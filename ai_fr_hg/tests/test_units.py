@@ -317,3 +317,76 @@ class TestChunkTokenEstimates(UnitTestCase):
 			score = vector.cosine_similarity(a, b)
 			self.assertTrue(-1.0001 <= score <= 1.0001, f"score {score} out of range")
 			self.assertFalse(math.isnan(score))
+
+
+class TestToolCallWireFormats(UnitTestCase):
+	"""Each runtime family expects a different shape for tool call arguments.
+
+	Ollama's Go API decodes `function.arguments` into a map, so sending the
+	OpenAI-style JSON string makes it reply with HTTP 400 "cannot unmarshal
+	string into Go struct field ...ToolCallFunctionArguments".
+	"""
+
+	@staticmethod
+	def _assistant_message(arguments):
+		from ai_fr_hg.ai.providers.base import ChatMessage
+
+		return ChatMessage(
+			role="assistant",
+			content="",
+			tool_calls=[
+				{
+					"id": "call_0",
+					"type": "function",
+					"function": {"name": "get_doc", "arguments": arguments},
+				}
+			],
+		)
+
+	def test_ollama_arguments_are_objects(self):
+		from ai_fr_hg.ai.providers.ollama import OllamaProvider
+
+		payload = OllamaProvider._to_ollama_message(self._assistant_message({"doctype": "User"}))
+		self.assertEqual(payload["tool_calls"][0]["function"]["arguments"], {"doctype": "User"})
+
+	def test_ollama_decodes_stringified_arguments(self):
+		from ai_fr_hg.ai.providers.ollama import OllamaProvider
+
+		payload = OllamaProvider._to_ollama_message(self._assistant_message('{"doctype": "User"}'))
+		self.assertEqual(payload["tool_calls"][0]["function"]["arguments"], {"doctype": "User"})
+
+	def test_ollama_handles_unparseable_arguments(self):
+		from ai_fr_hg.ai.providers.ollama import OllamaProvider
+
+		payload = OllamaProvider._to_ollama_message(self._assistant_message("not json"))
+		self.assertEqual(payload["tool_calls"][0]["function"]["arguments"], {"_raw": "not json"})
+
+	def test_ollama_tool_result_uses_tool_name(self):
+		from ai_fr_hg.ai.providers.base import ChatMessage
+		from ai_fr_hg.ai.providers.ollama import OllamaProvider
+
+		payload = OllamaProvider._to_ollama_message(
+			ChatMessage(role="tool", content="{}", name="get_doc", tool_call_id="call_0")
+		)
+		self.assertEqual(payload["tool_name"], "get_doc")
+		self.assertNotIn("name", payload)
+
+	def test_openai_arguments_are_json_strings(self):
+		import json
+
+		from ai_fr_hg.ai.providers.openai_compatible import OpenAICompatibleProvider
+
+		payload = OpenAICompatibleProvider._to_openai_message(
+			self._assistant_message({"doctype": "User"})
+		)
+		arguments = payload["tool_calls"][0]["function"]["arguments"]
+		self.assertIsInstance(arguments, str)
+		self.assertEqual(json.loads(arguments), {"doctype": "User"})
+
+	def test_openai_keeps_existing_string_arguments(self):
+		from ai_fr_hg.ai.providers.openai_compatible import OpenAICompatibleProvider
+
+		payload = OpenAICompatibleProvider._to_openai_message(
+			self._assistant_message('{"doctype": "User"}')
+		)
+		self.assertEqual(payload["tool_calls"][0]["function"]["arguments"], '{"doctype": "User"}')

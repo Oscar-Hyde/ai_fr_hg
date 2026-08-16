@@ -65,6 +65,49 @@ class OllamaProvider(BaseProvider):
 
 	# -- chat ------------------------------------------------------------
 
+	@staticmethod
+	def _to_ollama_message(message: ChatMessage) -> dict:
+		"""Render a message in Ollama's native wire format.
+
+		Ollama's Go API decodes `tool_calls[].function.arguments` into a map,
+		so - unlike OpenAI-compatible runtimes - the arguments must be sent as
+		a JSON *object*, never as a JSON-encoded string. Tool results are
+		matched by `tool_name` rather than `tool_call_id`.
+		"""
+		payload = message.as_dict()
+
+		if tool_calls := payload.get("tool_calls"):
+			payload["tool_calls"] = [OllamaProvider._to_ollama_tool_call(call) for call in tool_calls]
+
+		if payload.get("role") == "tool":
+			# `name` is not part of Ollama's message struct; `tool_name` is.
+			name = payload.pop("name", None)
+			if name and not payload.get("tool_name"):
+				payload["tool_name"] = name
+
+		return payload
+
+	@staticmethod
+	def _to_ollama_tool_call(call: dict) -> dict:
+		"""Coerce a canonical/OpenAI-style tool call into Ollama's shape."""
+		function = call.get("function") if isinstance(call.get("function"), dict) else call
+		arguments = function.get("arguments")
+
+		if isinstance(arguments, str):
+			try:
+				arguments = json.loads(arguments)
+			except ValueError:
+				arguments = {"_raw": arguments}
+		if not isinstance(arguments, dict):
+			arguments = {} if arguments in (None, "") else {"_raw": arguments}
+
+		return {
+			"function": {
+				"name": function.get("name") or "",
+				"arguments": arguments,
+			}
+		}
+
 	def chat(
 		self,
 		messages: list[ChatMessage],
@@ -75,7 +118,7 @@ class OllamaProvider(BaseProvider):
 	) -> CompletionResult:
 		payload = {
 			"model": model,
-			"messages": [m.as_dict() for m in messages],
+			"messages": [self._to_ollama_message(m) for m in messages],
 			"stream": False,
 			"options": self.build_options(options),
 		}
@@ -119,7 +162,7 @@ class OllamaProvider(BaseProvider):
 	) -> Iterator[str]:
 		payload = {
 			"model": model,
-			"messages": [m.as_dict() for m in messages],
+			"messages": [self._to_ollama_message(m) for m in messages],
 			"stream": True,
 			"options": self.build_options(options),
 		}
