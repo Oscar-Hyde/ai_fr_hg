@@ -213,14 +213,16 @@ def get_chat_context() -> dict:
 
 	accessible = get_accessible_knowledge_bases()
 
+	models = frappe.get_all(
+		"AI Model",
+		filters={"enabled": 1, "model_type": ["in", ["Chat", "Vision"]]},
+		fields=["name", "model_label", "model_type", "status", "provider", "is_default"],
+		order_by="is_default desc, model_label asc",
+	)
+
 	return {
 		"agents": agents,
-		"models": frappe.get_all(
-			"AI Model",
-			filters={"enabled": 1, "model_type": ["in", ["Chat", "Vision"]]},
-			fields=["name", "model_label", "model_type", "status", "provider"],
-			order_by="is_default desc, model_label asc",
-		),
+		"models": models,
 		"knowledge_bases": frappe.get_all(
 			"AI Knowledge Base",
 			filters={"name": ["in", accessible or [""]], "enabled": 1},
@@ -230,6 +232,7 @@ def get_chat_context() -> dict:
 		"settings": {
 			"streaming_enabled": frappe.db.get_single_value("AI Platform Settings", "streaming_enabled"),
 			"platform_enabled": frappe.db.get_single_value("AI Platform Settings", "platform_enabled"),
+			"default_chat_model": frappe.db.get_single_value("AI Platform Settings", "default_chat_model"),
 		},
 		"user": frappe.session.user,
 	}

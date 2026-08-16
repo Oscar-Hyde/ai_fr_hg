@@ -361,23 +361,37 @@ class AIModelManager {
 				},
 			],
 			async (values) => {
-				await frappe.xcall("ai_fr_hg.api.admin.pull_model", values);
-				frappe.show_alert({
-					message: __("Downloading {0}. This can take several minutes.", [
-						values.model_name,
-					]),
-					indicator: "blue",
-				});
-				frappe.realtime.on("ai_model_pulled", (data) => {
+				try {
+					await frappe.xcall("ai_fr_hg.api.admin.pull_model", values);
 					frappe.show_alert({
-						message:
-							data.status === "Success"
-								? __("{0} installed.", [data.model])
-								: __("Install failed: {0}", [data.error]),
-						indicator: data.status === "Success" ? "green" : "red",
+						message: __("Downloading {0}. This can take several minutes.", [
+							values.model_name,
+						]),
+						indicator: "blue",
 					});
-					this.refresh();
-				});
+
+					// Prompt callback can fire more than once; always replace the
+					// listener instead of stacking another on each install.
+					frappe.realtime.off("ai_model_pulled");
+					frappe.realtime.on("ai_model_pulled", (data) => {
+						if (data.model !== values.model_name || data.provider !== values.provider) return;
+						frappe.realtime.off("ai_model_pulled");
+						frappe.show_alert({
+							message:
+								data.status === "Success"
+									? __("{0} installed.", [data.model])
+									: __("Install failed: {0}", [data.error || __("Unknown error")]),
+							indicator: data.status === "Success" ? "green" : "red",
+						});
+						this.refresh();
+					});
+				} catch (error) {
+					frappe.msgprint({
+						title: __("Install Failed"),
+						indicator: "red",
+						message: error.message || __("Could not queue model installation."),
+					});
+				}
 			},
 			__("Install Model"),
 			__("Install")

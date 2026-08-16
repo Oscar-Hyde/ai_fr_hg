@@ -248,6 +248,11 @@ class AIAssistant {
 		this.selected_agent = this.context.agents[0].name;
 
 		const models = this.context.models.filter((m) => m.status !== "Missing");
+		const defaultModel =
+			models.find((m) => m.name === this.context.settings.default_chat_model) ||
+			models.find((m) => m.is_default && m.model_type === "Chat") ||
+			models.find((m) => m.model_type === "Chat");
+		if (defaultModel) this.selected_model = defaultModel.name;
 		this.model_control = frappe.ui.form.make_control({
 			parent: $model,
 			df: {
@@ -262,6 +267,7 @@ class AIAssistant {
 			},
 			render_input: true,
 		});
+		if (defaultModel) this.model_control.set_value(defaultModel.name);
 	}
 
 	render_knowledge_chips() {
@@ -507,6 +513,17 @@ class AIAssistant {
 		});
 	}
 
+	get_error_message(error, fallback) {
+		return (
+			error?.message ||
+			error?.exc?.server_messages ||
+			error?.server_messages ||
+			error?.responseJSON?.exception ||
+			fallback ||
+			__("The request failed.")
+		);
+	}
+
 	async send() {
 		const message = (this.$input.val() || "").trim();
 		if (!message || this.sending) return;
@@ -570,7 +587,9 @@ class AIAssistant {
 					<div class="ai-avatar">!</div>
 					<div class="ai-body">
 						<div class="ai-bubble ai-bubble-error">
-							${frappe.utils.escape_html(error.message || __("The request failed."))}
+							${frappe.utils.escape_html(
+								this.get_error_message(error, __("The request failed."))
+							)}
 						</div>
 					</div>
 				</div>
@@ -596,6 +615,10 @@ class AIAssistant {
 
 	attach_document() {
 		const me = this;
+		if (!this.context.knowledge_bases || !this.context.knowledge_bases.length) {
+			frappe.msgprint(__("Create a knowledge base before uploading documents."));
+			return;
+		}
 		new frappe.ui.FileUploader({
 			folder: "Home/Attachments",
 			on_success(file) {

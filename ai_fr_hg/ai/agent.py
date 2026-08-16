@@ -20,6 +20,7 @@ from ai_fr_hg.ai.engine import resolve_model, run_chat
 from ai_fr_hg.ai.knowledge import build_context, retrieve
 from ai_fr_hg.ai.logging import write_audit_log
 from ai_fr_hg.ai.providers.base import ChatMessage
+from ai_fr_hg.utils.db import safe_set_value
 
 DEFAULT_SYSTEM_PROMPT = (
 	"You are a helpful enterprise AI assistant running entirely on local infrastructure. "
@@ -173,16 +174,19 @@ def run_agent_turn(
 	context = extra_context or ""
 	if agent_doc.use_knowledge:
 		targets = knowledge_bases or get_agent_knowledge_bases(agent_doc, conversation_doc)
-		try:
-			retrieved = retrieve(
-				prompt,
-				knowledge_bases=targets or None,
-				top_k=cint(agent_doc.top_k) or None,
-			)
-			retrieved_context = build_context(retrieved)
-			context = f"{context}\n\n{retrieved_context}".strip() if context else retrieved_context
-		except Exception as exc:
-			frappe.log_error(title="AI retrieval failed", message=str(exc))
+		# A configured agent with no attached knowledge bases still returns fast
+		# instead of paying an access/query round-trip on every chat.
+		if targets:
+			try:
+				retrieved = retrieve(
+					prompt,
+					knowledge_bases=targets or None,
+					top_k=cint(agent_doc.top_k) or None,
+				)
+				retrieved_context = build_context(retrieved)
+				context = f"{context}\n\n{retrieved_context}".strip() if context else retrieved_context
+			except Exception as exc:
+				frappe.log_error(title="AI retrieval failed", message=str(exc))
 
 	# 2. Assemble the message list.
 	override = conversation_doc.system_prompt_override if conversation_doc else None
@@ -341,8 +345,16 @@ def update_conversation_stats(conversation: str, result) -> None:
 	}
 
 	if result:
-		current = cint(frappe.db.get_value("AI Conversation", conversation, "total_tokens"))
-		values["total_tokens"] = current + cint(result.total_tokens)
+		# Avoid read-modify-write races when two messages land concurrently.
+		frappe.db.sql(
+			"""
+			update `tabAI Conversation`
+			set total_tokens = coalesce(total_tokens, 0) + %s,
+				last_message_on = %s
+			where name = %s
+			""",
+			(cint(result.total_tokens), values["last_message_on"], conversation),
+		)
 
 	# Title the conversation after its first question, so the list is scannable.
 	if not frappe.db.get_value("AI Conversation", conversation, "title"):
@@ -356,22 +368,19 @@ def update_conversation_stats(conversation: str, result) -> None:
 		if first and first[0].content:
 			values["title"] = first[0].content.strip().split("\n")[0][:120]
 
-	frappe.db.set_value("AI Conversation", conversation, values, update_modified=False)
+	safe_set_value("AI Conversation", conversation, values, update_modified=False)
 
 
 def update_agent_stats(agent: str, result) -> None:
-	row = frappe.db.get_value("AI Agent", agent, ["message_count", "total_tokens"], as_dict=True)
-	if not row:
-		return
-	frappe.db.set_value(
-		"AI Agent",
-		agent,
-		{
-			"message_count": cint(row.message_count) + 1,
-			"total_tokens": cint(row.total_tokens) + (cint(result.total_tokens) if result else 0),
-			"last_used_on": now_datetime(),
-		},
-		update_modified=False,
+	frappe.db.sql(
+		"""
+		update `tabAI Agent`
+		set message_count = coalesce(message_count, 0) + 1,
+			total_tokens = coalesce(total_tokens, 0) + %s,
+			last_used_on = %s
+		where name = %s
+		""",
+		(cint(result.total_tokens) if result else 0, now_datetime(), agent),
 	)
 
 
@@ -395,12 +404,9 @@ def create_conversation(
 		conversation.append("knowledge_bases", {"knowledge_base": kb})
 	conversation.insert()
 
-	frappe.db.set_value(
-		"AI Agent",
-		agent_doc.name,
-		"conversation_count",
-		cint(frappe.db.count("AI Conversation", {"agent": agent_doc.name})),
-		update_modified=False,
+	frappe.db.sql(
+		"update `tabAI Agent` set conversation_count = conversation_count + 1 where name = %s",
+		(agent_doc.name,),
 	)
 
 	if agent_doc.greeting:

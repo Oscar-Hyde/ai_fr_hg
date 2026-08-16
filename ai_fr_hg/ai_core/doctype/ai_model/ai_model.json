@@ -197,7 +197,7 @@
    "fieldtype": "Column Break"
   },
   {
-   "default": "2048",
+   "default": "512",
    "fieldname": "max_tokens",
    "fieldtype": "Int",
    "label": "Max Tokens"
@@ -224,7 +224,7 @@
    "fieldname": "system_prompt",
    "fieldtype": "Code",
    "label": "System Prompt",
-   "options": "Text"
+   "options": "Markdown"
   },
   {
    "collapsible": 1,

@@ -4,6 +4,7 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
+
 from frappe.utils import cint, flt
 
 
@@ -66,12 +67,9 @@ class AIAgent(Document):
 	def validate_default(self):
 		if not self.is_default:
 			return
-		frappe.db.set_value(
-			"AI Agent",
-			{"is_default": 1, "name": ("!=", self.name)},
-			"is_default",
-			0,
-			update_modified=False,
+		frappe.db.sql(
+			"update `tabAI Agent` set is_default = 0 where is_default = 1 and name != %s",
+			(self.name,),
 		)
 
 	def validate_knowledge(self):

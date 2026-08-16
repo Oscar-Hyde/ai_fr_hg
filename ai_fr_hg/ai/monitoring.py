@@ -7,6 +7,8 @@ import frappe
 from frappe import _
 from frappe.utils import cint, now_datetime
 
+from ai_fr_hg.utils.db import safe_set_value
+
 DEGRADED_THRESHOLD = 3
 
 
@@ -42,7 +44,9 @@ def check_provider_health(provider: str, log: bool = True) -> dict:
 		effective = "Offline"
 
 	previous = doc.status
-	doc.db_set(
+	safe_set_value(
+		"AI Provider",
+		provider,
 		{
 			"status": effective,
 			"last_health_check": now_datetime(),
@@ -146,10 +150,11 @@ def sync_provider_models(provider: str, create_missing: bool = True) -> dict:
 	}
 
 	created, updated, missing = [], [], []
+	default_chat = frappe.db.get_single_value("AI Platform Settings", "default_chat_model")
 
 	for model in discovered:
 		if model.name in registered:
-			frappe.db.set_value(
+			safe_set_value(
 				"AI Model",
 				registered[model.name],
 				{
@@ -174,32 +179,48 @@ def sync_provider_models(provider: str, create_missing: bool = True) -> dict:
 		if frappe.db.exists("AI Model", label):
 			continue
 
-		doc = frappe.new_doc("AI Model")
-		doc.update(
-			{
-				"model_label": label,
-				"provider": provider,
-				"model_name": model.name,
-				"model_type": _guess_model_type(model.name),
-				"family": model.family,
-				"parameter_size": model.parameter_size,
-				"quantization": model.quantization,
-				"context_window": cint(model.context_window) or 8192,
-				"digest": model.digest,
-				"size_bytes": cint(model.size),
-				"status": "Available",
-				"last_checked": now_datetime(),
-				"enabled": 1,
-			}
-		)
-		doc.flags.ignore_permissions = True
-		doc.insert(ignore_permissions=True)
-		created.append(model.name)
+		try:
+			doc = frappe.new_doc("AI Model")
+			doc.update(
+				{
+					"model_label": label,
+					"provider": provider,
+					"model_name": model.name,
+					"model_type": _guess_model_type(model.name),
+					"family": model.family,
+					"parameter_size": model.parameter_size,
+					"quantization": model.quantization,
+					"context_window": cint(model.context_window) or 8192,
+					"digest": model.digest,
+					"size_bytes": cint(model.size),
+					"status": "Available",
+					"last_checked": now_datetime(),
+					"enabled": 1,
+				}
+			)
+			doc.flags.ignore_permissions = True
+			doc.insert(ignore_permissions=True)
+			created.append(model.name)
+
+			if doc.model_type == "Chat" and not default_chat:
+				safe_set_value(
+					"AI Platform Settings",
+					"AI Platform Settings",
+					"default_chat_model",
+					doc.name,
+					update_modified=False,
+				)
+				default_chat = doc.name
+		except frappe.DuplicateEntryError:
+			# Another discovery/pull/sync worker can create the same model concurrently.
+			frappe.db.rollback()
+		finally:
+			frappe.clear_cache(doctype="AI Model")
 
 	# Flag registered models the runtime no longer reports.
 	for model_name, record in registered.items():
 		if model_name not in discovered_names:
-			frappe.db.set_value(
+			safe_set_value(
 				"AI Model",
 				record,
 				{
@@ -210,6 +231,22 @@ def sync_provider_models(provider: str, create_missing: bool = True) -> dict:
 				update_modified=False,
 			)
 			missing.append(model_name)
+
+	if not default_chat:
+		existing_chat = frappe.db.get_value(
+			"AI Model",
+			{"provider": provider, "enabled": 1, "model_type": "Chat"},
+			"name",
+			order_by="is_default desc, creation asc",
+		)
+		if existing_chat:
+			safe_set_value(
+				"AI Platform Settings",
+				"AI Platform Settings",
+				"default_chat_model",
+				existing_chat,
+				update_modified=False,
+			)
 
 	return {
 		"provider": provider,

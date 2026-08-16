@@ -166,7 +166,7 @@
    "precision": "2"
   },
   {
-   "default": "2048",
+   "default": "512",
    "fieldname": "default_max_tokens",
    "fieldtype": "Int",
    "label": "Max Tokens"
@@ -191,7 +191,7 @@
    "fieldname": "default_system_prompt",
    "fieldtype": "Code",
    "label": "Default System Prompt",
-   "options": "Text"
+   "options": "Markdown"
   },
   {
    "fieldname": "knowledge_tab",

@@ -78,14 +78,14 @@
    "fieldname": "system_prompt",
    "fieldtype": "Code",
    "label": "System Prompt",
-   "options": "Text"
+   "options": "Markdown"
   },
   {
    "description": "Jinja template. Variables declared below are available in the render context.",
    "fieldname": "user_prompt",
    "fieldtype": "Code",
    "label": "User Prompt",
-   "options": "Text",
+   "options": "Markdown",
    "reqd": 1
   },
   {

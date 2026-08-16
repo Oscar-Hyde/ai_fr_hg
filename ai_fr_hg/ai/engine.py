@@ -19,6 +19,7 @@ from frappe.utils import cint, flt, now_datetime
 from ai_fr_hg.ai.exceptions import ModelNotAvailableError, ProviderError
 from ai_fr_hg.ai.providers import get_failover_providers, get_provider
 from ai_fr_hg.ai.providers.base import ChatMessage, CompletionResult
+from ai_fr_hg.utils.db import safe_set_value
 
 
 def get_settings():
@@ -265,34 +266,34 @@ def run_embedding(
 	finish_execution_log(log, result, provider=model_doc.provider)
 
 	if vectors and not model_doc.embedding_dimensions:
-		frappe.db.set_value(
+		safe_set_value(
 			"AI Model", model_doc.name, "embedding_dimensions", len(vectors[0]), update_modified=False
 		)
 	return vectors
 
 
 def update_model_metrics(model: str, result: CompletionResult) -> None:
-	"""Roll running request/token/latency statistics onto the model record."""
-	row = frappe.db.get_value(
-		"AI Model", model, ["total_requests", "total_tokens", "average_latency_ms"], as_dict=True
-	)
-	if not row:
+	"""Roll running request/token/latency statistics onto the model record.
+
+	Uses an atomic SQL update so simultaneous requests cannot produce a
+	``1020`` timestamp mismatch or lose counters.
+	"""
+	if not frappe.db.exists("AI Model", model):
 		return
 
-	total_requests = cint(row.total_requests) + 1
-	previous_average = flt(row.average_latency_ms)
-	average = ((previous_average * (total_requests - 1)) + result.duration_ms) / total_requests
-
-	frappe.db.set_value(
-		"AI Model",
-		model,
-		{
-			"total_requests": total_requests,
-			"total_tokens": cint(row.total_tokens) + cint(result.total_tokens),
-			"average_latency_ms": round(average, 2),
-			"status": "Available",
-			"last_checked": now_datetime(),
-			"last_error": None,
-		},
-		update_modified=False,
+	frappe.db.sql(
+		"""
+		update `tabAI Model`
+		set total_requests = coalesce(total_requests, 0) + 1,
+			total_tokens = coalesce(total_tokens, 0) + %s,
+			average_latency_ms = (
+				(coalesce(average_latency_ms, 0) * coalesce(total_requests, 0) + %s)
+				/ (coalesce(total_requests, 0) + 1)
+			),
+			status = 'Available',
+			last_checked = %s,
+			last_error = null
+		where name = %s
+		""",
+		(cint(result.total_tokens), cint(result.duration_ms), now_datetime(), model),
 	)
