@@ -46,18 +46,34 @@ bench get-app https://github.com/Oscar-Hyde/ai_fr_hg
 bench --site your-site.local install-app ai_fr_hg
 
 # 3. Optional: document format support (PDF, Word, Excel, PowerPoint, HTML)
-bench pip install "ai_fr_hg[documents] @ ./apps/ai_fr_hg"
+bench pip install --editable "./apps/ai_fr_hg[documents]"
 
 # 4. Make sure background workers and the scheduler are running
 bench --site your-site.local enable-scheduler
 ```
 
-Then set up the runtime:
+Then set up the runtime. Leave `ollama serve` running and run the pull
+commands from another shell:
 
 ```bash
-ollama serve                        # start the engine
-ollama pull llama3.1:8b             # a chat model
+ollama serve                        # terminal 1: start the engine
+
+ollama pull llama3.1:8b             # terminal 2: a chat model
 ollama pull nomic-embed-text        # an embedding model (required for search)
+```
+
+If Ollama was unpacked into the bench instead of installed system-wide, its
+binary will not automatically be on `PATH`. Point the shell at the portable
+installation first (put these exports in `~/.profile` to persist them):
+
+```bash
+export OLLAMA_ROOT="$HOME/frappe-bench/services/ollama"
+export PATH="$OLLAMA_ROOT/bin:$PATH"
+export OLLAMA_MODELS="$OLLAMA_ROOT/models"
+export LD_LIBRARY_PATH="$OLLAMA_ROOT/lib/ollama${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
+ollama --version
+ollama list
 ```
 
 Finally, open **`/app/ai-control-center`** and click **Test All Providers**,
@@ -68,6 +84,19 @@ Installation seeds a working configuration automatically: the `AI Manager`,
 `AI User` and `AI Auditor` roles, a `Local Ollama` provider, a
 `General Knowledge` knowledge base, a `General Assistant` agent, six built-in
 tools, two extraction schemas and a default resource policy.
+
+#### Recovering an interrupted installation
+
+Frappe can add the app to the site's installed-app list before `after_install`
+has finished. If installation was interrupted and a retry says "already
+installed", synchronise the schema and rerun the idempotent seed routine:
+
+```bash
+bench --site your-site.local migrate
+bench --site your-site.local execute ai_fr_hg.install.after_install
+bench build --app ai_fr_hg
+bench restart
+```
 
 ---
 
