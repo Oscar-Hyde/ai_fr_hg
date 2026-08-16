@@ -76,6 +76,13 @@ class OpenAICompatibleProvider(BaseProvider):
 		flat `images` list, so vision models work across both provider styles.
 		"""
 		payload = message.as_dict()
+
+		if tool_calls := payload.get("tool_calls"):
+			payload["tool_calls"] = [
+				OpenAICompatibleProvider._to_openai_tool_call(index, call)
+				for index, call in enumerate(tool_calls)
+			]
+
 		images = payload.pop("images", None)
 		if not images:
 			return payload
@@ -92,6 +99,24 @@ class OpenAICompatibleProvider(BaseProvider):
 			)
 		payload["content"] = parts
 		return payload
+
+	@staticmethod
+	def _to_openai_tool_call(index: int, call: dict) -> dict:
+		"""Coerce a canonical tool call into OpenAI's wire format.
+
+		OpenAI-compatible runtimes expect `function.arguments` to be a JSON
+		*string*, while the platform carries arguments around as a mapping.
+		"""
+		function = call.get("function") if isinstance(call.get("function"), dict) else call
+		arguments = function.get("arguments")
+		if not isinstance(arguments, str):
+			arguments = json.dumps(arguments or {}, default=str)
+
+		return {
+			"id": call.get("id") or f"call_{index}",
+			"type": call.get("type") or "function",
+			"function": {"name": function.get("name") or "", "arguments": arguments},
+		}
 
 	def chat(
 		self,
@@ -151,7 +176,7 @@ class OpenAICompatibleProvider(BaseProvider):
 	) -> Iterator[str]:
 		payload = {
 			"model": model,
-			"messages": [m.as_dict() for m in messages],
+			"messages": [self._to_openai_message(m) for m in messages],
 			"stream": True,
 			**self.build_options(options),
 		}

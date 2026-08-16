@@ -233,7 +233,10 @@ def run_agent_turn(
 						"type": "function",
 						"function": {
 							"name": call["name"],
-							"arguments": json.dumps(call["arguments"]),
+							# Kept as a mapping: each provider adapter renders
+							# it in its own wire format (Ollama needs an object,
+							# OpenAI-compatible runtimes need a JSON string).
+							"arguments": call["arguments"] or {},
 						},
 					}
 					for call in result.tool_calls
