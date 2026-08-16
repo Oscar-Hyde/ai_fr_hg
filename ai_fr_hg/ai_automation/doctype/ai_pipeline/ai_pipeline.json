@@ -1,0 +1,184 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "allow_rename": 0,
+ "autoname": "field:pipeline_name",
+ "creation": "2026-08-16 09:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "pipeline_name",
+  "enabled",
+  "description",
+  "pipeline_cb",
+  "trigger_type",
+  "schedule_cron",
+  "knowledge_base",
+  "queue",
+  "steps_sec",
+  "steps",
+  "pipeline_stats_sec",
+  "run_count",
+  "success_count",
+  "pipeline_stats_cb",
+  "failure_count",
+  "last_run_on"
+ ],
+ "fields": [
+  {
+   "fieldname": "pipeline_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Pipeline Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Enabled"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "fieldname": "pipeline_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Manual",
+   "fieldname": "trigger_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Trigger",
+   "options": "Manual\nDocument Ingest\nScheduled\nAPI"
+  },
+  {
+   "depends_on": "eval:doc.trigger_type=='Scheduled'",
+   "fieldname": "schedule_cron",
+   "fieldtype": "Data",
+   "label": "Cron Schedule",
+   "mandatory_depends_on": "eval:doc.trigger_type=='Scheduled'"
+  },
+  {
+   "depends_on": "eval:doc.trigger_type=='Document Ingest'",
+   "fieldname": "knowledge_base",
+   "fieldtype": "Link",
+   "label": "Knowledge Base",
+   "options": "AI Knowledge Base"
+  },
+  {
+   "default": "long",
+   "fieldname": "queue",
+   "fieldtype": "Select",
+   "label": "Queue",
+   "options": "default\nshort\nlong"
+  },
+  {
+   "fieldname": "steps_sec",
+   "fieldtype": "Section Break",
+   "label": "Steps"
+  },
+  {
+   "fieldname": "steps",
+   "fieldtype": "Table",
+   "label": "Steps",
+   "options": "AI Pipeline Step",
+   "reqd": 1
+  },
+  {
+   "fieldname": "pipeline_stats_sec",
+   "fieldtype": "Section Break",
+   "label": "Statistics"
+  },
+  {
+   "fieldname": "run_count",
+   "fieldtype": "Int",
+   "label": "Runs",
+   "read_only": 1
+  },
+  {
+   "fieldname": "success_count",
+   "fieldtype": "Int",
+   "label": "Successful",
+   "read_only": 1
+  },
+  {
+   "fieldname": "pipeline_stats_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "failure_count",
+   "fieldtype": "Int",
+   "label": "Failed",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_run_on",
+   "fieldtype": "Datetime",
+   "label": "Last Run",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [
+  {
+   "link_doctype": "AI Pipeline Run",
+   "link_fieldname": "pipeline"
+  }
+ ],
+ "modified": "2026-08-16 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Automation",
+ "name": "AI Pipeline",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI User",
+   "read": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "show_title_field_in_link": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "pipeline_name",
+ "track_changes": 1
+}

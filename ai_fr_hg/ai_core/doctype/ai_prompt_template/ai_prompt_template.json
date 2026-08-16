@@ -1,0 +1,166 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "allow_rename": 0,
+ "autoname": "field:template_name",
+ "creation": "2026-08-16 09:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "template_name",
+  "category",
+  "enabled",
+  "template_cb",
+  "model",
+  "output_format",
+  "description",
+  "prompt_sec",
+  "system_prompt",
+  "user_prompt",
+  "variables_sec",
+  "variables",
+  "schema_sec",
+  "json_schema"
+ ],
+ "fields": [
+  {
+   "fieldname": "template_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Template Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "default": "General",
+   "fieldname": "category",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Category",
+   "options": "General\nSummarization\nExtraction\nClassification\nComparison\nRAG\nAgent\nCustom"
+  },
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled"
+  },
+  {
+   "fieldname": "template_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "model",
+   "fieldtype": "Link",
+   "label": "Preferred Model",
+   "options": "AI Model"
+  },
+  {
+   "default": "Text",
+   "fieldname": "output_format",
+   "fieldtype": "Select",
+   "label": "Output Format",
+   "options": "Text\nMarkdown\nJSON"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "fieldname": "prompt_sec",
+   "fieldtype": "Section Break",
+   "label": "Prompt"
+  },
+  {
+   "fieldname": "system_prompt",
+   "fieldtype": "Code",
+   "label": "System Prompt",
+   "options": "Text"
+  },
+  {
+   "description": "Jinja template. Variables declared below are available in the render context.",
+   "fieldname": "user_prompt",
+   "fieldtype": "Code",
+   "label": "User Prompt",
+   "options": "Text",
+   "reqd": 1
+  },
+  {
+   "fieldname": "variables_sec",
+   "fieldtype": "Section Break",
+   "label": "Variables"
+  },
+  {
+   "fieldname": "variables",
+   "fieldtype": "Table",
+   "label": "Variables",
+   "options": "AI Prompt Variable"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "schema_sec",
+   "fieldtype": "Section Break",
+   "label": "Structured Output"
+  },
+  {
+   "depends_on": "eval:doc.output_format=='JSON'",
+   "fieldname": "json_schema",
+   "fieldtype": "Code",
+   "label": "JSON Schema",
+   "options": "JSON"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-16 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Core",
+ "name": "AI Prompt Template",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI User",
+   "read": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "show_title_field_in_link": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "template_name",
+ "track_changes": 1
+}

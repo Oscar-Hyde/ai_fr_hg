@@ -1,0 +1,45 @@
+# Copyright (c) 2026, Ai Fr Hg and contributors
+# For license information, please see license.txt
+
+import frappe
+from frappe import _
+
+
+class AIError(frappe.ValidationError):
+	"""Base class for every error raised by the AI platform."""
+
+
+class ProviderError(AIError):
+	"""Raised when a provider endpoint cannot fulfil a request."""
+
+
+class ProviderOfflineError(ProviderError):
+	"""Raised when a provider endpoint is unreachable."""
+
+
+class ProviderTimeoutError(ProviderError):
+	"""Raised when a provider endpoint does not respond in time."""
+
+
+class ModelNotAvailableError(AIError):
+	"""Raised when the requested model is not present on the runtime."""
+
+
+class LocalOnlyViolation(AIError):
+	"""Raised when a configured endpoint would leave the local network."""
+
+
+class QuotaExceededError(AIError):
+	"""Raised when a resource policy limit is hit."""
+
+
+class ToolExecutionError(AIError):
+	"""Raised when a tool invocation fails."""
+
+
+class DocumentProcessingError(AIError):
+	"""Raised when a document cannot be read or indexed."""
+
+
+class PipelineError(AIError):
+	"""Raised when a pipeline step fails and the policy is to stop."""

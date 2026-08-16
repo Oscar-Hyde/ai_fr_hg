@@ -1,0 +1,196 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "allow_rename": 0,
+ "autoname": "hash",
+ "creation": "2026-08-16 09:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "document",
+  "knowledge_base",
+  "chunk_index",
+  "heading",
+  "chunk_cb",
+  "token_count",
+  "character_count",
+  "page_number",
+  "checksum",
+  "content_sec",
+  "content",
+  "embedding_sec",
+  "embedding_model",
+  "embedding_dimensions",
+  "embedding_format",
+  "embedding_cb",
+  "embedding_norm",
+  "embedded_on",
+  "embedding"
+ ],
+ "fields": [
+  {
+   "fieldname": "document",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Document",
+   "options": "AI Document",
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "knowledge_base",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Knowledge Base",
+   "options": "AI Knowledge Base",
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "chunk_index",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Chunk Index",
+   "reqd": 1
+  },
+  {
+   "fieldname": "heading",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Heading"
+  },
+  {
+   "fieldname": "chunk_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "token_count",
+   "fieldtype": "Int",
+   "label": "Token Count"
+  },
+  {
+   "fieldname": "character_count",
+   "fieldtype": "Int",
+   "label": "Characters"
+  },
+  {
+   "fieldname": "page_number",
+   "fieldtype": "Int",
+   "label": "Page Number"
+  },
+  {
+   "fieldname": "checksum",
+   "fieldtype": "Data",
+   "label": "Checksum",
+   "search_index": 1
+  },
+  {
+   "fieldname": "content_sec",
+   "fieldtype": "Section Break",
+   "label": "Content"
+  },
+  {
+   "fieldname": "content",
+   "fieldtype": "Long Text",
+   "label": "Content",
+   "reqd": 1
+  },
+  {
+   "fieldname": "embedding_sec",
+   "fieldtype": "Section Break",
+   "label": "Embedding"
+  },
+  {
+   "fieldname": "embedding_model",
+   "fieldtype": "Link",
+   "label": "Embedding Model",
+   "options": "AI Model",
+   "search_index": 1
+  },
+  {
+   "fieldname": "embedding_dimensions",
+   "fieldtype": "Int",
+   "label": "Dimensions"
+  },
+  {
+   "default": "Base64 Float32",
+   "fieldname": "embedding_format",
+   "fieldtype": "Select",
+   "label": "Format",
+   "options": "Base64 Float32\nJSON"
+  },
+  {
+   "fieldname": "embedding_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "embedding_norm",
+   "fieldtype": "Float",
+   "label": "Vector Norm",
+   "precision": "6"
+  },
+  {
+   "fieldname": "embedded_on",
+   "fieldtype": "Datetime",
+   "label": "Embedded On"
+  },
+  {
+   "fieldname": "embedding",
+   "fieldtype": "Long Text",
+   "label": "Embedding Vector",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-16 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Knowledge",
+ "name": "AI Document Chunk",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI User",
+   "read": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "show_title_field_in_link": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "heading",
+ "track_changes": 0
+}

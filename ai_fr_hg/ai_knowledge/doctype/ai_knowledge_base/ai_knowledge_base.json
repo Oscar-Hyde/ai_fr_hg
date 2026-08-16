@@ -1,0 +1,218 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "allow_rename": 0,
+ "autoname": "field:knowledge_base_name",
+ "creation": "2026-08-16 09:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "knowledge_base_name",
+  "enabled",
+  "is_public",
+  "description",
+  "kb_cb",
+  "embedding_model",
+  "chunk_size",
+  "chunk_overlap",
+  "top_k",
+  "similarity_threshold",
+  "access_sec",
+  "restrict_to_roles",
+  "stats_sec",
+  "index_status",
+  "document_count",
+  "chunk_count",
+  "stats_cb",
+  "embedded_chunk_count",
+  "total_characters",
+  "last_indexed_on"
+ ],
+ "fields": [
+  {
+   "fieldname": "knowledge_base_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Knowledge Base",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Enabled"
+  },
+  {
+   "default": "1",
+   "fieldname": "is_public",
+   "fieldtype": "Check",
+   "label": "Visible to all AI Users"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "fieldname": "kb_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "embedding_model",
+   "fieldtype": "Link",
+   "label": "Embedding Model",
+   "options": "AI Model"
+  },
+  {
+   "default": "1200",
+   "fieldname": "chunk_size",
+   "fieldtype": "Int",
+   "label": "Chunk Size"
+  },
+  {
+   "default": "150",
+   "fieldname": "chunk_overlap",
+   "fieldtype": "Int",
+   "label": "Chunk Overlap"
+  },
+  {
+   "default": "6",
+   "fieldname": "top_k",
+   "fieldtype": "Int",
+   "label": "Retrieval Top K"
+  },
+  {
+   "default": "0.25",
+   "fieldname": "similarity_threshold",
+   "fieldtype": "Float",
+   "label": "Similarity Threshold",
+   "precision": "3"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "access_sec",
+   "fieldtype": "Section Break",
+   "label": "Access Control"
+  },
+  {
+   "depends_on": "eval:!doc.is_public",
+   "fieldname": "restrict_to_roles",
+   "fieldtype": "Table",
+   "label": "Restrict to Roles",
+   "options": "AI Knowledge Base Role"
+  },
+  {
+   "fieldname": "stats_sec",
+   "fieldtype": "Section Break",
+   "label": "Index Statistics"
+  },
+  {
+   "default": "Idle",
+   "fieldname": "index_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Index Status",
+   "options": "Idle\nIndexing\nStale\nError",
+   "read_only": 1
+  },
+  {
+   "fieldname": "document_count",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Documents",
+   "read_only": 1
+  },
+  {
+   "fieldname": "chunk_count",
+   "fieldtype": "Int",
+   "label": "Chunks",
+   "read_only": 1
+  },
+  {
+   "fieldname": "stats_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "embedded_chunk_count",
+   "fieldtype": "Int",
+   "label": "Embedded Chunks",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_characters",
+   "fieldtype": "Long Int",
+   "label": "Total Characters",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_indexed_on",
+   "fieldtype": "Datetime",
+   "label": "Last Indexed On",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [
+  {
+   "link_doctype": "AI Document",
+   "link_fieldname": "knowledge_base"
+  },
+  {
+   "link_doctype": "AI Document Chunk",
+   "link_fieldname": "knowledge_base"
+  }
+ ],
+ "modified": "2026-08-16 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Knowledge",
+ "name": "AI Knowledge Base",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI User",
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "show_title_field_in_link": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "knowledge_base_name",
+ "track_changes": 1
+}

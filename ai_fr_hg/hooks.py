@@ -12,18 +12,18 @@ use_json_request_body = True
 # Apps
 # ------------------
 
-# required_apps = []
+required_apps = []
 
 # Each item in the list will be shown as an app in the apps page
-# add_to_apps_screen = [
-# 	{
-# 		"name": "ai_fr_hg",
-# 		"logo": "/assets/ai_fr_hg/logo.png",
-# 		"title": "Ai Fr Hg",
-# 		"route": "/ai_fr_hg",
-# 		"has_permission": "ai_fr_hg.api.permission.has_app_permission",
-# 	}
-# ]
+add_to_apps_screen = [
+	{
+		"name": "ai_fr_hg",
+		"logo": "/assets/ai_fr_hg/images/logo.svg",
+		"title": "AI Platform",
+		"route": "/app/ai-control-center",
+		"has_permission": "ai_fr_hg.utils.permissions.has_app_permission",
+	}
+]
 
 # Companion apps that extend a host app (instead of taking their own apps-screen icon) can pin
 # their workspaces into the host app's workspace dock (rail) with this hook. Declaring it keeps
@@ -40,8 +40,8 @@ use_json_request_body = True
 # ------------------
 
 # include js, css files in header of desk.html
-# app_include_css = "/assets/ai_fr_hg/css/ai_fr_hg.css"
-# app_include_js = "/assets/ai_fr_hg/js/ai_fr_hg.js"
+app_include_css = "ai_fr_hg.bundle.css"
+app_include_js = "ai_fr_hg.bundle.js"
 
 # include js, css files in header of web template
 # web_include_css = "/assets/ai_fr_hg/css/ai_fr_hg.css"
@@ -58,8 +58,24 @@ use_json_request_body = True
 # page_js = {"page" : "public/js/file.js"}
 
 # include js in doctype views
-# doctype_js = {"doctype" : "public/js/doctype.js"}
-# doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
+doctype_js = {
+	"AI Provider": "public/js/doctype/ai_provider.js",
+	"AI Model": "public/js/doctype/ai_model.js",
+	"AI Knowledge Base": "public/js/doctype/ai_knowledge_base.js",
+	"AI Document": "public/js/doctype/ai_document.js",
+	"AI Agent": "public/js/doctype/ai_agent.js",
+	"AI Pipeline": "public/js/doctype/ai_pipeline.js",
+	"AI Platform Settings": "public/js/doctype/ai_platform_settings.js",
+	"AI Extraction Schema": "public/js/doctype/ai_extraction_schema.js",
+	"AI Automation Rule": "public/js/doctype/ai_automation_rule.js",
+	"AI Tool Invocation": "public/js/doctype/ai_tool_invocation.js",
+}
+
+doctype_list_js = {
+	"AI Provider": "public/js/doctype/ai_provider_list.js",
+	"AI Document": "public/js/doctype/ai_document_list.js",
+	"AI Model": "public/js/doctype/ai_model_list.js",
+}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
 
@@ -100,22 +116,20 @@ use_json_request_body = True
 # ----------
 
 # add methods and filters to jinja environment
-# jinja = {
-# 	"methods": "ai_fr_hg.utils.jinja_methods",
-# 	"filters": "ai_fr_hg.utils.jinja_filters"
-# }
+jinja = {
+	"methods": ["ai_fr_hg.utils.jinja.get_ai_summary", "ai_fr_hg.utils.jinja.ai_search"],
+}
 
 # Installation
 # ------------
 
-# before_install = "ai_fr_hg.install.before_install"
-# after_install = "ai_fr_hg.install.after_install"
+before_install = "ai_fr_hg.install.before_install"
+after_install = "ai_fr_hg.install.after_install"
 
 # Uninstallation
 # ------------
 
-# before_uninstall = "ai_fr_hg.uninstall.before_uninstall"
-# after_uninstall = "ai_fr_hg.uninstall.after_uninstall"
+before_uninstall = "ai_fr_hg.uninstall.before_uninstall"
 
 # Disable / Enable
 # ----------------
@@ -160,51 +174,66 @@ use_json_request_body = True
 # -----------
 # Permissions evaluated in scripted ways
 
-# permission_query_conditions = {
-# 	"Event": "frappe.desk.doctype.event.event.get_permission_query_conditions",
-# }
-#
-# has_permission = {
-# 	"Event": "frappe.desk.doctype.event.event.has_permission",
-# }
+permission_query_conditions = {
+	"AI Conversation": "ai_fr_hg.ai_conversation.doctype.ai_conversation.ai_conversation.get_permission_query_conditions",
+	"AI Message": "ai_fr_hg.ai_conversation.doctype.ai_message.ai_message.get_permission_query_conditions",
+	"AI Document": "ai_fr_hg.utils.permissions.get_document_query_conditions",
+}
+
+has_permission = {
+	"AI Conversation": "ai_fr_hg.ai_conversation.doctype.ai_conversation.ai_conversation.has_permission",
+	"AI Document": "ai_fr_hg.utils.permissions.has_document_permission",
+	"AI Knowledge Base": "ai_fr_hg.utils.permissions.has_knowledge_base_permission",
+}
 
 # Document Events
 # ---------------
 # Hook on document methods and events
 
-# doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-# 	}
-# }
+doc_events = {
+	"*": {
+		"after_insert": "ai_fr_hg.ai.automation.handle_document_event",
+		"on_update": "ai_fr_hg.ai.automation.handle_document_event",
+		"on_submit": "ai_fr_hg.ai.automation.handle_document_event",
+		"on_cancel": "ai_fr_hg.ai.automation.handle_document_event",
+		"on_trash": "ai_fr_hg.ai.automation.handle_document_event",
+	},
+	"File": {
+		"after_insert": "ai_fr_hg.utils.file_hooks.on_file_upload",
+	},
+}
 
 # Scheduled Tasks
 # ---------------
 
-# scheduler_events = {
-# 	"all": [
-# 		"ai_fr_hg.tasks.all"
-# 	],
-# 	"daily": [
-# 		"ai_fr_hg.tasks.daily"
-# 	],
-# 	"hourly": [
-# 		"ai_fr_hg.tasks.hourly"
-# 	],
-# 	"weekly": [
-# 		"ai_fr_hg.tasks.weekly"
-# 	],
-# 	"monthly": [
-# 		"ai_fr_hg.tasks.monthly"
-# 	],
-# }
+scheduler_events = {
+	"cron": {
+		# Provider reachability, throttled internally to the configured interval.
+		"*/5 * * * *": [
+			"ai_fr_hg.tasks.health_check",
+		],
+		# Due scheduled pipelines.
+		"*/10 * * * *": [
+			"ai_fr_hg.tasks.run_scheduled_pipelines",
+		],
+	},
+	"hourly_long": [
+		"ai_fr_hg.tasks.process_pending_documents",
+	],
+	"daily_long": [
+		"ai_fr_hg.tasks.sync_models",
+		"ai_fr_hg.tasks.rollup_usage",
+		"ai_fr_hg.tasks.backup_knowledge",
+	],
+	"weekly_long": [
+		"ai_fr_hg.tasks.cleanup_logs",
+	],
+}
 
 # Testing
 # -------
 
-# before_tests = "ai_fr_hg.install.before_tests"
+before_tests = "ai_fr_hg.install.before_tests"
 
 # Extend DocType Class
 # ------------------------------
@@ -286,12 +315,43 @@ export_python_type_annotations = True
 # Require all whitelisted methods to have type annotations
 require_type_annotated_api_methods = True
 
-# default_log_clearing_doctypes = {
-# 	"Logging DocType Name": 30  # days to retain logs
-# }
+default_log_clearing_doctypes = {
+	"AI Execution Log": 90,
+	"AI Service Health Log": 30,
+	"AI Audit Log": 365,
+	"AI Search Query": 30,
+}
 
 # Translation
 # ------------
 # List of apps whose translatable strings should be excluded from this app's translations.
 # ignore_translatable_strings_from = []
 
+
+# Extension Points
+# ----------------
+# Other apps extend the AI platform by contributing to these hooks. Each maps a
+# key to a dotted path; see the documentation in docs/EXTENDING.md.
+#
+# ai_providers        - new AI runtime adapters       (BaseProvider subclasses)
+# ai_document_readers - new file format readers       (BaseReader subclasses)
+# ai_tools            - new built-in tool handlers    (plain callables)
+#
+# Example, in another app's hooks.py:
+#
+# ai_providers = {"My Runtime": "my_app.providers.MyRuntimeProvider"}
+# ai_document_readers = {"dwg": "my_app.readers.DWGReader"}
+# ai_tools = {"lookup_customer": "my_app.tools.lookup_customer"}
+
+ai_providers = {}
+ai_document_readers = {}
+ai_tools = {}
+
+# Fixtures shipped with the app
+# -----------------------------
+fixtures = [
+	{
+		"dt": "Role",
+		"filters": [["name", "in", ["AI Manager", "AI User", "AI Auditor"]]],
+	},
+]

@@ -1,0 +1,205 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "allow_rename": 0,
+ "autoname": "field:tool_name",
+ "creation": "2026-08-16 09:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "tool_name",
+  "enabled",
+  "tool_type",
+  "is_readonly_tool",
+  "requires_approval",
+  "tool_cb",
+  "handler",
+  "target_doctype",
+  "target_report",
+  "pipeline",
+  "max_runtime_seconds",
+  "description_sec",
+  "description",
+  "parameters_sec",
+  "parameters",
+  "access_sec",
+  "allowed_roles",
+  "schema_sec",
+  "json_schema"
+ ],
+ "fields": [
+  {
+   "description": "Snake case identifier exposed to the model, e.g. search_knowledge_base",
+   "fieldname": "tool_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Tool Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Enabled"
+  },
+  {
+   "default": "Builtin",
+   "fieldname": "tool_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Tool Type",
+   "options": "Builtin\nDocType Query\nDocType Action\nReport\nServer Method\nPipeline"
+  },
+  {
+   "default": "1",
+   "fieldname": "is_readonly_tool",
+   "fieldtype": "Check",
+   "label": "Read Only"
+  },
+  {
+   "fieldname": "requires_approval",
+   "fieldtype": "Check",
+   "label": "Requires Approval"
+  },
+  {
+   "fieldname": "tool_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:['Builtin','Server Method'].includes(doc.tool_type)",
+   "description": "Dotted path to a whitelisted python callable.",
+   "fieldname": "handler",
+   "fieldtype": "Data",
+   "label": "Handler Method"
+  },
+  {
+   "depends_on": "eval:['DocType Query','DocType Action'].includes(doc.tool_type)",
+   "fieldname": "target_doctype",
+   "fieldtype": "Link",
+   "label": "Target DocType",
+   "options": "DocType"
+  },
+  {
+   "depends_on": "eval:doc.tool_type=='Report'",
+   "fieldname": "target_report",
+   "fieldtype": "Link",
+   "label": "Target Report",
+   "options": "Report"
+  },
+  {
+   "depends_on": "eval:doc.tool_type=='Pipeline'",
+   "fieldname": "pipeline",
+   "fieldtype": "Link",
+   "label": "Pipeline",
+   "options": "AI Pipeline"
+  },
+  {
+   "default": "30",
+   "fieldname": "max_runtime_seconds",
+   "fieldtype": "Int",
+   "label": "Max Runtime (s)"
+  },
+  {
+   "fieldname": "description_sec",
+   "fieldtype": "Section Break",
+   "label": "Description"
+  },
+  {
+   "description": "Shown to the model. Be explicit about when to use this tool.",
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description",
+   "reqd": 1
+  },
+  {
+   "fieldname": "parameters_sec",
+   "fieldtype": "Section Break",
+   "label": "Parameters"
+  },
+  {
+   "fieldname": "parameters",
+   "fieldtype": "Table",
+   "label": "Parameters",
+   "options": "AI Tool Parameter"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "access_sec",
+   "fieldtype": "Section Break",
+   "label": "Access"
+  },
+  {
+   "fieldname": "allowed_roles",
+   "fieldtype": "Table",
+   "label": "Allowed Roles",
+   "options": "AI Tool Role"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "schema_sec",
+   "fieldtype": "Section Break",
+   "label": "Generated Schema"
+  },
+  {
+   "fieldname": "json_schema",
+   "fieldtype": "Code",
+   "label": "JSON Schema",
+   "options": "JSON",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-16 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Conversation",
+ "name": "AI Tool",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI User",
+   "read": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "show_title_field_in_link": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "tool_name",
+ "track_changes": 1
+}

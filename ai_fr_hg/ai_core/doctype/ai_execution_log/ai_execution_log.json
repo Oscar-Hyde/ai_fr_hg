@@ -1,0 +1,272 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "allow_rename": 0,
+ "autoname": "hash",
+ "creation": "2026-08-16 09:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "operation",
+  "status",
+  "provider",
+  "model",
+  "log_cb",
+  "started_at",
+  "finished_at",
+  "duration_ms",
+  "user",
+  "reference_sec",
+  "reference_doctype",
+  "reference_name",
+  "reference_cb",
+  "conversation",
+  "pipeline_run",
+  "payload_sec",
+  "prompt_text",
+  "response_text",
+  "request_payload",
+  "response_payload",
+  "metrics_sec",
+  "prompt_tokens",
+  "completion_tokens",
+  "total_tokens",
+  "metrics_cb",
+  "tokens_per_second",
+  "retry_count",
+  "queue_time_ms",
+  "error_sec",
+  "error_message",
+  "traceback"
+ ],
+ "fields": [
+  {
+   "fieldname": "operation",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Operation",
+   "options": "Chat\nCompletion\nEmbedding\nSummarize\nClassify\nExtract\nCompare\nRerank\nTool Call\nHealth Check",
+   "reqd": 1
+  },
+  {
+   "default": "Queued",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Queued\nRunning\nSuccess\nFailed\nCancelled"
+  },
+  {
+   "fieldname": "provider",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Provider",
+   "options": "AI Provider"
+  },
+  {
+   "fieldname": "model",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Model",
+   "options": "AI Model"
+  },
+  {
+   "fieldname": "log_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "started_at",
+   "fieldtype": "Datetime",
+   "label": "Started At"
+  },
+  {
+   "fieldname": "finished_at",
+   "fieldtype": "Datetime",
+   "label": "Finished At"
+  },
+  {
+   "fieldname": "duration_ms",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Duration (ms)"
+  },
+  {
+   "fieldname": "user",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "User",
+   "options": "User"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "reference_sec",
+   "fieldtype": "Section Break",
+   "label": "Reference"
+  },
+  {
+   "fieldname": "reference_doctype",
+   "fieldtype": "Link",
+   "label": "Reference Document Type",
+   "options": "DocType"
+  },
+  {
+   "fieldname": "reference_name",
+   "fieldtype": "Dynamic Link",
+   "label": "Reference Name",
+   "options": "reference_doctype"
+  },
+  {
+   "fieldname": "reference_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "conversation",
+   "fieldtype": "Link",
+   "label": "Conversation",
+   "options": "AI Conversation"
+  },
+  {
+   "fieldname": "pipeline_run",
+   "fieldtype": "Link",
+   "label": "Pipeline Run",
+   "options": "AI Pipeline Run"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "payload_sec",
+   "fieldtype": "Section Break",
+   "label": "Payload"
+  },
+  {
+   "fieldname": "prompt_text",
+   "fieldtype": "Long Text",
+   "label": "Prompt"
+  },
+  {
+   "fieldname": "response_text",
+   "fieldtype": "Long Text",
+   "label": "Response"
+  },
+  {
+   "fieldname": "request_payload",
+   "fieldtype": "Code",
+   "label": "Request Payload",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "response_payload",
+   "fieldtype": "Code",
+   "label": "Response Payload",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "metrics_sec",
+   "fieldtype": "Section Break",
+   "label": "Metrics"
+  },
+  {
+   "fieldname": "prompt_tokens",
+   "fieldtype": "Int",
+   "label": "Prompt Tokens"
+  },
+  {
+   "fieldname": "completion_tokens",
+   "fieldtype": "Int",
+   "label": "Completion Tokens"
+  },
+  {
+   "fieldname": "total_tokens",
+   "fieldtype": "Int",
+   "label": "Total Tokens"
+  },
+  {
+   "fieldname": "metrics_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "tokens_per_second",
+   "fieldtype": "Float",
+   "label": "Tokens / Second",
+   "precision": "2"
+  },
+  {
+   "fieldname": "retry_count",
+   "fieldtype": "Int",
+   "label": "Retries"
+  },
+  {
+   "fieldname": "queue_time_ms",
+   "fieldtype": "Int",
+   "label": "Queue Time (ms)"
+  },
+  {
+   "collapsible": 1,
+   "collapsible_depends_on": "error_message",
+   "fieldname": "error_sec",
+   "fieldtype": "Section Break",
+   "label": "Error"
+  },
+  {
+   "fieldname": "error_message",
+   "fieldtype": "Small Text",
+   "label": "Error Message"
+  },
+  {
+   "fieldname": "traceback",
+   "fieldtype": "Code",
+   "label": "Traceback",
+   "options": "Python"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-16 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Core",
+ "name": "AI Execution Log",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI Manager",
+   "read": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "AI User",
+   "read": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "show_title_field_in_link": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "operation",
+ "track_changes": 0
+}

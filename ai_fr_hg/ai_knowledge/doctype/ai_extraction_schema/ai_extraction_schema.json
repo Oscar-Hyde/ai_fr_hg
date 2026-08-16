@@ -1,0 +1,149 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "allow_rename": 0,
+ "autoname": "field:schema_name",
+ "creation": "2026-08-16 09:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "schema_name",
+  "enabled",
+  "description",
+  "schema_cb",
+  "model",
+  "strict",
+  "target_doctype",
+  "fields_sec",
+  "extraction_fields",
+  "instructions_sec",
+  "instructions",
+  "json_schema"
+ ],
+ "fields": [
+  {
+   "fieldname": "schema_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Schema Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Enabled"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "fieldname": "schema_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "model",
+   "fieldtype": "Link",
+   "label": "Preferred Model",
+   "options": "AI Model"
+  },
+  {
+   "default": "1",
+   "fieldname": "strict",
+   "fieldtype": "Check",
+   "label": "Strict Schema"
+  },
+  {
+   "description": "Optional. Extracted data can be mapped onto this DocType.",
+   "fieldname": "target_doctype",
+   "fieldtype": "Link",
+   "label": "Target DocType",
+   "options": "DocType"
+  },
+  {
+   "fieldname": "fields_sec",
+   "fieldtype": "Section Break",
+   "label": "Fields"
+  },
+  {
+   "fieldname": "extraction_fields",
+   "fieldtype": "Table",
+   "label": "Fields",
+   "options": "AI Extraction Field",
+   "reqd": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "instructions_sec",
+   "fieldtype": "Section Break",
+   "label": "Instructions"
+  },
+  {
+   "fieldname": "instructions",
+   "fieldtype": "Text",
+   "label": "Extraction Instructions"
+  },
+  {
+   "fieldname": "json_schema",
+   "fieldtype": "Code",
+   "label": "Generated JSON Schema",
+   "options": "JSON",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-16 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Knowledge",
+ "name": "AI Extraction Schema",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI User",
+   "read": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "show_title_field_in_link": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "schema_name",
+ "track_changes": 1
+}

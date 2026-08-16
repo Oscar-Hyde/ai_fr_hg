@@ -3,12 +3,48 @@ name = "ai_fr_hg"
 authors = [
     { name = "Ai Fr Hg", email = "oscarhyde2002@outlook.com"}
 ]
-description = "Ai Fr Hg"
+description = "A complete, fully local enterprise AI platform for Frappe"
 requires-python = ">=3.14"
 readme = "README.md"
 dynamic = ["version"]
 dependencies = [
     # "frappe~=16.0.0" # Installed and managed by bench.
+    # The core platform depends only on `requests`, which Frappe already provides.
+    # Everything else is optional and degrades gracefully - see [project.optional-dependencies].
+]
+
+[project.optional-dependencies]
+# Document format support. Install with:
+#   bench pip install "ai_fr_hg[documents] @ ./apps/ai_fr_hg"
+documents = [
+    "pypdf>=4.0",           # PDF
+    "python-docx>=1.1",     # Word .docx
+    "openpyxl>=3.1",        # Excel .xlsx
+    "python-pptx>=0.6",     # PowerPoint .pptx
+    "beautifulsoup4>=4.12", # HTML / XML
+    "lxml>=5.0",            # Faster HTML/XML parsing
+]
+
+# Optical character recognition for scanned documents and images.
+# Also needs the Tesseract binary: apt install tesseract-ocr
+ocr = [
+    "Pillow>=10.0",
+    "pytesseract>=0.3.10",
+]
+
+# Vectorised similarity ranking. Strongly recommended: it turns retrieval
+# scoring into a single matrix multiply instead of a Python loop.
+performance = [
+    "numpy>=1.26",
+]
+
+# Cron expressions for scheduled pipelines.
+scheduling = [
+    "croniter>=2.0",
+]
+
+all = [
+    "ai_fr_hg[documents,ocr,performance,scheduling]",
 ]
 
 [build-system]

@@ -1,0 +1,435 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-08-16 09:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "general_tab",
+  "platform_enabled",
+  "offline_mode",
+  "allowed_hosts",
+  "general_cb",
+  "request_timeout",
+  "max_retries",
+  "processing_queue",
+  "defaults_sec",
+  "default_chat_model",
+  "default_embedding_model",
+  "defaults_cb",
+  "default_vision_model",
+  "default_agent",
+  "generation_tab",
+  "default_temperature",
+  "default_top_p",
+  "default_max_tokens",
+  "generation_cb",
+  "default_context_window",
+  "streaming_enabled",
+  "default_system_prompt",
+  "knowledge_tab",
+  "default_chunk_size",
+  "default_chunk_overlap",
+  "default_top_k",
+  "knowledge_cb",
+  "similarity_threshold",
+  "enable_hybrid_search",
+  "max_context_characters",
+  "ingest_sec",
+  "auto_process_documents",
+  "auto_embed_on_ingest",
+  "ingest_cb",
+  "max_document_size_mb",
+  "ocr_enabled",
+  "storage_tab",
+  "storage_folder",
+  "encrypt_documents",
+  "auto_backup_enabled",
+  "storage_cb",
+  "execution_log_retention_days",
+  "health_log_retention_days",
+  "audit_log_retention_days",
+  "monitoring_tab",
+  "health_check_enabled",
+  "health_check_interval_minutes",
+  "monitoring_cb",
+  "alert_on_provider_offline",
+  "alert_recipients",
+  "governance_tab",
+  "require_tool_approval",
+  "max_tokens_per_user_per_day",
+  "max_requests_per_user_per_hour",
+  "governance_cb",
+  "log_prompts",
+  "log_responses",
+  "redact_patterns"
+ ],
+ "fields": [
+  {
+   "fieldname": "general_tab",
+   "fieldtype": "Tab Break",
+   "label": "General"
+  },
+  {
+   "default": "1",
+   "fieldname": "platform_enabled",
+   "fieldtype": "Check",
+   "label": "Enable AI Platform"
+  },
+  {
+   "default": "1",
+   "description": "Blocks any provider endpoint that is not a loopback/private address.",
+   "fieldname": "offline_mode",
+   "fieldtype": "Check",
+   "label": "Strict Local Only Mode"
+  },
+  {
+   "description": "Newline separated hostnames permitted in strict local-only mode.",
+   "fieldname": "allowed_hosts",
+   "fieldtype": "Small Text",
+   "label": "Additional Allowed Hosts"
+  },
+  {
+   "fieldname": "general_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "120",
+   "fieldname": "request_timeout",
+   "fieldtype": "Int",
+   "label": "Request Timeout (s)"
+  },
+  {
+   "default": "2",
+   "fieldname": "max_retries",
+   "fieldtype": "Int",
+   "label": "Max Retries"
+  },
+  {
+   "default": "long",
+   "fieldname": "processing_queue",
+   "fieldtype": "Select",
+   "label": "Processing Queue",
+   "options": "default\nshort\nlong"
+  },
+  {
+   "fieldname": "defaults_sec",
+   "fieldtype": "Section Break",
+   "label": "Platform Defaults"
+  },
+  {
+   "fieldname": "default_chat_model",
+   "fieldtype": "Link",
+   "label": "Default Chat Model",
+   "options": "AI Model"
+  },
+  {
+   "fieldname": "default_embedding_model",
+   "fieldtype": "Link",
+   "label": "Default Embedding Model",
+   "options": "AI Model"
+  },
+  {
+   "fieldname": "defaults_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "default_vision_model",
+   "fieldtype": "Link",
+   "label": "Default Vision Model",
+   "options": "AI Model"
+  },
+  {
+   "fieldname": "default_agent",
+   "fieldtype": "Link",
+   "label": "Default Agent",
+   "options": "AI Agent"
+  },
+  {
+   "fieldname": "generation_tab",
+   "fieldtype": "Tab Break",
+   "label": "Generation"
+  },
+  {
+   "default": "0.2",
+   "fieldname": "default_temperature",
+   "fieldtype": "Float",
+   "label": "Temperature",
+   "precision": "2"
+  },
+  {
+   "default": "0.9",
+   "fieldname": "default_top_p",
+   "fieldtype": "Float",
+   "label": "Top P",
+   "precision": "2"
+  },
+  {
+   "default": "2048",
+   "fieldname": "default_max_tokens",
+   "fieldtype": "Int",
+   "label": "Max Tokens"
+  },
+  {
+   "fieldname": "generation_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "8192",
+   "fieldname": "default_context_window",
+   "fieldtype": "Int",
+   "label": "Context Window"
+  },
+  {
+   "default": "1",
+   "fieldname": "streaming_enabled",
+   "fieldtype": "Check",
+   "label": "Enable Streaming"
+  },
+  {
+   "fieldname": "default_system_prompt",
+   "fieldtype": "Code",
+   "label": "Default System Prompt",
+   "options": "Text"
+  },
+  {
+   "fieldname": "knowledge_tab",
+   "fieldtype": "Tab Break",
+   "label": "Knowledge"
+  },
+  {
+   "default": "1200",
+   "fieldname": "default_chunk_size",
+   "fieldtype": "Int",
+   "label": "Chunk Size (characters)"
+  },
+  {
+   "default": "150",
+   "fieldname": "default_chunk_overlap",
+   "fieldtype": "Int",
+   "label": "Chunk Overlap (characters)"
+  },
+  {
+   "default": "6",
+   "fieldname": "default_top_k",
+   "fieldtype": "Int",
+   "label": "Retrieval Top K"
+  },
+  {
+   "fieldname": "knowledge_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0.25",
+   "fieldname": "similarity_threshold",
+   "fieldtype": "Float",
+   "label": "Similarity Threshold",
+   "precision": "3"
+  },
+  {
+   "default": "1",
+   "fieldname": "enable_hybrid_search",
+   "fieldtype": "Check",
+   "label": "Enable Hybrid Search"
+  },
+  {
+   "default": "12000",
+   "fieldname": "max_context_characters",
+   "fieldtype": "Int",
+   "label": "Max Context Characters"
+  },
+  {
+   "fieldname": "ingest_sec",
+   "fieldtype": "Section Break",
+   "label": "Ingestion"
+  },
+  {
+   "default": "1",
+   "fieldname": "auto_process_documents",
+   "fieldtype": "Check",
+   "label": "Auto Process Uploaded Documents"
+  },
+  {
+   "default": "1",
+   "fieldname": "auto_embed_on_ingest",
+   "fieldtype": "Check",
+   "label": "Auto Embed After Extraction"
+  },
+  {
+   "fieldname": "ingest_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "50",
+   "fieldname": "max_document_size_mb",
+   "fieldtype": "Int",
+   "label": "Max Document Size (MB)"
+  },
+  {
+   "default": "1",
+   "fieldname": "ocr_enabled",
+   "fieldtype": "Check",
+   "label": "Enable OCR Fallback"
+  },
+  {
+   "fieldname": "storage_tab",
+   "fieldtype": "Tab Break",
+   "label": "Storage & Retention"
+  },
+  {
+   "default": "AI Platform",
+   "fieldname": "storage_folder",
+   "fieldtype": "Data",
+   "label": "Storage Folder"
+  },
+  {
+   "fieldname": "encrypt_documents",
+   "fieldtype": "Check",
+   "label": "Encrypt Stored Document Text"
+  },
+  {
+   "fieldname": "auto_backup_enabled",
+   "fieldtype": "Check",
+   "label": "Enable Scheduled Knowledge Backup"
+  },
+  {
+   "fieldname": "storage_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "90",
+   "fieldname": "execution_log_retention_days",
+   "fieldtype": "Int",
+   "label": "Execution Log Retention (days)"
+  },
+  {
+   "default": "30",
+   "fieldname": "health_log_retention_days",
+   "fieldtype": "Int",
+   "label": "Health Log Retention (days)"
+  },
+  {
+   "default": "365",
+   "fieldname": "audit_log_retention_days",
+   "fieldtype": "Int",
+   "label": "Audit Log Retention (days)"
+  },
+  {
+   "fieldname": "monitoring_tab",
+   "fieldtype": "Tab Break",
+   "label": "Monitoring"
+  },
+  {
+   "default": "1",
+   "fieldname": "health_check_enabled",
+   "fieldtype": "Check",
+   "label": "Enable Health Checks"
+  },
+  {
+   "default": "15",
+   "fieldname": "health_check_interval_minutes",
+   "fieldtype": "Int",
+   "label": "Health Check Interval (minutes)"
+  },
+  {
+   "fieldname": "monitoring_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "fieldname": "alert_on_provider_offline",
+   "fieldtype": "Check",
+   "label": "Alert on Provider Offline"
+  },
+  {
+   "fieldname": "alert_recipients",
+   "fieldtype": "Small Text",
+   "label": "Alert Recipients"
+  },
+  {
+   "fieldname": "governance_tab",
+   "fieldtype": "Tab Break",
+   "label": "Governance"
+  },
+  {
+   "default": "1",
+   "fieldname": "require_tool_approval",
+   "fieldtype": "Check",
+   "label": "Require Approval for Write Tools"
+  },
+  {
+   "default": "0",
+   "fieldname": "max_tokens_per_user_per_day",
+   "fieldtype": "Int",
+   "label": "Max Tokens / User / Day"
+  },
+  {
+   "default": "0",
+   "fieldname": "max_requests_per_user_per_hour",
+   "fieldtype": "Int",
+   "label": "Max Requests / User / Hour"
+  },
+  {
+   "fieldname": "governance_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "fieldname": "log_prompts",
+   "fieldtype": "Check",
+   "label": "Log Prompts"
+  },
+  {
+   "default": "1",
+   "fieldname": "log_responses",
+   "fieldtype": "Check",
+   "label": "Log Responses"
+  },
+  {
+   "description": "Newline separated regular expressions redacted before logging.",
+   "fieldname": "redact_patterns",
+   "fieldtype": "Small Text",
+   "label": "Redaction Patterns"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-08-16 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Core",
+ "name": "AI Platform Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

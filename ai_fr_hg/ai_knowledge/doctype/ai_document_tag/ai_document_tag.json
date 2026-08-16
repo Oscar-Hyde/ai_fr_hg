@@ -1,0 +1,53 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-08-16 09:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "tag",
+  "source",
+  "score"
+ ],
+ "fields": [
+  {
+   "columns": 5,
+   "fieldname": "tag",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Tag",
+   "reqd": 1
+  },
+  {
+   "columns": 2,
+   "default": "Manual",
+   "fieldname": "source",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Source",
+   "options": "Manual\nAI"
+  },
+  {
+   "columns": 2,
+   "fieldname": "score",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Score",
+   "precision": "3"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-08-16 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Knowledge",
+ "name": "AI Document Tag",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

@@ -1,0 +1,112 @@
+# Copyright (c) 2026, Ai Fr Hg and contributors
+# For license information, please see license.txt
+
+"""Native vector store.
+
+Embeddings live in the `AI Document Chunk` DocType as base64-encoded float32
+buffers, so the platform needs no external vector database. Vectors are stored
+pre-normalised, which reduces cosine similarity to a dot product and lets a
+pure-Python implementation stay fast; numpy is used automatically when present.
+"""
+
+import base64
+import math
+import struct
+
+try:
+	import numpy as _np
+except ImportError:  # numpy is optional
+	_np = None
+
+
+def encode_vector(vector: list[float]) -> str:
+	"""Pack a float vector into a compact base64 float32 buffer."""
+	if not vector:
+		return ""
+	if _np is not None:
+		buffer = _np.asarray(vector, dtype=_np.float32).tobytes()
+	else:
+		buffer = struct.pack(f"<{len(vector)}f", *vector)
+	return base64.b64encode(buffer).decode("ascii")
+
+
+def decode_vector(encoded: str | None) -> list[float]:
+	"""Unpack a base64 float32 buffer back into a list of floats."""
+	if not encoded:
+		return []
+	try:
+		buffer = base64.b64decode(encoded)
+	except Exception:
+		return []
+	count = len(buffer) // 4
+	if not count:
+		return []
+	if _np is not None:
+		return _np.frombuffer(buffer, dtype=_np.float32).tolist()
+	return list(struct.unpack(f"<{count}f", buffer[: count * 4]))
+
+
+def norm(vector: list[float]) -> float:
+	"""Euclidean length of a vector."""
+	if not vector:
+		return 0.0
+	if _np is not None:
+		return float(_np.linalg.norm(_np.asarray(vector, dtype=_np.float32)))
+	return math.sqrt(sum(value * value for value in vector))
+
+
+def normalize(vector: list[float]) -> list[float]:
+	"""Scale a vector to unit length so cosine similarity is a dot product."""
+	length = norm(vector)
+	if not length:
+		return list(vector)
+	if _np is not None:
+		return (_np.asarray(vector, dtype=_np.float32) / length).tolist()
+	return [value / length for value in vector]
+
+
+def dot(a: list[float], b: list[float]) -> float:
+	"""Dot product of two equal-length vectors."""
+	if not a or not b:
+		return 0.0
+	if len(a) != len(b):
+		# Mismatched dimensions mean the chunks were embedded by different models.
+		return 0.0
+	if _np is not None:
+		return float(_np.dot(_np.asarray(a, dtype=_np.float32), _np.asarray(b, dtype=_np.float32)))
+	return sum(x * y for x, y in zip(a, b, strict=True))
+
+
+def cosine_similarity(a: list[float], b: list[float]) -> float:
+	"""Cosine similarity of two vectors, safe against zero vectors."""
+	length_a, length_b = norm(a), norm(b)
+	if not length_a or not length_b:
+		return 0.0
+	return dot(a, b) / (length_a * length_b)
+
+
+def rank(query_vector: list[float], candidates: list[tuple[str, list[float]]], top_k: int = 10):
+	"""Score candidates against the query and return the best `top_k`.
+
+	`candidates` is a list of `(identifier, vector)` pairs, all expected to be
+	unit length. Returns `(identifier, score)` pairs sorted best first.
+	"""
+	if not query_vector or not candidates:
+		return []
+
+	query = normalize(query_vector)
+
+	if _np is not None and len(candidates) > 32:
+		# Vectorised path: one matrix multiply instead of a Python loop.
+		dimensions = len(query)
+		usable = [(key, vec) for key, vec in candidates if len(vec) == dimensions]
+		if not usable:
+			return []
+		matrix = _np.asarray([vec for _, vec in usable], dtype=_np.float32)
+		scores = matrix @ _np.asarray(query, dtype=_np.float32)
+		order = _np.argsort(-scores)[:top_k]
+		return [(usable[i][0], float(scores[i])) for i in order]
+
+	scored = [(key, dot(query, vector)) for key, vector in candidates]
+	scored.sort(key=lambda row: row[1], reverse=True)
+	return scored[:top_k]

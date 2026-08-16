@@ -1,0 +1,70 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-08-16 09:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "version",
+  "digest",
+  "pulled_on",
+  "size_bytes",
+  "is_active",
+  "notes"
+ ],
+ "fields": [
+  {
+   "columns": 2,
+   "fieldname": "version",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Version",
+   "reqd": 1
+  },
+  {
+   "columns": 3,
+   "fieldname": "digest",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Digest"
+  },
+  {
+   "columns": 2,
+   "fieldname": "pulled_on",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Pulled On"
+  },
+  {
+   "fieldname": "size_bytes",
+   "fieldtype": "Long Int",
+   "label": "Size (bytes)"
+  },
+  {
+   "columns": 1,
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Active"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-08-16 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Core",
+ "name": "AI Model Version",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}
