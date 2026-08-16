@@ -1,0 +1,235 @@
+{
+ "app": "ai_fr_hg",
+ "charts": [],
+ "content": "[{\"id\": \"h2788435\", \"type\": \"header\", \"data\": {\"text\": \"AI Workspace\", \"col\": 12, \"level\": 4}}, {\"id\": \"p85979936\", \"type\": \"paragraph\", \"data\": {\"text\": \"Chat with your local models, search your knowledge, and run AI tasks.\", \"col\": 12}}, {\"id\": \"s62141950\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"AI Assistant\", \"col\": 3}}, {\"id\": \"s6397134\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Knowledge Explorer\", \"col\": 3}}, {\"id\": \"s6789980\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"My Conversations\", \"col\": 3}}, {\"id\": \"s99485052\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"AI Tasks\", \"col\": 3}}, {\"id\": \"sp592df5\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"c95862942\", \"type\": \"card\", \"data\": {\"card_name\": \"Conversations\", \"col\": 4}}, {\"id\": \"c83124223\", \"type\": \"card\", \"data\": {\"card_name\": \"Knowledge\", \"col\": 4}}, {\"id\": \"c29315919\", \"type\": \"card\", \"data\": {\"card_name\": \"Tasks\", \"col\": 4}}]",
+ "creation": "2026-08-16 09:00:00.000000",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "message-circle",
+ "idx": 0,
+ "indicator_color": "blue",
+ "is_hidden": 0,
+ "label": "AI Workspace",
+ "links": [
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Conversations",
+   "link_count": 2,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Conversations",
+   "link_count": 0,
+   "link_to": "AI Conversation",
+   "link_type": "DocType",
+   "onboard": 1,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Messages",
+   "link_count": 0,
+   "link_to": "AI Message",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Knowledge",
+   "link_count": 3,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Documents",
+   "link_count": 0,
+   "link_to": "AI Document",
+   "link_type": "DocType",
+   "onboard": 1,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Knowledge Bases",
+   "link_count": 0,
+   "link_to": "AI Knowledge Base",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Search Queries",
+   "link_count": 0,
+   "link_to": "AI Search Query",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Tasks",
+   "link_count": 2,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "AI Tasks",
+   "link_count": 0,
+   "link_to": "AI Task",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Tool Invocations",
+   "link_count": 0,
+   "link_to": "AI Tool Invocation",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  }
+ ],
+ "modified": "2026-08-16 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Core",
+ "name": "AI Workspace",
+ "number_cards": [],
+ "owner": "Administrator",
+ "public": 1,
+ "quick_lists": [],
+ "roles": [
+  {
+   "role": "AI User"
+  },
+  {
+   "role": "AI Manager"
+  },
+  {
+   "role": "System Manager"
+  }
+ ],
+ "sequence_id": 10.0,
+ "shortcuts": [
+  {
+   "color": "Blue",
+   "label": "AI Assistant",
+   "link_to": "ai-assistant",
+   "type": "Page"
+  },
+  {
+   "color": "Green",
+   "label": "Knowledge Explorer",
+   "link_to": "knowledge-explorer",
+   "type": "Page"
+  },
+  {
+   "color": "Grey",
+   "label": "My Conversations",
+   "link_to": "AI Conversation",
+   "type": "DocType"
+  },
+  {
+   "color": "Orange",
+   "label": "AI Tasks",
+   "link_to": "AI Task",
+   "type": "DocType"
+  }
+ ],
+ "sidebar_items": [
+  {
+   "child": 0,
+   "collapsible": 1,
+   "icon": "message-circle",
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "AI Assistant",
+   "link_to": "ai-assistant",
+   "link_type": "Page",
+   "open_in_new_tab": 0,
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 0,
+   "collapsible": 1,
+   "icon": "search",
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Knowledge Explorer",
+   "link_to": "knowledge-explorer",
+   "link_type": "Page",
+   "open_in_new_tab": 0,
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 0,
+   "collapsible": 1,
+   "icon": "messages-square",
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Conversations",
+   "link_to": "AI Conversation",
+   "link_type": "DocType",
+   "open_in_new_tab": 0,
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 0,
+   "collapsible": 1,
+   "icon": "file-text",
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Documents",
+   "link_to": "AI Document",
+   "link_type": "DocType",
+   "open_in_new_tab": 0,
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 0,
+   "collapsible": 1,
+   "icon": "list-checks",
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Tasks",
+   "link_to": "AI Task",
+   "link_type": "DocType",
+   "open_in_new_tab": 0,
+   "show_arrow": 0,
+   "type": "Link"
+  }
+ ],
+ "standard": 1,
+ "title": "AI Workspace",
+ "type": "Workspace"
+}

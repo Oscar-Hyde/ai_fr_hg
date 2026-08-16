@@ -1,0 +1,134 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "allow_rename": 0,
+ "autoname": "hash",
+ "creation": "2026-08-16 09:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "query",
+  "knowledge_base",
+  "user",
+  "search_cb",
+  "search_type",
+  "result_count",
+  "top_score",
+  "duration_ms",
+  "results_sec",
+  "results"
+ ],
+ "fields": [
+  {
+   "fieldname": "query",
+   "fieldtype": "Small Text",
+   "in_list_view": 1,
+   "label": "Query",
+   "reqd": 1
+  },
+  {
+   "fieldname": "knowledge_base",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Knowledge Base",
+   "options": "AI Knowledge Base"
+  },
+  {
+   "fieldname": "user",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "User",
+   "options": "User"
+  },
+  {
+   "fieldname": "search_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Hybrid",
+   "fieldname": "search_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Search Type",
+   "options": "Semantic\nKeyword\nHybrid"
+  },
+  {
+   "fieldname": "result_count",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Results"
+  },
+  {
+   "fieldname": "top_score",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Top Score",
+   "precision": "4"
+  },
+  {
+   "fieldname": "duration_ms",
+   "fieldtype": "Int",
+   "label": "Duration (ms)"
+  },
+  {
+   "fieldname": "results_sec",
+   "fieldtype": "Section Break",
+   "label": "Results"
+  },
+  {
+   "fieldname": "results",
+   "fieldtype": "Code",
+   "label": "Results",
+   "options": "JSON"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-16 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Knowledge",
+ "name": "AI Search Query",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI Manager",
+   "read": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "AI User",
+   "read": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "show_title_field_in_link": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "query",
+ "track_changes": 0
+}

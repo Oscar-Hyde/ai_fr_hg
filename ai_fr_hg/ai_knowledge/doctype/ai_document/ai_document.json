@@ -1,0 +1,356 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "allow_rename": 0,
+ "autoname": "naming_series:",
+ "creation": "2026-08-16 09:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "title",
+  "knowledge_base",
+  "status",
+  "document_type",
+  "doc_cb",
+  "source_type",
+  "source_file",
+  "source_url",
+  "source_doctype",
+  "source_name",
+  "language",
+  "content_sec",
+  "content",
+  "summary_sec",
+  "summary",
+  "metadata_sec",
+  "mime_type",
+  "file_size",
+  "page_count",
+  "word_count",
+  "metadata_cb",
+  "character_count",
+  "checksum",
+  "reader_used",
+  "metadata",
+  "tags_sec",
+  "tags",
+  "confidence",
+  "index_sec",
+  "chunk_count",
+  "embedded_chunk_count",
+  "indexed_on",
+  "index_cb",
+  "processing_duration_ms",
+  "retry_count",
+  "error_message",
+  "extraction_sec",
+  "extraction_schema",
+  "extracted_data"
+ ],
+ "fields": [
+  {
+   "default": "AIDOC-.YYYY.-",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Series",
+   "options": "AIDOC-.YYYY.-",
+   "print_hide": 1
+  },
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Title",
+   "reqd": 1
+  },
+  {
+   "fieldname": "knowledge_base",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Knowledge Base",
+   "options": "AI Knowledge Base",
+   "reqd": 1
+  },
+  {
+   "default": "Draft",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Draft\nQueued\nExtracting\nChunking\nEmbedding\nIndexed\nFailed\nArchived"
+  },
+  {
+   "fieldname": "document_type",
+   "fieldtype": "Data",
+   "in_standard_filter": 1,
+   "label": "Document Type"
+  },
+  {
+   "fieldname": "doc_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "File",
+   "fieldname": "source_type",
+   "fieldtype": "Select",
+   "label": "Source Type",
+   "options": "File\nText\nURL\nDocType Record\nFolder"
+  },
+  {
+   "depends_on": "eval:doc.source_type=='File'",
+   "fieldname": "source_file",
+   "fieldtype": "Attach",
+   "label": "Source File"
+  },
+  {
+   "depends_on": "eval:doc.source_type=='URL'",
+   "fieldname": "source_url",
+   "fieldtype": "Data",
+   "label": "Source URL"
+  },
+  {
+   "depends_on": "eval:doc.source_type=='DocType Record'",
+   "fieldname": "source_doctype",
+   "fieldtype": "Link",
+   "label": "Source DocType",
+   "options": "DocType"
+  },
+  {
+   "depends_on": "eval:doc.source_type=='DocType Record'",
+   "fieldname": "source_name",
+   "fieldtype": "Dynamic Link",
+   "label": "Source Name",
+   "options": "source_doctype"
+  },
+  {
+   "fieldname": "language",
+   "fieldtype": "Data",
+   "label": "Language"
+  },
+  {
+   "fieldname": "content_sec",
+   "fieldtype": "Section Break",
+   "label": "Content"
+  },
+  {
+   "fieldname": "content",
+   "fieldtype": "Long Text",
+   "label": "Extracted Text"
+  },
+  {
+   "collapsible": 1,
+   "collapsible_depends_on": "summary",
+   "fieldname": "summary_sec",
+   "fieldtype": "Section Break",
+   "label": "Summary"
+  },
+  {
+   "fieldname": "summary",
+   "fieldtype": "Long Text",
+   "label": "Summary"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "metadata_sec",
+   "fieldtype": "Section Break",
+   "label": "Metadata"
+  },
+  {
+   "fieldname": "mime_type",
+   "fieldtype": "Data",
+   "label": "MIME Type",
+   "read_only": 1
+  },
+  {
+   "fieldname": "file_size",
+   "fieldtype": "Long Int",
+   "label": "File Size (bytes)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "page_count",
+   "fieldtype": "Int",
+   "label": "Pages",
+   "read_only": 1
+  },
+  {
+   "fieldname": "word_count",
+   "fieldtype": "Int",
+   "label": "Words",
+   "read_only": 1
+  },
+  {
+   "fieldname": "metadata_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "character_count",
+   "fieldtype": "Long Int",
+   "label": "Characters",
+   "read_only": 1
+  },
+  {
+   "fieldname": "checksum",
+   "fieldtype": "Data",
+   "label": "Checksum",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reader_used",
+   "fieldtype": "Data",
+   "label": "Reader Used",
+   "read_only": 1
+  },
+  {
+   "fieldname": "metadata",
+   "fieldtype": "Code",
+   "label": "Metadata",
+   "options": "JSON",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "tags_sec",
+   "fieldtype": "Section Break",
+   "label": "Classification"
+  },
+  {
+   "fieldname": "tags",
+   "fieldtype": "Table",
+   "label": "Tags",
+   "options": "AI Document Tag"
+  },
+  {
+   "fieldname": "confidence",
+   "fieldtype": "Percent",
+   "label": "Classification Confidence"
+  },
+  {
+   "fieldname": "index_sec",
+   "fieldtype": "Section Break",
+   "label": "Indexing"
+  },
+  {
+   "fieldname": "chunk_count",
+   "fieldtype": "Int",
+   "label": "Chunks",
+   "read_only": 1
+  },
+  {
+   "fieldname": "embedded_chunk_count",
+   "fieldtype": "Int",
+   "label": "Embedded Chunks",
+   "read_only": 1
+  },
+  {
+   "fieldname": "indexed_on",
+   "fieldtype": "Datetime",
+   "label": "Indexed On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "index_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "processing_duration_ms",
+   "fieldtype": "Int",
+   "label": "Processing Duration (ms)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "retry_count",
+   "fieldtype": "Int",
+   "label": "Retries",
+   "read_only": 1
+  },
+  {
+   "fieldname": "error_message",
+   "fieldtype": "Small Text",
+   "label": "Error Message",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "extraction_sec",
+   "fieldtype": "Section Break",
+   "label": "Structured Extraction"
+  },
+  {
+   "fieldname": "extraction_schema",
+   "fieldtype": "Link",
+   "label": "Extraction Schema",
+   "options": "AI Extraction Schema"
+  },
+  {
+   "fieldname": "extracted_data",
+   "fieldtype": "Code",
+   "label": "Extracted Data",
+   "options": "JSON",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [
+  {
+   "link_doctype": "AI Document Chunk",
+   "link_fieldname": "document"
+  }
+ ],
+ "modified": "2026-08-16 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Knowledge",
+ "name": "AI Document",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI User",
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "search_fields": "knowledge_base,status,document_type",
+ "show_title_field_in_link": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "title",
+ "track_changes": 1
+}

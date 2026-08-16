@@ -1,0 +1,290 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "allow_rename": 0,
+ "autoname": "field:agent_name",
+ "creation": "2026-08-16 09:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "agent_name",
+  "enabled",
+  "is_default",
+  "description",
+  "agent_cb",
+  "model",
+  "temperature",
+  "max_tokens",
+  "max_tool_iterations",
+  "behaviour_sec",
+  "system_prompt",
+  "greeting",
+  "response_format",
+  "knowledge_sec",
+  "use_knowledge",
+  "knowledge_bases",
+  "top_k",
+  "knowledge_cb",
+  "citation_mode",
+  "strict_grounding",
+  "fallback_answer",
+  "tools_sec",
+  "use_tools",
+  "tools",
+  "agent_access_sec",
+  "allowed_roles",
+  "agent_stats_sec",
+  "conversation_count",
+  "message_count",
+  "agent_stats_cb",
+  "total_tokens",
+  "last_used_on"
+ ],
+ "fields": [
+  {
+   "fieldname": "agent_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Agent Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Enabled"
+  },
+  {
+   "fieldname": "is_default",
+   "fieldtype": "Check",
+   "label": "Default Agent"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "fieldname": "agent_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "model",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Model",
+   "options": "AI Model"
+  },
+  {
+   "default": "0.2",
+   "fieldname": "temperature",
+   "fieldtype": "Float",
+   "label": "Temperature",
+   "precision": "2"
+  },
+  {
+   "default": "2048",
+   "fieldname": "max_tokens",
+   "fieldtype": "Int",
+   "label": "Max Tokens"
+  },
+  {
+   "default": "4",
+   "fieldname": "max_tool_iterations",
+   "fieldtype": "Int",
+   "label": "Max Tool Iterations"
+  },
+  {
+   "fieldname": "behaviour_sec",
+   "fieldtype": "Section Break",
+   "label": "Behaviour"
+  },
+  {
+   "fieldname": "system_prompt",
+   "fieldtype": "Code",
+   "label": "System Prompt",
+   "options": "Text"
+  },
+  {
+   "fieldname": "greeting",
+   "fieldtype": "Small Text",
+   "label": "Greeting"
+  },
+  {
+   "default": "Markdown",
+   "fieldname": "response_format",
+   "fieldtype": "Select",
+   "label": "Response Format",
+   "options": "Text\nMarkdown\nJSON"
+  },
+  {
+   "fieldname": "knowledge_sec",
+   "fieldtype": "Section Break",
+   "label": "Knowledge"
+  },
+  {
+   "default": "1",
+   "fieldname": "use_knowledge",
+   "fieldtype": "Check",
+   "label": "Use Knowledge Retrieval"
+  },
+  {
+   "depends_on": "use_knowledge",
+   "fieldname": "knowledge_bases",
+   "fieldtype": "Table",
+   "label": "Knowledge Bases",
+   "options": "AI Agent Knowledge Base"
+  },
+  {
+   "default": "6",
+   "depends_on": "use_knowledge",
+   "fieldname": "top_k",
+   "fieldtype": "Int",
+   "label": "Retrieval Top K"
+  },
+  {
+   "fieldname": "knowledge_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Inline",
+   "depends_on": "use_knowledge",
+   "fieldname": "citation_mode",
+   "fieldtype": "Select",
+   "label": "Citation Mode",
+   "options": "None\nInline\nFootnote"
+  },
+  {
+   "depends_on": "use_knowledge",
+   "fieldname": "strict_grounding",
+   "fieldtype": "Check",
+   "label": "Answer Only From Knowledge"
+  },
+  {
+   "depends_on": "use_knowledge",
+   "fieldname": "fallback_answer",
+   "fieldtype": "Small Text",
+   "label": "Fallback Answer"
+  },
+  {
+   "fieldname": "tools_sec",
+   "fieldtype": "Section Break",
+   "label": "Tools"
+  },
+  {
+   "fieldname": "use_tools",
+   "fieldtype": "Check",
+   "label": "Enable Tool Calling"
+  },
+  {
+   "depends_on": "use_tools",
+   "fieldname": "tools",
+   "fieldtype": "Table",
+   "label": "Tools",
+   "options": "AI Agent Tool"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "agent_access_sec",
+   "fieldtype": "Section Break",
+   "label": "Access"
+  },
+  {
+   "fieldname": "allowed_roles",
+   "fieldtype": "Table",
+   "label": "Allowed Roles",
+   "options": "AI Agent Role"
+  },
+  {
+   "fieldname": "agent_stats_sec",
+   "fieldtype": "Section Break",
+   "label": "Statistics"
+  },
+  {
+   "fieldname": "conversation_count",
+   "fieldtype": "Int",
+   "label": "Conversations",
+   "read_only": 1
+  },
+  {
+   "fieldname": "message_count",
+   "fieldtype": "Int",
+   "label": "Messages",
+   "read_only": 1
+  },
+  {
+   "fieldname": "agent_stats_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "total_tokens",
+   "fieldtype": "Long Int",
+   "label": "Total Tokens",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_used_on",
+   "fieldtype": "Datetime",
+   "label": "Last Used On",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [
+  {
+   "link_doctype": "AI Conversation",
+   "link_fieldname": "agent"
+  }
+ ],
+ "modified": "2026-08-16 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Conversation",
+ "name": "AI Agent",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI User",
+   "read": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "show_title_field_in_link": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "agent_name",
+ "track_changes": 1
+}

@@ -1,0 +1,202 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "allow_rename": 0,
+ "autoname": "naming_series:",
+ "creation": "2026-08-16 09:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "title",
+  "agent",
+  "user",
+  "status",
+  "conv_cb",
+  "model",
+  "pinned",
+  "message_count",
+  "total_tokens",
+  "last_message_on",
+  "context_sec",
+  "knowledge_bases",
+  "context_document",
+  "system_prompt_override",
+  "summary_sec",
+  "summary"
+ ],
+ "fields": [
+  {
+   "default": "AICONV-.YYYY.-",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Series",
+   "options": "AICONV-.YYYY.-",
+   "print_hide": 1
+  },
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Title"
+  },
+  {
+   "fieldname": "agent",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Agent",
+   "options": "AI Agent"
+  },
+  {
+   "fieldname": "user",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "User",
+   "options": "User"
+  },
+  {
+   "default": "Active",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Active\nArchived\nFailed"
+  },
+  {
+   "fieldname": "conv_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "model",
+   "fieldtype": "Link",
+   "label": "Model",
+   "options": "AI Model"
+  },
+  {
+   "fieldname": "pinned",
+   "fieldtype": "Check",
+   "label": "Pinned"
+  },
+  {
+   "fieldname": "message_count",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Messages",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_tokens",
+   "fieldtype": "Int",
+   "label": "Total Tokens",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_message_on",
+   "fieldtype": "Datetime",
+   "label": "Last Message",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "context_sec",
+   "fieldtype": "Section Break",
+   "label": "Context"
+  },
+  {
+   "fieldname": "knowledge_bases",
+   "fieldtype": "Table",
+   "label": "Knowledge Bases",
+   "options": "AI Agent Knowledge Base"
+  },
+  {
+   "fieldname": "context_document",
+   "fieldtype": "Link",
+   "label": "Focused Document",
+   "options": "AI Document"
+  },
+  {
+   "fieldname": "system_prompt_override",
+   "fieldtype": "Code",
+   "label": "System Prompt Override",
+   "options": "Text"
+  },
+  {
+   "collapsible": 1,
+   "collapsible_depends_on": "summary",
+   "fieldname": "summary_sec",
+   "fieldtype": "Section Break",
+   "label": "Summary"
+  },
+  {
+   "fieldname": "summary",
+   "fieldtype": "Long Text",
+   "label": "Summary"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [
+  {
+   "link_doctype": "AI Message",
+   "link_fieldname": "conversation"
+  },
+  {
+   "link_doctype": "AI Execution Log",
+   "link_fieldname": "conversation"
+  }
+ ],
+ "modified": "2026-08-16 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Conversation",
+ "name": "AI Conversation",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI User",
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "search_fields": "agent,user,status",
+ "show_title_field_in_link": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "title",
+ "track_changes": 1
+}

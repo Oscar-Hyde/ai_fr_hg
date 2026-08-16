@@ -1,0 +1,486 @@
+# Copyright (c) 2026, Ai Fr Hg and contributors
+# For license information, please see license.txt
+
+"""Installation, seeding and first-run setup.
+
+`after_install` makes the platform usable immediately: roles, a default local
+Ollama provider, a starter knowledge base, a general-purpose agent, the
+built-in tools and sensible platform defaults.
+"""
+
+import frappe
+from frappe import _
+
+ROLES = [
+	{
+		"role_name": "AI Manager",
+		"desk_access": 1,
+		"description": "Full control of the AI platform: providers, models, agents, policies.",
+	},
+	{
+		"role_name": "AI User",
+		"desk_access": 1,
+		"description": "Can chat, upload documents and search the knowledge base.",
+	},
+	{
+		"role_name": "AI Auditor",
+		"desk_access": 1,
+		"description": "Read-only access to logs, audit trails and usage reporting.",
+	},
+]
+
+BUILTIN_TOOLS = [
+	{
+		"tool_name": "search_knowledge_base",
+		"tool_type": "Builtin",
+		"handler": "search_knowledge_base",
+		"is_readonly_tool": 1,
+		"description": (
+			"Search the local knowledge base for passages relevant to a question. "
+			"Use this whenever the answer may live in an uploaded document."
+		),
+		"parameters": [
+			{
+				"parameter": "query",
+				"parameter_type": "String",
+				"required": 1,
+				"description": "The search query, phrased as a natural language question.",
+			},
+			{
+				"parameter": "knowledge_base",
+				"parameter_type": "String",
+				"description": "Optional: restrict the search to one knowledge base.",
+			},
+			{
+				"parameter": "limit",
+				"parameter_type": "Integer",
+				"description": "Maximum number of passages to return. Default 5.",
+			},
+		],
+	},
+	{
+		"tool_name": "get_document_text",
+		"tool_type": "Builtin",
+		"handler": "get_document_text",
+		"is_readonly_tool": 1,
+		"description": "Read the full extracted text of a specific AI Document by its ID.",
+		"parameters": [
+			{
+				"parameter": "document",
+				"parameter_type": "String",
+				"required": 1,
+				"description": "The AI Document ID, for example AIDOC-2026-00001.",
+			},
+			{
+				"parameter": "max_characters",
+				"parameter_type": "Integer",
+				"description": "Maximum characters to return. Default 8000.",
+			},
+		],
+	},
+	{
+		"tool_name": "list_documents",
+		"tool_type": "Builtin",
+		"handler": "list_documents",
+		"is_readonly_tool": 1,
+		"description": (
+			"List records of any Frappe DocType the user may read. "
+			"Use this to answer questions about business data."
+		),
+		"parameters": [
+			{
+				"parameter": "doctype",
+				"parameter_type": "String",
+				"required": 1,
+				"description": "The DocType to list, for example 'Sales Invoice'.",
+			},
+			{
+				"parameter": "filters",
+				"parameter_type": "Object",
+				"description": 'Filters as a JSON object, for example {"status": "Open"}.',
+			},
+			{
+				"parameter": "fields",
+				"parameter_type": "Array",
+				"description": "Fieldnames to return.",
+			},
+			{
+				"parameter": "limit",
+				"parameter_type": "Integer",
+				"description": "Maximum records to return. Default 20, maximum 100.",
+			},
+		],
+	},
+	{
+		"tool_name": "count_documents",
+		"tool_type": "Builtin",
+		"handler": "count_documents",
+		"is_readonly_tool": 1,
+		"description": "Count records of a DocType matching optional filters.",
+		"parameters": [
+			{
+				"parameter": "doctype",
+				"parameter_type": "String",
+				"required": 1,
+				"description": "The DocType to count.",
+			},
+			{"parameter": "filters", "parameter_type": "Object", "description": "Filters as a JSON object."},
+		],
+	},
+	{
+		"tool_name": "get_document",
+		"tool_type": "Builtin",
+		"handler": "get_document",
+		"is_readonly_tool": 1,
+		"description": "Fetch a single Frappe record by DocType and name.",
+		"parameters": [
+			{
+				"parameter": "doctype",
+				"parameter_type": "String",
+				"required": 1,
+				"description": "The DocType of the record.",
+			},
+			{
+				"parameter": "name",
+				"parameter_type": "String",
+				"required": 1,
+				"description": "The record's ID.",
+			},
+			{
+				"parameter": "fields",
+				"parameter_type": "Array",
+				"description": "Optional list of fields to return.",
+			},
+		],
+	},
+	{
+		"tool_name": "current_datetime",
+		"tool_type": "Builtin",
+		"handler": "current_datetime",
+		"is_readonly_tool": 1,
+		"description": "Get the current date and time on this system. Use this for any 'today' question.",
+		"parameters": [],
+	},
+]
+
+EXTRACTION_SCHEMAS = [
+	{
+		"schema_name": "Invoice Data",
+		"description": "Common fields found on a supplier invoice.",
+		"instructions": "Extract invoice details. Use ISO dates. Amounts must be plain numbers.",
+		"extraction_fields": [
+			{
+				"field_name": "invoice_number",
+				"label": "Invoice Number",
+				"field_type": "String",
+				"required": 1,
+			},
+			{"field_name": "invoice_date", "label": "Invoice Date", "field_type": "Date"},
+			{"field_name": "due_date", "label": "Due Date", "field_type": "Date"},
+			{"field_name": "supplier_name", "label": "Supplier", "field_type": "String"},
+			{"field_name": "total_amount", "label": "Total", "field_type": "Number"},
+			{"field_name": "tax_amount", "label": "Tax", "field_type": "Number"},
+			{"field_name": "currency", "label": "Currency", "field_type": "String"},
+			{"field_name": "line_items", "label": "Line Items", "field_type": "Array"},
+		],
+	},
+	{
+		"schema_name": "Contract Summary",
+		"description": "Key commercial terms of a contract.",
+		"instructions": "Extract the contract's parties, dates and commercial terms.",
+		"extraction_fields": [
+			{"field_name": "contract_title", "label": "Title", "field_type": "String", "required": 1},
+			{"field_name": "parties", "label": "Parties", "field_type": "Array"},
+			{"field_name": "effective_date", "label": "Effective Date", "field_type": "Date"},
+			{"field_name": "expiry_date", "label": "Expiry Date", "field_type": "Date"},
+			{"field_name": "contract_value", "label": "Value", "field_type": "Number"},
+			{"field_name": "notice_period_days", "label": "Notice Period (days)", "field_type": "Integer"},
+			{"field_name": "auto_renews", "label": "Auto Renews", "field_type": "Boolean"},
+			{"field_name": "governing_law", "label": "Governing Law", "field_type": "String"},
+		],
+	},
+]
+
+PROMPT_TEMPLATES = [
+	{
+		"template_name": "Document Summary",
+		"category": "Summarization",
+		"description": "Concise executive summary of a document.",
+		"system_prompt": "You are a precise analyst. You never invent facts.",
+		"user_prompt": (
+			"Summarise the document below for an executive audience.\n"
+			"Cover the purpose, the key facts and any required actions.\n\n"
+			"{{ content }}"
+		),
+		"variables": [{"variable": "content", "label": "Content", "required": 1}],
+	},
+	{
+		"template_name": "Grounded Answer",
+		"category": "RAG",
+		"description": "Answer a question strictly from supplied context.",
+		"system_prompt": (
+			"Answer only from the CONTEXT. If the context does not contain the answer, "
+			"say you do not have that information. Cite passages as [1], [2]."
+		),
+		"user_prompt": "CONTEXT:\n{{ context }}\n\nQUESTION: {{ question }}",
+		"variables": [
+			{"variable": "context", "label": "Context", "required": 1},
+			{"variable": "question", "label": "Question", "required": 1},
+		],
+	},
+]
+
+
+def before_install() -> None:
+	"""Warn about optional dependencies that unlock extra file formats."""
+	optional = {
+		"pypdf": "PDF",
+		"docx": "Word (.docx)",
+		"openpyxl": "Excel (.xlsx)",
+		"pptx": "PowerPoint (.pptx)",
+		"bs4": "HTML",
+	}
+
+	missing = []
+	for module, label in optional.items():
+		try:
+			__import__(module)
+		except ImportError:
+			missing.append(label)
+
+	if missing:
+		print(
+			"\n  Note: these document formats need optional packages: "
+			+ ", ".join(missing)
+			+ "\n  Install them with:  bench pip install ai_fr_hg[documents]\n"
+		)
+
+
+def after_install() -> None:
+	"""Seed roles, defaults and starter records."""
+	create_roles()
+	create_settings()
+	create_default_provider()
+	create_builtin_tools()
+	create_extraction_schemas()
+	create_prompt_templates()
+	create_default_knowledge_base()
+	create_default_agent()
+	create_default_policies()
+
+	frappe.db.commit()  # nosemgrep: frappe-manual-commit
+
+	print("")
+	print("  AI Platform installed.")
+	print("")
+	print("  Next steps:")
+	print("    1. Start your local runtime, e.g.  ollama serve")
+	print("    2. Pull a chat model,        e.g.  ollama pull llama3.1:8b")
+	print("    3. Pull an embedding model,  e.g.  ollama pull nomic-embed-text")
+	print("    4. Open /app/ai-control-center and run 'Test All Providers'")
+	print("    5. Run 'Discover Models' to register what the runtime has")
+	print("")
+
+
+def create_roles() -> None:
+	for role in ROLES:
+		if frappe.db.exists("Role", role["role_name"]):
+			continue
+		doc = frappe.new_doc("Role")
+		doc.update(role)
+		doc.flags.ignore_permissions = True
+		doc.insert(ignore_permissions=True)
+
+
+def create_settings() -> None:
+	settings = frappe.get_single("AI Platform Settings")
+	if not settings.default_system_prompt:
+		settings.default_system_prompt = (
+			"You are a helpful enterprise AI assistant running entirely on local infrastructure. "
+			"Answer accurately and concisely. If you are unsure, say so plainly rather than guessing."
+		)
+	if not settings.redact_patterns:
+		# Sensible starting redactions: card numbers and long digit runs.
+		settings.redact_patterns = "\n".join(
+			[
+				r"\b\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4}\b",
+				r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",
+			]
+		)
+	settings.flags.ignore_permissions = True
+	settings.save(ignore_permissions=True)
+
+
+def create_default_provider() -> None:
+	"""Register a local Ollama endpoint so the platform is usable at once."""
+	if frappe.db.exists("AI Provider", "Local Ollama"):
+		return
+
+	doc = frappe.new_doc("AI Provider")
+	doc.update(
+		{
+			"provider_name": "Local Ollama",
+			"provider_type": "Ollama",
+			"base_url": "http://localhost:11434",
+			"enabled": 1,
+			"is_default": 1,
+			"priority": 1,
+			"request_timeout": 120,
+			"max_concurrent_requests": 4,
+			"description": "Default local Ollama runtime. Start it with `ollama serve`.",
+		}
+	)
+	doc.flags.ignore_permissions = True
+	doc.insert(ignore_permissions=True)
+
+
+def create_builtin_tools() -> None:
+	for tool in BUILTIN_TOOLS:
+		if frappe.db.exists("AI Tool", tool["tool_name"]):
+			continue
+		doc = frappe.new_doc("AI Tool")
+		doc.update({k: v for k, v in tool.items() if k != "parameters"})
+		for parameter in tool.get("parameters") or []:
+			doc.append("parameters", parameter)
+		doc.flags.ignore_permissions = True
+		doc.insert(ignore_permissions=True)
+
+
+def create_extraction_schemas() -> None:
+	for schema in EXTRACTION_SCHEMAS:
+		if frappe.db.exists("AI Extraction Schema", schema["schema_name"]):
+			continue
+		doc = frappe.new_doc("AI Extraction Schema")
+		doc.update({k: v for k, v in schema.items() if k != "extraction_fields"})
+		for field in schema["extraction_fields"]:
+			doc.append("extraction_fields", field)
+		doc.flags.ignore_permissions = True
+		doc.insert(ignore_permissions=True)
+
+
+def create_prompt_templates() -> None:
+	for template in PROMPT_TEMPLATES:
+		if frappe.db.exists("AI Prompt Template", template["template_name"]):
+			continue
+		doc = frappe.new_doc("AI Prompt Template")
+		doc.update({k: v for k, v in template.items() if k != "variables"})
+		for variable in template.get("variables") or []:
+			doc.append("variables", variable)
+		doc.flags.ignore_permissions = True
+		doc.insert(ignore_permissions=True)
+
+
+def create_default_knowledge_base() -> None:
+	if frappe.db.exists("AI Knowledge Base", "General Knowledge"):
+		return
+
+	doc = frappe.new_doc("AI Knowledge Base")
+	doc.update(
+		{
+			"knowledge_base_name": "General Knowledge",
+			"description": "Default knowledge base for uploaded documents.",
+			"enabled": 1,
+			"is_public": 1,
+			"chunk_size": 1200,
+			"chunk_overlap": 150,
+			"top_k": 6,
+			"similarity_threshold": 0.25,
+		}
+	)
+	doc.flags.ignore_permissions = True
+	doc.insert(ignore_permissions=True)
+
+
+def create_default_agent() -> None:
+	if frappe.db.exists("AI Agent", "General Assistant"):
+		return
+
+	doc = frappe.new_doc("AI Agent")
+	doc.update(
+		{
+			"agent_name": "General Assistant",
+			"description": "General purpose assistant with knowledge retrieval and read-only tools.",
+			"enabled": 1,
+			"is_default": 1,
+			"temperature": 0.2,
+			"max_tokens": 2048,
+			"max_tool_iterations": 4,
+			"use_knowledge": 1,
+			"top_k": 6,
+			"citation_mode": "Inline",
+			"response_format": "Markdown",
+			"use_tools": 1,
+			"greeting": "Hello. Ask me anything about your documents or your data.",
+			"system_prompt": (
+				"You are an enterprise AI assistant running entirely on local infrastructure.\n"
+				"Be accurate, concise and professional.\n"
+				"When context passages are provided, ground your answer in them and cite them.\n"
+				"When you do not know something, say so rather than guessing.\n"
+				"Use the available tools when they would give a more accurate answer."
+			),
+		}
+	)
+	if frappe.db.exists("AI Knowledge Base", "General Knowledge"):
+		doc.append("knowledge_bases", {"knowledge_base": "General Knowledge", "weight": 1})
+	for tool in ("search_knowledge_base", "get_document_text", "current_datetime"):
+		if frappe.db.exists("AI Tool", tool):
+			doc.append("tools", {"tool": tool, "enabled": 1})
+
+	doc.flags.ignore_permissions = True
+	doc.insert(ignore_permissions=True)
+
+
+def create_default_policies() -> None:
+	"""A conservative default policy for the AI User role."""
+	if frappe.db.exists("AI Resource Policy", "Standard AI User"):
+		return
+
+	doc = frappe.new_doc("AI Resource Policy")
+	doc.update(
+		{
+			"policy_name": "Standard AI User",
+			"enabled": 1,
+			"role": "AI User",
+			"priority": 50,
+			"max_requests_per_hour": 200,
+			"max_tokens_per_day": 500_000,
+			"max_documents_per_day": 100,
+			"allow_tools": 1,
+			"allow_document_upload": 1,
+			"allow_pipeline_execution": 0,
+			"allow_model_management": 0,
+			"notes": "Default limits applied to everyone holding the AI User role.",
+		}
+	)
+	doc.flags.ignore_permissions = True
+	doc.insert(ignore_permissions=True)
+
+
+def before_tests() -> None:
+	"""Prepare a clean site for the test suite."""
+	frappe.clear_cache()
+
+	if not frappe.db.a_row_exists("Company"):
+		try:
+			from frappe.desk.page.setup_wizard.setup_wizard import setup_complete
+
+			setup_complete(
+				{
+					"currency": "USD",
+					"full_name": "Test User",
+					"company_name": "Test Company",
+					"timezone": "UTC",
+					"company_abbr": "TC",
+					"industry": "Manufacturing",
+					"country": "United States",
+					"language": "english",
+					"company_tagline": "Testing",
+					"email": "test@example.com",
+					"password": "test",
+					"chart_of_accounts": "Standard",
+				}
+			)
+		except Exception:
+			pass
+
+	frappe.db.commit()  # nosemgrep: frappe-manual-commit

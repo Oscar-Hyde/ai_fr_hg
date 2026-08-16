@@ -1,0 +1,265 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "allow_rename": 0,
+ "autoname": "field:provider_name",
+ "creation": "2026-08-16 09:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "provider_name",
+  "provider_type",
+  "enabled",
+  "is_default",
+  "provider_cb",
+  "base_url",
+  "api_key",
+  "request_timeout",
+  "verify_ssl",
+  "adapter_sec",
+  "adapter_path",
+  "extra_headers",
+  "model_prefix",
+  "health_sec",
+  "status",
+  "last_health_check",
+  "latency_ms",
+  "health_cb",
+  "available_model_count",
+  "consecutive_failures",
+  "last_error",
+  "limits_sec",
+  "max_concurrent_requests",
+  "rate_limit_per_minute",
+  "limits_cb",
+  "priority",
+  "description"
+ ],
+ "fields": [
+  {
+   "fieldname": "provider_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Provider Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "default": "Ollama",
+   "fieldname": "provider_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Provider Type",
+   "options": "Ollama\nOpenAI Compatible\nLlama.cpp\nvLLM\nLM Studio\nText Generation WebUI\nCustom",
+   "reqd": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Enabled"
+  },
+  {
+   "fieldname": "is_default",
+   "fieldtype": "Check",
+   "label": "Default Provider"
+  },
+  {
+   "fieldname": "provider_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "http://localhost:11434",
+   "fieldname": "base_url",
+   "fieldtype": "Data",
+   "label": "Base URL",
+   "reqd": 1
+  },
+  {
+   "fieldname": "api_key",
+   "fieldtype": "Password",
+   "label": "API Key"
+  },
+  {
+   "default": "120",
+   "fieldname": "request_timeout",
+   "fieldtype": "Int",
+   "label": "Request Timeout (s)"
+  },
+  {
+   "fieldname": "verify_ssl",
+   "fieldtype": "Check",
+   "label": "Verify SSL"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "adapter_sec",
+   "fieldtype": "Section Break",
+   "label": "Adapter"
+  },
+  {
+   "depends_on": "eval:doc.provider_type=='Custom'",
+   "description": "Dotted path to a class deriving from ai_fr_hg.ai.providers.base.BaseProvider",
+   "fieldname": "adapter_path",
+   "fieldtype": "Data",
+   "label": "Custom Adapter Path",
+   "mandatory_depends_on": "eval:doc.provider_type=='Custom'"
+  },
+  {
+   "fieldname": "extra_headers",
+   "fieldtype": "Code",
+   "label": "Extra Headers",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "model_prefix",
+   "fieldtype": "Data",
+   "label": "Model Name Prefix"
+  },
+  {
+   "fieldname": "health_sec",
+   "fieldtype": "Section Break",
+   "label": "Health"
+  },
+  {
+   "default": "Unknown",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Unknown\nOnline\nDegraded\nOffline",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_health_check",
+   "fieldtype": "Datetime",
+   "label": "Last Health Check",
+   "read_only": 1
+  },
+  {
+   "fieldname": "latency_ms",
+   "fieldtype": "Int",
+   "label": "Latency (ms)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "health_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "available_model_count",
+   "fieldtype": "Int",
+   "label": "Available Models",
+   "read_only": 1
+  },
+  {
+   "fieldname": "consecutive_failures",
+   "fieldtype": "Int",
+   "label": "Consecutive Failures",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_error",
+   "fieldtype": "Small Text",
+   "label": "Last Error",
+   "read_only": 1
+  },
+  {
+   "fieldname": "limits_sec",
+   "fieldtype": "Section Break",
+   "label": "Limits"
+  },
+  {
+   "default": "4",
+   "fieldname": "max_concurrent_requests",
+   "fieldtype": "Int",
+   "label": "Max Concurrent Requests"
+  },
+  {
+   "default": "0",
+   "fieldname": "rate_limit_per_minute",
+   "fieldtype": "Int",
+   "label": "Rate Limit / Minute"
+  },
+  {
+   "fieldname": "limits_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "10",
+   "description": "Lower values are preferred during automatic failover.",
+   "fieldname": "priority",
+   "fieldtype": "Int",
+   "label": "Priority"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [
+  {
+   "link_doctype": "AI Model",
+   "link_fieldname": "provider"
+  },
+  {
+   "link_doctype": "AI Service Health Log",
+   "link_fieldname": "provider"
+  }
+ ],
+ "modified": "2026-08-16 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Core",
+ "name": "AI Provider",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI User",
+   "read": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "search_fields": "provider_type,base_url,status",
+ "show_title_field_in_link": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "provider_name",
+ "track_changes": 1
+}

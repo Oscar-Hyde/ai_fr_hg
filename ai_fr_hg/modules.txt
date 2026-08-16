@@ -1,1 +1,6 @@
 Ai Fr Hg
+AI Core
+AI Knowledge
+AI Conversation
+AI Automation
+AI Operations

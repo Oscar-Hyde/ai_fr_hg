@@ -1,0 +1,26 @@
+{
+ "creation": "2026-08-16 09:00:00.000000",
+ "docstatus": 0,
+ "doctype": "Page",
+ "icon": "activity",
+ "idx": 0,
+ "modified": "2026-08-16 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Operations",
+ "name": "ai-operations",
+ "owner": "Administrator",
+ "page_name": "ai-operations",
+ "roles": [
+  {
+   "role": "AI Manager"
+  },
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "AI Auditor"
+  }
+ ],
+ "standard": "Yes",
+ "title": "AI Operations"
+}

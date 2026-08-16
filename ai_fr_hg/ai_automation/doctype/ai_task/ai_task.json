@@ -1,0 +1,232 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "allow_rename": 0,
+ "autoname": "naming_series:",
+ "creation": "2026-08-16 09:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "subject",
+  "task_type",
+  "status",
+  "priority",
+  "task_cb",
+  "agent",
+  "model",
+  "knowledge_base",
+  "pipeline",
+  "due_date",
+  "instruction_sec",
+  "instruction",
+  "input_data",
+  "task_result_sec",
+  "result",
+  "result_data",
+  "task_result_cb",
+  "execution_log",
+  "pipeline_run",
+  "completed_on",
+  "error_message"
+ ],
+ "fields": [
+  {
+   "default": "AITASK-.YYYY.-",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Series",
+   "options": "AITASK-.YYYY.-",
+   "print_hide": 1
+  },
+  {
+   "fieldname": "subject",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Subject",
+   "reqd": 1
+  },
+  {
+   "default": "Question",
+   "fieldname": "task_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Task Type",
+   "options": "Question\nSummarize\nClassify\nExtract Data\nCompare\nPipeline\nCustom"
+  },
+  {
+   "default": "Open",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "no_copy": 1,
+   "options": "Open\nPending Approval\nApproved\nRejected\nIn Progress\nCompleted\nFailed\nCancelled"
+  },
+  {
+   "default": "Medium",
+   "fieldname": "priority",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Priority",
+   "options": "Low\nMedium\nHigh\nUrgent"
+  },
+  {
+   "fieldname": "task_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "agent",
+   "fieldtype": "Link",
+   "label": "Agent",
+   "options": "AI Agent"
+  },
+  {
+   "fieldname": "model",
+   "fieldtype": "Link",
+   "label": "Model",
+   "options": "AI Model"
+  },
+  {
+   "fieldname": "knowledge_base",
+   "fieldtype": "Link",
+   "label": "Knowledge Base",
+   "options": "AI Knowledge Base"
+  },
+  {
+   "depends_on": "eval:doc.task_type=='Pipeline'",
+   "fieldname": "pipeline",
+   "fieldtype": "Link",
+   "label": "Pipeline",
+   "options": "AI Pipeline"
+  },
+  {
+   "fieldname": "due_date",
+   "fieldtype": "Datetime",
+   "label": "Due Date"
+  },
+  {
+   "fieldname": "instruction_sec",
+   "fieldtype": "Section Break",
+   "label": "Instruction"
+  },
+  {
+   "fieldname": "instruction",
+   "fieldtype": "Long Text",
+   "label": "Instruction",
+   "reqd": 1
+  },
+  {
+   "fieldname": "input_data",
+   "fieldtype": "Code",
+   "label": "Input Data",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "task_result_sec",
+   "fieldtype": "Section Break",
+   "label": "Result"
+  },
+  {
+   "fieldname": "result",
+   "fieldtype": "Long Text",
+   "label": "Result",
+   "read_only": 1
+  },
+  {
+   "fieldname": "result_data",
+   "fieldtype": "Code",
+   "label": "Result Data",
+   "options": "JSON",
+   "read_only": 1
+  },
+  {
+   "fieldname": "task_result_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "execution_log",
+   "fieldtype": "Link",
+   "label": "Execution Log",
+   "options": "AI Execution Log",
+   "read_only": 1
+  },
+  {
+   "fieldname": "pipeline_run",
+   "fieldtype": "Link",
+   "label": "Pipeline Run",
+   "options": "AI Pipeline Run",
+   "read_only": 1
+  },
+  {
+   "fieldname": "completed_on",
+   "fieldtype": "Datetime",
+   "label": "Completed On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "error_message",
+   "fieldtype": "Small Text",
+   "label": "Error Message",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-16 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Automation",
+ "name": "AI Task",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI User",
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "search_fields": "status,task_type,agent",
+ "show_title_field_in_link": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "subject",
+ "track_changes": 1
+}

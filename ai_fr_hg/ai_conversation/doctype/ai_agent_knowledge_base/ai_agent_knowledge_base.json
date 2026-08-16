@@ -1,0 +1,45 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-08-16 09:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "knowledge_base",
+  "weight"
+ ],
+ "fields": [
+  {
+   "columns": 6,
+   "fieldname": "knowledge_base",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Knowledge Base",
+   "options": "AI Knowledge Base",
+   "reqd": 1
+  },
+  {
+   "columns": 2,
+   "default": "1",
+   "fieldname": "weight",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Weight",
+   "precision": "2"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-08-16 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Conversation",
+ "name": "AI Agent Knowledge Base",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

@@ -1,0 +1,414 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "allow_rename": 0,
+ "autoname": "field:model_label",
+ "creation": "2026-08-16 09:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "model_label",
+  "provider",
+  "model_name",
+  "model_type",
+  "enabled",
+  "is_default",
+  "model_cb",
+  "family",
+  "parameter_size",
+  "quantization",
+  "context_window",
+  "embedding_dimensions",
+  "capability_sec",
+  "supports_tools",
+  "supports_vision",
+  "capability_cb",
+  "supports_streaming",
+  "supports_json_mode",
+  "generation_sec",
+  "temperature",
+  "top_p",
+  "top_k",
+  "generation_cb",
+  "max_tokens",
+  "repeat_penalty",
+  "stop_sequences",
+  "system_sec",
+  "system_prompt",
+  "advanced_sec",
+  "parameters",
+  "resource_sec",
+  "max_concurrent_requests",
+  "keep_alive",
+  "gpu_layers",
+  "resource_cb",
+  "num_threads",
+  "num_batch",
+  "num_ctx_override",
+  "status_sec",
+  "status",
+  "last_checked",
+  "digest",
+  "size_bytes",
+  "status_cb",
+  "total_requests",
+  "total_tokens",
+  "average_latency_ms",
+  "last_error",
+  "versions_sec",
+  "versions"
+ ],
+ "fields": [
+  {
+   "fieldname": "model_label",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Label",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "provider",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Provider",
+   "options": "AI Provider",
+   "reqd": 1
+  },
+  {
+   "description": "Identifier used by the runtime, e.g. llama3.1:8b",
+   "fieldname": "model_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Runtime Model Name",
+   "reqd": 1
+  },
+  {
+   "default": "Chat",
+   "fieldname": "model_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Model Type",
+   "options": "Chat\nCompletion\nEmbedding\nVision\nReranker",
+   "reqd": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled"
+  },
+  {
+   "fieldname": "is_default",
+   "fieldtype": "Check",
+   "label": "Default for Type"
+  },
+  {
+   "fieldname": "model_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "family",
+   "fieldtype": "Data",
+   "label": "Family"
+  },
+  {
+   "fieldname": "parameter_size",
+   "fieldtype": "Data",
+   "label": "Parameter Size"
+  },
+  {
+   "fieldname": "quantization",
+   "fieldtype": "Data",
+   "label": "Quantization"
+  },
+  {
+   "default": "8192",
+   "fieldname": "context_window",
+   "fieldtype": "Int",
+   "label": "Context Window"
+  },
+  {
+   "depends_on": "eval:doc.model_type=='Embedding'",
+   "fieldname": "embedding_dimensions",
+   "fieldtype": "Int",
+   "label": "Embedding Dimensions"
+  },
+  {
+   "fieldname": "capability_sec",
+   "fieldtype": "Section Break",
+   "label": "Capabilities"
+  },
+  {
+   "fieldname": "supports_tools",
+   "fieldtype": "Check",
+   "label": "Supports Tool Calling"
+  },
+  {
+   "fieldname": "supports_vision",
+   "fieldtype": "Check",
+   "label": "Supports Vision"
+  },
+  {
+   "fieldname": "capability_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "fieldname": "supports_streaming",
+   "fieldtype": "Check",
+   "label": "Supports Streaming"
+  },
+  {
+   "fieldname": "supports_json_mode",
+   "fieldtype": "Check",
+   "label": "Supports JSON Mode"
+  },
+  {
+   "fieldname": "generation_sec",
+   "fieldtype": "Section Break",
+   "label": "Generation Defaults"
+  },
+  {
+   "default": "0.2",
+   "fieldname": "temperature",
+   "fieldtype": "Float",
+   "label": "Temperature",
+   "precision": "2"
+  },
+  {
+   "default": "0.9",
+   "fieldname": "top_p",
+   "fieldtype": "Float",
+   "label": "Top P",
+   "precision": "2"
+  },
+  {
+   "default": "40",
+   "fieldname": "top_k",
+   "fieldtype": "Int",
+   "label": "Top K"
+  },
+  {
+   "fieldname": "generation_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "2048",
+   "fieldname": "max_tokens",
+   "fieldtype": "Int",
+   "label": "Max Tokens"
+  },
+  {
+   "default": "1.1",
+   "fieldname": "repeat_penalty",
+   "fieldtype": "Float",
+   "label": "Repeat Penalty",
+   "precision": "2"
+  },
+  {
+   "fieldname": "stop_sequences",
+   "fieldtype": "Small Text",
+   "label": "Stop Sequences"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "system_sec",
+   "fieldtype": "Section Break",
+   "label": "System Prompt"
+  },
+  {
+   "fieldname": "system_prompt",
+   "fieldtype": "Code",
+   "label": "System Prompt",
+   "options": "Text"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "advanced_sec",
+   "fieldtype": "Section Break",
+   "label": "Advanced Parameters"
+  },
+  {
+   "fieldname": "parameters",
+   "fieldtype": "Table",
+   "label": "Parameters",
+   "options": "AI Model Parameter"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "resource_sec",
+   "fieldtype": "Section Break",
+   "label": "Resource Control"
+  },
+  {
+   "default": "2",
+   "fieldname": "max_concurrent_requests",
+   "fieldtype": "Int",
+   "label": "Max Concurrent Requests"
+  },
+  {
+   "default": "5m",
+   "fieldname": "keep_alive",
+   "fieldtype": "Data",
+   "label": "Keep Alive"
+  },
+  {
+   "fieldname": "gpu_layers",
+   "fieldtype": "Int",
+   "label": "GPU Layers"
+  },
+  {
+   "fieldname": "resource_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "num_threads",
+   "fieldtype": "Int",
+   "label": "Threads"
+  },
+  {
+   "fieldname": "num_batch",
+   "fieldtype": "Int",
+   "label": "Batch Size"
+  },
+  {
+   "fieldname": "num_ctx_override",
+   "fieldtype": "Int",
+   "label": "Context Override"
+  },
+  {
+   "fieldname": "status_sec",
+   "fieldtype": "Section Break",
+   "label": "Status"
+  },
+  {
+   "default": "Unknown",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Unknown\nAvailable\nMissing\nError",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_checked",
+   "fieldtype": "Datetime",
+   "label": "Last Checked",
+   "read_only": 1
+  },
+  {
+   "fieldname": "digest",
+   "fieldtype": "Data",
+   "label": "Digest",
+   "read_only": 1
+  },
+  {
+   "fieldname": "size_bytes",
+   "fieldtype": "Long Int",
+   "label": "Size (bytes)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "status_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "total_requests",
+   "fieldtype": "Int",
+   "label": "Total Requests",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_tokens",
+   "fieldtype": "Long Int",
+   "label": "Total Tokens",
+   "read_only": 1
+  },
+  {
+   "fieldname": "average_latency_ms",
+   "fieldtype": "Float",
+   "label": "Average Latency (ms)",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_error",
+   "fieldtype": "Small Text",
+   "label": "Last Error",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "versions_sec",
+   "fieldtype": "Section Break",
+   "label": "Versions"
+  },
+  {
+   "fieldname": "versions",
+   "fieldtype": "Table",
+   "label": "Versions",
+   "options": "AI Model Version"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [
+  {
+   "link_doctype": "AI Execution Log",
+   "link_fieldname": "model"
+  }
+ ],
+ "modified": "2026-08-16 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Core",
+ "name": "AI Model",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI User",
+   "read": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "search_fields": "model_name,provider,model_type",
+ "show_title_field_in_link": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "model_label",
+ "track_changes": 1
+}

@@ -1,0 +1,117 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "allow_rename": 0,
+ "autoname": "hash",
+ "creation": "2026-08-16 09:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "snapshot_date",
+  "user",
+  "model",
+  "snapshot_cb",
+  "request_count",
+  "total_tokens",
+  "failure_count",
+  "average_latency_ms",
+  "document_count"
+ ],
+ "fields": [
+  {
+   "fieldname": "snapshot_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Date",
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "user",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "User",
+   "options": "User"
+  },
+  {
+   "fieldname": "model",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Model",
+   "options": "AI Model"
+  },
+  {
+   "fieldname": "snapshot_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "request_count",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Requests"
+  },
+  {
+   "fieldname": "total_tokens",
+   "fieldtype": "Long Int",
+   "in_list_view": 1,
+   "label": "Total Tokens"
+  },
+  {
+   "fieldname": "failure_count",
+   "fieldtype": "Int",
+   "label": "Failures"
+  },
+  {
+   "fieldname": "average_latency_ms",
+   "fieldtype": "Float",
+   "label": "Average Latency (ms)",
+   "precision": "2"
+  },
+  {
+   "fieldname": "document_count",
+   "fieldtype": "Int",
+   "label": "Documents Processed"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-16 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Operations",
+ "name": "AI Usage Snapshot",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI Manager",
+   "read": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "show_title_field_in_link": 0,
+ "sort_field": "snapshot_date",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}

@@ -1,0 +1,145 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-08-16 09:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "step_name",
+  "step_type",
+  "enabled",
+  "model",
+  "prompt_template",
+  "tool",
+  "extraction_schema",
+  "knowledge_base",
+  "sub_pipeline",
+  "method",
+  "input_field",
+  "output_field",
+  "config",
+  "on_error",
+  "retry_count"
+ ],
+ "fields": [
+  {
+   "columns": 2,
+   "fieldname": "step_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Step",
+   "reqd": 1
+  },
+  {
+   "columns": 2,
+   "default": "Prompt",
+   "fieldname": "step_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Type",
+   "options": "Extract Text\nChunk\nEmbed\nSummarize\nClassify\nExtract Data\nCompare\nPrompt\nTool\nPipeline\nCustom Method",
+   "reqd": 1
+  },
+  {
+   "columns": 1,
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "On"
+  },
+  {
+   "columns": 2,
+   "fieldname": "model",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Model",
+   "options": "AI Model"
+  },
+  {
+   "columns": 2,
+   "fieldname": "prompt_template",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Prompt Template",
+   "options": "AI Prompt Template"
+  },
+  {
+   "depends_on": "eval:doc.step_type=='Tool'",
+   "fieldname": "tool",
+   "fieldtype": "Link",
+   "label": "Tool",
+   "options": "AI Tool"
+  },
+  {
+   "depends_on": "eval:doc.step_type=='Extract Data'",
+   "fieldname": "extraction_schema",
+   "fieldtype": "Link",
+   "label": "Extraction Schema",
+   "options": "AI Extraction Schema"
+  },
+  {
+   "fieldname": "knowledge_base",
+   "fieldtype": "Link",
+   "label": "Knowledge Base",
+   "options": "AI Knowledge Base"
+  },
+  {
+   "depends_on": "eval:doc.step_type=='Pipeline'",
+   "fieldname": "sub_pipeline",
+   "fieldtype": "Link",
+   "label": "Sub Pipeline",
+   "options": "AI Pipeline"
+  },
+  {
+   "depends_on": "eval:doc.step_type=='Custom Method'",
+   "fieldname": "method",
+   "fieldtype": "Data",
+   "label": "Custom Method"
+  },
+  {
+   "default": "content",
+   "fieldname": "input_field",
+   "fieldtype": "Data",
+   "label": "Input Key"
+  },
+  {
+   "fieldname": "output_field",
+   "fieldtype": "Data",
+   "label": "Output Key"
+  },
+  {
+   "fieldname": "config",
+   "fieldtype": "Code",
+   "label": "Configuration",
+   "options": "JSON"
+  },
+  {
+   "default": "Stop",
+   "fieldname": "on_error",
+   "fieldtype": "Select",
+   "label": "On Error",
+   "options": "Stop\nContinue\nRetry"
+  },
+  {
+   "default": "1",
+   "fieldname": "retry_count",
+   "fieldtype": "Int",
+   "label": "Retries"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-08-16 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Automation",
+ "name": "AI Pipeline Step",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

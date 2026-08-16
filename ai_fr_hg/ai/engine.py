@@ -1,0 +1,298 @@
+# Copyright (c) 2026, Ai Fr Hg and contributors
+# For license information, please see license.txt
+
+"""The AI execution engine.
+
+Every AI operation in the platform passes through :func:`run_chat` or
+:func:`run_embedding`. That single funnel is what gives the platform complete
+traceability: model resolution, quota enforcement, redaction, logging, metric
+roll-up and failover all live here rather than being scattered across callers.
+"""
+
+import time
+from typing import Any
+
+import frappe
+from frappe import _
+from frappe.utils import cint, flt, now_datetime
+
+from ai_fr_hg.ai.exceptions import ModelNotAvailableError, ProviderError
+from ai_fr_hg.ai.providers import get_failover_providers, get_provider
+from ai_fr_hg.ai.providers.base import ChatMessage, CompletionResult
+
+
+def get_settings():
+	"""Cached AI Platform Settings single."""
+	return frappe.get_cached_doc("AI Platform Settings")
+
+
+def resolve_model(model: str | None = None, model_type: str = "Chat"):
+	"""Resolve a model name, the configured default, or the best candidate.
+
+	Raises when nothing suitable is enabled, so callers never operate on an
+	implicit or missing model.
+	"""
+	if model:
+		doc = frappe.get_cached_doc("AI Model", model)
+		if not doc.enabled:
+			frappe.throw(_("AI Model {0} is disabled.").format(model))
+		return doc
+
+	settings = get_settings()
+	default_field = {
+		"Chat": "default_chat_model",
+		"Completion": "default_chat_model",
+		"Embedding": "default_embedding_model",
+		"Vision": "default_vision_model",
+	}.get(model_type)
+
+	if default_field and (configured := settings.get(default_field)):
+		doc = frappe.get_cached_doc("AI Model", configured)
+		if doc.enabled:
+			return doc
+
+	candidates = frappe.get_all(
+		"AI Model",
+		filters={"enabled": 1, "model_type": model_type},
+		fields=["name"],
+		order_by="is_default desc, creation asc",
+		limit=1,
+	)
+	if not candidates:
+		frappe.throw(
+			_("No enabled {0} model is available. Register one in the AI Models workspace.").format(
+				model_type
+			),
+			exc=ModelNotAvailableError,
+			title=_("No Model"),
+		)
+	return frappe.get_cached_doc("AI Model", candidates[0].name)
+
+
+def build_options(model_doc, overrides: dict | None = None) -> dict:
+	"""Merge platform defaults, model defaults and per-call overrides."""
+	settings = get_settings()
+	options: dict[str, Any] = {
+		"temperature": flt(model_doc.temperature)
+		if model_doc.temperature is not None
+		else flt(settings.default_temperature),
+		"top_p": flt(model_doc.top_p) if model_doc.top_p is not None else flt(settings.default_top_p),
+		"max_tokens": cint(model_doc.max_tokens) or cint(settings.default_max_tokens),
+		"context_window": cint(model_doc.num_ctx_override) or cint(model_doc.context_window),
+	}
+	if model_doc.top_k:
+		options["top_k"] = cint(model_doc.top_k)
+	if model_doc.repeat_penalty:
+		options["repeat_penalty"] = flt(model_doc.repeat_penalty)
+	if model_doc.keep_alive:
+		options["keep_alive"] = model_doc.keep_alive
+	if model_doc.num_threads:
+		options["num_threads"] = cint(model_doc.num_threads)
+	if model_doc.num_batch:
+		options["num_batch"] = cint(model_doc.num_batch)
+	if model_doc.gpu_layers:
+		options["gpu_layers"] = cint(model_doc.gpu_layers)
+	if model_doc.stop_sequences:
+		options["stop"] = [s.strip() for s in model_doc.stop_sequences.splitlines() if s.strip()]
+
+	for row in model_doc.get("parameters") or []:
+		options[row.parameter] = _cast_parameter(row.value, row.value_type)
+
+	if overrides:
+		options.update({k: v for k, v in overrides.items() if v is not None})
+	return options
+
+
+def _cast_parameter(value, value_type):
+	import json
+
+	if value_type == "Number":
+		return flt(value)
+	if value_type == "Boolean":
+		return str(value).lower() in ("1", "true", "yes")
+	if value_type == "JSON":
+		try:
+			return json.loads(value)
+		except (ValueError, TypeError):
+			return value
+	return value
+
+
+def normalise_messages(messages) -> list[ChatMessage]:
+	"""Accept dicts or ChatMessage objects and return ChatMessage objects."""
+	normalised = []
+	for message in messages or []:
+		if isinstance(message, ChatMessage):
+			normalised.append(message)
+			continue
+		role = (message.get("role") or "user").lower()
+		normalised.append(
+			ChatMessage(
+				role=role,
+				content=message.get("content") or "",
+				name=message.get("name"),
+				tool_call_id=message.get("tool_call_id"),
+				tool_calls=message.get("tool_calls"),
+				images=message.get("images"),
+			)
+		)
+	return normalised
+
+
+def run_chat(
+	messages,
+	model: str | None = None,
+	options: dict | None = None,
+	tools: list[dict] | None = None,
+	json_schema: dict | None = None,
+	operation: str = "Chat",
+	reference_doctype: str | None = None,
+	reference_name: str | None = None,
+	conversation: str | None = None,
+	pipeline_run: str | None = None,
+	allow_failover: bool = True,
+) -> CompletionResult:
+	"""Execute a chat completion with full logging, quota checks and failover."""
+	from ai_fr_hg.ai.governance import check_quota, record_usage
+	from ai_fr_hg.ai.logging import finish_execution_log, start_execution_log
+
+	settings = get_settings()
+	if not settings.platform_enabled:
+		frappe.throw(_("The AI Platform is disabled in AI Platform Settings."))
+
+	model_doc = resolve_model(model, "Chat")
+	check_quota(model_doc)
+
+	chat_messages = normalise_messages(messages)
+	merged_options = build_options(model_doc, options)
+
+	log = start_execution_log(
+		operation=operation,
+		model=model_doc,
+		messages=chat_messages,
+		options=merged_options,
+		reference_doctype=reference_doctype,
+		reference_name=reference_name,
+		conversation=conversation,
+		pipeline_run=pipeline_run,
+	)
+
+	attempts = [model_doc.provider]
+	if allow_failover:
+		attempts += get_failover_providers(exclude=model_doc.provider)
+
+	last_error: Exception | None = None
+	max_retries = cint(settings.max_retries)
+
+	for attempt_index, provider_name in enumerate(attempts):
+		for retry in range(max_retries + 1):
+			try:
+				provider = get_provider(provider_name)
+				result = provider.chat(
+					chat_messages,
+					model=model_doc.model_name,
+					options=merged_options,
+					tools=tools,
+					json_schema=json_schema,
+				)
+				finish_execution_log(log, result, provider=provider_name, retry_count=retry)
+				update_model_metrics(model_doc.name, result)
+				record_usage(model_doc.name, result.total_tokens)
+				return result
+			except Exception as exc:
+				last_error = exc
+				if retry < max_retries and _is_retryable(exc):
+					time.sleep(min(2**retry, 8))
+					continue
+				break
+		if attempt_index < len(attempts) - 1:
+			frappe.log_error(
+				title="AI failover",
+				message=f"Provider {provider_name} failed ({last_error}); trying the next provider.",
+			)
+
+	finish_execution_log(log, None, error=last_error)
+	raise last_error or ProviderError(_("Chat completion failed."))
+
+
+def _is_retryable(exc: Exception) -> bool:
+	from ai_fr_hg.ai.exceptions import ProviderOfflineError, ProviderTimeoutError
+
+	return isinstance(exc, ProviderTimeoutError | ProviderOfflineError)
+
+
+def run_embedding(
+	texts: list[str],
+	model: str | None = None,
+	operation: str = "Embedding",
+	reference_doctype: str | None = None,
+	reference_name: str | None = None,
+) -> list[list[float]]:
+	"""Embed a batch of texts using the configured embedding model."""
+	from ai_fr_hg.ai.logging import finish_execution_log, start_execution_log
+
+	if not texts:
+		return []
+
+	settings = get_settings()
+	if not settings.platform_enabled:
+		frappe.throw(_("The AI Platform is disabled in AI Platform Settings."))
+
+	model_doc = resolve_model(model, "Embedding")
+	log = start_execution_log(
+		operation=operation,
+		model=model_doc,
+		messages=None,
+		options={"batch_size": len(texts)},
+		reference_doctype=reference_doctype,
+		reference_name=reference_name,
+	)
+
+	started = time.monotonic()
+	try:
+		provider = get_provider(model_doc.provider)
+		vectors = provider.embed(texts, model=model_doc.model_name)
+	except Exception as exc:
+		finish_execution_log(log, None, error=exc)
+		raise
+
+	duration_ms = int((time.monotonic() - started) * 1000)
+	result = CompletionResult(
+		content=f"{len(vectors)} vectors",
+		duration_ms=duration_ms,
+		model=model_doc.model_name,
+	)
+	finish_execution_log(log, result, provider=model_doc.provider)
+
+	if vectors and not model_doc.embedding_dimensions:
+		frappe.db.set_value(
+			"AI Model", model_doc.name, "embedding_dimensions", len(vectors[0]), update_modified=False
+		)
+	return vectors
+
+
+def update_model_metrics(model: str, result: CompletionResult) -> None:
+	"""Roll running request/token/latency statistics onto the model record."""
+	row = frappe.db.get_value(
+		"AI Model", model, ["total_requests", "total_tokens", "average_latency_ms"], as_dict=True
+	)
+	if not row:
+		return
+
+	total_requests = cint(row.total_requests) + 1
+	previous_average = flt(row.average_latency_ms)
+	average = ((previous_average * (total_requests - 1)) + result.duration_ms) / total_requests
+
+	frappe.db.set_value(
+		"AI Model",
+		model,
+		{
+			"total_requests": total_requests,
+			"total_tokens": cint(row.total_tokens) + cint(result.total_tokens),
+			"average_latency_ms": round(average, 2),
+			"status": "Available",
+			"last_checked": now_datetime(),
+			"last_error": None,
+		},
+		update_modified=False,
+	)

@@ -1,0 +1,245 @@
+{
+ "app": "ai_fr_hg",
+ "charts": [],
+ "content": "[{\"id\": \"h93132925\", \"type\": \"header\", \"data\": {\"text\": \"AI Automation\", \"col\": 12, \"level\": 4}}, {\"id\": \"p19696119\", \"type\": \"paragraph\", \"data\": {\"text\": \"Pipelines, event-driven rules and agents that run without human intervention.\", \"col\": 12}}, {\"id\": \"s81571183\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Pipelines\", \"col\": 3}}, {\"id\": \"s38628173\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Automation Rules\", \"col\": 3}}, {\"id\": \"s83422548\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Agents\", \"col\": 3}}, {\"id\": \"s42773412\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Tools\", \"col\": 3}}, {\"id\": \"sp1453f7\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"c81571183\", \"type\": \"card\", \"data\": {\"card_name\": \"Pipelines\", \"col\": 4}}, {\"id\": \"c58035297\", \"type\": \"card\", \"data\": {\"card_name\": \"Agents & Tools\", \"col\": 4}}, {\"id\": \"c16666255\", \"type\": \"card\", \"data\": {\"card_name\": \"Rules\", \"col\": 4}}]",
+ "creation": "2026-08-16 09:00:00.000000",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "workflow",
+ "idx": 0,
+ "indicator_color": "orange",
+ "is_hidden": 0,
+ "label": "AI Automation",
+ "links": [
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Pipelines",
+   "link_count": 2,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Pipelines",
+   "link_count": 0,
+   "link_to": "AI Pipeline",
+   "link_type": "DocType",
+   "onboard": 1,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Pipeline Runs",
+   "link_count": 0,
+   "link_to": "AI Pipeline Run",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Agents & Tools",
+   "link_count": 3,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Agents",
+   "link_count": 0,
+   "link_to": "AI Agent",
+   "link_type": "DocType",
+   "onboard": 1,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Tools",
+   "link_count": 0,
+   "link_to": "AI Tool",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Tool Invocations",
+   "link_count": 0,
+   "link_to": "AI Tool Invocation",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Rules",
+   "link_count": 2,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Automation Rules",
+   "link_count": 0,
+   "link_to": "AI Automation Rule",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "AI Tasks",
+   "link_count": 0,
+   "link_to": "AI Task",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  }
+ ],
+ "modified": "2026-08-16 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Automation",
+ "name": "AI Automation",
+ "number_cards": [],
+ "owner": "Administrator",
+ "public": 1,
+ "quick_lists": [],
+ "roles": [
+  {
+   "role": "AI Manager"
+  },
+  {
+   "role": "System Manager"
+  }
+ ],
+ "sequence_id": 13.0,
+ "shortcuts": [
+  {
+   "color": "Orange",
+   "label": "Pipelines",
+   "link_to": "AI Pipeline",
+   "type": "DocType"
+  },
+  {
+   "color": "Blue",
+   "label": "Automation Rules",
+   "link_to": "AI Automation Rule",
+   "type": "DocType"
+  },
+  {
+   "color": "Green",
+   "label": "Agents",
+   "link_to": "AI Agent",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "label": "Tools",
+   "link_to": "AI Tool",
+   "type": "DocType"
+  }
+ ],
+ "sidebar_items": [
+  {
+   "child": 0,
+   "collapsible": 1,
+   "icon": "workflow",
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Pipelines",
+   "link_to": "AI Pipeline",
+   "link_type": "DocType",
+   "open_in_new_tab": 0,
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 0,
+   "collapsible": 1,
+   "icon": "play-circle",
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Pipeline Runs",
+   "link_to": "AI Pipeline Run",
+   "link_type": "DocType",
+   "open_in_new_tab": 0,
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 0,
+   "collapsible": 1,
+   "icon": "zap",
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Automation Rules",
+   "link_to": "AI Automation Rule",
+   "link_type": "DocType",
+   "open_in_new_tab": 0,
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 0,
+   "collapsible": 1,
+   "icon": "bot",
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Agents",
+   "link_to": "AI Agent",
+   "link_type": "DocType",
+   "open_in_new_tab": 0,
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 0,
+   "collapsible": 1,
+   "icon": "wrench",
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Tools",
+   "link_to": "AI Tool",
+   "link_type": "DocType",
+   "open_in_new_tab": 0,
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 0,
+   "collapsible": 1,
+   "icon": "list-checks",
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Tasks",
+   "link_to": "AI Task",
+   "link_type": "DocType",
+   "open_in_new_tab": 0,
+   "show_arrow": 0,
+   "type": "Link"
+  }
+ ],
+ "standard": 1,
+ "title": "AI Automation",
+ "type": "Workspace"
+}

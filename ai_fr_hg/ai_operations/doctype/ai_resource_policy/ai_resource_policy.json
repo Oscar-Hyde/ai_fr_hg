@@ -1,0 +1,186 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "allow_rename": 0,
+ "autoname": "field:policy_name",
+ "creation": "2026-08-16 09:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "policy_name",
+  "enabled",
+  "role",
+  "user",
+  "priority",
+  "policy_cb",
+  "max_requests_per_hour",
+  "max_tokens_per_day",
+  "max_documents_per_day",
+  "max_concurrent_requests",
+  "capability_sec",
+  "allow_tools",
+  "allow_document_upload",
+  "capability_cb",
+  "allow_pipeline_execution",
+  "allow_model_management",
+  "policy_models_sec",
+  "allowed_models",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "policy_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Policy Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Enabled"
+  },
+  {
+   "fieldname": "role",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Applies to Role",
+   "options": "Role"
+  },
+  {
+   "fieldname": "user",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Applies to User",
+   "options": "User"
+  },
+  {
+   "default": "10",
+   "fieldname": "priority",
+   "fieldtype": "Int",
+   "label": "Priority"
+  },
+  {
+   "fieldname": "policy_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "max_requests_per_hour",
+   "fieldtype": "Int",
+   "label": "Max Requests / Hour"
+  },
+  {
+   "default": "0",
+   "fieldname": "max_tokens_per_day",
+   "fieldtype": "Int",
+   "label": "Max Tokens / Day"
+  },
+  {
+   "default": "0",
+   "fieldname": "max_documents_per_day",
+   "fieldtype": "Int",
+   "label": "Max Documents / Day"
+  },
+  {
+   "default": "0",
+   "fieldname": "max_concurrent_requests",
+   "fieldtype": "Int",
+   "label": "Max Concurrent Requests"
+  },
+  {
+   "fieldname": "capability_sec",
+   "fieldtype": "Section Break",
+   "label": "Capabilities"
+  },
+  {
+   "default": "1",
+   "fieldname": "allow_tools",
+   "fieldtype": "Check",
+   "label": "Allow Tool Execution"
+  },
+  {
+   "default": "1",
+   "fieldname": "allow_document_upload",
+   "fieldtype": "Check",
+   "label": "Allow Document Upload"
+  },
+  {
+   "fieldname": "capability_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "allow_pipeline_execution",
+   "fieldtype": "Check",
+   "label": "Allow Pipeline Execution"
+  },
+  {
+   "fieldname": "allow_model_management",
+   "fieldtype": "Check",
+   "label": "Allow Model Management"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "policy_models_sec",
+   "fieldtype": "Section Break",
+   "label": "Allowed Models"
+  },
+  {
+   "description": "Leave empty to allow every enabled model.",
+   "fieldname": "allowed_models",
+   "fieldtype": "Table",
+   "label": "Allowed Models",
+   "options": "AI Policy Model"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-16 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Operations",
+ "name": "AI Resource Policy",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "show_title_field_in_link": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "policy_name",
+ "track_changes": 1
+}

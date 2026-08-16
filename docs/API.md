@@ -1,0 +1,261 @@
+# API reference
+
+All endpoints are Frappe whitelisted methods, callable over REST or from
+client-side JavaScript. They enforce the session user's permissions and the
+governance policies in force.
+
+**REST**
+
+```
+POST /api/method/<dotted.path>
+Content-Type: application/json
+Authorization: token <api_key>:<api_secret>
+```
+
+**JavaScript**
+
+```javascript
+const response = await frappe.xcall("<dotted.path>", { ...params });
+```
+
+---
+
+## Chat
+
+### `ai_fr_hg.api.chat.send_message`
+
+Send a message and get a grounded reply. Creates the conversation if none is
+supplied.
+
+| Parameter | Type | Notes |
+| --- | --- | --- |
+| `message` | string | Required. |
+| `conversation` | string | Omit to start a new one. |
+| `agent` | string | Defaults to the configured default agent. |
+| `knowledge_bases` | list | Overrides the agent's knowledge bases. |
+| `model` | string | Overrides the agent's model. |
+
+```json
+{
+  "answer": "The refund window is 30 days from purchase [1].",
+  "conversation": "AICONV-2026-00042",
+  "agent": "General Assistant",
+  "model": "llama3.1:8b (Local Ollama)",
+  "citations": [
+    {
+      "chunk": "a1b2c3",
+      "document": "AIDOC-2026-00007",
+      "document_title": "Returns Policy",
+      "knowledge_base": "General Knowledge",
+      "content": "Customers may return items within thirty days...",
+      "score": 0.8734,
+      "semantic_score": 0.8912,
+      "keyword_score": 0.7421,
+      "heading": "Refunds",
+      "page_number": 3
+    }
+  ],
+  "tool_invocations": [],
+  "message": "AIMSG-000123",
+  "prompt_tokens": 842,
+  "completion_tokens": 47,
+  "total_tokens": 889,
+  "duration_ms": 2140
+}
+```
+
+### Other chat endpoints
+
+| Method | Purpose |
+| --- | --- |
+| `start_conversation(agent, title, knowledge_bases)` | Create an empty conversation. |
+| `get_conversation(conversation)` | Full history with parsed citations. |
+| `list_conversations(limit, include_archived)` | The user's conversations, pinned first. |
+| `rename_conversation(conversation, title)` | Rename. |
+| `archive_conversation(conversation)` | Archive without deleting. |
+| `delete_conversation(conversation)` | Delete the conversation and its messages. |
+| `submit_feedback(message, feedback)` | `Positive`, `Negative` or `""` to clear. |
+| `summarize_conversation(conversation)` | Generate and store a summary. |
+| `get_chat_context()` | Bootstrap payload: agents, models, knowledge bases, settings. |
+
+---
+
+## Knowledge
+
+### `ai_fr_hg.api.knowledge.upload_document`
+
+Ingest a previously uploaded file. Processing is queued by default.
+
+| Parameter | Type | Notes |
+| --- | --- | --- |
+| `file_url` | string | Required. From Frappe's file upload. |
+| `knowledge_base` | string | Required. |
+| `title` | string | Defaults to the filename. |
+| `extraction_schema` | string | Run structured extraction after indexing. |
+| `process_now` | bool | Process synchronously instead of queuing. |
+
+```json
+{ "document": "AIDOC-2026-00008", "status": "Queued" }
+```
+
+### `ai_fr_hg.api.knowledge.search`
+
+Ranked passages, no model generation.
+
+| Parameter | Type | Notes |
+| --- | --- | --- |
+| `query` | string | Required. |
+| `knowledge_bases` | list | Defaults to everything the user can read. |
+| `top_k` | int | Default 10. |
+| `search_type` | string | `Hybrid`, `Semantic` or `Keyword`. |
+
+```json
+{
+  "query": "refund policy",
+  "count": 3,
+  "results": [ { "document_title": "Returns Policy", "score": 0.8734, "...": "..." } ]
+}
+```
+
+### `ai_fr_hg.api.knowledge.ask`
+
+One-shot grounded question answering. Same response shape as `send_message`,
+but nothing is persisted.
+
+| Parameter | Type |
+| --- | --- |
+| `question` | string, required |
+| `knowledge_bases` | list |
+| `agent` | string |
+| `model` | string |
+
+### Document intelligence
+
+| Method | Returns |
+| --- | --- |
+| `summarize_document(document, max_words, save)` | `{document, summary}` |
+| `classify_document(document, categories, save)` | `{document, category, confidence, reason}` |
+| `extract_document_data(document, schema, save)` | `{document, schema, data}` |
+| `compare(document_a, document_b, instructions)` | `{document_a, document_b, comparison}` |
+| `reprocess_document(document, force)` | `{document, status}` |
+| `reindex_knowledge_base(knowledge_base)` | `{knowledge_base, queued}` |
+| `add_text(text, knowledge_base, title)` | `{document, status}` |
+| `get_document_chunks(document, limit)` | List of chunks with embedding status. |
+| `get_knowledge_overview()` | Counters, recent documents, failed documents. |
+| `get_supported_formats()` | Extensions, grouped by reader. |
+
+Classification is constrained to the supplied categories: if the model invents
+one, the platform maps it back or returns `null` rather than passing through a
+hallucinated label.
+
+---
+
+## Administration
+
+All of these require `AI Manager` or `System Manager`.
+
+| Method | Purpose |
+| --- | --- |
+| `test_provider(provider)` | Probe one provider, persist the result. |
+| `test_all_providers()` | Probe every enabled provider. |
+| `discover_models(provider, create_missing)` | Register models the runtime reports. |
+| `pull_model(provider, model_name)` | Download a model (Ollama). Runs in the background. |
+| `test_model(model, prompt)` | Send a probe prompt; returns latency and tokens/sec. |
+| `get_dashboard()` | Full operations payload. |
+| `get_system_status()` | Readiness checklist. |
+| `get_usage_report(days, user)` | Usage by day, model and user. |
+| `export_knowledge_base(knowledge_base, include_embeddings)` | Export to a private JSON file. |
+| `import_knowledge_base(file_url, knowledge_base)` | Import, skipping duplicates by checksum. |
+| `purge_logs(doctype, days)` | Delete old log records. |
+
+### `get_system_status`
+
+```json
+{
+  "ready": false,
+  "offline_mode": true,
+  "checks": [
+    { "label": "Platform enabled", "status": true, "hint": "..." },
+    {
+      "label": "An embedding model is registered",
+      "status": false,
+      "hint": "Install an embedding model, e.g. `ollama pull nomic-embed-text`."
+    }
+  ]
+}
+```
+
+### `get_dashboard`
+
+Returns `providers`, `models`, `knowledge`, `activity_24h`,
+`providers_detail`, `models_detail`, `recent_errors`, `pending_approvals`,
+`active_jobs` and `top_users`.
+
+---
+
+## Tools
+
+| Method | Purpose |
+| --- | --- |
+| `ai_fr_hg.ai.tools.approve_invocation(invocation)` | Approve and run a held tool call. |
+| `ai_fr_hg.ai.tools.reject_invocation(invocation)` | Reject it. |
+
+---
+
+## Errors
+
+Failures return standard Frappe error responses. The exception hierarchy is:
+
+| Exception | Meaning |
+| --- | --- |
+| `AIError` | Base class. |
+| `ProviderError` | Provider misconfigured or returned an error. |
+| `ProviderOfflineError` | Runtime unreachable. |
+| `ProviderTimeoutError` | Request exceeded the timeout. |
+| `ModelNotFoundError` | Model not registered or not present on the runtime. |
+| `QuotaExceededError` | Governance limit reached. |
+| `DocumentProcessingError` | Extraction failed. |
+| `ToolExecutionError` | Tool failed or is not permitted. |
+| `PipelineError` | Pipeline step failed. |
+
+Tool execution never raises into the model loop — `execute_tool` returns
+`{"status": "Failed", "error": "..."}` so the model can recover or explain
+itself rather than the whole turn collapsing.
+
+---
+
+## Example: end-to-end ingestion and query
+
+```python
+import requests
+
+BASE = "http://localhost:8000/api/method"
+AUTH = {"Authorization": "token <key>:<secret>"}
+
+# 1. Upload a file through Frappe's standard endpoint
+with open("policy.pdf", "rb") as handle:
+    upload = requests.post(
+        f"{BASE.replace('/api/method', '')}/api/method/upload_file",
+        headers=AUTH,
+        files={"file": handle},
+        data={"is_private": 1},
+    ).json()["message"]
+
+# 2. Ingest it
+document = requests.post(
+    f"{BASE}/ai_fr_hg.api.knowledge.upload_document",
+    headers=AUTH,
+    json={"file_url": upload["file_url"], "knowledge_base": "General Knowledge"},
+).json()["message"]
+
+# 3. Ask about it once indexing finishes
+answer = requests.post(
+    f"{BASE}/ai_fr_hg.api.knowledge.ask",
+    headers=AUTH,
+    json={"question": "What is the refund window?"},
+).json()["message"]
+
+print(answer["answer"])
+for index, citation in enumerate(answer["citations"], start=1):
+    print(f"[{index}] {citation['document_title']} p{citation['page_number']}")
+```
