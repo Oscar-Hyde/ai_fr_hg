@@ -58,11 +58,12 @@ def pull_model(provider: str, model_name: str) -> dict:
 
 	check_capability("model_management")
 
+	safe_model_name = frappe.scrub(model_name).replace("__", "_")
 	frappe.enqueue(
 		"ai_fr_hg.api.admin._pull_model_job",
 		queue="long",
 		timeout=7200,
-		job_id=f"ai_pull_{provider}_{model_name}",
+		job_id=f"ai_pull_{frappe.scrub(provider)}_{safe_model_name}",
 		deduplicate=True,
 		provider=provider,
 		model_name=model_name,

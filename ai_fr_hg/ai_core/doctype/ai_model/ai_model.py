@@ -6,6 +6,8 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import cint, flt, now_datetime
 
+from ai_fr_hg.utils.db import safe_set_value
+
 
 class AIModel(Document):
 	_DOCTYPE_NAME = "AI Model"
@@ -130,7 +132,9 @@ class AIModel(Document):
 		info = adapter.show_model(self.model_name) or {}
 		details = info.get("details") or {}
 
-		self.db_set(
+		safe_set_value(
+			"AI Model",
+			self.name,
 			{
 				"family": details.get("family") or self.family,
 				"parameter_size": details.get("parameter_size") or self.parameter_size,

@@ -403,9 +403,9 @@ def create_default_agent() -> None:
 			"enabled": 1,
 			"is_default": 1,
 			"temperature": 0.2,
-			"max_tokens": 2048,
-			"max_tool_iterations": 4,
-			"use_knowledge": 1,
+			"max_tokens": 512,
+			"max_tool_iterations": 2,
+			"use_knowledge": 0,
 			"top_k": 6,
 			"citation_mode": "Inline",
 			"response_format": "Markdown",
@@ -420,8 +420,9 @@ def create_default_agent() -> None:
 			),
 		}
 	)
-	if frappe.db.exists("AI Knowledge Base", "General Knowledge"):
-		doc.append("knowledge_bases", {"knowledge_base": "General Knowledge", "weight": 1})
+	# Knowledge retrieval is opt-in per conversation: automatically running it on
+	# every small-talk chat adds an embedding round-trip and prompt bloat on a
+	# fresh site that often has no documents yet.
 	for tool in ("search_knowledge_base", "get_document_text", "current_datetime"):
 		if frappe.db.exists("AI Tool", tool):
 			doc.append("tools", {"tool": tool, "enabled": 1})

@@ -86,13 +86,13 @@
    "precision": "2"
   },
   {
-   "default": "2048",
+   "default": "512",
    "fieldname": "max_tokens",
    "fieldtype": "Int",
    "label": "Max Tokens"
   },
   {
-   "default": "4",
+   "default": "2",
    "fieldname": "max_tool_iterations",
    "fieldtype": "Int",
    "label": "Max Tool Iterations"
@@ -106,7 +106,7 @@
    "fieldname": "system_prompt",
    "fieldtype": "Code",
    "label": "System Prompt",
-   "options": "Text"
+   "options": "Markdown"
   },
   {
    "fieldname": "greeting",

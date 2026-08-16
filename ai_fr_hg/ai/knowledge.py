@@ -11,7 +11,7 @@ full of identifiers, part numbers and proper nouns.
 
 import re
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import frappe
 from frappe import _
@@ -20,6 +20,7 @@ from frappe.utils import cint, flt, now_datetime
 from ai_fr_hg.ai.chunking import chunk_text
 from ai_fr_hg.ai.engine import run_embedding
 from ai_fr_hg.ai.vector import decode_vector, encode_vector, normalize, rank
+from ai_fr_hg.utils.db import safe_set_value
 
 WORD = re.compile(r"[\w\-/.]{2,}")
 #: Embedding batch size, kept modest so local runtimes stay responsive.
@@ -177,17 +178,19 @@ def embed_chunks(chunk_names: list[str], model: str | None = None) -> int:
 			)
 			continue
 
-		model_name = model or frappe.db.get_single_value("AI Platform Settings", "default_embedding_model")
+		embedding_model_name = model or frappe.db.get_single_value(
+			"AI Platform Settings", "default_embedding_model"
+		)
 		for row, vector in zip(rows, vectors, strict=False):
 			if not vector:
 				continue
 			unit = normalize(vector)
-			frappe.db.set_value(
+			safe_set_value(
 				"AI Document Chunk",
 				row.name,
 				{
 					"embedding": encode_vector(unit),
-					"embedding_model": model_name,
+					"embedding_model": embedding_model_name,
 					"embedding_dimensions": len(unit),
 					"embedding_norm": 1.0,
 					"embedding_format": "Base64 Float32",
@@ -310,7 +313,7 @@ def semantic_search(
 		"AI Document Chunk",
 		filters={"knowledge_base": ["in", knowledge_bases], "embedding": ["!=", ""]},
 		fields=["name", "embedding"],
-		limit_page_length=0,
+		limit_page_length=max(top_k * 20, 200),
 	)
 	candidates = [(row.name, decode_vector(row.embedding)) for row in rows]
 	candidates = [(name, vector) for name, vector in candidates if vector]
@@ -344,6 +347,21 @@ def retrieve(
 	if not targets or not (query or "").strip():
 		return []
 
+	# Do not pay an embedding round-trip for empty knowledge bases.
+	populated = [
+		row.knowledge_base
+		for row in frappe.get_all(
+			"AI Document Chunk",
+			filters={"knowledge_base": ["in", targets]},
+			fields=["knowledge_base"],
+			distinct=True,
+			limit_page_length=len(targets),
+		)
+	]
+	targets = [kb for kb in targets if kb in set(populated)]
+	if not targets:
+		return []
+
 	top_k = cint(top_k) or cint(settings.default_top_k) or 6
 	search_type = search_type or ("Hybrid" if settings.enable_hybrid_search else "Semantic")
 	threshold = (
@@ -374,6 +392,9 @@ def retrieve(
 
 	results = _hydrate(ordered, semantic, keyword)
 
+	# Search telemetry is useful for administrators, but it writes a row on
+	# every chat turn. Queue it so retrieval latency is not dominated by an
+	# insert and local models stay responsive.
 	if log:
 		_log_search(query, targets, search_type, results, started)
 	return results
@@ -451,6 +472,29 @@ def _hydrate(ordered, semantic, keyword) -> list[RetrievedChunk]:
 
 def _log_search(query, targets, search_type, results, started) -> None:
 	try:
+		frappe.enqueue(
+			"ai_fr_hg.ai.knowledge._log_search_job",
+			queue="short",
+			timeout=120,
+			job_id=f"ai_search_log:{frappe.generate_hash(length=10)}",
+			query=query,
+			targets=targets,
+			search_type=search_type,
+			results=[r.as_dict() for r in results[:10]],
+			result_count=len(results),
+			top_score=results[0].score if results else 0,
+			duration_ms=int((time.monotonic() - started) * 1000),
+			user=frappe.session.user,
+		)
+	except Exception:
+		frappe.log_error(title="AI Search Query log failed", message=frappe.get_traceback())
+
+
+def _log_search_job(
+	query, targets, search_type, results, result_count, top_score, duration_ms, user
+) -> None:
+	try:
+		frappe.set_user(user)
 		doc = frappe.new_doc("AI Search Query")
 		doc.update(
 			{
@@ -458,10 +502,10 @@ def _log_search(query, targets, search_type, results, started) -> None:
 				"knowledge_base": targets[0] if len(targets) == 1 else None,
 				"user": frappe.session.user,
 				"search_type": search_type,
-				"result_count": len(results),
-				"top_score": results[0].score if results else 0,
-				"duration_ms": int((time.monotonic() - started) * 1000),
-				"results": frappe.as_json([r.as_dict() for r in results[:10]]),
+				"result_count": result_count,
+				"top_score": top_score,
+				"duration_ms": duration_ms,
+				"results": frappe.as_json(results),
 			}
 		)
 		doc.flags.ignore_permissions = True
