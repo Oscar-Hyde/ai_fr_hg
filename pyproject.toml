@@ -15,7 +15,7 @@ dependencies = [
 
 [project.optional-dependencies]
 # Document format support. Install with:
-#   bench pip install "ai_fr_hg[documents] @ ./apps/ai_fr_hg"
+#   bench pip install --editable "./apps/ai_fr_hg[documents]"
 documents = [
     "pypdf>=4.0",           # PDF
     "python-docx>=1.1",     # Word .docx

@@ -252,7 +252,7 @@ def before_install() -> None:
 		print(
 			"\n  Note: these document formats need optional packages: "
 			+ ", ".join(missing)
-			+ "\n  Install them with:  bench pip install ai_fr_hg[documents]\n"
+			+ '\n  Install them with:  bench pip install --editable "./apps/ai_fr_hg[documents]"\n'
 		)
 
 
@@ -457,30 +457,11 @@ def create_default_policies() -> None:
 
 
 def before_tests() -> None:
-	"""Prepare a clean site for the test suite."""
+	"""Clear cached metadata before the standalone app fixtures are created.
+
+	The app supports a plain Frappe site and its tests do not require ERPNext.
+	In particular, do not query or create ERPNext's ``Company`` DocType here:
+	Frappe runs this hook before every test category, including on sites where
+	that DocType does not exist.
+	"""
 	frappe.clear_cache()
-
-	if not frappe.db.a_row_exists("Company"):
-		try:
-			from frappe.desk.page.setup_wizard.setup_wizard import setup_complete
-
-			setup_complete(
-				{
-					"currency": "USD",
-					"full_name": "Test User",
-					"company_name": "Test Company",
-					"timezone": "UTC",
-					"company_abbr": "TC",
-					"industry": "Manufacturing",
-					"country": "United States",
-					"language": "english",
-					"company_tagline": "Testing",
-					"email": "test@example.com",
-					"password": "test",
-					"chart_of_accounts": "Standard",
-				}
-			)
-		except Exception:
-			pass
-
-	frappe.db.commit()  # nosemgrep: frappe-manual-commit

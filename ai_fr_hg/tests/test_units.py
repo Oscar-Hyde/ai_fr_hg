@@ -10,11 +10,25 @@ safe in any environment.
 
 import math
 from itertools import pairwise
+from unittest.mock import patch
 
 from frappe.tests import UnitTestCase
 
 from ai_fr_hg.ai import vector
 from ai_fr_hg.ai.chunking import Chunk, chunk_text, estimate_tokens, split_sentences
+from ai_fr_hg.install import before_tests
+
+
+class TestTestBootstrap(UnitTestCase):
+	@patch("ai_fr_hg.install.frappe")
+	def test_before_tests_does_not_require_erpnext(self, frappe_mock):
+		# Any access to frappe.db would fail, just as querying Company fails on a
+		# standalone Frappe site where ERPNext is not installed.
+		frappe_mock.db = object()
+
+		before_tests()
+
+		frappe_mock.clear_cache.assert_called_once_with()
 
 
 class TestChunking(UnitTestCase):
