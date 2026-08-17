@@ -57,46 +57,8 @@ app_include_js = "ai_fr_hg.bundle.js"
 # include js in page
 # page_js = {"page" : "public/js/file.js"}
 
-# include js in doctype views
-doctype_js = {
-	"AI Provider": "public/js/doctype/ai_provider.js",
-	"AI Model": "public/js/doctype/ai_model.js",
-	"AI Knowledge Base": "public/js/doctype/ai_knowledge_base.js",
-	"AI Document": "public/js/doctype/ai_document.js",
-	"AI Agent": "public/js/doctype/ai_agent.js",
-	"AI Pipeline": "public/js/doctype/ai_pipeline.js",
-	"AI Platform Settings": "public/js/doctype/ai_platform_settings.js",
-	"AI Extraction Schema": "public/js/doctype/ai_extraction_schema.js",
-	"AI Automation Rule": "public/js/doctype/ai_automation_rule.js",
-	"AI Tool Invocation": "public/js/doctype/ai_tool_invocation.js",
-	"AI Knowledge Candidate": "public/js/doctype/ai_knowledge_candidate.js",
-	"AI Memory": "public/js/doctype/ai_memory.js",
-	"AI Skill": "public/js/doctype/ai_skill.js",
-	"AI Conversation": "public/js/doctype/ai_conversation.js",
-	"AI Message": "public/js/doctype/ai_message.js",
-	"AI Pipeline Run": "public/js/doctype/ai_pipeline_run.js",
-	"AI Tool": "public/js/doctype/ai_tool.js",
-	"AI Prompt Template": "public/js/doctype/ai_prompt_template.js",
-	"AI Execution Log": "public/js/doctype/ai_execution_log.js",
-	"AI Audit Log": "public/js/doctype/ai_audit_log.js",
-	"AI Resource Policy": "public/js/doctype/ai_resource_policy.js",
-	"AI Task": "public/js/doctype/ai_task.js",
-	"AI Search Query": "public/js/doctype/ai_search_query.js",
-	"AI Service Health Log": "public/js/doctype/ai_service_health_log.js",
-	"AI Usage Snapshot": "public/js/doctype/ai_usage_snapshot.js",
-	"AI Document Chunk": "public/js/doctype/ai_document_chunk.js",
-}
-
-doctype_list_js = {
-	"AI Provider": "public/js/doctype/ai_provider_list.js",
-	"AI Document": "public/js/doctype/ai_document_list.js",
-	"AI Model": "public/js/doctype/ai_model_list.js",
-	"AI Knowledge Candidate": "public/js/doctype/ai_knowledge_candidate_list.js",
-	"AI Memory": "public/js/doctype/ai_memory_list.js",
-	"AI Skill": "public/js/doctype/ai_skill_list.js",
-	"AI Conversation": "public/js/doctype/ai_conversation_list.js",
-	"AI Agent": "public/js/doctype/ai_agent_list.js",
-}
+# Standard DocType form and list scripts are colocated with their controllers and
+# schemas so Frappe discovers them through its native asset conventions.
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
 
