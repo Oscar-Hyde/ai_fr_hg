@@ -29,8 +29,8 @@ event rules run unattended on background workers.
 
 ### Requirements
 
-- Frappe Framework v15 or newer (developed against `develop` / v17)
-- Python 3.11+
+- Frappe Framework v17
+- Python 3.14+ (matching Frappe v17 and `pyproject.toml`)
 - A local AI runtime. [Ollama](https://ollama.com) is recommended.
 
 ---

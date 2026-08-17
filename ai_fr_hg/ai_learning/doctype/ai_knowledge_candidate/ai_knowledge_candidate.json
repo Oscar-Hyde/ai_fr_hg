@@ -15,8 +15,11 @@
   "content_cb",
   "content",
   "confidence",
+  "target_scope",
+  "target_scope_value",
   "validation_sec",
   "validation_notes",
+  "testing_status",
   "approval_required",
   "approved_by",
   "approved_on",
@@ -82,6 +85,19 @@
    "label": "Confidence"
   },
   {
+   "default": "Global",
+   "fieldname": "target_scope",
+   "fieldtype": "Select",
+   "label": "Target Scope",
+   "options": "Global\nUser\nRole\nAgent"
+  },
+  {
+   "depends_on": "eval:doc.target_scope!='Global'",
+   "fieldname": "target_scope_value",
+   "fieldtype": "Data",
+   "label": "Target Scope Value"
+  },
+  {
    "fieldname": "validation_sec",
    "fieldtype": "Section Break",
    "label": "Validation"
@@ -92,6 +108,14 @@
    "label": "Validation Notes"
   },
   {
+   "default": "Not Tested",
+   "fieldname": "testing_status",
+   "fieldtype": "Select",
+   "label": "Testing Status",
+   "options": "Not Tested\nPassed\nConflict\nFailed",
+   "read_only": 1
+  },
+  {
    "default": "1",
    "fieldname": "approval_required",
    "fieldtype": "Check",
@@ -99,8 +123,9 @@
   },
   {
    "fieldname": "approved_by",
-   "fieldtype": "Data",
-   "label": "Approved By"
+   "fieldtype": "Link",
+   "label": "Approved By",
+   "options": "User"
   },
   {
    "fieldname": "approved_on",
@@ -136,10 +161,11 @@
   },
   {
    "fieldname": "user",
-   "fieldtype": "Data",
+   "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Teaching User",
-   "read_only": 1
+   "read_only": 1,
+   "options": "User"
   },
   {
    "default": "Explicit Teaching",
@@ -172,7 +198,7 @@
    "link_fieldname": "source_candidate"
   }
  ],
- "modified": "2026-08-17 09:00:00.000000",
+ "modified": "2026-08-17 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "AI Learning",
  "name": "AI Knowledge Candidate",

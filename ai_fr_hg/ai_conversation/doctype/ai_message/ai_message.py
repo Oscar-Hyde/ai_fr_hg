@@ -28,6 +28,9 @@ class AIMessage(Document):
 		error_message: DF.SmallText | None
 		execution_log: DF.Link | None
 		feedback: DF.Literal["", "Positive", "Negative"]
+		feedback_comment: DF.SmallText | None
+		feedback_reason: DF.Literal["", "Correction", "Missing Information", "Incorrect Information"]
+		learned_context: DF.Code | None
 		model: DF.Link | None
 		prompt_tokens: DF.Int
 		reasoning: DF.LongText | None
@@ -68,9 +71,26 @@ def get_permission_query_conditions(user: str | None = None) -> str:
 	"""Messages inherit their conversation's visibility."""
 	user = user or frappe.session.user
 	roles = set(frappe.get_roles(user))
-	if roles.intersection({"System Manager", "AI Manager"}):
+	if user == "Administrator" or roles.intersection({"System Manager", "AI Manager"}):
 		return ""
 	return f"""`tabAI Message`.`conversation` in (
 		select name from `tabAI Conversation`
 		where `user` = {frappe.db.escape(user)} or `owner` = {frappe.db.escape(user)}
 	)"""
+
+
+def has_permission(doc, ptype: str | None = None, user: str | None = None) -> bool:
+	"""Apply conversation ownership to direct message reads and writes too."""
+	user = user or frappe.session.user
+	roles = set(frappe.get_roles(user))
+	if user == "Administrator" or roles.intersection({"System Manager", "AI Manager"}):
+		return True
+	if not doc.conversation:
+		return False
+	conversation = frappe.db.get_value(
+		"AI Conversation",
+		doc.conversation,
+		["user", "owner"],
+		as_dict=True,
+	)
+	return bool(conversation and user in {conversation.user, conversation.owner})

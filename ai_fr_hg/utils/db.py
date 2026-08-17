@@ -51,7 +51,7 @@ def safe_set_value(
 	table = doctype if doctype.startswith("tab") else f"tab{doctype}"
 	params.append(name)
 	frappe.db.sql(
-		f"update `{table}` set {', '.join(assignments)} where name = %s",  # noqa: S608
+		f"update `{table}` set {', '.join(assignments)} where name = %s",
 		tuple(params),
 	)
 	frappe.clear_cache(doctype=doctype, name=name)

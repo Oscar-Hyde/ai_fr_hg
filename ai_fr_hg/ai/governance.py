@@ -65,12 +65,12 @@ def get_effective_policy(user: str | None = None) -> frappe._dict:
 				"max_tokens_per_day": cint(settings.max_tokens_per_user_per_day),
 				"max_documents_per_day": 0,
 				"max_concurrent_requests": 0,
-			"allow_tools": 1,
-			"allow_document_upload": 1,
-			"allow_pipeline_execution": 1,
-			"allow_model_management": 0,
-			"allow_learning": 1,
-			"allowed_models": [],
+				"allow_tools": 1,
+				"allow_document_upload": 1,
+				"allow_pipeline_execution": 1,
+				"allow_model_management": 0,
+				"allow_learning": 1,
+				"allowed_models": [],
 			}
 		)
 

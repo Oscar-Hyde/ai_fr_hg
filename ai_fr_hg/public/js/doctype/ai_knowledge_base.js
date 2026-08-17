@@ -45,7 +45,9 @@ frappe.ui.form.on("AI Knowledge Base", {
 		if (!isNaN(size) && !isNaN(overlap) && size && overlap >= size) {
 			frm.set_value("chunk_overlap", Math.max(0, Math.floor(size * 0.15)));
 			frappe.show_alert({
-				message: __("Chunk Overlap must be smaller than Chunk Size - adjusted automatically."),
+				message: __(
+					"Chunk Overlap must be smaller than Chunk Size - adjusted automatically."
+				),
 				indicator: "orange",
 			});
 		}

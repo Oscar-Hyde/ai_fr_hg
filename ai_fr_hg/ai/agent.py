@@ -254,10 +254,17 @@ def run_agent_turn(
 	# turn. This is additive and best-effort - a memory failure must never
 	# break an otherwise healthy chat turn.
 	memory_block = skills_block = ""
+	learned_context = {"memories": [], "skills": []}
 	try:
-		from ai_fr_hg.ai.learning import build_memory_context
+		from ai_fr_hg.ai.learning import prepare_memory_context
 
-		memory_block, skills_block = build_memory_context(prompt, agent=agent_doc.name)
+		prepared = prepare_memory_context(prompt, agent=agent_doc.name)
+		memory_block = prepared["memory_block"]
+		skills_block = prepared["skill_block"]
+		learned_context = {
+			"memories": prepared["memories"],
+			"skills": prepared["skills"],
+		}
 	except Exception:
 		frappe.log_error(title="AI memory recall failed", message=frappe.get_traceback())
 
@@ -294,9 +301,7 @@ def run_agent_turn(
 		# instead - a grounded reply now beats a perfect one after the proxy
 		# has already hung up.
 		offer_tools = (
-			tools
-			if iteration < max_iterations and budget_allows(ITERATION_COST_SECONDS * 2)
-			else None
+			tools if iteration < max_iterations and budget_allows(ITERATION_COST_SECONDS * 2) else None
 		)
 
 		try:
@@ -409,6 +414,9 @@ def run_agent_turn(
 			agent=agent_doc.name,
 			citations=frappe.as_json(citations) if citations else None,
 			context_used=context or None,
+			learned_context=frappe.as_json(learned_context)
+			if learned_context["memories"] or learned_context["skills"]
+			else None,
 			prompt_tokens=result.prompt_tokens if result else 0,
 			completion_tokens=result.completion_tokens if result else 0,
 			total_tokens=result.total_tokens if result else 0,

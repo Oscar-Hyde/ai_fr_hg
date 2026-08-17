@@ -609,9 +609,7 @@ class AIAssistant {
 					<div class="ai-avatar">!</div>
 					<div class="ai-body">
 						<div class="ai-bubble ai-bubble-error">
-							${frappe.utils.escape_html(
-								this.get_error_message(error, __("The request failed."))
-							)}
+							${frappe.utils.escape_html(this.get_error_message(error, __("The request failed.")))}
 						</div>
 					</div>
 				</div>

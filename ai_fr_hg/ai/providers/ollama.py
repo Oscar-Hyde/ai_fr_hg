@@ -126,8 +126,7 @@ class OllamaProvider(BaseProvider):
 			payload["keep_alive"] = keep_alive
 		if tools:
 			payload["tools"] = [
-				{"type": "function", "function": t} if "function" not in t else t
-				for t in tools
+				{"type": "function", "function": t} if "function" not in t else t for t in tools
 			]
 		if json_schema:
 			payload["format"] = json_schema
@@ -171,8 +170,7 @@ class OllamaProvider(BaseProvider):
 		}
 		if tools:
 			payload["tools"] = [
-				{"type": "function", "function": t} if "function" not in t else t
-				for t in tools
+				{"type": "function", "function": t} if "function" not in t else t for t in tools
 			]
 
 		response = self.request("POST", "/api/chat", payload, stream=True)

@@ -6,6 +6,7 @@
 import frappe
 
 MANAGER_ROLES = {"System Manager", "AI Manager"}
+LEARNING_REVIEW_ROLES = MANAGER_ROLES | {"AI Auditor"}
 
 
 def has_app_permission() -> bool:
@@ -73,3 +74,79 @@ def _has_write_grant(doc, user: str) -> bool:
 		if row.role in roles and row.can_write:
 			return True
 	return False
+
+
+def _can_review_learning(user: str) -> bool:
+	return user == "Administrator" or bool(set(frappe.get_roles(user)).intersection(LEARNING_REVIEW_ROLES))
+
+
+def get_candidate_query_conditions(user: str | None = None) -> str:
+	"""Learners see their own candidates; reviewers see the complete queue."""
+	user = user or frappe.session.user
+	if _can_review_learning(user):
+		return ""
+	return f"`tabAI Knowledge Candidate`.`user` = {frappe.db.escape(user)}"
+
+
+def has_candidate_permission(doc, ptype: str | None = None, user: str | None = None) -> bool:
+	user = user or frappe.session.user
+	return _can_review_learning(user) or doc.user == user
+
+
+def _learning_scope_query(table: str, user: str) -> str:
+	if _can_review_learning(user):
+		return ""
+
+	roles = set(frappe.get_roles(user))
+	escaped_roles = ", ".join(frappe.db.escape(role) for role in roles) or "''"
+	escaped_user = frappe.db.escape(user)
+	return f"""(
+		`{table}`.`scope` = 'Global'
+		or (`{table}`.`scope` = 'User' and `{table}`.`scope_value` = {escaped_user})
+		or (`{table}`.`scope` = 'Role' and `{table}`.`scope_value` in ({escaped_roles}))
+		or (`{table}`.`scope` = 'Agent' and (
+			not exists (
+				select 1 from `tabAI Agent Role` ar
+				where ar.parent = `{table}`.`scope_value` and ar.parenttype = 'AI Agent'
+			)
+			or exists (
+				select 1 from `tabAI Agent Role` ar
+				where ar.parent = `{table}`.`scope_value`
+					and ar.parenttype = 'AI Agent' and ar.role in ({escaped_roles})
+			)
+		))
+	)"""
+
+
+def get_memory_query_conditions(user: str | None = None) -> str:
+	return _learning_scope_query("tabAI Memory", user or frappe.session.user)
+
+
+def get_skill_query_conditions(user: str | None = None) -> str:
+	return _learning_scope_query("tabAI Skill", user or frappe.session.user)
+
+
+def _learning_scope_applies(doc, user: str) -> bool:
+	if _can_review_learning(user):
+		return True
+	scope = doc.scope or "Global"
+	value = doc.scope_value
+	roles = set(frappe.get_roles(user))
+	if scope == "Global":
+		return True
+	if scope == "User":
+		return bool(value) and value == user
+	if scope == "Role":
+		return bool(value) and value in roles
+	if scope == "Agent" and value:
+		allowed = set(frappe.get_all("AI Agent Role", filters={"parent": value}, pluck="role"))
+		return not allowed or bool(roles.intersection(allowed))
+	return False
+
+
+def has_memory_permission(doc, ptype: str | None = None, user: str | None = None) -> bool:
+	return _learning_scope_applies(doc, user or frappe.session.user)
+
+
+def has_skill_permission(doc, ptype: str | None = None, user: str | None = None) -> bool:
+	return _learning_scope_applies(doc, user or frappe.session.user)

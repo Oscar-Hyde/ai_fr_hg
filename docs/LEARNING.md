@@ -58,6 +58,11 @@ A candidate is any piece of teaching the platform should adopt:
 | `Fact` / `Preference` / `Feedback` | `AI Memory` | "The refund period is thirty days." |
 | `Instruction` | `AI Skill` | "Always use Markdown tables when comparing options." |
 
+Candidates carry a target scope (`Global`, `User`, `Role`, or `Agent`) through
+promotion. Preferences, feedback, and chat corrections default to the teaching
+user; other types default to global review. Non-global values are validated
+against Frappe users, roles, and agents before the candidate is accepted.
+
 ### 3. Validate provenance
 
 `validate_candidate()` confirms the record is learnable: non-empty content, a
@@ -78,27 +83,36 @@ also reference an originating record, so the audit story is always complete.
 
 `approve_candidate()` is restricted to **AI Manager / System Manager**. On
 approval it creates an `AI Memory` (optionally embedded) or an `AI Skill`, and
-writes an `AI Audit Log` entry. `reject_candidate()` records the decision so it
-is never learned. **`Require Approval for Learned Knowledge`** (AI Platform
-Settings → Learning) is on by default, so taught knowledge never affects future
-answers until a human approves it.
+writes an `AI Audit Log` entry. Promotion is idempotent and serialized, so two
+approval requests cannot create duplicate learned records. `reject_candidate()`
+records the decision so it is never learned. **`Require Approval for Learned
+Knowledge`** (AI Platform Settings → Learning) is on by default. If an
+administrator deliberately disables it, conflict-free candidates are promoted
+by policy; duplicates and overlaps still stop at `Conflict` for review.
 
 ### 7. Future AI behaviour
 
-Each turn, `run_agent_turn` calls `build_memory_context(prompt, agent)` →
+Each turn, `run_agent_turn` calls `prepare_memory_context(prompt, agent)` →
 `recall()`. Active memories are filtered to the caller's scope (Global / User /
 Role / Agent), ranked by relevance to the question (coverage + Jaccard), and
 the top-N (default 5) plus all enabled skills are rendered into the system
-prompt as numbered `LEARNED KNOWLEDGE` / `KNOWN PROCEDURES` blocks. Recall is
-best-effort: if it fails the chat still answers.
+prompt as numbered `LEARNED KNOWLEDGE` / `KNOWN PROCEDURES` blocks. The exact
+memory and skill identifiers are persisted on the assistant message for later
+feedback attribution. Recall is best-effort: if it fails the chat still
+answers. Row-level Frappe permissions apply the same scopes to Desk and API
+lists, so private memories are not exposed merely because a user can open the
+Learning workspace.
 
 ### 8. Observe result
 
-`observe_feedback()` runs when a user rates an answer. A Not Helpful rating
-captures the answer as a new `Chat Correction` candidate for review, closing
-the loop. Recalling a memory also increments its `usage_count` / `last_used_on`,
-so administrators can see what is actually shaping behaviour and retire what is
-not.
+`observe_feedback()` runs when a user rates an answer. A supplied correction
+becomes a `Chat Correction` candidate. Without one, the system stores a clearly
+labelled **failure example** rather than accidentally proposing the incorrect
+answer as authoritative knowledge. Repeated ratings are idempotent, and changing
+a rating moves the exact recalled memories between `helpful_count` and
+`not_helpful_count`. Recalling a memory also increments its `usage_count` /
+`last_used_on`, so administrators can see what is shaping behaviour and retire
+what is not.
 
 ---
 

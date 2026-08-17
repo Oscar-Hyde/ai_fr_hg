@@ -25,9 +25,11 @@ def teach(
 	source_reference_name: str | None = None,
 	provenance: str | None = None,
 	confidence: float = 0.0,
+	target_scope: str | None = None,
+	target_scope_value: str | None = None,
 ) -> dict:
-	"""Teach the platform a fact, preference, or instruction."""
-	doc = learning.create_candidate(
+	"""Teach through the canonical governed learning service."""
+	return learning.teach(
 		content=content,
 		title=title,
 		candidate_type=candidate_type,
@@ -36,26 +38,9 @@ def teach(
 		source_reference_name=source_reference_name,
 		provenance=provenance,
 		confidence=confidence,
+		target_scope=target_scope,
+		target_scope_value=target_scope_value,
 	)
-	report = learning.validate_candidate(doc)
-	conflicts = learning.check_conflicts(doc)
-	if conflicts["duplicates"]:
-		doc.db_set("status", "Conflict")
-		doc.db_set("conflict_count", len(conflicts["duplicates"]) + len(conflicts["overlaps"]))
-		return {
-			"candidate": doc.name,
-			"status": "Conflict",
-			"conflicts": conflicts,
-			"valid": report["valid"],
-		}
-	doc.db_set("status", "Validated")
-	doc.db_set("conflict_count", len(conflicts["overlaps"]))
-	return {
-		"candidate": doc.name,
-		"status": "Validated",
-		"conflicts": conflicts,
-		"valid": report["valid"],
-	}
 
 
 @frappe.whitelist()
@@ -88,6 +73,9 @@ def list_candidates(status: str | None = None) -> list:
 			"user",
 			"status",
 			"confidence",
+			"target_scope",
+			"target_scope_value",
+			"testing_status",
 			"conflict_count",
 			"creation",
 		],
@@ -118,7 +106,7 @@ def list_memories(status: str = "Active", limit: int = 200) -> list:
 			"creation",
 		],
 		order_by="usage_count desc, creation desc",
-		limit_page_length=limit,
+		limit_page_length=min(max(cint(limit) or 200, 1), 500),
 	)
 
 
@@ -142,18 +130,31 @@ def list_skills(enabled: int = 1, limit: int = 100) -> list:
 			"usage_count",
 		],
 		order_by="usage_count desc, creation desc",
-		limit_page_length=limit,
+		limit_page_length=min(max(cint(limit) or 100, 1), 500),
 	)
+
+
+def _visible_count(doctype: str, filters: dict | None = None) -> int:
+	"""Count through ``get_list`` so row-level learning scopes are enforced."""
+	rows = frappe.get_list(
+		doctype,
+		filters=filters or {},
+		fields=["count(name) as total"],
+		limit_page_length=1,
+	)
+	return cint(rows[0].total) if rows else 0
 
 
 @frappe.whitelist()
 def overview() -> dict:
-	"""Summary counters for a Learning dashboard."""
+	"""Summary counters limited to records visible to the caller."""
 	check_capability("learning")
 	return {
-		"candidates": frappe.db.count("AI Knowledge Candidate"),
-		"pending": frappe.db.count("AI Knowledge Candidate", {"status": ["in", ["Draft", "Validated", "Conflict"]]}),
-		"memories": frappe.db.count("AI Memory", {"status": "Active"}),
-		"skills": frappe.db.count("AI Skill", {"enabled": 1}),
+		"candidates": _visible_count("AI Knowledge Candidate"),
+		"pending": _visible_count(
+			"AI Knowledge Candidate", {"status": ["in", ["Draft", "Validated", "Conflict"]]}
+		),
+		"memories": _visible_count("AI Memory", {"status": "Active"}),
+		"skills": _visible_count("AI Skill", {"enabled": 1}),
 		"learning_enabled": frappe.db.get_single_value("AI Platform Settings", "learning_enabled"),
 	}

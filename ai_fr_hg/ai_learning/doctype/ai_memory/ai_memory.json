@@ -25,7 +25,10 @@
   "source_candidate",
   "source_type",
   "source_user",
+  "provenance",
   "embedding_sec",
+  "embedding",
+  "embedding_format",
   "embedding_model",
   "embedding_dimensions"
  ],
@@ -133,14 +136,36 @@
   },
   {
    "fieldname": "source_user",
-   "fieldtype": "Data",
-   "label": "Teaching User"
+   "fieldtype": "Link",
+   "label": "Teaching User",
+   "options": "User"
+  },
+  {
+   "fieldname": "provenance",
+   "fieldtype": "Small Text",
+   "label": "Provenance",
+   "read_only": 1
   },
   {
    "collapsible": 1,
    "fieldname": "embedding_sec",
    "fieldtype": "Section Break",
    "label": "Embedding"
+  },
+  {
+   "fieldname": "embedding",
+   "fieldtype": "Long Text",
+   "hidden": 1,
+   "label": "Embedding",
+   "read_only": 1
+  },
+  {
+   "default": "Base64 Float32",
+   "fieldname": "embedding_format",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Embedding Format",
+   "read_only": 1
   },
   {
    "fieldname": "embedding_model",
@@ -157,7 +182,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-08-17 09:00:00.000000",
+ "modified": "2026-08-17 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "AI Learning",
  "name": "AI Memory",

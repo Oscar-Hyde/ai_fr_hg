@@ -60,9 +60,7 @@ class AIKnowledgeBase(Document):
 				)
 			)
 		if not 0 <= threshold <= 1:
-			frappe.throw(
-				_("Similarity Threshold ({0}) must be between 0 and 1.").format(threshold)
-			)
+			frappe.throw(_("Similarity Threshold ({0}) must be between 0 and 1.").format(threshold))
 
 	def validate_embedding_model(self):
 		if not self.embedding_model:

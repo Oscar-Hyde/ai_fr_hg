@@ -179,12 +179,19 @@ permission_query_conditions = {
 	"AI Conversation": "ai_fr_hg.ai_conversation.doctype.ai_conversation.ai_conversation.get_permission_query_conditions",
 	"AI Message": "ai_fr_hg.ai_conversation.doctype.ai_message.ai_message.get_permission_query_conditions",
 	"AI Document": "ai_fr_hg.utils.permissions.get_document_query_conditions",
+	"AI Knowledge Candidate": "ai_fr_hg.utils.permissions.get_candidate_query_conditions",
+	"AI Memory": "ai_fr_hg.utils.permissions.get_memory_query_conditions",
+	"AI Skill": "ai_fr_hg.utils.permissions.get_skill_query_conditions",
 }
 
 has_permission = {
 	"AI Conversation": "ai_fr_hg.ai_conversation.doctype.ai_conversation.ai_conversation.has_permission",
+	"AI Message": "ai_fr_hg.ai_conversation.doctype.ai_message.ai_message.has_permission",
 	"AI Document": "ai_fr_hg.utils.permissions.has_document_permission",
 	"AI Knowledge Base": "ai_fr_hg.utils.permissions.has_knowledge_base_permission",
+	"AI Knowledge Candidate": "ai_fr_hg.utils.permissions.has_candidate_permission",
+	"AI Memory": "ai_fr_hg.utils.permissions.has_memory_permission",
+	"AI Skill": "ai_fr_hg.utils.permissions.has_skill_permission",
 }
 
 # Document Events

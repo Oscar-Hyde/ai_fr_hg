@@ -528,9 +528,7 @@ def _log_search(query, targets, search_type, results, started) -> None:
 		frappe.log_error(title="AI Search Query log failed", message=frappe.get_traceback())
 
 
-def _log_search_job(
-	query, targets, search_type, results, result_count, top_score, duration_ms, user
-) -> None:
+def _log_search_job(query, targets, search_type, results, result_count, top_score, duration_ms, user) -> None:
 	try:
 		frappe.set_user(user)
 		doc = frappe.new_doc("AI Search Query")

@@ -173,9 +173,7 @@ class BaseProvider:
 		if (clamped := clamp_timeout(effective_timeout)) is not None:
 			if not clamped:
 				raise DeadlineExceededError(
-					_("Provider {0} was not called: the request time budget is exhausted.").format(
-						self.name
-					)
+					_("Provider {0} was not called: the request time budget is exhausted.").format(self.name)
 				)
 			effective_timeout = clamped
 
@@ -195,9 +193,7 @@ class BaseProvider:
 			) from exc
 		except requests.exceptions.ReadTimeout as exc:
 			raise ProviderTimeoutError(
-				_("Provider {0} did not respond within {1}s.").format(
-					self.name, round(effective_timeout)
-				)
+				_("Provider {0} did not respond within {1}s.").format(self.name, round(effective_timeout))
 			) from exc
 		except requests.exceptions.ConnectionError as exc:
 			raise ProviderOfflineError(
