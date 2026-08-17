@@ -2,6 +2,55 @@
 // For license information, please see license.txt
 
 frappe.ui.form.on("AI Knowledge Base", {
+	validate(frm) {
+		// Keep the chunking parameters valid before they reach the server, so a
+		// bad value is caught inline instead of bouncing the save as a 417.
+		const size = parseFloat(frm.doc.chunk_size);
+		const overlap = parseFloat(frm.doc.chunk_overlap);
+		const threshold = parseFloat(frm.doc.similarity_threshold);
+
+		if (frm.doc.chunk_size && !isNaN(size) && size < 100) {
+			frappe.throw(__("Chunk Size must be at least 100 characters."));
+		}
+		if (!isNaN(overlap) && overlap >= 0 && !isNaN(size) && size && overlap >= size) {
+			frappe.throw(__("Chunk Overlap must be smaller than Chunk Size."));
+		}
+		if (
+			frm.doc.similarity_threshold !== "" &&
+			frm.doc.similarity_threshold != null &&
+			!isNaN(threshold) &&
+			(threshold < 0 || threshold > 1)
+		) {
+			frappe.throw(__("Similarity Threshold must be between 0 and 1."));
+		}
+	},
+
+	// Auto-correct overlap the moment it crosses chunk size, so the user never
+	// trips over the error while typing.
+	chunk_size(frm) {
+		const size = parseFloat(frm.doc.chunk_size);
+		const overlap = parseFloat(frm.doc.chunk_overlap);
+		if (!isNaN(size) && !isNaN(overlap) && size && overlap >= size) {
+			frm.set_value("chunk_overlap", Math.max(0, Math.floor(size * 0.15)));
+			frappe.show_alert({
+				message: __("Chunk Overlap adjusted to stay below Chunk Size."),
+				indicator: "orange",
+			});
+		}
+	},
+
+	chunk_overlap(frm) {
+		const size = parseFloat(frm.doc.chunk_size);
+		const overlap = parseFloat(frm.doc.chunk_overlap);
+		if (!isNaN(size) && !isNaN(overlap) && size && overlap >= size) {
+			frm.set_value("chunk_overlap", Math.max(0, Math.floor(size * 0.15)));
+			frappe.show_alert({
+				message: __("Chunk Overlap must be smaller than Chunk Size - adjusted automatically."),
+				indicator: "orange",
+			});
+		}
+	},
+
 	refresh(frm) {
 		if (frm.is_new()) return;
 

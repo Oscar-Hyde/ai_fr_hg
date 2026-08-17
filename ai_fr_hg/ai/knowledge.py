@@ -261,11 +261,14 @@ def get_accessible_knowledge_bases(user: str | None = None) -> list[str]:
 	return accessible
 
 
-def keyword_search(query: str, knowledge_bases: list[str], limit: int = 50) -> dict[str, float]:
+def keyword_search(
+	query: str, knowledge_bases: list[str], limit: int = 50, documents: list[str] | None = None
+) -> dict[str, float]:
 	"""Score chunks by keyword overlap using a LIKE-based match.
 
 	Deliberately dependency-free so the platform works on any MariaDB or
-	Postgres install without a full-text index.
+	Postgres install without a full-text index. When `documents` is given, only
+	chunks belonging to those documents are considered.
 	"""
 	terms = [term.lower() for term in WORD.findall(query or "")][:8]
 	if not terms or not knowledge_bases:
@@ -275,11 +278,17 @@ def keyword_search(query: str, knowledge_bases: list[str], limit: int = 50) -> d
 	placeholders = ", ".join(["%s"] * len(knowledge_bases))
 	values = [f"%{term}%" for term in terms] + list(knowledge_bases)
 
+	doc_clause = ""
+	if documents:
+		doc_placeholders = ", ".join(["%s"] * len(documents))
+		doc_clause = f" and document in ({doc_placeholders})"
+		values += list(documents)
+
 	rows = frappe.db.sql(
 		f"""
 		select name, content
 		from `tabAI Document Chunk`
-		where ({conditions}) and knowledge_base in ({placeholders})
+		where ({conditions}) and knowledge_base in ({placeholders}){doc_clause}
 		limit {cint(limit)}
 		""",  # nosemgrep: frappe-manual-commit
 		values,
@@ -298,7 +307,11 @@ def keyword_search(query: str, knowledge_bases: list[str], limit: int = 50) -> d
 
 
 def semantic_search(
-	query: str, knowledge_bases: list[str], top_k: int = 10, model: str | None = None
+	query: str,
+	knowledge_bases: list[str],
+	top_k: int = 10,
+	model: str | None = None,
+	documents: list[str] | None = None,
 ) -> dict[str, float]:
 	"""Score chunks by cosine similarity against the query embedding."""
 	if not knowledge_bases:
@@ -309,9 +322,13 @@ def semantic_search(
 		return {}
 	query_vector = vectors[0]
 
+	filters: dict = {"knowledge_base": ["in", knowledge_bases], "embedding": ["!=", ""]}
+	if documents:
+		filters["document"] = ["in", documents]
+
 	rows = frappe.get_all(
 		"AI Document Chunk",
-		filters={"knowledge_base": ["in", knowledge_bases], "embedding": ["!=", ""]},
+		filters=filters,
 		fields=["name", "embedding"],
 		limit_page_length=max(top_k * 20, 200),
 	)
@@ -329,30 +346,51 @@ def retrieve(
 	similarity_threshold: float | None = None,
 	model: str | None = None,
 	log: bool = True,
+	documents: list[str] | None = None,
 ) -> list[RetrievedChunk]:
 	"""Retrieve the most relevant chunks for `query`.
 
 	Hybrid mode fuses dense and keyword rankings with reciprocal rank fusion,
 	so a chunk that ranks well on either signal surfaces.
+
+	When `documents` is supplied, retrieval is scoped to those `AI Document`
+	records: only their chunks are ranked and only their knowledge bases are
+	considered. This is how "answer from the file I just uploaded" is grounded
+	solely in the new upload instead of the whole knowledge base.
 	"""
 	started = time.monotonic()
 	settings = frappe.get_cached_doc("AI Platform Settings")
 
 	accessible = set(get_accessible_knowledge_bases())
-	if knowledge_bases:
-		targets = [kb for kb in knowledge_bases if kb in accessible]
+
+	if documents:
+		# The uploaded files are the source of truth; restrict targets to the
+		# knowledge bases they actually live in (and the caller can read).
+		doc_kbs = {
+			row.knowledge_base
+			for row in frappe.get_all(
+				"AI Document", filters={"name": ["in", documents]}, fields=["knowledge_base"]
+			)
+		}
+		targets = [kb for kb in doc_kbs if kb in accessible]
 	else:
-		targets = list(accessible)
+		if knowledge_bases:
+			targets = [kb for kb in knowledge_bases if kb in accessible]
+		else:
+			targets = list(accessible)
 
 	if not targets or not (query or "").strip():
 		return []
 
 	# Do not pay an embedding round-trip for empty knowledge bases.
+	populated_filters: dict = {"knowledge_base": ["in", targets]}
+	if documents:
+		populated_filters["document"] = ["in", documents]
 	populated = [
 		row.knowledge_base
 		for row in frappe.get_all(
 			"AI Document Chunk",
-			filters={"knowledge_base": ["in", targets]},
+			filters=populated_filters,
 			fields=["knowledge_base"],
 			distinct=True,
 			limit_page_length=len(targets),
@@ -373,13 +411,13 @@ def retrieve(
 
 	if search_type in ("Semantic", "Hybrid"):
 		try:
-			semantic = semantic_search(query, targets, top_k=top_k, model=model)
+			semantic = semantic_search(query, targets, top_k=top_k, model=model, documents=documents)
 		except Exception as exc:
 			frappe.log_error(title="AI semantic search failed", message=str(exc))
 			if search_type == "Semantic":
 				raise
 	if search_type in ("Keyword", "Hybrid"):
-		keyword = keyword_search(query, targets)
+		keyword = keyword_search(query, targets, documents=documents)
 
 	fused = _fuse(semantic, keyword, search_type)
 	if not fused:

@@ -19,7 +19,11 @@ from frappe.utils import cint, flt, now_datetime
 from ai_fr_hg.ai.deadline import allows as budget_allows
 from ai_fr_hg.ai.deadline import expired as budget_expired
 from ai_fr_hg.ai.engine import resolve_model, run_chat
-from ai_fr_hg.ai.exceptions import DeadlineExceededError
+from ai_fr_hg.ai.exceptions import (
+	DeadlineExceededError,
+	ProviderOfflineError,
+	ProviderTimeoutError,
+)
 from ai_fr_hg.ai.knowledge import build_context, retrieve
 from ai_fr_hg.ai.logging import write_audit_log
 from ai_fr_hg.ai.providers.base import ChatMessage
@@ -57,6 +61,19 @@ TIMED_OUT_ANSWER = (
 	"responding slowly.\n\n"
 	"This usually settles after the model's first run. If it keeps happening, try a "
 	"smaller model, or raise **Request Timeout** in AI Platform Settings."
+)
+
+PROVIDER_TIMEOUT_ANSWER = (
+	"The AI model did not respond within the allowed time and I could not finish an "
+	"answer.\n\n"
+	"Local models are slowest on their first run, so try again first. If it keeps "
+	"happening, pick a smaller model or raise **Request Timeout** in AI Platform Settings."
+)
+
+PROVIDER_OFFLINE_ANSWER = (
+	"The AI runtime is unreachable, so I could not answer.\n\n"
+	"Check that the model server is running and that the provider's **Base URL** in "
+	"AI Providers is correct, then try again."
 )
 
 
@@ -176,8 +193,15 @@ def run_agent_turn(
 	include_history: bool = True,
 	save_messages: bool = True,
 	extra_context: str | None = None,
+	documents: list[str] | None = None,
 ) -> dict:
-	"""Execute one full agent turn and return the answer with its provenance."""
+	"""Execute one full agent turn and return the answer with its provenance.
+
+	`documents` scopes retrieval to a specific set of `AI Document` records -
+	used when a caller has just uploaded files and wants the model to answer
+	from those files alone, so the reply is grounded in the new upload rather
+	than the whole knowledge base.
+	"""
 	from ai_fr_hg.ai.tools import execute_tool, get_agent_tool_schemas
 
 	started = time.monotonic()
@@ -197,12 +221,13 @@ def run_agent_turn(
 		# Retrieval is supporting evidence, not the answer. Skip it when the
 		# budget is already too tight to also pay for the generation that
 		# follows, rather than spending the whole turn on context.
-		if targets and budget_allows(RETRIEVAL_BUDGET_SECONDS + ITERATION_COST_SECONDS):
+		if (targets or documents) and budget_allows(RETRIEVAL_BUDGET_SECONDS + ITERATION_COST_SECONDS):
 			try:
 				retrieved = retrieve(
 					prompt,
 					knowledge_bases=targets or None,
 					top_k=cint(agent_doc.top_k) or None,
+					documents=documents,
 				)
 				retrieved_context = build_context(retrieved)
 				context = f"{context}\n\n{retrieved_context}".strip() if context else retrieved_context
@@ -231,6 +256,7 @@ def run_agent_turn(
 	tool_invocations: list[dict] = []
 	result = None
 	timed_out = False
+	timeout_kind = "budget"
 
 	for iteration in range(max_iterations + 1):
 		# Offering tools invites another round trip to interpret their output.
@@ -253,7 +279,20 @@ def run_agent_turn(
 				conversation=conversation,
 			)
 		except DeadlineExceededError:
+			# The whole turn ran out of its shared time budget.
 			timed_out = True
+			timeout_kind = "budget"
+			break
+		except ProviderTimeoutError:
+			# The provider specifically failed to answer in time (as opposed to
+			# the overall turn budget). Surface a helpful message rather than a
+			# bare 417 so the thread stays coherent.
+			timed_out = True
+			timeout_kind = "timeout"
+			break
+		except ProviderOfflineError:
+			timed_out = True
+			timeout_kind = "offline"
 			break
 
 		if not result.tool_calls:
@@ -317,11 +356,16 @@ def run_agent_turn(
 	citations = [r.as_dict() for r in retrieved]
 	answer = (result.content if result else "") or ""
 
-	# A blown budget is a real outcome, not a dropped connection. Persist an
-	# explanation so the conversation stays coherent and the user learns what
-	# to change, instead of the proxy returning a bare 504.
+	# A blown budget (or an unresponsive runtime) is a real outcome, not a
+	# dropped connection. Persist an explanation so the conversation stays
+	# coherent and the user learns what to change, instead of the proxy or the
+	# API returning a bare 504/417.
 	if timed_out and not answer.strip():
-		answer = TIMED_OUT_ANSWER
+		answer = {
+			"budget": TIMED_OUT_ANSWER,
+			"timeout": PROVIDER_TIMEOUT_ANSWER,
+			"offline": PROVIDER_OFFLINE_ANSWER,
+		}[timeout_kind]
 
 	# 5. Persist the assistant's reply.
 	assistant_message = None

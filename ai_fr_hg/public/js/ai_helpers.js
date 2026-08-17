@@ -54,6 +54,7 @@ Object.assign(frappe.ai, {
 				question,
 				knowledge_bases: options.knowledge_bases || null,
 				agent: options.agent || null,
+				documents: options.documents || null,
 			});
 
 			const citations = (response.citations || [])

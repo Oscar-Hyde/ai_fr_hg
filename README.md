@@ -126,6 +126,7 @@ for a fresh install.
 | Document | Contents |
 | --- | --- |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Module layout, data model, request lifecycle, design decisions |
+| [`docs/FILE_TO_ANSWER.md`](docs/FILE_TO_ANSWER.md) | The complete attach → ingest → index → retrieve → cite lifecycle, dev & production process |
 | [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) | Every setting, quotas, redaction, retention, deployment topologies |
 | [`docs/EXTENDING.md`](docs/EXTENDING.md) | Writing custom providers, readers, tools and pipeline steps |
 | [`docs/API.md`](docs/API.md) | Whitelisted REST endpoints with request and response shapes |

@@ -45,12 +45,24 @@ class AIKnowledgeBase(Document):
 		self.validate_embedding_model()
 
 	def validate_chunking(self):
-		if cint(self.chunk_size) < 100:
+		chunk_size = cint(self.chunk_size)
+		chunk_overlap = cint(self.chunk_overlap)
+		threshold = flt(self.similarity_threshold)
+
+		if chunk_size < 100:
 			frappe.throw(_("Chunk Size must be at least 100 characters."))
-		if cint(self.chunk_overlap) >= cint(self.chunk_size):
-			frappe.throw(_("Chunk Overlap must be smaller than Chunk Size."))
-		if not 0 <= flt(self.similarity_threshold) <= 1:
-			frappe.throw(_("Similarity Threshold must be between 0 and 1."))
+		if chunk_overlap < 0:
+			frappe.throw(_("Chunk Overlap cannot be negative."))
+		if chunk_overlap >= chunk_size:
+			frappe.throw(
+				_("Chunk Overlap ({0}) must be smaller than Chunk Size ({1}).").format(
+					chunk_overlap, chunk_size
+				)
+			)
+		if not 0 <= threshold <= 1:
+			frappe.throw(
+				_("Similarity Threshold ({0}) must be between 0 and 1.").format(threshold)
+			)
 
 	def validate_embedding_model(self):
 		if not self.embedding_model:

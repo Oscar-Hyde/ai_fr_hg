@@ -422,6 +422,57 @@ class TestRetrieval(AIPlatformTestCase):
 		context = build_context(results, max_characters=3000)
 		self.assertLessEqual(len(context), 3600)
 
+	def test_retrieval_can_be_scoped_to_documents(self):
+		"""`documents` must restrict results to the given records, so "answer
+		from the file I just uploaded" does not draw on the whole knowledge base."""
+		from ai_fr_hg.ai.knowledge import index_document, retrieve
+
+		alpha = self.make_document("Alpha Doc", "The system policy covers apples and refunds. " * 30)
+		beta = self.make_document("Beta Doc", "The system policy covers bananas and returns. " * 30)
+		with stub_embeddings():
+			index_document(alpha.name)
+			index_document(beta.name)
+
+		# Both documents mention "system policy", so unscoped retrieval returns
+		# chunks from either; scoping to `alpha` must keep only its chunks.
+		results = retrieve(
+			"system policy",
+			knowledge_bases=[self.knowledge_base.name],
+			search_type="Keyword",
+			top_k=10,
+			documents=[alpha.name],
+		)
+		self.assertTrue(results)
+		self.assertTrue(all(result.document == alpha.name for result in results))
+
+
+class TestIngestionWait(AIPlatformTestCase):
+	def test_wait_returns_immediately_for_indexed_document(self):
+		from ai_fr_hg.ai.ingestion import wait_for_indexed
+
+		document = self.make_document("Wait Indexed Doc", "content")
+		document.db_set("status", "Indexed", update_modified=False)
+
+		with patch("ai_fr_hg.ai.ingestion.time.sleep") as sleep:
+			statuses = wait_for_indexed([document.name], timeout=5)
+
+		sleep.assert_not_called()
+		self.assertEqual(statuses.get(document.name), "Indexed")
+
+	def test_wait_respects_timeout(self):
+		from ai_fr_hg.ai.ingestion import wait_for_indexed
+
+		document = self.make_document("Wait Queued Doc", "content")
+		document.db_set("status", "Queued", update_modified=False)
+
+		# First monotonic call sets the deadline; the second is past it.
+		with patch("ai_fr_hg.ai.ingestion.time.sleep"), patch(
+			"ai_fr_hg.ai.ingestion.time.monotonic", side_effect=[0, 10, 10, 10]
+		):
+			statuses = wait_for_indexed([document.name], timeout=1)
+
+		self.assertEqual(statuses.get(document.name), "Queued")
+
 
 class TestExtractionSchema(AIPlatformTestCase):
 	def test_json_schema_is_generated(self):
@@ -690,6 +741,35 @@ class TestAgentRuntime(AIPlatformTestCase):
 		)
 		self.assertEqual(saved[0].status, "Failed")
 		self.assertIn("ran out of time", saved[0].content)
+
+	def test_provider_timeout_saves_friendly_answer(self):
+		"""A provider read timeout must not surface as a 417; it becomes a saved
+		explanation so the conversation stays coherent."""
+		from ai_fr_hg.ai.agent import PROVIDER_TIMEOUT_ANSWER, create_conversation, run_agent_turn
+		from ai_fr_hg.ai.deadline import turn_budget
+		from ai_fr_hg.ai.exceptions import ProviderTimeoutError
+
+		conversation = create_conversation(agent="Test Agent")
+
+		with patch(
+			"ai_fr_hg.ai.agent.run_chat", side_effect=ProviderTimeoutError("slow model")
+		):
+			with turn_budget(60):
+				response = run_agent_turn(
+					"Question?", agent="Test Agent", conversation=conversation.name
+				)
+
+		self.assertTrue(response["timed_out"])
+		self.assertEqual(response["answer"], PROVIDER_TIMEOUT_ANSWER)
+
+		saved = frappe.get_all(
+			"AI Message",
+			filters={"conversation": conversation.name, "role": "Assistant"},
+			fields=["status"],
+			order_by="sequence desc",
+			limit=1,
+		)
+		self.assertEqual(saved[0].status, "Failed")
 
 	def test_tools_are_withheld_when_the_budget_cannot_fund_a_follow_up(self):
 		"""Near the deadline, ask for prose rather than another tool round trip."""

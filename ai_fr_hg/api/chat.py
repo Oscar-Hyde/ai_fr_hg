@@ -17,10 +17,18 @@ def send_message(
 	agent: str | None = None,
 	knowledge_bases: str | list | None = None,
 	model: str | None = None,
+	documents: str | list | None = None,
 ) -> dict:
-	"""Send a message and return the assistant's reply with its citations."""
+	"""Send a message and return the assistant's reply with its citations.
+
+	`documents` lists `AI Document` records the user has just uploaded. The
+	turn waits for them to finish indexing (bounded by the turn budget) and
+	then grounds retrieval on those files alone, so asking "summarise the file
+	I just uploaded" answers from the new upload instead of missing it.
+	"""
 	from ai_fr_hg.ai.agent import create_conversation, run_agent_turn
 	from ai_fr_hg.ai.deadline import turn_budget
+	from ai_fr_hg.ai.ingestion import wait_for_indexed
 
 	if not (message or "").strip():
 		frappe.throw(_("Message cannot be empty."))
@@ -30,6 +38,8 @@ def send_message(
 			knowledge_bases = json.loads(knowledge_bases)
 		except ValueError:
 			knowledge_bases = [knowledge_bases]
+
+	documents = _coerce_documents(documents)
 
 	if not conversation:
 		conversation_doc = create_conversation(agent=agent, knowledge_bases=knowledge_bases)
@@ -41,13 +51,32 @@ def send_message(
 	# before the retry/failover bounds are exhausted. Cap the turn so the user
 	# gets a saved, explainable answer instead of a 504.
 	with turn_budget(_get_turn_budget()):
+		if documents:
+			wait_for_indexed(documents)
 		return run_agent_turn(
 			message,
 			agent=agent,
 			conversation=conversation,
 			knowledge_bases=knowledge_bases,
 			model=model,
+			documents=documents,
 		)
+
+
+def _coerce_documents(documents) -> list[str]:
+	"""Normalise the `documents` argument and check the caller may read them."""
+	if isinstance(documents, str):
+		try:
+			documents = json.loads(documents)
+		except ValueError:
+			documents = [documents]
+
+	names = [doc for doc in (documents or []) if doc]
+	for name in names:
+		if not frappe.db.exists("AI Document", name):
+			frappe.throw(_("AI Document {0} does not exist.").format(name))
+		frappe.has_permission("AI Document", "read", doc=name, throw=True)
+	return names
 
 
 def _get_turn_budget() -> int:

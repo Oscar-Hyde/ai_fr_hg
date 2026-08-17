@@ -117,11 +117,17 @@ def ask(
 	knowledge_bases: str | list | None = None,
 	agent: str | None = None,
 	model: str | None = None,
+	documents: str | list | None = None,
 ) -> dict:
-	"""One-shot grounded question answering, without creating a conversation."""
+	"""One-shot grounded question answering, without creating a conversation.
+
+	`documents` scopes the answer to specific `AI Document` records (e.g. the
+	"Ask About This" button), waiting for indexing if they were just uploaded.
+	"""
 	from ai_fr_hg.ai.agent import run_agent_turn
 	from ai_fr_hg.ai.deadline import turn_budget
-	from ai_fr_hg.api.chat import _get_turn_budget
+	from ai_fr_hg.ai.ingestion import wait_for_indexed
+	from ai_fr_hg.api.chat import _coerce_documents, _get_turn_budget
 
 	if isinstance(knowledge_bases, str):
 		try:
@@ -129,8 +135,12 @@ def ask(
 		except ValueError:
 			knowledge_bases = [knowledge_bases]
 
+	documents = _coerce_documents(documents)
+
 	# Interactive, so it carries the same proxy deadline as chat.
 	with turn_budget(_get_turn_budget()):
+		if documents:
+			wait_for_indexed(documents)
 		return run_agent_turn(
 			question,
 			agent=agent,
@@ -138,6 +148,7 @@ def ask(
 			model=model,
 			include_history=False,
 			save_messages=False,
+			documents=documents,
 		)
 
 

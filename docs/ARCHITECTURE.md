@@ -141,6 +141,17 @@ User message
    └─ 7. persist                AI Message rows with citations and tokens
 ```
 
+### Attaching a file and asking about it
+
+A file attached in chat is ingested on a background worker, so a question
+asked in the same breath would race the index. `send_message` accepts the
+just-uploaded `documents`, waits for them to reach `Indexed` within the turn
+budget (`ai.ingestion.wait_for_indexed`), and passes them to
+`run_agent_turn`. `retrieve(..., documents=…)` then scopes retrieval to those
+records, so "summarise the file I just uploaded" is grounded in the upload
+itself rather than the whole knowledge base. See
+[`docs/FILE_TO_ANSWER.md`](FILE_TO_ANSWER.md) for the full lifecycle.
+
 ---
 
 ## Design decisions
