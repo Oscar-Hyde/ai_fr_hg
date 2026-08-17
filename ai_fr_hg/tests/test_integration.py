@@ -8,6 +8,7 @@ a plain CI site with no Ollama installed.
 """
 
 from contextlib import contextmanager
+from itertools import chain, repeat
 from unittest.mock import patch
 
 import frappe
@@ -468,7 +469,7 @@ class TestIngestionWait(AIPlatformTestCase):
 		# First monotonic call sets the deadline; the second is past it.
 		with (
 			patch("ai_fr_hg.ai.ingestion.time.sleep"),
-			patch("ai_fr_hg.ai.ingestion.time.monotonic", side_effect=[0, 10, 10, 10]),
+			patch("ai_fr_hg.ai.ingestion.time.monotonic", side_effect=chain([0], repeat(10))),
 		):
 			statuses = wait_for_indexed([document.name], timeout=1)
 
@@ -614,7 +615,7 @@ class TestBuiltinTools(AIPlatformTestCase):
 		"""
 		from ai_fr_hg.ai.tools.builtin import get_document_text
 
-		document = self.make_document("Unextracted Document", "")
+		document = self.make_document("Unextracted Document", "placeholder")
 		document.db_set("content", None, update_modified=False)
 		document.db_set("status", "Queued", update_modified=False)
 		document.db_set("source_file", "/files/unextracted.docx", update_modified=False)

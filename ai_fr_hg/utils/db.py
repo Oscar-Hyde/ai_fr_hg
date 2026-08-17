@@ -58,4 +58,4 @@ def safe_set_value(
 		f"update `{table}` set {', '.join(assignments)} where name = %s",
 		tuple(params),
 	)
-	frappe.clear_cache(doctype=meta.name, name=name)
+	frappe.clear_document_cache(meta.name, name)
