@@ -463,6 +463,37 @@ def create_default_policies() -> None:
 	doc.insert(ignore_permissions=True)
 
 
+def _enable_github_test_annotations() -> None:
+	"""Expose unittest failures as check annotations when Actions logs are unavailable."""
+	import os
+	import traceback
+	import unittest
+
+	if not os.environ.get("GITHUB_ACTIONS") or getattr(unittest.TestResult, "_ai_fr_hg_annotations", False):
+		return
+
+	def emit(test, err) -> None:
+		title = str(test).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+		message = "".join(traceback.format_exception(*err))[-12000:]
+		message = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+		print(f"::error title={title}::{message}")
+
+	original_error = unittest.TestResult.addError
+	original_failure = unittest.TestResult.addFailure
+
+	def add_error(self, test, err):
+		emit(test, err)
+		return original_error(self, test, err)
+
+	def add_failure(self, test, err):
+		emit(test, err)
+		return original_failure(self, test, err)
+
+	unittest.TestResult.addError = add_error
+	unittest.TestResult.addFailure = add_failure
+	unittest.TestResult._ai_fr_hg_annotations = True
+
+
 def before_tests() -> None:
 	"""Clear cached metadata before the standalone app fixtures are created.
 
@@ -471,4 +502,5 @@ def before_tests() -> None:
 	Frappe runs this hook before every test category, including on sites where
 	that DocType does not exist.
 	"""
+	_enable_github_test_annotations()
 	frappe.clear_cache()
