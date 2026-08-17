@@ -222,6 +222,12 @@
 	color: var(--text-color);
 }
 
+// A turn that hit its time budget: an answer, but not the one asked for.
+.ai-bubble-warning {
+	background: var(--bg-yellow);
+	color: var(--text-color);
+}
+
 .ai-message-footer {
 	margin-top: 4px;
 }

@@ -15,9 +15,29 @@ needs to intervene — everything else is automatic.
 | Additional Allowed Hosts | empty | Hostnames exempt from the local-only guard, one per line. |
 | Default System Prompt | seeded | Used by agents that do not define their own. |
 | Request Timeout | 120 s | Per-request HTTP timeout. Raise it for large models on CPU. |
+| Max Turn Duration | 90 s | Total budget for one interactive chat turn, across retries, failover and tool calls. Set 0 to disable. |
 | Max Retries | 2 | Retry attempts for transient failures before failover. |
 | Enable Failover | on | Try the next provider by priority when one is unreachable. |
 | Streaming Enabled | on | Allow token streaming where the runtime supports it. |
+
+### On Max Turn Duration
+
+`Request Timeout` bounds a *single* HTTP call. One chat turn can make many:
+each tool iteration is another model call, each call may be retried, and each
+retry may be tried against every enabled provider. Multiplied out, the worst
+case is far longer than any reverse proxy will hold a connection open, and the
+user sees a bare `504 Gateway Time-out` — no answer, and no error to explain it.
+
+`Max Turn Duration` is the budget for the whole turn. Every layer beneath it
+checks the remaining time before starting more work: socket timeouts are
+clamped to what is left, retries and failover stop when they cannot finish, and
+tool calling gives way to a final answer as the deadline approaches. If the
+budget does run out, the turn still saves a reply explaining what happened.
+
+Keep it comfortably below your proxy's timeout (nginx `proxy_read_timeout`
+defaults to 60 s). Set it to `0` for unbounded turns — appropriate only when
+nothing with a timeout sits in front of the site. Background jobs, pipelines
+and scheduled tasks are never budgeted, since no client is waiting on them.
 
 ### On Strict Local Only
 

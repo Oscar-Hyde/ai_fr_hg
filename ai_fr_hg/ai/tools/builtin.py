@@ -324,25 +324,45 @@ def get_document_text(
 		doc_name = _resolve_ai_document(str(doc_identifier))
 
 	if not doc_name:
+		# Name the documents that do exist. Without this the model can only say
+		# "I couldn't find it", which reads as a failure even when the real
+		# cause is a slightly different title or a still-queued upload.
 		return {
 			"error": f"Document '{doc_identifier}' was not found in the knowledge base.",
 			"found": False,
+			"available_documents": _recent_document_choices(),
 		}
 
 	frappe.has_permission("AI Document", "read", doc=doc_name, throw=True)
 	doc = frappe.get_doc("AI Document", doc_name)
 
-	# If document text hasn't been extracted yet, trigger processing on demand
+	# The document may still be queued behind a background worker. Extract its
+	# text inline so the answer is not blocked on the worker, but deliberately
+	# skip indexing: embedding every chunk is many model round trips and does
+	# not affect the text we are about to return. Indexing stays queued.
 	if (not doc.content or doc.status in ("Queued", "Extracting")) and doc.source_file:
 		try:
 			from ai_fr_hg.ai.ingestion import process_document
 
-			process_document(doc.name)
+			process_document(doc.name, index=False)
 			doc.reload()
 		except Exception as exc:
 			frappe.log_error(title="On-demand AI document extraction failed", message=str(exc))
 
 	content = doc.content or ""
+
+	# Extraction can legitimately yield nothing - a scanned PDF with no OCR, an
+	# unsupported format, a worker that has not run yet. Say which, so the
+	# model relays a cause instead of "I couldn't find the document".
+	if not content.strip():
+		return {
+			"document": doc.name,
+			"title": doc.title,
+			"status": doc.status,
+			"found": True,
+			"content": "",
+			"error": _document_text_unavailable_reason(doc),
+		}
 	truncated = len(content) > (cint(max_chars) or 8000)
 
 	return {
@@ -354,6 +374,37 @@ def get_document_text(
 		"truncated": truncated,
 		"total_characters": len(content),
 	}
+
+
+def _recent_document_choices(limit: int = 10) -> list[dict]:
+	"""Recent documents the user may read, to disambiguate a failed lookup."""
+	try:
+		return frappe.get_list(
+			"AI Document",
+			fields=["name", "title", "status"],
+			order_by="modified desc",
+			limit_page_length=limit,
+		)
+	except Exception:
+		return []
+
+
+def _document_text_unavailable_reason(doc) -> str:
+	"""Explain why a document that exists has no readable text yet."""
+	if doc.status == "Failed":
+		return (
+			f"Document '{doc.title}' could not be processed: "
+			f"{doc.error_message or 'no further detail was recorded'}."
+		)
+	if doc.status in ("Queued", "Extracting", "Chunking", "Embedding"):
+		return (
+			f"Document '{doc.title}' is still being processed (status: {doc.status}). "
+			"Ask again shortly."
+		)
+	return (
+		f"Document '{doc.title}' contains no extractable text. It may be a scanned "
+		"image needing OCR, or an unsupported format."
+	)
 
 
 def current_datetime(**kwargs) -> dict:

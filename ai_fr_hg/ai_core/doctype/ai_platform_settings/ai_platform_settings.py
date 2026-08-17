@@ -49,6 +49,7 @@ class AIPlatformSettings(Document):
 		max_document_size_mb: DF.Int
 		max_requests_per_user_per_hour: DF.Int
 		max_retries: DF.Int
+		max_turn_seconds: DF.Int
 		max_tokens_per_user_per_day: DF.Int
 		ocr_enabled: DF.Check
 		offline_mode: DF.Check
@@ -70,6 +71,8 @@ class AIPlatformSettings(Document):
 	def validate_intervals(self):
 		if cint(self.request_timeout) < 5:
 			frappe.throw(_("Request Timeout must be at least 5 seconds."))
+		if cint(self.max_turn_seconds) and cint(self.max_turn_seconds) < 10:
+			frappe.throw(_("Max Turn Duration must be at least 10 seconds, or 0 to disable it."))
 		if cint(self.default_chunk_overlap) >= cint(self.default_chunk_size):
 			frappe.throw(_("Chunk Overlap must be smaller than Chunk Size."))
 		if not 0 <= flt(self.similarity_threshold) <= 1:

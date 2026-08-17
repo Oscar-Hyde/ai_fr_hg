@@ -554,6 +554,56 @@ class TestBuiltinTools(AIPlatformTestCase):
 		result_by_path = get_document_text(file_path="Tool Read Document.docx")
 		self.assertIn("Readable content", result_by_path["content"])
 
+	def test_get_document_text_does_not_embed_inline(self):
+		"""Reading a document must not run the embedding pipeline in-request.
+
+		Embedding is many model round trips; doing it inside a chat turn is
+		what pushed `send_message` past the gateway timeout.
+		"""
+		from ai_fr_hg.ai.tools.builtin import get_document_text
+
+		document = self.make_document("Unextracted Document", "")
+		document.db_set("content", None, update_modified=False)
+		document.db_set("status", "Queued", update_modified=False)
+		document.db_set("source_file", "/files/unextracted.docx", update_modified=False)
+
+		with patch("ai_fr_hg.ai.ingestion.process_document") as process:
+			get_document_text(document.name)
+
+		self.assertTrue(process.called, "text should still be extracted on demand")
+		self.assertIs(
+			process.call_args.kwargs.get("index"),
+			False,
+			"indexing must be deferred to a background worker",
+		)
+
+	def test_missing_document_reports_the_alternatives(self):
+		"""A failed lookup should help the model, not just say 'not found'."""
+		from ai_fr_hg.ai.tools.builtin import get_document_text
+
+		self.make_document("A Findable Report", "Some content.")
+		result = get_document_text("No_Such_File_At_All.docx")
+
+		self.assertFalse(result["found"])
+		self.assertIn("available_documents", result)
+		titles = [row.get("title") for row in result["available_documents"]]
+		self.assertIn("A Findable Report", titles)
+
+	def test_empty_document_explains_why(self):
+		"""'No text' must be distinguishable from 'no such document'."""
+		from ai_fr_hg.ai.tools.builtin import get_document_text
+
+		document = self.make_document("Scanned Only Document", "placeholder")
+		document.db_set("content", "", update_modified=False)
+		document.db_set("status", "Failed", update_modified=False)
+		document.db_set("error_message", "No text could be extracted.", update_modified=False)
+
+		result = get_document_text(document.name)
+
+		self.assertTrue(result["found"])
+		self.assertIn("could not be processed", result["error"])
+		self.assertIn("No text could be extracted", result["error"])
+
 	def test_list_documents_respects_limit(self):
 		from ai_fr_hg.ai.tools.builtin import list_documents
 
@@ -609,6 +659,81 @@ class TestAgentRuntime(AIPlatformTestCase):
 		roles = [message.role for message in messages]
 		self.assertIn("User", roles)
 		self.assertIn("Assistant", roles)
+
+	def test_exhausted_budget_saves_an_answer_instead_of_hanging(self):
+		"""A blown budget must end the turn, not leave the proxy to time out."""
+		from ai_fr_hg.ai.agent import TIMED_OUT_ANSWER, create_conversation, run_agent_turn
+		from ai_fr_hg.ai.deadline import turn_budget
+		from ai_fr_hg.ai.exceptions import DeadlineExceededError
+
+		conversation = create_conversation(agent="Test Agent")
+
+		with patch("ai_fr_hg.ai.agent.run_chat", side_effect=DeadlineExceededError("out of time")):
+			with turn_budget(60):
+				response = run_agent_turn(
+					"Summarise the document I just uploaded.",
+					agent="Test Agent",
+					conversation=conversation.name,
+				)
+
+		# The turn returns normally, flagged, with a usable explanation.
+		self.assertTrue(response["timed_out"])
+		self.assertEqual(response["answer"], TIMED_OUT_ANSWER)
+
+		# And the reply is persisted, so the thread stays coherent on reload.
+		saved = frappe.get_all(
+			"AI Message",
+			filters={"conversation": conversation.name, "role": "Assistant"},
+			fields=["content", "status"],
+			order_by="sequence desc",
+			limit=1,
+		)
+		self.assertEqual(saved[0].status, "Failed")
+		self.assertIn("ran out of time", saved[0].content)
+
+	def test_tools_are_withheld_when_the_budget_cannot_fund_a_follow_up(self):
+		"""Near the deadline, ask for prose rather than another tool round trip."""
+		from ai_fr_hg.ai.agent import run_agent_turn
+		from ai_fr_hg.ai.deadline import turn_budget
+
+		agent = frappe.get_doc("AI Agent", "Test Agent")
+		agent.use_tools = 1
+		agent.flags.ignore_permissions = True
+
+		captured = {}
+
+		def capture(messages, **kwargs):
+			captured["tools"] = kwargs.get("tools")
+			return CompletionResult(content="Final answer.", total_tokens=5)
+
+		with patch("ai_fr_hg.ai.agent.run_chat", side_effect=capture):
+			# A 12s budget cannot fund a tool call plus the call that would
+			# interpret its result, so no tools should be offered.
+			with turn_budget(12):
+				run_agent_turn("Question?", agent="Test Agent", save_messages=False)
+
+		self.assertIsNone(captured["tools"])
+
+	def test_generous_budget_still_offers_tools(self):
+		"""The guard must not disable tool calling under normal conditions."""
+		from ai_fr_hg.ai.agent import run_agent_turn
+		from ai_fr_hg.ai.deadline import turn_budget
+
+		captured = {}
+
+		def capture(messages, **kwargs):
+			captured["tools"] = kwargs.get("tools")
+			return CompletionResult(content="Final answer.", total_tokens=5)
+
+		agent = frappe.get_doc("AI Agent", "Test Agent")
+		if not agent.use_tools:
+			self.skipTest("Test Agent has no tools configured.")
+
+		with patch("ai_fr_hg.ai.agent.run_chat", side_effect=capture):
+			with turn_budget(600):
+				run_agent_turn("Question?", agent="Test Agent", save_messages=False)
+
+		self.assertIsNotNone(captured["tools"])
 
 	def test_system_prompt_includes_context(self):
 		from ai_fr_hg.ai.agent import build_system_prompt

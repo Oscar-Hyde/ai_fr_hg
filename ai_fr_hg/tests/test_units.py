@@ -393,3 +393,106 @@ class TestToolCallWireFormats(UnitTestCase):
 			self._assistant_message('{"doctype": "User"}')
 		)
 		self.assertEqual(payload["tool_calls"][0]["function"]["arguments"], '{"doctype": "User"}')
+
+
+class TestDeadline(UnitTestCase):
+	"""The time budget that keeps a chat turn inside the proxy's patience."""
+
+	def make_deadline(self, budget, now=None):
+		"""A deadline driven by a hand-cranked clock, so no test sleeps."""
+		from ai_fr_hg.ai.deadline import Deadline
+
+		clock = {"t": 0.0}
+		deadline = Deadline(budget, clock=lambda: clock["t"])
+		return deadline, clock
+
+	def test_remaining_shrinks_as_time_passes(self):
+		deadline, clock = self.make_deadline(100)
+		self.assertEqual(deadline.remaining(), 100)
+
+		clock["t"] = 30
+		self.assertEqual(deadline.remaining(), 70)
+
+	def test_remaining_never_goes_negative(self):
+		deadline, clock = self.make_deadline(10)
+		clock["t"] = 999
+		self.assertEqual(deadline.remaining(), 0)
+		self.assertTrue(deadline.expired)
+
+	def test_clamp_caps_timeout_at_remaining_budget(self):
+		deadline, clock = self.make_deadline(100)
+		clock["t"] = 70
+
+		# 30s left, minus the 2s reserve, so a 120s call is cut to 28s.
+		self.assertAlmostEqual(deadline.clamp(120), 28.0)
+
+	def test_clamp_leaves_short_timeouts_alone(self):
+		deadline, _clock = self.make_deadline(100)
+		self.assertEqual(deadline.clamp(5), 5)
+
+	def test_clamp_returns_zero_when_budget_is_spent(self):
+		"""Zero is the signal to give up rather than start a doomed call."""
+		deadline, clock = self.make_deadline(100)
+		clock["t"] = 99.5
+		self.assertEqual(deadline.clamp(120), 0.0)
+
+	def test_allows_accounts_for_the_reserve(self):
+		deadline, clock = self.make_deadline(100)
+		clock["t"] = 90
+
+		# 10s left: room for 5s of work plus the 2s reserve, but not 9s.
+		self.assertTrue(deadline.allows(5))
+		self.assertFalse(deadline.allows(9))
+
+
+class TestTurnBudget(UnitTestCase):
+	"""`turn_budget` installs the deadline the rest of the stack reads."""
+
+	def setUp(self):
+		patcher = patch("ai_fr_hg.ai.deadline.frappe")
+		self.frappe_mock = patcher.start()
+		self.addCleanup(patcher.stop)
+		self.frappe_mock.flags = {}
+
+	def test_budget_is_visible_inside_and_gone_after(self):
+		from ai_fr_hg.ai.deadline import get_deadline, turn_budget
+
+		with turn_budget(60) as deadline:
+			self.assertIsNotNone(deadline)
+			self.assertIs(get_deadline(), deadline)
+
+		self.assertIsNone(get_deadline())
+
+	def test_zero_disables_budgeting(self):
+		"""Background jobs have no proxy in front of them and stay unbounded."""
+		from ai_fr_hg.ai.deadline import clamp_timeout, get_deadline, turn_budget
+
+		with turn_budget(0) as deadline:
+			self.assertIsNone(deadline)
+			self.assertIsNone(get_deadline())
+			# No budget means callers keep their own timeout.
+			self.assertIsNone(clamp_timeout(120))
+
+	def test_nested_budget_cannot_extend_the_outer_one(self):
+		from ai_fr_hg.ai.deadline import get_deadline, turn_budget
+
+		with turn_budget(30) as outer:
+			with turn_budget(600) as inner:
+				self.assertIs(inner, outer)
+			self.assertIs(get_deadline(), outer)
+
+	def test_budget_is_restored_after_an_exception(self):
+		from ai_fr_hg.ai.deadline import get_deadline, turn_budget
+
+		with self.assertRaises(ValueError):
+			with turn_budget(60):
+				raise ValueError("boom")
+
+		self.assertIsNone(get_deadline())
+
+	def test_helpers_are_permissive_without_a_budget(self):
+		from ai_fr_hg.ai.deadline import allows, expired, remaining_seconds
+
+		self.assertTrue(allows(9999))
+		self.assertFalse(expired())
+		self.assertIsNone(remaining_seconds())

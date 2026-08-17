@@ -4,4 +4,5 @@
 
 [post_model_sync]
 ai_fr_hg.patches.v0_0_1_fast_defaults_and_code_fields
+ai_fr_hg.patches.v0_0_2_turn_time_budget
 # Patches added in this section will be executed after doctypes are migrated

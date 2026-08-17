@@ -412,11 +412,15 @@ class AIAssistant {
 			? frappe.utils.escape_html(message.content || "").replace(/\n/g, "<br>")
 			: frappe.markdown(message.content || "");
 
+		// A turn that ran out of time still produces an answer, but it is an
+		// explanation rather than a result - style it so that is obvious.
+		const timedOut = message.timed_out || message.status === "Failed";
+
 		const $el = $(`
 			<div class="ai-message ai-message-${message.role.toLowerCase()}">
 				<div class="ai-avatar">${isUser ? frappe.utils.icon("user", "sm") : "AI"}</div>
 				<div class="ai-body">
-					<div class="ai-bubble">${rendered}</div>
+					<div class="ai-bubble${timedOut ? " ai-bubble-warning" : ""}">${rendered}</div>
 					<div class="ai-message-footer"></div>
 				</div>
 			</div>
@@ -514,6 +518,16 @@ class AIAssistant {
 	}
 
 	get_error_message(error, fallback) {
+		// A gateway timeout is produced by the proxy, not the app, so it
+		// carries no server_messages and would otherwise surface as a bare
+		// "The request failed." Name it, and say what to do about it.
+		const status = error?.status || error?.responseJSON?.status || error?.xhr?.status;
+		if (status === 504 || status === 502 || status === 408) {
+			return __(
+				"The model did not answer in time and the connection timed out. Local models are slowest on their first run — try again, or pick a smaller model."
+			);
+		}
+
 		return (
 			error?.message ||
 			error?.exc?.server_messages ||
@@ -577,6 +591,7 @@ class AIAssistant {
 				model: response.model,
 				total_tokens: response.total_tokens,
 				duration_ms: response.duration_ms,
+				timed_out: response.timed_out,
 			});
 
 			if (isNew) this.refresh_conversations();

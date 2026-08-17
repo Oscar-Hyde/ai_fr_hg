@@ -56,6 +56,7 @@ supplied.
     }
   ],
   "tool_invocations": [],
+  "timed_out": false,
   "message": "AIMSG-000123",
   "prompt_tokens": 842,
   "completion_tokens": 47,
@@ -63,6 +64,10 @@ supplied.
   "duration_ms": 2140
 }
 ```
+
+`timed_out` is `true` when the turn hit its **Max Turn Duration** budget. The
+call still returns `200` with a saved `answer` explaining the timeout, rather
+than leaving the connection open for the proxy to terminate with a `504`.
 
 ### Other chat endpoints
 

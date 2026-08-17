@@ -16,7 +16,10 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, now_datetime
 
+from ai_fr_hg.ai.deadline import allows as budget_allows
+from ai_fr_hg.ai.deadline import expired as budget_expired
 from ai_fr_hg.ai.engine import resolve_model, run_chat
+from ai_fr_hg.ai.exceptions import DeadlineExceededError
 from ai_fr_hg.ai.knowledge import build_context, retrieve
 from ai_fr_hg.ai.logging import write_audit_log
 from ai_fr_hg.ai.providers.base import ChatMessage
@@ -40,6 +43,21 @@ CITATION_INSTRUCTIONS = (
 
 #: Conversation history window sent to the model, in messages.
 HISTORY_LIMIT = 20
+
+#: Rough cost of one more model round trip. Used to decide whether the turn can
+#: afford another tool iteration, or should settle for the answer it has.
+ITERATION_COST_SECONDS = 10.0
+
+#: Time budget for retrieval. Retrieval is a nice-to-have: if the embedding
+#: round trip is slow we would rather answer without context than not at all.
+RETRIEVAL_BUDGET_SECONDS = 20.0
+
+TIMED_OUT_ANSWER = (
+	"I ran out of time while answering that. The local model is still loading or is "
+	"responding slowly.\n\n"
+	"This usually settles after the model's first run. If it keeps happening, try a "
+	"smaller model, or raise **Request Timeout** in AI Platform Settings."
+)
 
 
 def get_agent(agent: str | None = None):
@@ -176,7 +194,10 @@ def run_agent_turn(
 		targets = knowledge_bases or get_agent_knowledge_bases(agent_doc, conversation_doc)
 		# A configured agent with no attached knowledge bases still returns fast
 		# instead of paying an access/query round-trip on every chat.
-		if targets:
+		# Retrieval is supporting evidence, not the answer. Skip it when the
+		# budget is already too tight to also pay for the generation that
+		# follows, rather than spending the whole turn on context.
+		if targets and budget_allows(RETRIEVAL_BUDGET_SECONDS + ITERATION_COST_SECONDS):
 			try:
 				retrieved = retrieve(
 					prompt,
@@ -209,18 +230,39 @@ def run_agent_turn(
 
 	tool_invocations: list[dict] = []
 	result = None
+	timed_out = False
 
 	for iteration in range(max_iterations + 1):
-		result = run_chat(
-			messages,
-			model=model_doc.name,
-			options=options,
-			tools=tools if iteration < max_iterations else None,
-			operation="Chat",
-			conversation=conversation,
+		# Offering tools invites another round trip to interpret their output.
+		# Once the budget can no longer fund that, ask for a final answer
+		# instead - a grounded reply now beats a perfect one after the proxy
+		# has already hung up.
+		offer_tools = (
+			tools
+			if iteration < max_iterations and budget_allows(ITERATION_COST_SECONDS * 2)
+			else None
 		)
 
+		try:
+			result = run_chat(
+				messages,
+				model=model_doc.name,
+				options=options,
+				tools=offer_tools,
+				operation="Chat",
+				conversation=conversation,
+			)
+		except DeadlineExceededError:
+			timed_out = True
+			break
+
 		if not result.tool_calls:
+			break
+
+		# Tool results are only useful if we can afford the follow-up call
+		# that turns them into prose.
+		if budget_expired() or not budget_allows(ITERATION_COST_SECONDS):
+			timed_out = not (result.content or "").strip()
 			break
 
 		messages.append(
@@ -273,7 +315,13 @@ def run_agent_turn(
 				)
 
 	citations = [r.as_dict() for r in retrieved]
-	answer = result.content if result else ""
+	answer = (result.content if result else "") or ""
+
+	# A blown budget is a real outcome, not a dropped connection. Persist an
+	# explanation so the conversation stays coherent and the user learns what
+	# to change, instead of the proxy returning a bare 504.
+	if timed_out and not answer.strip():
+		answer = TIMED_OUT_ANSWER
 
 	# 5. Persist the assistant's reply.
 	assistant_message = None
@@ -291,6 +339,8 @@ def run_agent_turn(
 			completion_tokens=result.completion_tokens if result else 0,
 			total_tokens=result.total_tokens if result else 0,
 			duration_ms=result.duration_ms if result else 0,
+			status="Failed" if timed_out else "Completed",
+			error_message="Turn exceeded its time budget." if timed_out else None,
 		)
 		update_conversation_stats(conversation, result)
 
@@ -304,6 +354,7 @@ def run_agent_turn(
 		"model": model_doc.name,
 		"citations": citations,
 		"tool_invocations": tool_invocations,
+		"timed_out": timed_out,
 		"user_message": user_message.name if user_message else None,
 		"message": assistant_message.name if assistant_message else None,
 		"prompt_tokens": result.prompt_tokens if result else 0,

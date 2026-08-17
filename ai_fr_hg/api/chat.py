@@ -20,6 +20,7 @@ def send_message(
 ) -> dict:
 	"""Send a message and return the assistant's reply with its citations."""
 	from ai_fr_hg.ai.agent import create_conversation, run_agent_turn
+	from ai_fr_hg.ai.deadline import turn_budget
 
 	if not (message or "").strip():
 		frappe.throw(_("Message cannot be empty."))
@@ -36,13 +37,25 @@ def send_message(
 	else:
 		frappe.get_doc("AI Conversation", conversation).check_permission("write")
 
-	return run_agent_turn(
-		message,
-		agent=agent,
-		conversation=conversation,
-		knowledge_bases=knowledge_bases,
-		model=model,
-	)
+	# Interactive requests sit behind a reverse proxy that will hang up long
+	# before the retry/failover bounds are exhausted. Cap the turn so the user
+	# gets a saved, explainable answer instead of a 504.
+	with turn_budget(_get_turn_budget()):
+		return run_agent_turn(
+			message,
+			agent=agent,
+			conversation=conversation,
+			knowledge_bases=knowledge_bases,
+			model=model,
+		)
+
+
+def _get_turn_budget() -> int:
+	"""Seconds one interactive turn may take. 0 disables the budget."""
+	configured = frappe.db.get_single_value("AI Platform Settings", "max_turn_seconds")
+	# `None` means the column predates this setting (site not yet migrated);
+	# fall back to the default rather than silently running unbudgeted.
+	return 90 if configured is None else cint(configured)
 
 
 @frappe.whitelist()

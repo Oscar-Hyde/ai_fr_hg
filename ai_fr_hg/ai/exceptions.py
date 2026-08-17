@@ -21,6 +21,15 @@ class ProviderTimeoutError(ProviderError):
 	"""Raised when a provider endpoint does not respond in time."""
 
 
+class DeadlineExceededError(ProviderTimeoutError):
+	"""Raised when the request's overall time budget is exhausted.
+
+	Derives from :class:`ProviderTimeoutError` so existing timeout handling
+	keeps working, but is distinct enough to report honestly to the user: the
+	runtime did not necessarily fail, we simply ran out of time to wait for it.
+	"""
+
+
 class ModelNotAvailableError(AIError):
 	"""Raised when the requested model is not present on the runtime."""
 
