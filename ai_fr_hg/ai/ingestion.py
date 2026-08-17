@@ -1,253 +1,821 @@
 # Copyright (c) 2026, Ai Fr Hg and contributors
 # For license information, please see license.txt
 
-"""Unified document ingestion pipeline.
+"""Permission-aware document ingestion and background processing.
 
-Every source - an uploaded file, pasted text, a URL or an existing Frappe
-record - converges on the same path: read -> extract text -> chunk -> embed ->
-index. That single pipeline is what makes the platform's document handling
-predictable and auditable.
+The requesting user is durable processing authority. Source access is checked
+before enqueue and checked again by the worker under that same user, so retries
+or scheduler execution can never acquire scheduler/Administrator privileges.
 """
 
+from __future__ import annotations
+
 import hashlib
+import json
+import mimetypes
+import os
+import socket
 import time
+import zipfile
+from contextlib import contextmanager
+from io import BytesIO
+from urllib.parse import unquote, urljoin, urlparse
 
 import frappe
 from frappe import _
-from frappe.utils import cint, get_files_path, now_datetime
+from frappe.utils import cint, now_datetime
 
-from ai_fr_hg.ai.exceptions import DocumentProcessingError
+from ai_fr_hg.ai.logging import write_audit_log
+from ai_fr_hg.ai.exceptions import (
+	CorruptDocumentError,
+	DocumentFetchError,
+	DocumentProcessingError,
+	DocumentResourceLimitError,
+	DocumentSourcePermissionError,
+	UnsupportedDocumentError,
+)
 from ai_fr_hg.ai.readers import get_reader, supported_extensions
 from ai_fr_hg.ai.readers.base import MissingDependency
+from ai_fr_hg.utils.network import enforce_local_only, get_allowed_hosts
+
+DEFAULT_MAX_DOCUMENT_MB = 50
+MAX_REDIRECTS = 5
+MAX_ARCHIVE_MEMBERS = 10_000
+ARCHIVE_EXTENSIONS = {"docx", "xlsx", "xlsm", "pptx"}
+REDIRECT_STATUSES = {301, 302, 303, 307, 308}
+ALLOWED_CONTENT_TYPES = {
+	"application/json",
+	"application/octet-stream",
+	"application/pdf",
+	"application/vnd.ms-excel.sheet.macroenabled.12",
+	"application/vnd.openxmlformats-officedocument.presentationml.presentation",
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+	"application/xml",
+	"image/bmp",
+	"image/gif",
+	"image/jpeg",
+	"image/png",
+	"image/tiff",
+	"image/webp",
+	"message/rfc822",
+}
+MIME_EXTENSIONS = {
+	"application/json": ".json",
+	"application/pdf": ".pdf",
+	"application/vnd.ms-excel.sheet.macroenabled.12": ".xlsm",
+	"application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+	"application/xml": ".xml",
+	"image/bmp": ".bmp",
+	"image/gif": ".gif",
+	"image/jpeg": ".jpg",
+	"image/png": ".png",
+	"image/tiff": ".tiff",
+	"image/webp": ".webp",
+	"message/rfc822": ".eml",
+	"text/csv": ".csv",
+	"text/html": ".html",
+	"text/markdown": ".md",
+	"text/plain": ".txt",
+	"text/tab-separated-values": ".tsv",
+}
 
 
-def get_file_content(file_url: str) -> tuple[bytes, str]:
-	"""Load the bytes and filename of a Frappe `File` by its URL."""
-	if not file_url:
-		frappe.throw(_("No file specified."))
+def _max_document_bytes() -> int:
+	configured = cint(frappe.db.get_single_value("AI Platform Settings", "max_document_size_mb"))
+	return max(1, configured or DEFAULT_MAX_DOCUMENT_MB) * 1024 * 1024
 
+
+def _max_retries() -> int:
+	configured = frappe.db.get_single_value("AI Platform Settings", "max_retries")
+	return 2 if configured in (None, "") else max(0, cint(configured))
+
+
+def _is_manager(user: str) -> bool:
+	if user == "Administrator":
+		return True
+	return bool(set(frappe.get_roles(user)).intersection({"System Manager", "AI Manager"}))
+
+
+def _url_ingestion_allowed(user: str) -> bool:
+	return _is_manager(user) or bool(
+		frappe.db.get_single_value("AI Platform Settings", "allow_user_url_ingestion")
+	)
+
+
+def _assert_valid_authority(user: str | None) -> str:
+	user = user or ""
+	if not user or user == "Guest" or not frappe.db.exists("User", user):
+		raise DocumentSourcePermissionError(_("A valid authenticated processing user is required."))
+	if user != "Administrator" and not frappe.db.get_value("User", user, "enabled"):
+		raise DocumentSourcePermissionError(_("Processing user {0} is disabled.").format(user))
+	return user
+
+
+@contextmanager
+def _as_user(user: str):
+	"""Temporarily restore the durable request authority in this worker."""
+	previous = frappe.session.user
+	if previous != user:
+		frappe.set_user(user)
+	try:
+		yield
+	finally:
+		if frappe.session.user != previous:
+			frappe.set_user(previous)
+
+
+def _file_doc(file_url: str):
 	name = frappe.db.get_value("File", {"file_url": file_url}, "name")
 	if not name:
-		frappe.throw(_("File {0} was not found.").format(file_url))
-
-	file_doc = frappe.get_doc("File", name)
-	return file_doc.get_content(encodings=[]), file_doc.file_name
+		raise DocumentFetchError(_("File record not found for {0}.").format(file_url))
+	return frappe.get_doc("File", name)
 
 
-def process_document(document: str, index: bool | None = None) -> dict:
-	"""Extract text from a document's source and optionally index it."""
-	from ai_fr_hg.ai.knowledge import index_document
-
-	doc = frappe.get_doc("AI Document", document)
-	settings = frappe.get_cached_doc("AI Platform Settings")
-	started = time.monotonic()
-
-	doc.db_set("status", "Extracting", update_modified=False)
-	doc.db_set("error_message", None, update_modified=False)
-
-	try:
-		result = extract_source_text(doc, settings)
-	except MissingDependency as exc:
-		_fail(doc, str(exc))
-		return {"document": document, "status": "Failed", "error": str(exc)}
-	except Exception as exc:
-		_fail(doc, str(exc))
-		frappe.log_error(title=f"AI ingestion failed: {document}", message=frappe.get_traceback())
-		return {"document": document, "status": "Failed", "error": str(exc)}
-
-	text = result.text or ""
-	if not text.strip():
-		message = "; ".join(result.warnings) or "No text could be extracted from this source."
-		_fail(doc, message)
-		return {"document": document, "status": "Failed", "error": message}
-
-	doc.db_set(
-		{
-			"content": text,
-			"character_count": len(text),
-			"word_count": len(text.split()),
-			"page_count": cint(result.page_count),
-			"checksum": hashlib.sha256(text.encode("utf-8")).hexdigest()[:32],
-			"metadata": frappe.as_json(result.metadata),
-			"reader_used": result.metadata.get("reader"),
-			"processing_duration_ms": int((time.monotonic() - started) * 1000),
-		},
-		update_modified=False,
-	)
-
-	should_index = settings.auto_embed_on_ingest if index is None else index
-	if should_index:
-		try:
-			index_document(document)
-		except Exception as exc:
-			_fail(doc, f"Text extracted, but indexing failed: {exc}")
-			frappe.log_error(title=f"AI indexing failed: {document}", message=frappe.get_traceback())
-			return {"document": document, "status": "Failed", "error": str(exc)}
-		status = "Indexed"
-	elif index is False:
-		# An interactive caller extracted the text inline to answer a question
-		# and deliberately skipped embedding. The document is readable but not
-		# yet searchable, so hand the indexing to a worker rather than
-		# reporting a completeness the record does not have.
-		enqueue_processing(document)
-		status = "Queued"
-	else:
-		# Embedding is disabled platform-wide; extraction is all there is to do.
-		doc.db_set("status", "Indexed", update_modified=False)
-		status = "Indexed"
-
-	frappe.publish_realtime(
-		"ai_document_processed",
-		{"document": document, "status": status},
-		user=doc.owner,
-	)
-
-	return {
-		"document": document,
-		"status": status,
-		"characters": len(text),
-		"warnings": result.warnings,
-	}
-
-
-def extract_source_text(doc, settings):
-	"""Dispatch to the right extraction strategy for the document's source."""
-	from ai_fr_hg.ai.readers.base import ReadResult
-
-	source_type = doc.source_type or "File"
+def validate_source_access(document, user: str | None = None) -> None:
+	"""Check source authority without reading or fetching source content."""
+	user = _assert_valid_authority(user or frappe.session.user)
+	source_type = document.source_type
 
 	if source_type == "Text":
-		if not doc.content:
-			raise DocumentProcessingError(_("This document has no text content."))
-		return ReadResult(
-			text=doc.content, page_count=1, metadata={"format": "text", "reader": "Inline Text"}
-		)
-
+		return
 	if source_type == "File":
-		return _read_file(doc, settings)
-
-	if source_type == "URL":
-		return _read_url(doc, settings)
-
-	if source_type == "DocType Record":
-		return _read_record(doc)
-
-	raise DocumentProcessingError(_("Unsupported source type {0}.").format(source_type))
-
-
-def _read_file(doc, settings):
-	if not doc.source_file:
-		raise DocumentProcessingError(_("No source file is attached."))
-
-	content, filename = get_file_content(doc.source_file)
-
-	max_bytes = cint(settings.max_document_size_mb) * 1024 * 1024
-	if max_bytes and len(content) > max_bytes:
-		raise DocumentProcessingError(
-			_("File is {0} MB, which exceeds the {1} MB limit.").format(
-				round(len(content) / 1024 / 1024, 1), settings.max_document_size_mb
+		if not document.source_file:
+			raise DocumentFetchError(_("No source file is attached."))
+		file_doc = _file_doc(document.source_file)
+		if not frappe.has_permission("File", "read", doc=file_doc, user=user):
+			raise DocumentSourcePermissionError(
+				_("User {0} cannot read source File {1}.").format(user, file_doc.name)
 			)
+		return
+	if source_type == "DocType Record":
+		if not document.source_doctype or not document.source_name:
+			raise DocumentFetchError(_("Source DocType and record name are required."))
+		if not frappe.db.exists(document.source_doctype, document.source_name):
+			raise DocumentFetchError(
+				_("Source record {0} {1} does not exist.").format(
+					document.source_doctype, document.source_name
+				)
+			)
+		source_doc = frappe.get_doc(document.source_doctype, document.source_name)
+		if not frappe.has_permission(
+			document.source_doctype,
+			"read",
+			doc=source_doc,
+			user=user,
+		):
+			raise DocumentSourcePermissionError(
+				_("User {0} cannot read source record {1} {2}.").format(
+					user, document.source_doctype, document.source_name
+				)
+			)
+		return
+	if source_type == "URL":
+		if not _url_ingestion_allowed(user):
+			raise DocumentSourcePermissionError(
+				_("User {0} is not allowed to ingest URL sources.").format(user)
+			)
+		_validate_fetch_url(document.source_url, user=user)
+		return
+
+	raise UnsupportedDocumentError(_("Source type {0} is not supported.").format(source_type))
+
+
+def enqueue_processing(
+	document_name: str,
+	requested_by: str | None = None,
+	*,
+	reset_retries: bool = False,
+) -> dict:
+	"""Authorize and enqueue one canonical processing job after commit."""
+	requested_by = _assert_valid_authority(requested_by or frappe.session.user)
+	job_id = f"ai-document::{document_name}"
+	lock_key = f"{frappe.local.site}:ai_fr_hg:document-enqueue:{document_name}"
+
+	with frappe.cache.lock(lock_key, timeout=15, blocking_timeout=10):
+		with _as_user(requested_by):
+			document = frappe.get_doc("AI Document", document_name)
+			if not frappe.has_permission("AI Document", "write", doc=document, user=requested_by):
+				raise DocumentSourcePermissionError(
+					_("User {0} cannot process AI Document {1}.").format(requested_by, document_name)
+				)
+			validate_source_access(document, requested_by)
+
+			if document.status in {"Extracting", "Chunking", "Embedding"}:
+				return {"document": document_name, "status": document.status, "job_id": document.processing_job_id}
+			if document.status == "Queued" and document.processing_job_id:
+				try:
+					from frappe.utils.background_jobs import is_job_enqueued
+
+					job_is_active = is_job_enqueued(document.processing_job_id)
+				except Exception:
+					# Redis uncertainty must not create a duplicate worker. The scheduled
+					# reconciler will retry this check when the queue is available again.
+					frappe.log_error(
+						title=_("Could not inspect document job {0}").format(document.processing_job_id),
+						message=frappe.get_traceback(),
+					)
+					job_is_active = True
+				if job_is_active:
+					return {"document": document_name, "status": "Queued", "job_id": document.processing_job_id}
+			if document.status in {"Indexed", "Archived"}:
+				frappe.throw(
+					_("Document {0} must be explicitly reprocessed before it can be queued again.").format(
+						document_name
+					),
+					frappe.ValidationError,
+				)
+
+			values = {
+				"status": "Queued",
+				"processing_requested_by": requested_by,
+				"processing_requested_on": now_datetime(),
+				"processing_job_id": job_id,
+				"error_type": None,
+				"error_message": None,
+			}
+			if reset_retries:
+				values["retry_count"] = 0
+			frappe.db.set_value("AI Document", document_name, values, update_modified=False)
+
+			queue = frappe.db.get_single_value("AI Platform Settings", "processing_queue") or "long"
+			try:
+				frappe.enqueue(
+					"ai_fr_hg.ai.ingestion.process_document",
+					queue=queue,
+					timeout=3600,
+					job_id=job_id,
+					deduplicate=True,
+					document_name=document_name,
+					requested_by=requested_by,
+					enqueue_after_commit=True,
+				)
+			except Exception as exc:
+				frappe.db.set_value(
+					"AI Document",
+					document_name,
+					{"status": "Failed", "error_type": "EnqueueError", "error_message": str(exc)[:2000]},
+					update_modified=False,
+				)
+				raise
+
+			from ai_fr_hg.ai.logging import write_audit_log
+
+			write_audit_log(
+				action="Document Processing Queued",
+				category="Execution",
+				message=_("Document {0} was queued for canonical processing.").format(document_name),
+				details={"authority": requested_by, "job_id": job_id, "queue": queue},
+				reference_doctype="AI Document",
+				reference_name=document_name,
+				raise_on_error=True,
+			)
+
+	return {"document": document_name, "status": "Queued", "job_id": job_id}
+
+
+# Backward-compatible public name retained for callers in older integrations.
+def enqueue_document_processing(document_name: str) -> dict:
+	return enqueue_processing(document_name)
+
+
+def process_document(
+	document_name: str,
+	index: bool | None = None,
+	requested_by: str | None = None,
+) -> dict:
+	"""Extract and optionally index a document under persisted authority.
+
+	Normal worker calls require a Queued record and always build the canonical
+	chunk index; ``auto_embed_on_ingest`` controls only whether those chunks are
+	embedded. ``index=False`` is a compatibility mode for authorized callers
+	that need extracted text immediately. It never consumes or replaces an
+	already queued indexing job.
+	"""
+	started = time.monotonic()
+	document = frappe.get_doc("AI Document", document_name)
+	persisted_authority = document.processing_requested_by
+	interactive_extraction = index is False
+	authority = (
+		(requested_by or frappe.session.user)
+		if interactive_extraction
+		else (persisted_authority or requested_by or document.owner)
+	)
+
+	try:
+		authority = _assert_valid_authority(authority)
+		if (
+			not interactive_extraction
+			and requested_by
+			and persisted_authority
+			and requested_by != persisted_authority
+		):
+			raise DocumentSourcePermissionError(_("The processing authority does not match the queued request."))
+
+		lock_key = f"{frappe.local.site}:ai_fr_hg:document-process:{document_name}"
+		processing_lock = frappe.cache.lock(
+			lock_key,
+			timeout=3600,
+			blocking_timeout=10 if interactive_extraction else 120,
 		)
+		if not processing_lock.acquire(blocking=True):
+			return {
+				"document": document_name,
+				"status": frappe.db.get_value("AI Document", document_name, "status") or "Unknown",
+				"skipped": True,
+				"locked": True,
+			}
+		try:
+			with _as_user(authority):
+				document.reload()
+				starting_status = document.status
+
+				if interactive_extraction:
+					if starting_status == "Indexed" and (document.content or "").strip():
+						return {
+							"document": document_name,
+							"status": "Indexed",
+							"characters": cint(document.character_count),
+							"skipped": True,
+						}
+					if starting_status not in {"Draft", "Failed", "Queued"}:
+						return {"document": document_name, "status": starting_status, "skipped": True}
+				elif starting_status != "Queued":
+					return {"document": document_name, "status": starting_status, "skipped": True}
+
+				if not frappe.has_permission("AI Document", "write", doc=document, user=authority):
+					raise DocumentSourcePermissionError(
+						_("User {0} no longer has permission to process {1}.").format(authority, document_name)
+					)
+				validate_source_access(document, authority)
+				document.db_set("status", "Extracting", update_modified=False)
+				result, reader, content, filename, mime_type = _extract_source(document, authority)
+
+				document.db_set(
+					{
+						"content": result.text,
+						"reader_used": reader.label,
+						"mime_type": mime_type or mimetypes.guess_type(filename)[0],
+						"file_size": len(content),
+						"checksum": hashlib.sha256(content).hexdigest(),
+						"page_count": result.page_count,
+						"word_count": result.word_count,
+						"character_count": result.character_count,
+						"metadata": json.dumps(result.metadata, default=str) if result.metadata else None,
+						"error_type": None,
+						"error_message": None,
+					},
+					update_modified=False,
+				)
+
+				if interactive_extraction:
+					# Preserve Queued so the already submitted worker can build the index.
+					# Draft/Failed callers asked only for extraction and remain unindexed.
+					restored_status = "Queued" if starting_status == "Queued" else "Draft"
+					duration = int((time.monotonic() - started) * 1000)
+					document.db_set(
+						{"status": restored_status, "processing_duration_ms": duration},
+						update_modified=False,
+					)
+					write_audit_log(
+						action="Document Text Extracted",
+						reference_doctype="AI Document",
+						reference_name=document_name,
+						details={
+							"authority": authority,
+							"duration_ms": duration,
+							"reader": reader.label,
+							"queued_index_preserved": starting_status == "Queued",
+						},
+						raise_on_error=True,
+					)
+					return {
+						"document": document_name,
+						"status": restored_status,
+						"characters": result.character_count,
+						"warnings": result.warnings,
+					}
+
+				from ai_fr_hg.ai.knowledge import index_document
+
+				embed = (
+					bool(frappe.db.get_single_value("AI Platform Settings", "auto_embed_on_ingest"))
+					if index is None
+					else bool(index)
+				)
+				index_result = index_document(document_name, embed=embed)
+				if frappe.db.get_value("AI Document", document_name, "status") != "Indexed":
+					raise CorruptDocumentError(_("Document indexing did not complete successfully."))
+
+				duration = int((time.monotonic() - started) * 1000)
+				document.db_set(
+					{
+						"processing_duration_ms": duration,
+						"error_type": None,
+						"error_message": None,
+					},
+					update_modified=False,
+				)
+				chunks = cint(index_result.get("chunks"))
+				write_audit_log(
+					action="Document Indexed",
+					reference_doctype="AI Document",
+					reference_name=document_name,
+					details={
+						"authority": authority,
+						"chunks": chunks,
+						"embedded": cint(index_result.get("embedded")),
+						"embedding_requested": embed,
+						"duration_ms": duration,
+						"reader": reader.label,
+						"checksum": hashlib.sha256(content).hexdigest(),
+					},
+					raise_on_error=True,
+				)
+				frappe.publish_realtime(
+					"ai_document_processed",
+					{"document": document_name, "status": "Indexed"},
+					user=authority,
+				)
+				return {
+					"document": document_name,
+					"status": "Indexed",
+					"chunks": chunks,
+					"characters": result.character_count,
+					"warnings": result.warnings,
+				}
+		finally:
+			try:
+				processing_lock.release()
+			except Exception:
+				frappe.log_error(title="AI document processing lock release failed", message=frappe.get_traceback())
+	except Exception as exc:
+		error_type = exc.__class__.__name__
+		duration = int((time.monotonic() - started) * 1000)
+		current_retries = cint(frappe.db.get_value("AI Document", document_name, "retry_count"))
+		frappe.db.set_value(
+			"AI Document",
+			document_name,
+			{
+				"status": "Failed",
+				"error_type": error_type,
+				"error_message": str(exc)[:2000],
+				"processing_duration_ms": duration,
+				"retry_count": current_retries + 1,
+			},
+			update_modified=False,
+		)
+		frappe.log_error(
+			title=_("AI document ingestion failed: {0}").format(document_name),
+			message=frappe.get_traceback(),
+		)
+		write_audit_log(
+			action="Document Processing Failed",
+			severity="Critical",
+			reference_doctype="AI Document",
+			reference_name=document_name,
+			details={"authority": authority, "error_type": error_type, "error": str(exc)[:1000]},
+			raise_on_error=True,
+		)
+		return {"document": document_name, "status": "Failed", "error_type": error_type, "error": str(exc)}
+
+
+def _extract_source(document, authority: str):
+	"""Run the one reader-registry extraction path and validate its output."""
+	content, filename, mime_type = get_source_content(document, authority)
+	_validate_size(content)
+	_validate_archive(content, filename)
 
 	reader = get_reader(filename)
 	if not reader:
-		raise DocumentProcessingError(
-			_("No reader is registered for this file type. Supported: {0}").format(
-				", ".join(supported_extensions())
+		extension = _extension(filename) or _("unknown")
+		raise UnsupportedDocumentError(
+			_("No document reader is registered for .{0}. Supported extensions: {1}").format(
+				extension, ", ".join(supported_extensions())
 			)
 		)
 
-	result = reader.read(content, filename)
-	result.metadata.setdefault("reader", reader.label)
-	result.metadata.setdefault("filename", filename)
+	try:
+		result = reader.read(content, filename)
+	except MissingDependency as exc:
+		raise UnsupportedDocumentError(str(exc)) from exc
+	except DocumentProcessingError:
+		raise
+	except Exception as exc:
+		raise CorruptDocumentError(
+			_("The {0} reader could not parse {1}: {2}").format(reader.label, filename, str(exc))
+		) from exc
 
-	doc.db_set("file_size", len(content), update_modified=False)
-	if not doc.document_type:
-		doc.db_set("document_type", reader.label, update_modified=False)
-	if mime := _guess_mime(filename):
-		doc.db_set("mime_type", mime, update_modified=False)
+	if not result.text or not result.text.strip():
+		raise CorruptDocumentError(
+			_("The {0} reader found no readable text in {1}.").format(reader.label, filename)
+		)
+	if len(result.text) > _max_document_bytes() * 10:
+		raise DocumentResourceLimitError(_("Extracted text exceeds the processing character limit."))
+	return result, reader, content, filename, mime_type
 
-	return result
+def get_source_content(document, user: str | None = None) -> tuple[bytes, str, str | None]:
+	"""Load source bytes only after explicit source permission validation."""
+	user = _assert_valid_authority(user or frappe.session.user)
+	validate_source_access(document, user)
+
+	if document.source_type == "File":
+		file_doc = _file_doc(document.source_file)
+		content = file_doc.get_content()
+		if isinstance(content, str):
+			content = content.encode("utf-8")
+		return (
+			content,
+			file_doc.file_name or os.path.basename(document.source_file),
+			file_doc.get("content_type") or file_doc.get("file_type"),
+		)
+
+	if document.source_type == "Text":
+		return (document.content or "").encode("utf-8"), f"{document.name}.txt", "text/plain"
+
+	if document.source_type == "URL":
+		return fetch_url_content(document.source_url, user=user)
+
+	if document.source_type == "DocType Record":
+		return get_doctype_content(document.source_doctype, document.source_name, user)
+
+	raise UnsupportedDocumentError(_("Source type {0} is not supported.").format(document.source_type))
 
 
-def _read_url(doc, settings):
-	"""Fetch a URL, honouring strict local-only mode."""
+def get_doctype_content(doctype: str, name: str, user: str | None = None) -> tuple[bytes, str, str]:
+	"""Serialize only fields readable by the requesting user."""
+	user = _assert_valid_authority(user or frappe.session.user)
+	doc = frappe.get_doc(doctype, name)
+	if not frappe.has_permission(doctype, "read", doc=doc, user=user):
+		raise DocumentSourcePermissionError(
+			_("User {0} cannot read source record {1} {2}.").format(user, doctype, name)
+		)
+
+	from frappe.model import get_permitted_fields
+
+	permitted = set(get_permitted_fields(doctype, user=user, permission_type="read"))
+	readable_types = {
+		"Check",
+		"Code",
+		"Currency",
+		"Data",
+		"Date",
+		"Datetime",
+		"Duration",
+		"Dynamic Link",
+		"Float",
+		"Int",
+		"Link",
+		"Long Text",
+		"Percent",
+		"Read Only",
+		"Select",
+		"Small Text",
+		"Text",
+		"Time",
+	}
+	lines = [f"{doctype}: {name}"]
+	for field in frappe.get_meta(doctype).fields:
+		if field.fieldname not in permitted or field.fieldtype not in readable_types:
+			continue
+		value = doc.get(field.fieldname)
+		if value not in (None, ""):
+			lines.append(f"{field.label or field.fieldname}: {value}")
+	return "\n".join(lines).encode("utf-8"), f"{doctype}-{name}.txt", "text/plain"
+
+
+def _validate_fetch_url(url: str | None, user: str | None = None) -> None:
+	if not url:
+		raise DocumentFetchError(_("A source URL is required."))
+	try:
+		parsed = urlparse(url)
+	except ValueError as exc:
+		raise DocumentFetchError(_("The source URL is invalid.")) from exc
+	if parsed.scheme.lower() not in {"http", "https"} or not parsed.hostname:
+		raise DocumentFetchError(_("Only absolute HTTP and HTTPS source URLs are supported."))
+	if parsed.username or parsed.password:
+		raise DocumentFetchError(_("Source URLs must not contain embedded credentials."))
+	user = _assert_valid_authority(user or frappe.session.user)
+	if not _is_manager(user) and parsed.hostname.lower() not in get_allowed_hosts():
+		raise DocumentFetchError(
+			_("Non-manager URL ingestion is limited to hosts in Additional Allowed Hosts.")
+		)
+	try:
+		socket.getaddrinfo(parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80))
+	except (OSError, UnicodeError, ValueError) as exc:
+		raise DocumentFetchError(_("Could not resolve source host {0}.").format(parsed.hostname)) from exc
+	try:
+		enforce_local_only(url, _("Document source URL"))
+	except Exception as exc:
+		raise DocumentFetchError(str(exc)) from exc
+
+
+def _content_type(response) -> str:
+	return (response.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
+
+
+def _validate_response_headers(response, max_bytes: int) -> str:
+	content_type = _content_type(response)
+	if content_type and not (content_type.startswith("text/") or content_type in ALLOWED_CONTENT_TYPES):
+		raise UnsupportedDocumentError(
+			_("URL returned unsupported Content-Type {0}.").format(content_type)
+		)
+	content_length = response.headers.get("Content-Length")
+	if content_length:
+		try:
+			if int(content_length) > max_bytes:
+				raise DocumentResourceLimitError(
+					_("URL response is larger than the configured {0} byte limit.").format(max_bytes)
+				)
+		except ValueError as exc:
+			raise DocumentFetchError(_("URL returned an invalid Content-Length header.")) from exc
+	return content_type
+
+
+def _url_filename(url: str, content_type: str) -> str:
+	filename = os.path.basename(unquote(urlparse(url).path)).strip() or "download"
+	filename = filename.replace("\x00", "")
+	if "." not in filename and content_type in MIME_EXTENSIONS:
+		filename += MIME_EXTENSIONS[content_type]
+	return filename
+
+
+def fetch_url_content(
+	url: str,
+	user: str | None = None,
+) -> tuple[bytes, str, str | None]:
+	"""Fetch a URL with manual redirect validation and bounded streaming."""
 	import requests
 
-	from ai_fr_hg.utils.network import enforce_local_only
+	user = _assert_valid_authority(user or frappe.session.user)
+	max_bytes = _max_document_bytes()
+	timeout = min(120, max(5, cint(frappe.db.get_single_value("AI Platform Settings", "request_timeout")) or 30))
+	current_url = url
+	session = requests.Session()
+	session.trust_env = False
 
-	url = doc.source_url
-	enforce_local_only(url, _("Document source URL"))
+	try:
+		for redirect_count in range(MAX_REDIRECTS + 1):
+			_validate_fetch_url(current_url, user=user)
+			try:
+				response = session.get(
+					current_url,
+					headers={
+						"Accept": "text/*, application/json, application/pdf, application/xml, image/*, application/octet-stream",
+						"User-Agent": "AI-FR-HG-Document-Ingestion/1.0",
+					},
+					timeout=(min(10, timeout), timeout),
+					allow_redirects=False,
+					stream=True,
+				)
+			except requests.RequestException as exc:
+				raise DocumentFetchError(_("Could not fetch {0}: {1}").format(current_url, str(exc))) from exc
 
-	response = requests.get(url, timeout=cint(settings.request_timeout) or 60)
-	response.raise_for_status()
+			try:
+				if response.status_code in REDIRECT_STATUSES:
+					location = response.headers.get("Location")
+					if not location:
+						raise DocumentFetchError(_("URL redirect did not include a Location header."))
+					if redirect_count >= MAX_REDIRECTS:
+						raise DocumentFetchError(
+							_("URL exceeded the maximum of {0} redirects.").format(MAX_REDIRECTS)
+						)
+					current_url = urljoin(current_url, location)
+					continue
 
-	filename = url.rsplit("/", 1)[-1] or "index.html"
-	if "." not in filename:
-		filename += ".html"
+				try:
+					response.raise_for_status()
+				except requests.HTTPError as exc:
+					raise DocumentFetchError(
+						_("URL returned HTTP {0}.").format(response.status_code)
+					) from exc
 
-	reader = get_reader(filename) or get_reader("page.html")
-	result = reader.read(response.content, filename)
-	result.metadata.setdefault("reader", reader.label)
-	result.metadata["source_url"] = url
-	return result
+				content_type = _validate_response_headers(response, max_bytes)
+				buffer = bytearray()
+				try:
+					for chunk in response.iter_content(chunk_size=64 * 1024):
+						if not chunk:
+							continue
+						buffer.extend(chunk)
+						if len(buffer) > max_bytes:
+							raise DocumentResourceLimitError(
+								_("URL response exceeded the configured {0} byte limit.").format(max_bytes)
+							)
+				except requests.RequestException as exc:
+					raise DocumentFetchError(_("URL response could not be read: {0}").format(str(exc))) from exc
+				if not buffer:
+					raise CorruptDocumentError(_("URL returned an empty document."))
+				return bytes(buffer), _url_filename(current_url, content_type), content_type or None
+			finally:
+				response.close()
+	finally:
+		session.close()
 
-
-def _read_record(doc):
-	"""Render an existing Frappe document into indexable text."""
-	from ai_fr_hg.ai.readers.base import ReadResult
-
-	if not doc.source_doctype or not doc.source_name:
-		raise DocumentProcessingError(_("Source DocType and name are required."))
-
-	frappe.has_permission(doc.source_doctype, "read", doc=doc.source_name, throw=True)
-	source = frappe.get_doc(doc.source_doctype, doc.source_name)
-	meta = frappe.get_meta(doc.source_doctype)
-
-	lines = [f"# {doc.source_doctype}: {doc.source_name}"]
-	for field in meta.fields:
-		if field.fieldtype in ("Section Break", "Column Break", "Tab Break", "Button", "HTML"):
-			continue
-		value = source.get(field.fieldname)
-		if value in (None, "", []):
-			continue
-		if field.fieldtype in ("Table", "Table MultiSelect"):
-			lines.append(f"\n## {field.label or field.fieldname}")
-			for row in value:
-				cells = [
-					f"{df.label or df.fieldname}: {row.get(df.fieldname)}"
-					for df in frappe.get_meta(field.options).fields
-					if row.get(df.fieldname) not in (None, "", [])
-					and df.fieldtype not in ("Section Break", "Column Break")
-				]
-				if cells:
-					lines.append(" | ".join(cells))
-		else:
-			lines.append(f"{field.label or field.fieldname}: {value}")
-
-	return ReadResult(
-		text="\n".join(lines),
-		page_count=1,
-		metadata={
-			"format": "doctype",
-			"reader": "DocType Record",
-			"doctype": doc.source_doctype,
-			"name": doc.source_name,
-		},
-	)
-
-
-def _guess_mime(filename: str) -> str | None:
-	import mimetypes
-
-	return mimetypes.guess_type(filename)[0]
+	raise DocumentFetchError(_("URL fetch ended without a document."))
 
 
-def _fail(doc, message: str) -> None:
-	doc.db_set(
-		{"status": "Failed", "error_message": (message or "")[:1000]},
-		update_modified=False,
-	)
+def _extension(filename: str) -> str:
+	return filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+
+
+def _validate_size(content: bytes) -> None:
+	max_bytes = _max_document_bytes()
+	if len(content) > max_bytes:
+		raise DocumentResourceLimitError(
+			_("Document is {0} bytes; the configured limit is {1} bytes.").format(len(content), max_bytes)
+		)
+	if not content:
+		raise CorruptDocumentError(_("Document source is empty."))
+
+
+def _validate_archive(content: bytes, filename: str) -> None:
+	"""Reject corrupt/encrypted Office containers and bounded zip bombs."""
+	if _extension(filename) not in ARCHIVE_EXTENSIONS:
+		return
+	try:
+		with zipfile.ZipFile(BytesIO(content)) as archive:
+			members = archive.infolist()
+			if len(members) > MAX_ARCHIVE_MEMBERS:
+				raise DocumentResourceLimitError(
+					_("Office document contains too many archive members ({0}).").format(len(members))
+				)
+			uncompressed = sum(member.file_size for member in members)
+			if uncompressed > _max_document_bytes() * 10:
+				raise DocumentResourceLimitError(
+					_("Office document expands beyond the configured processing limit.")
+				)
+			if any(member.flag_bits & 0x1 for member in members):
+				raise CorruptDocumentError(_("Encrypted Office documents are not supported."))
+	except (zipfile.BadZipFile, zipfile.LargeZipFile) as exc:
+		raise CorruptDocumentError(_("The Office document container is corrupt.")) from exc
+
+
+def get_file_content(file_url: str, user: str | None = None) -> tuple[bytes, str]:
+	"""Read a Frappe File only when the authenticated user can read it."""
+	user = _assert_valid_authority(user or frappe.session.user)
+	file_doc = _file_doc(file_url)
+	if not frappe.has_permission("File", "read", doc=file_doc, user=user):
+		raise DocumentSourcePermissionError(
+			_("User {0} cannot read source File {1}.").format(user, file_doc.name)
+		)
+	content = file_doc.get_content()
+	if isinstance(content, str):
+		content = content.encode("utf-8")
+	_validate_size(content)
+	return content, file_doc.file_name or os.path.basename(file_url)
+
+
+def process_document_now(
+	document_name: str,
+	requested_by: str | None = None,
+	*,
+	embed: bool | None = None,
+) -> dict:
+	"""Synchronously run the canonical processor without submitting an RQ job."""
+	authority = _assert_valid_authority(requested_by or frappe.session.user)
+	with _as_user(authority):
+		document = frappe.get_doc("AI Document", document_name)
+		if not frappe.has_permission("AI Document", "write", doc=document, user=authority):
+			raise DocumentSourcePermissionError(
+				_("User {0} cannot process AI Document {1}.").format(authority, document_name)
+			)
+		validate_source_access(document, authority)
+		if document.status == "Indexed":
+			if embed is True:
+				from ai_fr_hg.ai.knowledge import index_document
+
+				result = index_document(document_name, embed=True)
+				return {"document": document_name, "status": "Indexed", **result}
+			return {"document": document_name, "status": "Indexed", "skipped": True}
+		if document.status in {"Extracting", "Chunking", "Embedding"}:
+			return {"document": document_name, "status": document.status, "skipped": True}
+		if document.status == "Archived":
+			frappe.throw(_("Archived documents cannot be processed."), frappe.ValidationError)
+		if (
+			document.status == "Queued"
+			and document.processing_requested_by
+			and document.processing_requested_by != authority
+		):
+			raise DocumentSourcePermissionError(
+				_("Document {0} is queued under a different processing authority.").format(document_name)
+			)
+
+		frappe.db.set_value(
+			"AI Document",
+			document_name,
+			{
+				"status": "Queued",
+				"processing_requested_by": authority,
+				"processing_requested_on": now_datetime(),
+				"processing_job_id": f"inline::{document_name}",
+				"error_type": None,
+				"error_message": None,
+			},
+			update_modified=False,
+		)
+	return process_document(document_name, index=embed, requested_by=authority)
 
 
 def ingest_file(
@@ -257,32 +825,31 @@ def ingest_file(
 	extraction_schema: str | None = None,
 	enqueue_job: bool = True,
 ) -> str:
-	"""Create an `AI Document` from an uploaded file and start processing."""
+	"""Create an authorized AI Document from a Frappe File."""
 	from ai_fr_hg.ai.governance import check_capability, check_document_quota
 
+	authority = _assert_valid_authority(frappe.session.user)
 	check_capability("document_upload")
 	check_document_quota()
+	_, filename = get_file_content(file_url, authority)
 
-	_, filename = get_file_content(file_url)
-
-	doc = frappe.new_doc("AI Document")
-	doc.update(
+	document = frappe.new_doc("AI Document")
+	document.update(
 		{
 			"title": title or filename,
 			"knowledge_base": knowledge_base,
 			"source_type": "File",
 			"source_file": file_url,
 			"extraction_schema": extraction_schema,
-			"status": "Queued",
+			"status": "Draft",
 		}
 	)
-	doc.insert()
-
+	document.insert()
 	if enqueue_job:
-		enqueue_processing(doc.name)
+		enqueue_processing(document.name, requested_by=authority)
 	else:
-		process_document(doc.name)
-	return doc.name
+		process_document_now(document.name, requested_by=authority)
+	return document.name
 
 
 def ingest_text(
@@ -291,90 +858,106 @@ def ingest_text(
 	title: str,
 	enqueue_job: bool = True,
 ) -> str:
-	"""Create an `AI Document` from raw text and start processing."""
+	"""Create an authorized AI Document from bounded inline text."""
 	from ai_fr_hg.ai.governance import check_capability, check_document_quota
 
+	authority = _assert_valid_authority(frappe.session.user)
 	check_capability("document_upload")
 	check_document_quota()
+	_validate_size((text or "").encode("utf-8"))
 
-	doc = frappe.new_doc("AI Document")
-	doc.update(
+	document = frappe.new_doc("AI Document")
+	document.update(
 		{
 			"title": title,
 			"knowledge_base": knowledge_base,
 			"source_type": "Text",
 			"content": text,
-			"status": "Queued",
+			"status": "Draft",
 		}
 	)
-	doc.insert()
-
+	document.insert()
 	if enqueue_job:
-		enqueue_processing(doc.name)
+		enqueue_processing(document.name, requested_by=authority)
 	else:
-		process_document(doc.name)
-	return doc.name
+		process_document_now(document.name, requested_by=authority)
+	return document.name
 
 
-def enqueue_processing(document: str) -> None:
-	"""Queue document processing on a background worker."""
-	queue = frappe.db.get_single_value("AI Platform Settings", "processing_queue") or "long"
-
-	frappe.enqueue(
-		"ai_fr_hg.ai.ingestion.process_document",
-		queue=queue,
-		timeout=3600,
-		job_id=f"ai_process_{document}",
-		deduplicate=True,
-		document=document,
-		enqueue_after_commit=True,
-	)
-	frappe.db.set_value("AI Document", document, "status", "Queued", update_modified=False)
-
-
-#: Upper bound (in seconds) for waiting on a background index when there is no
-#: active request deadline to constrain the wait.
 DEFAULT_WAIT_SECONDS = 45.0
-
-#: How often to re-check a document's status while waiting.
 POLL_INTERVAL = 0.4
 
 
 def wait_for_indexed(document_names: list[str], timeout: float | None = None) -> dict[str, str]:
-	"""Block until each document reaches a terminal status, bounded by `timeout`.
-
-	Used by interactive chat: a user attaches a file and immediately asks about
-	it. Ingestion runs on a background worker, so without waiting the retrieval
-	step would find nothing and the model would wrongly claim it has no
-	information. This polls the records until they are `Indexed`, `Failed`, or
-	the time budget runs out, then returns the observed statuses.
-
-	When no explicit `timeout` is given, the wait is capped by whatever remains
-	of the active request deadline (minus a small reserve) so the whole turn
-	still finishes before the reverse proxy hangs up.
-	"""
+	"""Wait for authorized documents to reach Indexed or Failed, within a deadline."""
 	from ai_fr_hg.ai.deadline import DEFAULT_RESERVE_SECONDS, remaining_seconds
 
-	names = [name for name in (document_names or []) if name]
+	names = list(dict.fromkeys(name for name in (document_names or []) if name))
 	if not names:
 		return {}
+	for name in names:
+		doc = frappe.get_doc("AI Document", name)
+		if not frappe.has_permission("AI Document", "read", doc=doc, user=frappe.session.user):
+			raise DocumentSourcePermissionError(
+				_("User {0} cannot read AI Document {1}.").format(frappe.session.user, name)
+			)
 
 	if timeout is None:
 		remaining = remaining_seconds()
-		if remaining is None:
-			timeout = DEFAULT_WAIT_SECONDS
-		else:
-			timeout = max(remaining - DEFAULT_RESERVE_SECONDS, 0.5)
-
+		timeout = (
+			DEFAULT_WAIT_SECONDS
+			if remaining is None
+			else max(remaining - DEFAULT_RESERVE_SECONDS, 0.5)
+		)
 	hard_deadline = time.monotonic() + max(float(timeout), 0.0)
 	statuses: dict[str, str] = {}
-
 	while True:
-		statuses = {name: frappe.db.get_value("AI Document", name, "status") or "Unknown" for name in names}
-		if all(status in ("Indexed", "Failed") for status in statuses.values()):
-			break
+		statuses = {
+			name: frappe.db.get_value("AI Document", name, "status") or "Unknown"
+			for name in names
+		}
+		if all(status in {"Indexed", "Failed"} for status in statuses.values()):
+			return statuses
 		if time.monotonic() >= hard_deadline:
-			break
+			return statuses
 		time.sleep(POLL_INTERVAL)
 
-	return statuses
+
+def process_pending_documents() -> None:
+	"""Reconcile stale queue records and bounded retries as original users."""
+	max_retries = _max_retries()
+	fields = ["name", "owner", "processing_requested_by"]
+	failed = frappe.get_all(
+		"AI Document",
+		filters=[
+			["status", "=", "Failed"],
+			["retry_count", "<=", max_retries],
+			["modified", "<", frappe.utils.add_to_date(now_datetime(), minutes=-5)],
+		],
+		fields=fields,
+		limit_page_length=20,
+	)
+	remaining = max(20 - len(failed), 0)
+	stale_queued = (
+		frappe.get_all(
+			"AI Document",
+			filters=[
+				["status", "=", "Queued"],
+				["modified", "<", frappe.utils.add_to_date(now_datetime(), hours=-2)],
+			],
+			fields=fields,
+			limit_page_length=remaining,
+		)
+		if remaining
+		else []
+	)
+
+	for row in [*failed, *stale_queued]:
+		authority = row.processing_requested_by or row.owner
+		try:
+			enqueue_processing(row.name, requested_by=authority)
+		except Exception:
+			frappe.log_error(
+				title=_("Could not reconcile AI document {0}").format(row.name),
+				message=frappe.get_traceback(),
+			)

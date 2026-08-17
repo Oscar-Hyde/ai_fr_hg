@@ -153,9 +153,10 @@ bench --site your-site.local run-tests --app ai_fr_hg
 ```
 
 The test suite separates fast pure-logic tests (`tests/test_units.py` — no
-database, no runtime) from integration tests (`tests/test_integration.py` —
-DocTypes and the service layer, with the model runtime stubbed), so CI never
-needs a GPU or a running Ollama.
+database, no runtime) from integration tests colocated as
+`<module>/doctype/<doctype>/test_<doctype>.py` beside each owning DocType.
+Those tests exercise DocTypes and their canonical service paths with the model
+runtime stubbed, so CI never needs a GPU or a running Ollama.
 
 ---
 

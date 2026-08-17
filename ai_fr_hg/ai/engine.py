@@ -9,7 +9,9 @@ traceability: model resolution, quota enforcement, redaction, logging, metric
 roll-up and failover all live here rather than being scattered across callers.
 """
 
+import math
 import time
+from numbers import Real
 from typing import Any
 
 import frappe
@@ -271,7 +273,11 @@ def run_embedding(
 	started = time.monotonic()
 	try:
 		provider = get_provider(model_doc.provider)
-		vectors = provider.embed(texts, model=model_doc.model_name)
+		vectors = _validate_embedding_response(
+			provider.embed(texts, model=model_doc.model_name),
+			expected_count=len(texts),
+			expected_dimensions=cint(model_doc.embedding_dimensions),
+		)
 	except Exception as exc:
 		finish_execution_log(log, None, error=exc)
 		raise
@@ -289,6 +295,43 @@ def run_embedding(
 			"AI Model", model_doc.name, "embedding_dimensions", len(vectors[0]), update_modified=False
 		)
 	return vectors
+
+
+def _validate_embedding_response(
+	vectors,
+	*,
+	expected_count: int,
+	expected_dimensions: int = 0,
+) -> list[list[float]]:
+	"""Validate the provider contract before any caller can persist vectors."""
+	if not isinstance(vectors, (list, tuple)):
+		raise ProviderError(_("The embedding provider returned a non-list response."))
+	if len(vectors) != expected_count:
+		raise ProviderError(
+			_("The embedding provider returned {0} vectors for {1} inputs.").format(
+				len(vectors), expected_count
+			)
+		)
+
+	validated: list[list[float]] = []
+	dimensions = expected_dimensions
+	for index, vector in enumerate(vectors, start=1):
+		if not isinstance(vector, (list, tuple)) or not vector:
+			raise ProviderError(_("Embedding vector {0} is empty or malformed.").format(index))
+		if any(isinstance(value, bool) or not isinstance(value, Real) for value in vector):
+			raise ProviderError(_("Embedding vector {0} contains non-numeric values.").format(index))
+		numeric = [float(value) for value in vector]
+		if not all(math.isfinite(value) for value in numeric) or not any(numeric):
+			raise ProviderError(_("Embedding vector {0} contains invalid values.").format(index))
+		if dimensions and len(numeric) != dimensions:
+			raise ProviderError(
+				_("Embedding vector {0} has {1} dimensions; expected {2}.").format(
+					index, len(numeric), dimensions
+				)
+			)
+		dimensions = dimensions or len(numeric)
+		validated.append(numeric)
+	return validated
 
 
 def update_model_metrics(model: str, result: CompletionResult) -> None:

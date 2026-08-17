@@ -5,8 +5,9 @@
 
 These deliberately touch no database and no model runtime, so they run with
 plain `python -m unittest` (or pytest) with no Frappe site present. Frappe's
-integration tests exercise the orchestration layer in
-:mod:`ai_fr_hg.tests.test_integration` instead.
+integration tests exercise the orchestration layer in the colocated
+:mod:`ai_fr_hg.ai_learning.doctype.ai_knowledge_candidate.test_ai_knowledge_candidate`
+module instead.
 """
 
 import unittest

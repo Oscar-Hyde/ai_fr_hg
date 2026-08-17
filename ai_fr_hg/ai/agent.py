@@ -551,7 +551,9 @@ def create_conversation(
 	write_audit_log(
 		action="Conversation Created",
 		category="Access",
+		details={"agent": agent_doc.name, "knowledge_bases": knowledge_bases or []},
 		reference_doctype="AI Conversation",
 		reference_name=conversation.name,
+		raise_on_error=True,
 	)
 	return conversation

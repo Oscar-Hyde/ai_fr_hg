@@ -51,5 +51,8 @@ class AIMemory(Document):
 	@frappe.whitelist()
 	def archive(self) -> dict:
 		"""Stop this memory from being injected into future turns."""
+		frappe.only_for(["AI Manager", "System Manager"])
+		if self.status == "Archived":
+			return {"status": "Archived", "memory": self.name}
 		self.db_set("status", "Archived")
 		return {"status": "Archived", "memory": self.name}

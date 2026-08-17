@@ -143,7 +143,7 @@ what is not.
 | `ai_learning/doctype/ai_memory` | Approved persistent knowledge, injected into future turns. |
 | `ai_learning/doctype/ai_skill` | Approved learned procedures, injected into future turns. |
 | `ai_learning/workspace/ai_learning` | Desk workspace linking the three doctypes. |
-| `public/js/doctype/ai_knowledge_candidate.js` | Approve / Reject buttons on the candidate form. |
+| `ai_learning/doctype/ai_knowledge_candidate/ai_knowledge_candidate.js` | Approve / Reject buttons on the candidate form. |
 
 Wiring into the agent lives in `ai/agent.py` (`build_system_prompt` +
 `run_agent_turn`) and feedback capture in `api/chat.py` (`submit_feedback`).
@@ -162,8 +162,9 @@ python -m unittest ai_fr_hg.tests.test_learning_utils
 
 The full lifecycle — candidate creation, validation, conflict detection,
 approval, promotion, recall scoping, and feedback capture — is covered by
-**integration tests** in `ai_fr_hg.tests.test_integration` (`TestLearningLoop`),
-which stub the model runtime and run on a normal bench:
+**integration tests** in
+`ai_fr_hg.ai_learning.doctype.ai_knowledge_candidate.test_ai_knowledge_candidate`
+(`TestLearningLoop`), which stub the model runtime and run on a normal bench:
 
 ```bash
 bench --site your-site.local run-tests --app ai_fr_hg

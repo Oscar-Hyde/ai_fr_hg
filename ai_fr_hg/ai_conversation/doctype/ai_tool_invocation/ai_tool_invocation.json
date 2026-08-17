@@ -11,9 +11,16 @@
   "tool",
   "status",
   "conversation",
+  "agent",
+  "pipeline_run",
   "message",
   "invocation_cb",
   "user",
+  "approved_by",
+  "approved_at",
+  "rejected_by",
+  "rejected_at",
+  "requested_at",
   "started_at",
   "finished_at",
   "duration_ms",
@@ -48,6 +55,20 @@
    "options": "AI Conversation"
   },
   {
+   "fieldname": "agent",
+   "fieldtype": "Link",
+   "label": "Agent",
+   "options": "AI Agent",
+   "read_only": 1
+  },
+  {
+   "fieldname": "pipeline_run",
+   "fieldtype": "Link",
+   "label": "Pipeline Run",
+   "options": "AI Pipeline Run",
+   "read_only": 1
+  },
+  {
    "fieldname": "message",
    "fieldtype": "Link",
    "label": "Message",
@@ -63,6 +84,38 @@
    "in_standard_filter": 1,
    "label": "User",
    "options": "User"
+  },
+  {
+   "fieldname": "approved_by",
+   "fieldtype": "Link",
+   "label": "Approved By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "approved_at",
+   "fieldtype": "Datetime",
+   "label": "Approved At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "rejected_by",
+   "fieldtype": "Link",
+   "label": "Rejected By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "rejected_at",
+   "fieldtype": "Datetime",
+   "label": "Rejected At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "requested_at",
+   "fieldtype": "Datetime",
+   "label": "Requested At",
+   "read_only": 1
   },
   {
    "fieldname": "started_at",
@@ -114,36 +167,28 @@
  "permissions": [
   {
    "role": "System Manager",
-   "create": 1,
-   "delete": 1,
-   "email": 1,
-   "export": 1,
-   "print": 1,
    "read": 1,
    "report": 1,
-   "share": 1,
-   "write": 1
+   "export": 1,
+   "print": 1
   },
   {
    "role": "AI Manager",
-   "create": 1,
-   "delete": 1,
-   "email": 1,
-   "export": 1,
-   "print": 1,
    "read": 1,
    "report": 1,
-   "share": 1,
-   "write": 1
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "AI Auditor",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
   },
   {
    "role": "AI User",
-   "read": 1,
-   "export": 1,
-   "print": 1,
-   "report": 1,
-   "email": 1,
-   "share": 1
+   "read": 1
   }
  ],
  "row_format": "Dynamic",

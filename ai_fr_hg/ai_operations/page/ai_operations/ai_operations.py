@@ -7,4 +7,4 @@ import frappe
 
 
 def get_context(context):
-	frappe.only_for(["AI Manager", "System Manager", "AI Auditor"])
+	frappe.only_for(["AI Manager", "System Manager"])

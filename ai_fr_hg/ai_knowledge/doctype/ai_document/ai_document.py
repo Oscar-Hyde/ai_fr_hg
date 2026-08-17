@@ -5,6 +5,8 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 
+from ai_fr_hg.ai.ingestion import enqueue_processing, validate_source_access
+
 
 class AIDocument(Document):
 	_DOCTYPE_NAME = "AI Document"
@@ -38,7 +40,11 @@ class AIDocument(Document):
 		naming_series: DF.Literal["AIDOC-.YYYY.-"]
 		page_count: DF.Int
 		processing_duration_ms: DF.Int
+		processing_job_id: DF.Data | None
+		processing_requested_by: DF.Link | None
+		processing_requested_on: DF.Datetime | None
 		reader_used: DF.Data | None
+		error_type: DF.Data | None
 		retry_count: DF.Int
 		source_doctype: DF.Link | None
 		source_file: DF.Attach | None
@@ -60,6 +66,7 @@ class AIDocument(Document):
 
 	def validate(self):
 		self.validate_source()
+		validate_source_access(self, user=frappe.session.user)
 
 	def validate_source(self):
 		if self.source_type == "File" and not self.source_file:
@@ -71,16 +78,24 @@ class AIDocument(Document):
 		if self.source_type == "DocType Record" and not (self.source_doctype and self.source_name):
 			frappe.throw(_("Source DocType and Source Name are required."))
 
+	def _assert_write_access(self) -> None:
+		self.check_permission("write")
+
+	def _assert_status(self, allowed: set[str], action: str) -> None:
+		if self.status not in allowed:
+			frappe.throw(
+				_("Cannot {0} a document in {1} status.").format(action, self.status),
+				frappe.ValidationError,
+			)
+
 	def after_insert(self):
 		"""Auto-process new documents when the platform is configured to."""
-		if self.status != "Queued":
+		if self.flags.get("skip_auto_process") or self.status not in {"Draft", "Queued"}:
 			return
 		if not frappe.db.get_single_value("AI Platform Settings", "auto_process_documents"):
 			return
 
-		from ai_fr_hg.ai.ingestion import enqueue_processing
-
-		enqueue_processing(self.name)
+		enqueue_processing(self.name, requested_by=self.owner)
 
 	def on_trash(self):
 		frappe.db.delete("AI Document Chunk", {"document": self.name})
@@ -93,28 +108,50 @@ class AIDocument(Document):
 
 	@frappe.whitelist()
 	def process(self) -> dict:
-		"""Extract and index this document now."""
-		from ai_fr_hg.ai.ingestion import enqueue_processing
-
-		enqueue_processing(self.name)
-		return {"document": self.name, "status": "Queued"}
+		"""Validate source authority and enqueue first-time or failed processing."""
+		self._assert_write_access()
+		self._assert_status({"Draft", "Failed", "Queued"}, _("process"))
+		validate_source_access(self, user=frappe.session.user)
+		return enqueue_processing(self.name, requested_by=frappe.session.user)
 
 	@frappe.whitelist()
 	def reprocess(self) -> dict:
-		"""Discard existing chunks and process this document again."""
+		"""Discard existing chunks and enqueue a fresh authorized processing run."""
+		self._assert_write_access()
+		self._assert_status({"Draft", "Failed", "Indexed"}, _("reprocess"))
+		validate_source_access(self, user=frappe.session.user)
 		frappe.db.delete("AI Document Chunk", {"document": self.name})
-		return self.process()
+		frappe.db.set_value(
+			self.doctype,
+			self.name,
+			{
+				"status": "Draft",
+				"chunk_count": 0,
+				"embedded_chunk_count": 0,
+				"indexed_on": None,
+			},
+			update_modified=False,
+		)
+		return enqueue_processing(
+			self.name,
+			requested_by=frappe.session.user,
+			reset_retries=True,
+		)
 
 	@frappe.whitelist()
 	def generate_summary(self) -> dict:
-		"""Summarise this document and store the result."""
+		"""Summarise an indexed document and store the result."""
+		self._assert_write_access()
+		self._assert_status({"Indexed"}, _("summarize"))
 		from ai_fr_hg.api.knowledge import summarize_document
 
 		return summarize_document(self.name)
 
 	@frappe.whitelist()
 	def run_extraction(self, schema: str | None = None) -> dict:
-		"""Extract structured data using the configured schema."""
+		"""Extract structured data from an indexed document."""
+		self._assert_write_access()
+		self._assert_status({"Indexed"}, _("extract data from"))
 		from ai_fr_hg.api.knowledge import extract_document_data
 
 		target = schema or self.extraction_schema

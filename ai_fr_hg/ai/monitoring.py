@@ -3,6 +3,8 @@
 
 """Service health monitoring and model discovery."""
 
+from uuid import uuid4
+
 import frappe
 from frappe import _
 from frappe.utils import cint, now_datetime
@@ -90,11 +92,14 @@ def check_all_providers() -> list[dict]:
 	"""Probe every enabled provider. Used by the scheduler."""
 	results = []
 	for provider in frappe.get_all("AI Provider", filters={"enabled": 1}, pluck="name"):
+		save_point = f"ai_health_{uuid4().hex}"
+		frappe.db.savepoint(save_point)
 		try:
 			results.append(check_provider_health(provider))
+			frappe.db.release_savepoint(save_point)
 		except Exception:
+			frappe.db.rollback(save_point=save_point)
 			frappe.log_error(title=f"AI health check failed: {provider}", message=frappe.get_traceback())
-	frappe.db.commit()  # nosemgrep: frappe-manual-commit
 	return results
 
 
@@ -179,6 +184,8 @@ def sync_provider_models(provider: str, create_missing: bool = True) -> dict:
 		if frappe.db.exists("AI Model", label):
 			continue
 
+		save_point = f"ai_model_discovery_{uuid4().hex}"
+		frappe.db.savepoint(save_point)
 		try:
 			doc = frappe.new_doc("AI Model")
 			doc.update(
@@ -200,7 +207,6 @@ def sync_provider_models(provider: str, create_missing: bool = True) -> dict:
 			)
 			doc.flags.ignore_permissions = True
 			doc.insert(ignore_permissions=True)
-			created.append(model.name)
 
 			if doc.model_type == "Chat" and not default_chat:
 				safe_set_value(
@@ -211,9 +217,13 @@ def sync_provider_models(provider: str, create_missing: bool = True) -> dict:
 					update_modified=False,
 				)
 				default_chat = doc.name
+			created.append(model.name)
+			frappe.db.release_savepoint(save_point)
 		except frappe.DuplicateEntryError:
-			# Another discovery/pull/sync worker can create the same model concurrently.
-			frappe.db.rollback()
+			# Another discovery/pull/sync worker can create the same model concurrently
+			# without rolling back models reconciled earlier in this batch.
+			frappe.db.rollback(save_point=save_point)
+			frappe.db.release_savepoint(save_point)
 		finally:
 			frappe.clear_cache(doctype="AI Model")
 

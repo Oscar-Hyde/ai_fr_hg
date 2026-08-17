@@ -54,17 +54,10 @@ def add_text(text: str, knowledge_base: str, title: str, process_now: bool = Fal
 
 @frappe.whitelist()
 def reprocess_document(document: str, force: bool = False) -> dict:
-	"""Re-run extraction and indexing for a document."""
-	doc = frappe.get_doc("AI Document", document)
-	doc.check_permission("write")
-
-	from ai_fr_hg.ai.ingestion import enqueue_processing
-
-	if cint(force):
-		frappe.db.delete("AI Document Chunk", {"document": document})
-
-	enqueue_processing(document)
-	return {"document": document, "status": "Queued"}
+	"""Re-run extraction and indexing through the document's governed action."""
+	# `force` is retained for API compatibility; reprocessing always rebuilds
+	# derived chunks so stale embeddings cannot survive a source change.
+	return frappe.get_doc("AI Document", document).reprocess()
 
 
 @frappe.whitelist()
@@ -72,18 +65,32 @@ def reindex_knowledge_base(knowledge_base: str) -> dict:
 	"""Queue every document in a knowledge base for reprocessing."""
 	frappe.only_for(["AI Manager", "System Manager"])
 
-	from ai_fr_hg.ai.ingestion import enqueue_processing
-
 	documents = frappe.get_all(
 		"AI Document",
-		filters={"knowledge_base": knowledge_base, "status": ["!=", "Archived"]},
+		filters={
+			"knowledge_base": knowledge_base,
+			"status": ["in", ["Draft", "Failed", "Indexed"]],
+		},
 		pluck="name",
 	)
+	queued = 0
 	for document in documents:
-		enqueue_processing(document)
+		frappe.get_doc("AI Document", document).reprocess()
+		queued += 1
 
 	frappe.db.set_value("AI Knowledge Base", knowledge_base, "index_status", "Indexing")
-	return {"knowledge_base": knowledge_base, "queued": len(documents)}
+	from ai_fr_hg.ai.logging import write_audit_log
+
+	write_audit_log(
+		action="Knowledge Base Reindex Queued",
+		category="Execution",
+		message=_("Queued {0} documents for reindexing in {1}.").format(queued, knowledge_base),
+		details={"queued_documents": queued},
+		reference_doctype="AI Knowledge Base",
+		reference_name=knowledge_base,
+		raise_on_error=True,
+	)
+	return {"knowledge_base": knowledge_base, "queued": queued}
 
 
 @frappe.whitelist()

@@ -101,7 +101,8 @@
    "default": "30",
    "fieldname": "max_runtime_seconds",
    "fieldtype": "Int",
-   "label": "Max Runtime (s)"
+   "label": "Max Runtime (s)",
+   "description": "Hard execution deadline. Tools fail closed if the runtime cannot enforce it."
   },
   {
    "fieldname": "description_sec",

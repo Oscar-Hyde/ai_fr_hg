@@ -67,7 +67,9 @@ def _is_learning_manager(user: str | None = None) -> bool:
 
 
 def _default_scope(candidate_type: str, source_type: str, user: str) -> tuple[str, str | None]:
-	"""Choose the least-surprising safe scope when the caller does not specify one."""
+	"""Choose a least-privilege scope for teaching that omitted one."""
+	if not _is_learning_manager():
+		return "User", user
 	if candidate_type in {"Preference", "Feedback"} or source_type in {"Chat Correction", "Feedback"}:
 		return "User", user
 	return "Global", None
@@ -88,8 +90,9 @@ def _validate_scope(scope: str, value: str | None, teaching_user: str) -> tuple[
 		return False, _("Target role does not exist.")
 	if scope == "Agent" and not frappe.db.exists("AI Agent", value):
 		return False, _("Target agent does not exist.")
-	if scope == "User" and value != teaching_user and not _is_learning_manager():
-		return False, _("You may only teach user-scoped knowledge for yourself.")
+	if not _is_learning_manager():
+		if scope != "User" or value != teaching_user:
+			return False, _("Only AI Managers may teach Global, Role, Agent, or another user's scope.")
 	return True, _("Target scope is valid.")
 
 
@@ -185,7 +188,10 @@ def create_candidate(
 			"source_type": source_type,
 			"source_reference_doctype": source_reference_doctype,
 			"source_reference_name": source_reference_name,
-			"provenance": provenance or f"{source_type} by {teaching_user}.",
+			# Free-form caller text is contextual evidence, never authoritative
+			# attribution. The DocType controller builds ``provenance`` from the
+			# actor, teaching user, source type, and source record.
+			"provenance_context": provenance,
 			"confidence": confidence,
 			"user": teaching_user,
 			"target_scope": target_scope,
@@ -197,14 +203,6 @@ def create_candidate(
 	)
 	doc.flags.ignore_permissions = True
 	doc.insert(ignore_permissions=True)
-
-	write_audit_log(
-		action="Knowledge Candidate Created",
-		category="Learning",
-		message=f"Candidate {doc.name} ({candidate_type}) created for {target_scope} scope.",
-		reference_doctype="AI Knowledge Candidate",
-		reference_name=doc.name,
-	)
 	return doc
 
 
@@ -412,8 +410,16 @@ def _approve_candidate(
 		category="Learning",
 		severity="Warning",
 		message=f"{approver} approved candidate {candidate_name}.",
+		details={
+			"teaching_user": candidate.user,
+			"policy_approved": policy_approved,
+			"promoted_to": promoted["doctype"],
+			"promoted_name": promoted["name"],
+			"conflict_override": bool(conflicts["duplicates"] or conflicts["overlaps"]),
+		},
 		reference_doctype="AI Knowledge Candidate",
 		reference_name=candidate_name,
+		raise_on_error=True,
 	)
 
 	return {
@@ -447,8 +453,11 @@ def reject_candidate(candidate_name: str, notes: str | None = None) -> dict:
 		action="Knowledge Candidate Rejected",
 		category="Learning",
 		severity="Warning",
+		message=_("{0} rejected candidate {1}.").format(frappe.session.user, candidate_name),
+		details={"teaching_user": candidate.user, "decision_notes": notes},
 		reference_doctype="AI Knowledge Candidate",
 		reference_name=candidate_name,
+		raise_on_error=True,
 	)
 	return {"candidate": candidate_name, "status": "Rejected"}
 
@@ -554,6 +563,27 @@ def _promote_to_skill(candidate) -> dict:
 	return {"doctype": "AI Skill", "name": doc.name}
 
 
+def _audit_candidate_processing(candidate, state: str, *, details: dict | None = None) -> None:
+	"""Record a candidate validation/governance transition in the same transaction."""
+	severity = "Warning" if state in {"Validation Failed", "Conflict"} else "Info"
+	write_audit_log(
+		action=f"Knowledge Candidate {state}",
+		category="Learning",
+		severity=severity,
+		message=_("Candidate {0} entered learning state {1}.").format(candidate.name, state),
+		details={
+			"teaching_user": candidate.user,
+			"source_type": candidate.source_type,
+			"target_scope": candidate.target_scope,
+			"target_scope_value": candidate.target_scope_value,
+			**(details or {}),
+		},
+		reference_doctype="AI Knowledge Candidate",
+		reference_name=candidate.name,
+		raise_on_error=True,
+	)
+
+
 def process_candidate(candidate_name: str, approve: bool = False) -> dict:
 	"""Validate, conflict-test and apply the configured gate to a draft candidate."""
 	check_capability("learning")
@@ -561,6 +591,8 @@ def process_candidate(candidate_name: str, approve: bool = False) -> dict:
 		frappe.throw(_("The Learning Loop is disabled in AI Platform Settings."), exc=LearningError)
 	candidate = frappe.get_doc("AI Knowledge Candidate", candidate_name)
 	candidate.check_permission("read")
+	if not _is_learning_manager() and candidate.user != frappe.session.user:
+		frappe.throw(_("You may only validate your own knowledge candidates."), frappe.PermissionError)
 	approval_required = 1 if cint(_settings().require_memory_approval) else 0
 	if cint(candidate.approval_required) != approval_required:
 		candidate.db_set("approval_required", approval_required, update_modified=False)
@@ -574,6 +606,7 @@ def process_candidate(candidate_name: str, approve: bool = False) -> dict:
 			{"status": "Draft", "testing_status": "Failed", "validation_notes": notes},
 			update_modified=False,
 		)
+		_audit_candidate_processing(candidate, "Validation Failed", details={"validation_notes": notes})
 		return {
 			"candidate": candidate.name,
 			"status": "Draft",
@@ -595,6 +628,15 @@ def process_candidate(candidate_name: str, approve: bool = False) -> dict:
 			},
 			update_modified=False,
 		)
+		_audit_candidate_processing(
+			candidate,
+			"Conflict",
+			details={
+				"duplicate_count": len(conflicts["duplicates"]),
+				"overlap_count": len(conflicts["overlaps"]),
+				"summary": summary[:1000],
+			},
+		)
 		return {
 			"candidate": candidate.name,
 			"status": "Conflict",
@@ -607,6 +649,7 @@ def process_candidate(candidate_name: str, approve: bool = False) -> dict:
 		{"status": "Validated", "testing_status": "Passed", "conflicts_summary": None},
 		update_modified=False,
 	)
+	_audit_candidate_processing(candidate, "Validated", details={"approval_required": approval_required})
 	if approve:
 		decision = approve_candidate(candidate.name, notes="Approved during teaching; no conflicts detected.")
 	elif not cint(candidate.approval_required):
@@ -828,8 +871,10 @@ def observe_feedback(
 		action=f"Feedback {feedback}",
 		category="Learning",
 		message=reason,
+		details={"previous_feedback": previous_feedback, "has_correction": bool((correction or "").strip())},
 		reference_doctype="AI Message",
 		reference_name=message_name,
+		raise_on_error=True,
 	)
 	if feedback == "Positive":
 		return {"message": message_name, "feedback": feedback, "candidate": None}

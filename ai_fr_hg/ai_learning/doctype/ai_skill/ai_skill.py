@@ -43,11 +43,15 @@ class AISkill(Document):
 	@frappe.whitelist()
 	def disable(self) -> dict:
 		"""Disable this skill so it is no longer injected into prompts."""
-		self.db_set("enabled", 0)
+		frappe.only_for(["AI Manager", "System Manager"])
+		if self.enabled:
+			self.db_set("enabled", 0)
 		return {"enabled": 0, "skill": self.name}
 
 	@frappe.whitelist()
 	def enable(self) -> dict:
 		"""Re-enable a disabled skill."""
-		self.db_set("enabled", 1)
+		frappe.only_for(["AI Manager", "System Manager"])
+		if not self.enabled:
+			self.db_set("enabled", 1)
 		return {"enabled": 1, "skill": self.name}

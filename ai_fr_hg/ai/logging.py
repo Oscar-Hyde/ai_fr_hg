@@ -149,11 +149,13 @@ def write_audit_log(
 	details: dict | None = None,
 	reference_doctype: str | None = None,
 	reference_name: str | None = None,
+	*,
+	raise_on_error: bool = False,
 ) -> None:
 	"""Append an entry to the platform audit trail.
 
-	Audit writes never raise: a failure to log must not break the operation
-	being logged.
+	Most observational call sites remain best-effort. Security-sensitive owners
+	can pass ``raise_on_error=True`` so an unaudited state change fails closed.
 	"""
 	try:
 		doc = frappe.new_doc("AI Audit Log")
@@ -176,3 +178,5 @@ def write_audit_log(
 		doc.insert(ignore_permissions=True)
 	except Exception:
 		frappe.log_error(title="AI Audit Log write failed", message=frappe.get_traceback())
+		if raise_on_error:
+			raise

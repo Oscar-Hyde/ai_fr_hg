@@ -95,7 +95,8 @@ On this branch these are now **enforced before the server is reached**:
    `max_value` on `chunk_size`, `chunk_overlap`, `top_k` and
    `similarity_threshold`, plus human descriptions so the form explains each
    knob.
-2. **Client-side validation** (`public/js/doctype/ai_knowledge_base.js`): a
+2. **Client-side validation**
+   (`ai_knowledge/doctype/ai_knowledge_base/ai_knowledge_base.js`): a
    `validate` handler throws the same errors inline, and the `chunk_size` /
    `chunk_overlap` handlers auto-correct an overlap that crosses chunk size the
    moment it happens.
@@ -155,7 +156,9 @@ the knowledge dashboard and the AI Document form.
 - **API** in `ai_fr_hg/api/` — thin whitelisted wrappers.
 - **DocType controllers** — validation and thin actions that delegate into
   `ai/`.
-- **Desk assets** in `public/js/` and `ai_core/page/` / `ai_knowledge/page/`.
+- **Desk assets** use Frappe's native layout: standard DocType scripts are
+  colocated under `<module>/doctype/<doctype>/`, shared bundles remain in
+  `public/js/`, and pages live under their owning module's `page/` directory.
 
 ### Extending
 
@@ -170,8 +173,8 @@ the knowledge dashboard and the AI Document form.
 # fast, no DB / runtime
 bench --site your-site.local run-tests --app ai_fr_hg --module test_units
 
-# integration (DocTypes + service layer, model runtime stubbed)
-bench --site your-site.local run-tests --app ai_fr_hg --module test_integration
+# integration (colocated DocType tests + service layer, model runtime stubbed)
+bench --site your-site.local run-tests --app ai_fr_hg
 ```
 
 Unit tests cover chunking, vector math, deadlines, JSON parsing, the network
@@ -211,8 +214,8 @@ stub the chat and embedding engines so CI needs no GPU or Ollama.
 | `ai/knowledge.py` | `retrieve`, `semantic_search`, `keyword_search` accept a `documents` filter and scope targets to the uploaded files' knowledge bases. |
 | `api/knowledge.py` | One-shot `ask` accepts `documents`, waits for indexing, and grounds the answer on the chosen records. |
 | `public/js/ai_helpers.js` | `frappe.ai.ask` forwards `documents` so the AI Document "Ask About This" button answers from that record. |
-| `public/js/doctype/ai_document.js` | "Ask About This" passes the current document to scope retrieval. |
+| `ai_knowledge/doctype/ai_document/ai_document.js` | "Ask About This" passes the current document to scope retrieval. |
 | `ai_knowledge_base.json` | Field constraints (`min_value`/`max_value`) and descriptions for chunking settings. |
 | `ai_knowledge_base.py` | Clearer validation messages that name the offending value. |
-| `public/js/doctype/ai_knowledge_base.js` | Client-side validation + auto-correction of chunk overlap. |
+| `ai_knowledge/doctype/ai_knowledge_base/ai_knowledge_base.js` | Client-side validation + auto-correction of chunk overlap. |
 | `ai_assistant.js` | Tracks just-uploaded documents and passes them on the next send. |

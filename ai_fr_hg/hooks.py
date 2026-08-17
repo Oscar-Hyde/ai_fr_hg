@@ -57,46 +57,8 @@ app_include_js = "ai_fr_hg.bundle.js"
 # include js in page
 # page_js = {"page" : "public/js/file.js"}
 
-# include js in doctype views
-doctype_js = {
-	"AI Provider": "public/js/doctype/ai_provider.js",
-	"AI Model": "public/js/doctype/ai_model.js",
-	"AI Knowledge Base": "public/js/doctype/ai_knowledge_base.js",
-	"AI Document": "public/js/doctype/ai_document.js",
-	"AI Agent": "public/js/doctype/ai_agent.js",
-	"AI Pipeline": "public/js/doctype/ai_pipeline.js",
-	"AI Platform Settings": "public/js/doctype/ai_platform_settings.js",
-	"AI Extraction Schema": "public/js/doctype/ai_extraction_schema.js",
-	"AI Automation Rule": "public/js/doctype/ai_automation_rule.js",
-	"AI Tool Invocation": "public/js/doctype/ai_tool_invocation.js",
-	"AI Knowledge Candidate": "public/js/doctype/ai_knowledge_candidate.js",
-	"AI Memory": "public/js/doctype/ai_memory.js",
-	"AI Skill": "public/js/doctype/ai_skill.js",
-	"AI Conversation": "public/js/doctype/ai_conversation.js",
-	"AI Message": "public/js/doctype/ai_message.js",
-	"AI Pipeline Run": "public/js/doctype/ai_pipeline_run.js",
-	"AI Tool": "public/js/doctype/ai_tool.js",
-	"AI Prompt Template": "public/js/doctype/ai_prompt_template.js",
-	"AI Execution Log": "public/js/doctype/ai_execution_log.js",
-	"AI Audit Log": "public/js/doctype/ai_audit_log.js",
-	"AI Resource Policy": "public/js/doctype/ai_resource_policy.js",
-	"AI Task": "public/js/doctype/ai_task.js",
-	"AI Search Query": "public/js/doctype/ai_search_query.js",
-	"AI Service Health Log": "public/js/doctype/ai_service_health_log.js",
-	"AI Usage Snapshot": "public/js/doctype/ai_usage_snapshot.js",
-	"AI Document Chunk": "public/js/doctype/ai_document_chunk.js",
-}
-
-doctype_list_js = {
-	"AI Provider": "public/js/doctype/ai_provider_list.js",
-	"AI Document": "public/js/doctype/ai_document_list.js",
-	"AI Model": "public/js/doctype/ai_model_list.js",
-	"AI Knowledge Candidate": "public/js/doctype/ai_knowledge_candidate_list.js",
-	"AI Memory": "public/js/doctype/ai_memory_list.js",
-	"AI Skill": "public/js/doctype/ai_skill_list.js",
-	"AI Conversation": "public/js/doctype/ai_conversation_list.js",
-	"AI Agent": "public/js/doctype/ai_agent_list.js",
-}
+# Standard DocType form and list scripts are colocated with their controllers and
+# schemas so Frappe discovers them through its native asset conventions.
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
 
@@ -196,22 +158,25 @@ before_uninstall = "ai_fr_hg.uninstall.before_uninstall"
 # Permissions evaluated in scripted ways
 
 permission_query_conditions = {
-	"AI Conversation": "ai_fr_hg.ai_conversation.doctype.ai_conversation.ai_conversation.get_permission_query_conditions",
-	"AI Message": "ai_fr_hg.ai_conversation.doctype.ai_message.ai_message.get_permission_query_conditions",
-	"AI Document": "ai_fr_hg.utils.permissions.get_document_query_conditions",
-	"AI Knowledge Candidate": "ai_fr_hg.utils.permissions.get_candidate_query_conditions",
-	"AI Memory": "ai_fr_hg.utils.permissions.get_memory_query_conditions",
-	"AI Skill": "ai_fr_hg.utils.permissions.get_skill_query_conditions",
+	"AI Conversation": "ai_fr_hg.utils.permissions.conversation_query",
+	"AI Message": "ai_fr_hg.utils.permissions.message_query",
+	"AI Knowledge Base": "ai_fr_hg.utils.permissions.knowledge_base_query",
+	"AI Document": "ai_fr_hg.utils.permissions.document_query",
+	"AI Document Chunk": "ai_fr_hg.utils.permissions.chunk_query",
+	"AI Agent": "ai_fr_hg.utils.permissions.agent_query",
+	"AI Knowledge Candidate": "ai_fr_hg.utils.permissions.candidate_query",
+	"AI Memory": "ai_fr_hg.utils.permissions.memory_query",
+	"AI Skill": "ai_fr_hg.utils.permissions.skill_query",
+	"AI Task": "ai_fr_hg.utils.permissions.task_query",
+	"AI Pipeline Run": "ai_fr_hg.utils.permissions.pipeline_run_query",
+	"AI Execution Log": "ai_fr_hg.utils.permissions.execution_log_query",
+	"AI Search Query": "ai_fr_hg.utils.permissions.search_query",
+	"AI Tool Invocation": "ai_fr_hg.utils.permissions.tool_invocation_query",
 }
 
 has_permission = {
-	"AI Conversation": "ai_fr_hg.ai_conversation.doctype.ai_conversation.ai_conversation.has_permission",
-	"AI Message": "ai_fr_hg.ai_conversation.doctype.ai_message.ai_message.has_permission",
-	"AI Document": "ai_fr_hg.utils.permissions.has_document_permission",
-	"AI Knowledge Base": "ai_fr_hg.utils.permissions.has_knowledge_base_permission",
-	"AI Knowledge Candidate": "ai_fr_hg.utils.permissions.has_candidate_permission",
-	"AI Memory": "ai_fr_hg.utils.permissions.has_memory_permission",
-	"AI Skill": "ai_fr_hg.utils.permissions.has_skill_permission",
+	doctype: "ai_fr_hg.utils.permissions.has_document_permission"
+	for doctype in permission_query_conditions
 }
 
 # Document Events
@@ -364,16 +329,19 @@ default_log_clearing_doctypes = {
 # ai_providers        - new AI runtime adapters       (BaseProvider subclasses)
 # ai_document_readers - new file format readers       (BaseReader subclasses)
 # ai_tools            - new built-in tool handlers    (plain callables)
+# ai_pipeline_methods - trusted Custom Method steps   (plain callables)
 #
 # Example, in another app's hooks.py:
 #
 # ai_providers = {"My Runtime": "my_app.providers.MyRuntimeProvider"}
 # ai_document_readers = {"dwg": "my_app.readers.DWGReader"}
 # ai_tools = {"lookup_customer": "my_app.tools.lookup_customer"}
+# ai_pipeline_methods = {"sync_customer": "my_app.pipelines.sync_customer"}
 
 ai_providers = {}
 ai_document_readers = {}
 ai_tools = {}
+ai_pipeline_methods = {}
 
 # Fixtures shipped with the app
 # -----------------------------
