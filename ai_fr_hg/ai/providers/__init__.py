@@ -67,7 +67,7 @@ def get_provider(provider: str | None = None) -> BaseProvider:
 		try:
 			provider_class = frappe.get_attr(doc.adapter_path)
 		except Exception as exc:
-			frappe.throw(_("Could not load custom adapter {0}: {1}").format(doc.adapter_path, exc))
+			frappe.throw(_("Could not load custom adapter {0}: {1}").format(doc.adapter_path, str(exc)))
 	else:
 		classes = get_provider_classes()
 		provider_class = classes.get(doc.provider_type)

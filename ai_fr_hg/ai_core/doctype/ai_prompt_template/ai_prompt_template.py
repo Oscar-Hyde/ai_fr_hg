@@ -64,7 +64,7 @@ class AIPromptTemplate(Document):
 		try:
 			parsed = json.loads(self.json_schema)
 		except ValueError as exc:
-			frappe.throw(_("JSON Schema is not valid JSON: {0}").format(exc))
+			frappe.throw(_("JSON Schema is not valid JSON: {0}").format(str(exc)))
 		if not isinstance(parsed, dict):
 			frappe.throw(_("JSON Schema must be a JSON object."))
 

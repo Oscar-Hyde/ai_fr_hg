@@ -81,7 +81,7 @@ class AIProvider(Document):
 		try:
 			parsed = json.loads(self.extra_headers)
 		except ValueError as exc:
-			frappe.throw(_("Extra Headers must be valid JSON: {0}").format(exc))
+			frappe.throw(_("Extra Headers must be valid JSON: {0}").format(str(exc)))
 		if not isinstance(parsed, dict):
 			frappe.throw(_("Extra Headers must be a JSON object."))
 

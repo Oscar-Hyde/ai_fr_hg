@@ -104,18 +104,9 @@ def search_knowledge_base(
 		or ""
 	)
 	resolved_kb = (
-		knowledge_base
-		or kwargs.get("kb")
-		or kwargs.get("kb_name")
-		or kwargs.get("knowledge_base_name")
+		knowledge_base or kwargs.get("kb") or kwargs.get("kb_name") or kwargs.get("knowledge_base_name")
 	)
-	resolved_limit = (
-		limit
-		or kwargs.get("top_k")
-		or kwargs.get("max_results")
-		or kwargs.get("count")
-		or 5
-	)
+	resolved_limit = limit or kwargs.get("top_k") or kwargs.get("max_results") or kwargs.get("count") or 5
 
 	if not resolved_query:
 		return {"query": "", "count": 0, "results": []}
@@ -148,17 +139,9 @@ def get_document(
 	**kwargs,
 ) -> dict:
 	"""Fetch a single Frappe document the user is allowed to read."""
-	resolved_doctype = (
-		doctype
-		or kwargs.get("doc_type")
-		or kwargs.get("document_type")
-	)
+	resolved_doctype = doctype or kwargs.get("doc_type") or kwargs.get("document_type")
 	resolved_name = (
-		name
-		or kwargs.get("id")
-		or kwargs.get("docname")
-		or kwargs.get("doc_name")
-		or kwargs.get("document")
+		name or kwargs.get("id") or kwargs.get("docname") or kwargs.get("doc_name") or kwargs.get("document")
 	)
 	resolved_fields = fields or kwargs.get("columns") or kwargs.get("fieldnames")
 
@@ -172,9 +155,7 @@ def get_document(
 		if isinstance(resolved_fields, str):
 			resolved_fields = [f.strip() for f in resolved_fields.split(",") if f.strip()]
 		return {
-			field: doc.get(field)
-			for field in resolved_fields
-			if doc.meta.has_field(field) or field == "name"
+			field: doc.get(field) for field in resolved_fields if doc.meta.has_field(field) or field == "name"
 		}
 
 	return doc.as_dict(no_nulls=True, no_default_fields=False)
@@ -191,11 +172,7 @@ def list_documents(
 	"""List records of a DocType, respecting the user's permissions."""
 	import json
 
-	resolved_doctype = (
-		doctype
-		or kwargs.get("doc_type")
-		or kwargs.get("document_type")
-	)
+	resolved_doctype = doctype or kwargs.get("doc_type") or kwargs.get("document_type")
 	if not resolved_doctype:
 		return []
 
@@ -232,11 +209,7 @@ def count_documents(
 	"""Count records of a DocType matching optional filters."""
 	import json
 
-	resolved_doctype = (
-		doctype
-		or kwargs.get("doc_type")
-		or kwargs.get("document_type")
-	)
+	resolved_doctype = doctype or kwargs.get("doc_type") or kwargs.get("document_type")
 	if not resolved_doctype:
 		return {"doctype": "", "count": 0}
 
@@ -306,11 +279,7 @@ def get_document_text(
 	)
 
 	max_chars = (
-		max_characters
-		or kwargs.get("max_chars")
-		or kwargs.get("limit")
-		or kwargs.get("length")
-		or 8000
+		max_characters or kwargs.get("max_chars") or kwargs.get("limit") or kwargs.get("length") or 8000
 	)
 
 	if not doc_identifier:
@@ -397,10 +366,7 @@ def _document_text_unavailable_reason(doc) -> str:
 			f"{doc.error_message or 'no further detail was recorded'}."
 		)
 	if doc.status in ("Queued", "Extracting", "Chunking", "Embedding"):
-		return (
-			f"Document '{doc.title}' is still being processed (status: {doc.status}). "
-			"Ask again shortly."
-		)
+		return f"Document '{doc.title}' is still being processed (status: {doc.status}). Ask again shortly."
 	return (
 		f"Document '{doc.title}' contains no extractable text. It may be a scanned "
 		"image needing OCR, or an unsupported format."

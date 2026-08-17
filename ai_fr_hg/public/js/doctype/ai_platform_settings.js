@@ -65,8 +65,7 @@ frappe.ui.form.on("AI Platform Settings", {
 				title: __("Local Only Mode Disabled"),
 				indicator: "orange",
 				message: __(
-					"Provider endpoints outside the local network will now be allowed. " +
-						"Prompts and document contents could leave this machine."
+					"Provider endpoints outside the local network will now be allowed. Prompts and document contents could leave this machine."
 				),
 			});
 		}

@@ -79,7 +79,7 @@ than leaving the connection open for the proxy to terminate with a `504`.
 | `rename_conversation(conversation, title)` | Rename. |
 | `archive_conversation(conversation)` | Archive without deleting. |
 | `delete_conversation(conversation)` | Delete the conversation and its messages. |
-| `submit_feedback(message, feedback)` | `Positive`, `Negative` or `""` to clear. |
+| `submit_feedback(message, feedback, correction, reason)` | Rate an answer; optional correction/reason enters the governed learning loop. |
 | `summarize_conversation(conversation)` | Generate and store a summary. |
 | `get_chat_context()` | Bootstrap payload: agents, models, knowledge bases, settings. |
 
@@ -195,6 +195,57 @@ All of these require `AI Manager` or `System Manager`.
 Returns `providers`, `models`, `knowledge`, `activity_24h`,
 `providers_detail`, `models_detail`, `recent_errors`, `pending_approvals`,
 `active_jobs` and `top_users`.
+
+---
+
+## Learning
+
+### `ai_fr_hg.api.learning.teach`
+
+Create and test a governed knowledge candidate. The method never writes
+straight into active memory. With the default policy it returns a `Validated`
+or `Conflict` candidate for review; when **Require Approval for Learned
+Knowledge** is disabled, a conflict-free candidate is promoted automatically.
+
+| Parameter | Type | Notes |
+| --- | --- | --- |
+| `content` | string | Required teaching, correction, fact, preference, or procedure. |
+| `title` | string | Optional review title. |
+| `candidate_type` | string | `Fact`, `Preference`, `Instruction`, `Feedback`, or `Document`; inferred when omitted. |
+| `source_type` | string | Defaults to `Explicit Teaching`. Document/tool/automation sources require a source record. |
+| `source_reference_doctype` | string | Must be paired with `source_reference_name`; the caller must be able to read it. |
+| `source_reference_name` | string | Originating record. |
+| `provenance` | string | Optional detail; a basic user/source statement is generated when omitted. |
+| `confidence` | number | Candidate confidence percentage. |
+| `target_scope` | string | `Global`, `User`, `Role`, or `Agent`. Preferences and feedback default to the teaching user. |
+| `target_scope_value` | string | Required for non-global scopes. |
+
+```json
+{
+  "candidate": "AI-CAND-2026-00012",
+  "status": "Validated",
+  "valid": true,
+  "conflicts": { "duplicates": [], "overlaps": [] },
+  "validation": { "checks": [] }
+}
+```
+
+### Other learning endpoints
+
+| Method | Purpose |
+| --- | --- |
+| `approve_candidate(candidate, notes)` | AI Manager/System Manager promotion to memory or skill. Conflict overrides require notes. |
+| `reject_candidate(candidate, notes)` | Reject without learning. |
+| `list_candidates(status)` | Permission-filtered review queue. |
+| `list_memories(status, limit)` | Active or archived memories visible in the caller's scope. |
+| `list_skills(enabled, limit)` | Skills visible in the caller's scope. |
+| `overview()` | Permission-filtered learning counters. |
+
+Every assistant response records the identifiers of memories and skills that
+shaped it. `submit_feedback` updates the corresponding helpful/not-helpful
+counters exactly once. Negative feedback without a supplied correction creates
+a clearly labelled failure example, never an authoritative copy of the wrong
+answer.
 
 ---
 

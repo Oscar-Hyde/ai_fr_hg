@@ -72,7 +72,9 @@ class AIPipeline(Document):
 				try:
 					json.loads(step.config)
 				except ValueError as exc:
-					frappe.throw(_("Row {0}: Configuration is not valid JSON: {1}").format(step.idx, exc))
+					frappe.throw(
+						_("Row {0}: Configuration is not valid JSON: {1}").format(step.idx, str(exc))
+					)
 
 	def validate_schedule(self):
 		if self.trigger_type != "Scheduled":

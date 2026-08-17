@@ -100,13 +100,14 @@
   },
   {
    "fieldname": "source_user",
-   "fieldtype": "Data",
-   "label": "Teaching User"
+   "fieldtype": "Link",
+   "label": "Teaching User",
+   "options": "User"
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-08-17 09:00:00.000000",
+ "modified": "2026-08-17 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "AI Learning",
  "name": "AI Skill",

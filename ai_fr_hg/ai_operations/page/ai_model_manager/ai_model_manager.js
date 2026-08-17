@@ -374,13 +374,16 @@ class AIModelManager {
 					// listener instead of stacking another on each install.
 					frappe.realtime.off("ai_model_pulled");
 					frappe.realtime.on("ai_model_pulled", (data) => {
-						if (data.model !== values.model_name || data.provider !== values.provider) return;
+						if (data.model !== values.model_name || data.provider !== values.provider)
+							return;
 						frappe.realtime.off("ai_model_pulled");
 						frappe.show_alert({
 							message:
 								data.status === "Success"
 									? __("{0} installed.", [data.model])
-									: __("Install failed: {0}", [data.error || __("Unknown error")]),
+									: __("Install failed: {0}", [
+											data.error || __("Unknown error"),
+									  ]),
 							indicator: data.status === "Success" ? "green" : "red",
 						});
 						this.refresh();

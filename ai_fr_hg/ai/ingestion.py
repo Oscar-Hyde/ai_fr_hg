@@ -370,9 +370,7 @@ def wait_for_indexed(document_names: list[str], timeout: float | None = None) ->
 	statuses: dict[str, str] = {}
 
 	while True:
-		statuses = {
-			name: frappe.db.get_value("AI Document", name, "status") or "Unknown" for name in names
-		}
+		statuses = {name: frappe.db.get_value("AI Document", name, "status") or "Unknown" for name in names}
 		if all(status in ("Indexed", "Failed") for status in statuses.values()):
 			break
 		if time.monotonic() >= hard_deadline:

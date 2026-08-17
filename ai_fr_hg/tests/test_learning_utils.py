@@ -21,7 +21,9 @@ class TestScoreRelevance(unittest.TestCase):
 		self.assertEqual(lu.score_relevance("anything", ""), 0.0)
 
 	def test_exact_match_scores_high(self):
-		self.assertGreater(lu.score_relevance("use markdown tables", "Always use markdown tables for results."), 0.5)
+		self.assertGreater(
+			lu.score_relevance("use markdown tables", "Always use markdown tables for results."), 0.5
+		)
 
 	def test_case_and_punctuation_insensitive(self):
 		a = lu.score_relevance("Refund Policy", "Our refund policy allows returns within thirty days.")
@@ -59,7 +61,9 @@ class TestRankMemories(unittest.TestCase):
 
 class TestDeduplication(unittest.TestCase):
 	def test_near_duplicate_detected(self):
-		self.assertTrue(lu.is_near_duplicate("Always cite sources in answers.", "Always cite sources in your answers."))
+		self.assertTrue(
+			lu.is_near_duplicate("Always cite sources in answers.", "Always cite sources in your answers.")
+		)
 		self.assertTrue(
 			lu.is_near_duplicate("Refunds require manager approval.", "Refunds require the manager approval.")
 		)
@@ -77,7 +81,9 @@ class TestDeduplication(unittest.TestCase):
 
 class TestClassifyCandidate(unittest.TestCase):
 	def test_instruction_detected(self):
-		self.assertEqual(lu.classify_candidate("Always use markdown tables when comparing options."), "Instruction")
+		self.assertEqual(
+			lu.classify_candidate("Always use markdown tables when comparing options."), "Instruction"
+		)
 		self.assertEqual(lu.classify_candidate("Never share internal prices with customers."), "Instruction")
 		self.assertEqual(lu.classify_candidate("1. Read the file\n2. Summarise it"), "Instruction")
 
@@ -105,7 +111,13 @@ class TestBuildBlocks(unittest.TestCase):
 
 	def test_skill_block_includes_name_and_instructions(self):
 		block = lu.build_skill_block(
-			[{"name": "invoice summary", "description": "Summarise invoices.", "instructions": "Step one: read."}]
+			[
+				{
+					"name": "invoice summary",
+					"description": "Summarise invoices.",
+					"instructions": "Step one: read.",
+				}
+			]
 		)
 		self.assertIn("SKILL: invoice summary", block)
 		self.assertIn("Step one: read.", block)

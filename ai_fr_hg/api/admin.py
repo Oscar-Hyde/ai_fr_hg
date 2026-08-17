@@ -223,21 +223,15 @@ def get_usage_report(days: int = 30, user: str | None = None) -> dict:
 	from frappe.utils import add_days, today
 
 	since = add_days(today(), -cint(days) or -30)
-	conditions = ["snapshot_date >= %(since)s"]
-	values = {"since": since}
-	if user:
-		conditions.append("user = %(user)s")
-		values["user"] = user
-
-	where = " and ".join(conditions)
+	values = {"since": since, "user": user or None}
 
 	return {
 		"daily": frappe.db.sql(
-			f"""
+			"""
 			select snapshot_date, sum(request_count) as requests, sum(total_tokens) as tokens,
 				sum(failure_count) as failures
 			from `tabAI Usage Snapshot`
-			where {where}
+			where snapshot_date >= %(since)s and (%(user)s is null or user = %(user)s)
 			group by snapshot_date
 			order by snapshot_date asc
 			""",
@@ -245,11 +239,12 @@ def get_usage_report(days: int = 30, user: str | None = None) -> dict:
 			as_dict=True,
 		),
 		"by_model": frappe.db.sql(
-			f"""
+			"""
 			select model, sum(request_count) as requests, sum(total_tokens) as tokens,
 				avg(average_latency_ms) as avg_latency
 			from `tabAI Usage Snapshot`
-			where {where} and model is not null
+			where snapshot_date >= %(since)s and (%(user)s is null or user = %(user)s)
+				and model is not null
 			group by model
 			order by requests desc
 			limit 20
@@ -258,10 +253,11 @@ def get_usage_report(days: int = 30, user: str | None = None) -> dict:
 			as_dict=True,
 		),
 		"by_user": frappe.db.sql(
-			f"""
+			"""
 			select user, sum(request_count) as requests, sum(total_tokens) as tokens
 			from `tabAI Usage Snapshot`
-			where {where} and user is not null
+			where snapshot_date >= %(since)s and (%(user)s is null or user = %(user)s)
+				and user is not null
 			group by user
 			order by requests desc
 			limit 20

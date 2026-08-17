@@ -23,16 +23,22 @@ class AISkill(Document):
 		skill_name: DF.Data
 		skill_type: DF.Literal["Procedural", "Formatting", "Workflow"]
 		source_candidate: DF.Link | None
-		source_user: DF.Data | None
+		source_user: DF.Link | None
 		usage_count: DF.Int
 		version: DF.Int
 	# end: auto-generated types
+
+	def before_insert(self):
+		if not self.flags.from_learning or not self.source_candidate:
+			frappe.throw(_("AI Skill must be created by approving an AI Knowledge Candidate."))
 
 	def validate(self):
 		if not (self.instructions or "").strip():
 			frappe.throw(_("Skill instructions cannot be empty."))
 		if self.scope != "Global" and not (self.scope_value or "").strip():
 			frappe.throw(_("Scope Value is required when Scope is not Global."))
+		if self.scope == "Global":
+			self.scope_value = None
 
 	@frappe.whitelist()
 	def disable(self) -> dict:

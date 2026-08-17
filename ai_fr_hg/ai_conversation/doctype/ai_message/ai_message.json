@@ -28,6 +28,7 @@
   "retrieval_sec",
   "citations",
   "context_used",
+  "learned_context",
   "msg_metrics_sec",
   "prompt_tokens",
   "completion_tokens",
@@ -36,6 +37,8 @@
   "duration_ms",
   "execution_log",
   "feedback",
+  "feedback_reason",
+  "feedback_comment",
   "error_message"
  ],
  "fields": [
@@ -164,6 +167,13 @@
    "label": "Context Used"
   },
   {
+   "fieldname": "learned_context",
+   "fieldtype": "Code",
+   "label": "Learned Context",
+   "options": "JSON",
+   "read_only": 1
+  },
+  {
    "collapsible": 1,
    "fieldname": "msg_metrics_sec",
    "fieldtype": "Section Break",
@@ -206,6 +216,17 @@
    "options": "\nPositive\nNegative"
   },
   {
+   "fieldname": "feedback_reason",
+   "fieldtype": "Select",
+   "label": "Feedback Reason",
+   "options": "\nCorrection\nMissing Information\nIncorrect Information"
+  },
+  {
+   "fieldname": "feedback_comment",
+   "fieldtype": "Small Text",
+   "label": "Feedback Comment"
+  },
+  {
    "fieldname": "error_message",
    "fieldtype": "Small Text",
    "label": "Error Message"
@@ -213,7 +234,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-08-16 09:00:00.000000",
+ "modified": "2026-08-17 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "AI Conversation",
  "name": "AI Message",

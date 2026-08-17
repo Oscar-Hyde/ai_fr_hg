@@ -379,9 +379,7 @@ class TestToolCallWireFormats(UnitTestCase):
 
 		from ai_fr_hg.ai.providers.openai_compatible import OpenAICompatibleProvider
 
-		payload = OpenAICompatibleProvider._to_openai_message(
-			self._assistant_message({"doctype": "User"})
-		)
+		payload = OpenAICompatibleProvider._to_openai_message(self._assistant_message({"doctype": "User"}))
 		arguments = payload["tool_calls"][0]["function"]["arguments"]
 		self.assertIsInstance(arguments, str)
 		self.assertEqual(json.loads(arguments), {"doctype": "User"})
@@ -389,9 +387,7 @@ class TestToolCallWireFormats(UnitTestCase):
 	def test_openai_keeps_existing_string_arguments(self):
 		from ai_fr_hg.ai.providers.openai_compatible import OpenAICompatibleProvider
 
-		payload = OpenAICompatibleProvider._to_openai_message(
-			self._assistant_message('{"doctype": "User"}')
-		)
+		payload = OpenAICompatibleProvider._to_openai_message(self._assistant_message('{"doctype": "User"}'))
 		self.assertEqual(payload["tool_calls"][0]["function"]["arguments"], '{"doctype": "User"}')
 
 

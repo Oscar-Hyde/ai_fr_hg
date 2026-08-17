@@ -110,7 +110,7 @@ class AIPlatformSettings(Document):
 			try:
 				_re.compile(line.strip())
 			except _re.error as exc:
-				frappe.throw(_("Invalid redaction pattern {0}: {1}").format(line, exc))
+				frappe.throw(_("Invalid redaction pattern {0}: {1}").format(line, str(exc)))
 
 	def on_update(self):
 		from ai_fr_hg.ai.logging import clear_pattern_cache

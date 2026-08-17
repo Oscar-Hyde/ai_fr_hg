@@ -47,4 +47,4 @@ def execute():
 		order_by="creation asc",
 	)
 	if chat_models and not settings.default_chat_model:
-		frappe.db.set_value("AI Platform Settings", None, "default_chat_model", chat_models[0])
+		frappe.db.set_single_value("AI Platform Settings", "default_chat_model", chat_models[0])

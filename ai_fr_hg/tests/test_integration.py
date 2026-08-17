@@ -8,6 +8,7 @@ a plain CI site with no Ollama installed.
 """
 
 from contextlib import contextmanager
+from itertools import chain, repeat
 from unittest.mock import patch
 
 import frappe
@@ -466,8 +467,9 @@ class TestIngestionWait(AIPlatformTestCase):
 		document.db_set("status", "Queued", update_modified=False)
 
 		# First monotonic call sets the deadline; the second is past it.
-		with patch("ai_fr_hg.ai.ingestion.time.sleep"), patch(
-			"ai_fr_hg.ai.ingestion.time.monotonic", side_effect=[0, 10, 10, 10]
+		with (
+			patch("ai_fr_hg.ai.ingestion.time.sleep"),
+			patch("ai_fr_hg.ai.ingestion.time.monotonic", side_effect=chain([0], repeat(10))),
 		):
 			statuses = wait_for_indexed([document.name], timeout=1)
 
@@ -613,7 +615,7 @@ class TestBuiltinTools(AIPlatformTestCase):
 		"""
 		from ai_fr_hg.ai.tools.builtin import get_document_text
 
-		document = self.make_document("Unextracted Document", "")
+		document = self.make_document("Unextracted Document", "placeholder")
 		document.db_set("content", None, update_modified=False)
 		document.db_set("status", "Queued", update_modified=False)
 		document.db_set("source_file", "/files/unextracted.docx", update_modified=False)
@@ -751,13 +753,9 @@ class TestAgentRuntime(AIPlatformTestCase):
 
 		conversation = create_conversation(agent="Test Agent")
 
-		with patch(
-			"ai_fr_hg.ai.agent.run_chat", side_effect=ProviderTimeoutError("slow model")
-		):
+		with patch("ai_fr_hg.ai.agent.run_chat", side_effect=ProviderTimeoutError("slow model")):
 			with turn_budget(60):
-				response = run_agent_turn(
-					"Question?", agent="Test Agent", conversation=conversation.name
-				)
+				response = run_agent_turn("Question?", agent="Test Agent", conversation=conversation.name)
 
 		self.assertTrue(response["timed_out"])
 		self.assertEqual(response["answer"], PROVIDER_TIMEOUT_ANSWER)
@@ -1233,6 +1231,119 @@ class TestLearningLoop(AIPlatformTestCase):
 		candidate = frappe.get_doc("AI Knowledge Candidate", result["candidate"])
 		self.assertEqual(candidate.source_type, "Chat Correction")
 		self.assertEqual(candidate.source_reference_name, message.name)
+		self.assertEqual(candidate.candidate_type, "Feedback")
+		self.assertIn("failure example", candidate.content)
+		self.assertNotEqual(candidate.content, message.content)
+
+	def test_preference_defaults_to_teaching_user_scope(self):
+		from ai_fr_hg.ai.learning import approve_candidate, create_candidate
+
+		candidate = create_candidate(
+			content="I prefer concise monthly reports.",
+			candidate_type="Preference",
+			user="Administrator",
+		)
+		candidate.db_set("status", "Validated")
+		with patch("ai_fr_hg.ai.engine.run_embedding", return_value=[]):
+			result = approve_candidate(candidate.name)
+
+		memory = frappe.get_doc("AI Memory", result["promoted_name"])
+		self.assertEqual(memory.scope, "User")
+		self.assertEqual(memory.scope_value, "Administrator")
+
+	def test_disabled_approval_gate_auto_promotes_conflict_free_teaching(self):
+		from ai_fr_hg.ai.learning import teach
+
+		settings = frappe.get_single("AI Platform Settings")
+		settings.learning_enabled = 1
+		settings.require_memory_approval = 0
+		with (
+			patch("ai_fr_hg.ai.learning._settings", return_value=settings),
+			patch("ai_fr_hg.ai.engine.run_embedding", return_value=[]),
+		):
+			result = teach(
+				"Warehouse aisle turquoise has a safety inspection every 19 days.",
+				user="Administrator",
+			)
+
+		self.assertEqual(result["status"], "Approved")
+		self.assertTrue(frappe.db.exists("AI Memory", {"source_candidate": result["candidate"]}))
+
+	def test_approve_is_idempotent(self):
+		from ai_fr_hg.ai.learning import approve_candidate, create_candidate
+
+		candidate = create_candidate(
+			content="Idempotent approvals prevent duplicate learned records.",
+			user="Administrator",
+		)
+		candidate.db_set("status", "Validated")
+		with patch("ai_fr_hg.ai.engine.run_embedding", return_value=[]):
+			first = approve_candidate(candidate.name)
+			second = approve_candidate(candidate.name)
+
+		self.assertEqual(first["promoted_name"], second["promoted_name"])
+		self.assertEqual(
+			frappe.db.count("AI Memory", {"source_candidate": candidate.name}),
+			1,
+		)
+
+	def test_document_candidate_promotes_to_fact_memory(self):
+		from ai_fr_hg.ai.learning import approve_candidate, create_candidate
+
+		candidate = create_candidate(
+			content="The document establishes a quarterly calibration schedule.",
+			candidate_type="Document",
+			source_type="Document",
+			source_reference_doctype="AI Document",
+			source_reference_name=self.make_document("Learning Source", "Quarterly calibration.").name,
+			user="Administrator",
+		)
+		candidate.db_set("status", "Validated")
+		with patch("ai_fr_hg.ai.engine.run_embedding", return_value=[]):
+			result = approve_candidate(candidate.name)
+
+		memory = frappe.get_doc("AI Memory", result["promoted_name"])
+		self.assertEqual(memory.memory_type, "Fact")
+		self.assertEqual(memory.source_type, "Document")
+
+	def test_feedback_updates_recalled_memory_counters_once(self):
+		from ai_fr_hg.ai.learning import record_feedback
+
+		memory_name = self.make_memory("Always include an owner in action items.")
+		conversation = frappe.get_doc(
+			{
+				"doctype": "AI Conversation",
+				"title": "Feedback Counters",
+				"user": "Administrator",
+				"status": "Active",
+			}
+		).insert(ignore_permissions=True)
+		message = frappe.get_doc(
+			{
+				"doctype": "AI Message",
+				"conversation": conversation.name,
+				"role": "Assistant",
+				"content": "An answer shaped by memory.",
+				"sequence": 1,
+				"status": "Completed",
+				"user": "Administrator",
+				"learned_context": frappe.as_json({"memories": [memory_name], "skills": []}),
+			}
+		).insert(ignore_permissions=True)
+
+		record_feedback(message.name, "Positive")
+		record_feedback(message.name, "Positive")
+		self.assertEqual(frappe.db.get_value("AI Memory", memory_name, "helpful_count"), 1)
+
+		record_feedback(message.name, "Negative", correction="Always name an owner for each action item.")
+		counts = frappe.db.get_value(
+			"AI Memory",
+			memory_name,
+			["helpful_count", "not_helpful_count"],
+			as_dict=True,
+		)
+		self.assertEqual(counts.helpful_count, 0)
+		self.assertEqual(counts.not_helpful_count, 1)
 
 	def test_build_system_prompt_includes_memory_block(self):
 		from ai_fr_hg.ai.agent import build_system_prompt

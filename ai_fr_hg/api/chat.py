@@ -121,6 +121,7 @@ def get_conversation(conversation: str) -> dict:
 			"content",
 			"reasoning",
 			"citations",
+			"learned_context",
 			"sequence",
 			"creation",
 			"model",
@@ -142,6 +143,11 @@ def get_conversation(conversation: str) -> dict:
 				message.citations = json.loads(message.citations)
 			except ValueError:
 				message.citations = []
+		if message.learned_context:
+			try:
+				message.learned_context = json.loads(message.learned_context)
+			except ValueError:
+				message.learned_context = {}
 
 	return {
 		"conversation": doc.as_dict(),
@@ -195,30 +201,17 @@ def rename_conversation(conversation: str, title: str) -> dict:
 
 
 @frappe.whitelist()
-def submit_feedback(message: str, feedback: str) -> dict:
-	"""Record thumbs up/down on an assistant message.
+def submit_feedback(
+	message: str,
+	feedback: str,
+	correction: str | None = None,
+	reason: str | None = None,
+) -> dict:
+	"""Record an outcome and feed it through the governed Learning Loop."""
+	from ai_fr_hg.ai.learning import record_feedback
 
-	A ``Negative`` rating feeds the Learning Loop: the answer is captured as a
-	knowledge candidate for review, so a human can turn a recurring mistake
-	into a learned correction.
-	"""
-	if feedback not in ("Positive", "Negative", ""):
-		frappe.throw(_("Feedback must be Positive or Negative."))
-
-	doc = frappe.get_doc("AI Message", message)
-	doc.check_permission("write")
-	doc.db_set("feedback", feedback)
-
-	result = {"status": "recorded", "feedback": feedback}
-	if feedback:
-		try:
-			from ai_fr_hg.ai.learning import observe_feedback
-
-			result.update(observe_feedback(message, feedback))
-		except Exception:
-			# Feedback recording must never break the user's action.
-			frappe.log_error(title="AI feedback loop failed", message=frappe.get_traceback())
-	return result
+	result = record_feedback(message, feedback, correction=correction, reason=reason)
+	return {"status": "recorded", **result}
 
 
 @frappe.whitelist()
