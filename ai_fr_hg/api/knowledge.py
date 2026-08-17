@@ -120,6 +120,8 @@ def ask(
 ) -> dict:
 	"""One-shot grounded question answering, without creating a conversation."""
 	from ai_fr_hg.ai.agent import run_agent_turn
+	from ai_fr_hg.ai.deadline import turn_budget
+	from ai_fr_hg.api.chat import _get_turn_budget
 
 	if isinstance(knowledge_bases, str):
 		try:
@@ -127,14 +129,16 @@ def ask(
 		except ValueError:
 			knowledge_bases = [knowledge_bases]
 
-	return run_agent_turn(
-		question,
-		agent=agent,
-		knowledge_bases=knowledge_bases,
-		model=model,
-		include_history=False,
-		save_messages=False,
-	)
+	# Interactive, so it carries the same proxy deadline as chat.
+	with turn_budget(_get_turn_budget()):
+		return run_agent_turn(
+			question,
+			agent=agent,
+			knowledge_bases=knowledge_bases,
+			model=model,
+			include_history=False,
+			save_messages=False,
+		)
 
 
 @frappe.whitelist()

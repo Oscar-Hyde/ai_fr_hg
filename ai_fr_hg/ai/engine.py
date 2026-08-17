@@ -16,10 +16,15 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, now_datetime
 
-from ai_fr_hg.ai.exceptions import ModelNotAvailableError, ProviderError
+from ai_fr_hg.ai.deadline import get_deadline
+from ai_fr_hg.ai.exceptions import DeadlineExceededError, ModelNotAvailableError, ProviderError
 from ai_fr_hg.ai.providers import get_failover_providers, get_provider
 from ai_fr_hg.ai.providers.base import ChatMessage, CompletionResult
 from ai_fr_hg.utils.db import safe_set_value
+
+#: Smallest window worth starting another provider attempt in. Below this the
+#: call would be clamped to a timeout too short for any real model to answer.
+MIN_ATTEMPT_SECONDS = 5.0
 
 
 def get_settings():
@@ -184,8 +189,15 @@ def run_chat(
 
 	last_error: Exception | None = None
 	max_retries = cint(settings.max_retries)
+	deadline = get_deadline()
 
 	for attempt_index, provider_name in enumerate(attempts):
+		# Failing over costs at least another full round trip. If the budget
+		# cannot fund one, stop here and report the failure we already have
+		# rather than burning the remaining time on a call we must abandon.
+		if deadline and attempt_index and not deadline.allows(MIN_ATTEMPT_SECONDS):
+			break
+
 		for retry in range(max_retries + 1):
 			try:
 				provider = get_provider(provider_name)
@@ -202,10 +214,17 @@ def run_chat(
 				return result
 			except Exception as exc:
 				last_error = exc
-				if retry < max_retries and _is_retryable(exc):
-					time.sleep(min(2**retry, 8))
-					continue
-				break
+				if not (retry < max_retries and _is_retryable(exc)):
+					break
+				# Never sleep away time the request no longer has, and never
+				# retry into a budget too small to hold the attempt.
+				backoff = min(2**retry, 8)
+				if deadline and not deadline.allows(backoff + MIN_ATTEMPT_SECONDS):
+					break
+				time.sleep(backoff)
+
+		if isinstance(last_error, DeadlineExceededError):
+			break  # out of time; further providers would fail identically
 		if attempt_index < len(attempts) - 1:
 			frappe.log_error(
 				title="AI failover",

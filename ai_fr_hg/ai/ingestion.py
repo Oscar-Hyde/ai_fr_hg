@@ -83,18 +83,28 @@ def process_document(document: str, index: bool | None = None) -> dict:
 			_fail(doc, f"Text extracted, but indexing failed: {exc}")
 			frappe.log_error(title=f"AI indexing failed: {document}", message=frappe.get_traceback())
 			return {"document": document, "status": "Failed", "error": str(exc)}
+		status = "Indexed"
+	elif index is False:
+		# An interactive caller extracted the text inline to answer a question
+		# and deliberately skipped embedding. The document is readable but not
+		# yet searchable, so hand the indexing to a worker rather than
+		# reporting a completeness the record does not have.
+		enqueue_processing(document)
+		status = "Queued"
 	else:
+		# Embedding is disabled platform-wide; extraction is all there is to do.
 		doc.db_set("status", "Indexed", update_modified=False)
+		status = "Indexed"
 
 	frappe.publish_realtime(
 		"ai_document_processed",
-		{"document": document, "status": "Indexed"},
+		{"document": document, "status": status},
 		user=doc.owner,
 	)
 
 	return {
 		"document": document,
-		"status": "Indexed",
+		"status": status,
 		"characters": len(text),
 		"warnings": result.warnings,
 	}

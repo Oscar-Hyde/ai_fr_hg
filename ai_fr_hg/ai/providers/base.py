@@ -17,7 +17,12 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt
 
-from ai_fr_hg.ai.exceptions import ProviderError, ProviderOfflineError, ProviderTimeoutError
+from ai_fr_hg.ai.exceptions import (
+	DeadlineExceededError,
+	ProviderError,
+	ProviderOfflineError,
+	ProviderTimeoutError,
+)
 from ai_fr_hg.utils.network import enforce_local_only
 
 
@@ -151,11 +156,28 @@ class BaseProvider:
 		timeout: int | None = None,
 		stream: bool = False,
 	):
-		"""Perform an HTTP call against the runtime, guarded by local-only mode."""
+		"""Perform an HTTP call against the runtime, guarded by local-only mode.
+
+		The socket timeout is clamped to whatever remains of the request's
+		time budget, so a slow runtime can never hold the connection past the
+		deadline the caller promised to honour.
+		"""
 		import requests
+
+		from ai_fr_hg.ai.deadline import clamp_timeout
 
 		url = self.url(path)
 		enforce_local_only(url, _("Provider {0}").format(self.name))
+
+		effective_timeout = timeout or self.timeout
+		if (clamped := clamp_timeout(effective_timeout)) is not None:
+			if not clamped:
+				raise DeadlineExceededError(
+					_("Provider {0} was not called: the request time budget is exhausted.").format(
+						self.name
+					)
+				)
+			effective_timeout = clamped
 
 		try:
 			response = requests.request(
@@ -163,7 +185,7 @@ class BaseProvider:
 				url,
 				json=payload,
 				headers=self.get_headers(),
-				timeout=timeout or self.timeout,
+				timeout=effective_timeout,
 				verify=self.verify_ssl,
 				stream=stream,
 			)
@@ -173,7 +195,9 @@ class BaseProvider:
 			) from exc
 		except requests.exceptions.ReadTimeout as exc:
 			raise ProviderTimeoutError(
-				_("Provider {0} did not respond within {1}s.").format(self.name, timeout or self.timeout)
+				_("Provider {0} did not respond within {1}s.").format(
+					self.name, round(effective_timeout)
+				)
 			) from exc
 		except requests.exceptions.ConnectionError as exc:
 			raise ProviderOfflineError(
