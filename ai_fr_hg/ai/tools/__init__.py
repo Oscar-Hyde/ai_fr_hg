@@ -106,10 +106,18 @@ def get_builtin_handlers() -> dict:
 
 
 def execute_tool(
-	tool: str, arguments: dict, conversation: str | None = None, agent: str | None = None
+	tool: str, arguments: dict | str | None = None, conversation: str | None = None, agent: str | None = None
 ) -> dict:
 	"""Run a tool and return `{status, result, error}`. Never raises."""
 	started = time.monotonic()
+
+	if isinstance(arguments, str):
+		try:
+			arguments = json.loads(arguments)
+		except Exception:
+			arguments = {"_raw": arguments}
+	if not isinstance(arguments, dict):
+		arguments = {} if arguments is None else {"_raw": arguments}
 
 	if not frappe.db.exists("AI Tool", tool):
 		return {"status": "Failed", "error": f"Unknown tool: {tool}", "result": None}

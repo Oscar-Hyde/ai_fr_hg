@@ -12,17 +12,121 @@ from frappe import _
 from frappe.utils import cint, now_datetime
 
 
-def search_knowledge_base(query: str, knowledge_base: str | None = None, limit: int = 5) -> dict:
+def _resolve_ai_document(identifier: str | None) -> str | None:
+	"""Find an AI Document name by ID, title, filename, or partial match."""
+	if not identifier or not isinstance(identifier, str):
+		return None
+
+	identifier = identifier.strip()
+	if not identifier:
+		return None
+
+	# 1. Exact primary key match
+	if frappe.db.exists("AI Document", identifier):
+		return identifier
+
+	# 2. Extract clean filename / basename if a path was passed (e.g. /files/foo.docx or C:\foo.docx)
+	basename = identifier.replace("\\", "/").rsplit("/", 1)[-1].strip()
+
+	# 3. Exact title or source_file match
+	for field in ("title", "source_file"):
+		match = frappe.db.get_value("AI Document", {field: identifier}, "name")
+		if match:
+			return match
+		if basename and basename != identifier:
+			match = frappe.db.get_value("AI Document", {field: basename}, "name")
+			if match:
+				return match
+
+	# 4. Partial match on title or source_file
+	search_terms = [basename] if basename else [identifier]
+	if basename and "." in basename:
+		stem = basename.rsplit(".", 1)[0].strip()
+		if stem and stem not in search_terms:
+			search_terms.append(stem)
+
+	for term in search_terms:
+		match = frappe.db.get_value(
+			"AI Document",
+			{"title": ["like", f"%{term}%"]},
+			"name",
+			order_by="modified desc",
+		)
+		if match:
+			return match
+		match = frappe.db.get_value(
+			"AI Document",
+			{"source_file": ["like", f"%{term}%"]},
+			"name",
+			order_by="modified desc",
+		)
+		if match:
+			return match
+
+	# 5. Check if there's a recent document by this user if generic query
+	if len(search_terms) == 1 and search_terms[0].lower() in (
+		"latest",
+		"recent",
+		"uploaded",
+		"last",
+		"document",
+		"this document",
+	):
+		recent = frappe.get_list(
+			"AI Document",
+			filters={"owner": frappe.session.user},
+			fields=["name"],
+			order_by="modified desc",
+			limit_page_length=1,
+		)
+		if recent:
+			return recent[0].name
+
+	return None
+
+
+def search_knowledge_base(
+	query: str | None = None,
+	knowledge_base: str | None = None,
+	limit: int = 5,
+	**kwargs,
+) -> dict:
 	"""Semantic search across the knowledge bases the user may read."""
 	from ai_fr_hg.ai.knowledge import retrieve
 
+	resolved_query = (
+		query
+		or kwargs.get("q")
+		or kwargs.get("search_query")
+		or kwargs.get("text")
+		or kwargs.get("prompt")
+		or kwargs.get("question")
+		or ""
+	)
+	resolved_kb = (
+		knowledge_base
+		or kwargs.get("kb")
+		or kwargs.get("kb_name")
+		or kwargs.get("knowledge_base_name")
+	)
+	resolved_limit = (
+		limit
+		or kwargs.get("top_k")
+		or kwargs.get("max_results")
+		or kwargs.get("count")
+		or 5
+	)
+
+	if not resolved_query:
+		return {"query": "", "count": 0, "results": []}
+
 	results = retrieve(
-		query,
-		knowledge_bases=[knowledge_base] if knowledge_base else None,
-		top_k=min(cint(limit) or 5, 20),
+		resolved_query,
+		knowledge_bases=[resolved_kb] if resolved_kb else None,
+		top_k=min(cint(resolved_limit) or 5, 20),
 	)
 	return {
-		"query": query,
+		"query": resolved_query,
 		"count": len(results),
 		"results": [
 			{
@@ -37,97 +141,222 @@ def search_knowledge_base(query: str, knowledge_base: str | None = None, limit: 
 	}
 
 
-def get_document(doctype: str, name: str, fields: list | str | None = None) -> dict:
+def get_document(
+	doctype: str | None = None,
+	name: str | None = None,
+	fields: list | str | None = None,
+	**kwargs,
+) -> dict:
 	"""Fetch a single Frappe document the user is allowed to read."""
-	frappe.has_permission(doctype, "read", doc=name, throw=True)
-	doc = frappe.get_doc(doctype, name)
+	resolved_doctype = (
+		doctype
+		or kwargs.get("doc_type")
+		or kwargs.get("document_type")
+	)
+	resolved_name = (
+		name
+		or kwargs.get("id")
+		or kwargs.get("docname")
+		or kwargs.get("doc_name")
+		or kwargs.get("document")
+	)
+	resolved_fields = fields or kwargs.get("columns") or kwargs.get("fieldnames")
 
-	if fields:
-		if isinstance(fields, str):
-			fields = [f.strip() for f in fields.split(",") if f.strip()]
-		return {field: doc.get(field) for field in fields if doc.meta.has_field(field) or field == "name"}
+	if not resolved_doctype or not resolved_name:
+		return {"error": "Both 'doctype' and 'name' are required to fetch a document."}
+
+	frappe.has_permission(resolved_doctype, "read", doc=resolved_name, throw=True)
+	doc = frappe.get_doc(resolved_doctype, resolved_name)
+
+	if resolved_fields:
+		if isinstance(resolved_fields, str):
+			resolved_fields = [f.strip() for f in resolved_fields.split(",") if f.strip()]
+		return {
+			field: doc.get(field)
+			for field in resolved_fields
+			if doc.meta.has_field(field) or field == "name"
+		}
 
 	return doc.as_dict(no_nulls=True, no_default_fields=False)
 
 
 def list_documents(
-	doctype: str,
+	doctype: str | None = None,
 	filters: dict | str | None = None,
 	fields: list | str | None = None,
 	limit: int = 20,
 	order_by: str | None = None,
+	**kwargs,
 ) -> list:
 	"""List records of a DocType, respecting the user's permissions."""
 	import json
 
-	frappe.has_permission(doctype, "read", throw=True)
+	resolved_doctype = (
+		doctype
+		or kwargs.get("doc_type")
+		or kwargs.get("document_type")
+	)
+	if not resolved_doctype:
+		return []
 
-	if isinstance(filters, str):
+	frappe.has_permission(resolved_doctype, "read", throw=True)
+
+	resolved_filters = filters or kwargs.get("filter") or kwargs.get("where") or {}
+	if isinstance(resolved_filters, str):
 		try:
-			filters = json.loads(filters)
+			resolved_filters = json.loads(resolved_filters)
 		except ValueError:
-			filters = {}
-	if isinstance(fields, str):
-		fields = [f.strip() for f in fields.split(",") if f.strip()]
+			resolved_filters = {}
+
+	resolved_fields = fields or kwargs.get("columns") or kwargs.get("fieldnames")
+	if isinstance(resolved_fields, str):
+		resolved_fields = [f.strip() for f in resolved_fields.split(",") if f.strip()]
+
+	resolved_limit = limit or kwargs.get("limit_page_length") or kwargs.get("count") or 20
+	resolved_order = order_by or kwargs.get("sort_by") or kwargs.get("order")
 
 	return frappe.get_list(
-		doctype,
-		filters=filters or {},
-		fields=fields or ["name"],
-		limit_page_length=min(cint(limit) or 20, 100),
-		order_by=order_by or "modified desc",
+		resolved_doctype,
+		filters=resolved_filters or {},
+		fields=resolved_fields or ["name"],
+		limit_page_length=min(cint(resolved_limit) or 20, 100),
+		order_by=resolved_order or "modified desc",
 	)
 
 
-def count_documents(doctype: str, filters: dict | str | None = None) -> dict:
+def count_documents(
+	doctype: str | None = None,
+	filters: dict | str | None = None,
+	**kwargs,
+) -> dict:
 	"""Count records of a DocType matching optional filters."""
 	import json
 
-	frappe.has_permission(doctype, "read", throw=True)
-	if isinstance(filters, str):
+	resolved_doctype = (
+		doctype
+		or kwargs.get("doc_type")
+		or kwargs.get("document_type")
+	)
+	if not resolved_doctype:
+		return {"doctype": "", "count": 0}
+
+	frappe.has_permission(resolved_doctype, "read", throw=True)
+
+	resolved_filters = filters or kwargs.get("filter") or kwargs.get("where") or {}
+	if isinstance(resolved_filters, str):
 		try:
-			filters = json.loads(filters)
+			resolved_filters = json.loads(resolved_filters)
 		except ValueError:
-			filters = {}
+			resolved_filters = {}
 
-	return {"doctype": doctype, "count": frappe.db.count(doctype, filters or {})}
+	return {"doctype": resolved_doctype, "count": frappe.db.count(resolved_doctype, resolved_filters or {})}
 
 
-def run_report(report: str, filters: dict | str | None = None) -> dict:
+def run_report(
+	report: str | None = None,
+	filters: dict | str | None = None,
+	**kwargs,
+) -> dict:
 	"""Execute a query report and return its columns and rows."""
 	import json
 
 	from frappe.desk.query_report import run
 
-	frappe.has_permission("Report", "read", doc=report, throw=True)
-	if isinstance(filters, str):
-		try:
-			filters = json.loads(filters)
-		except ValueError:
-			filters = {}
+	resolved_report = report or kwargs.get("report_name") or kwargs.get("name")
+	if not resolved_report:
+		return {"error": "Report name is required."}
 
-	result = run(report, filters=filters or {}, ignore_prepared_report=True)
+	frappe.has_permission("Report", "read", doc=resolved_report, throw=True)
+
+	resolved_filters = filters or kwargs.get("filter") or kwargs.get("params") or {}
+	if isinstance(resolved_filters, str):
+		try:
+			resolved_filters = json.loads(resolved_filters)
+		except ValueError:
+			resolved_filters = {}
+
+	result = run(resolved_report, filters=resolved_filters or {}, ignore_prepared_report=True)
 	return {
 		"columns": [c.get("label") if isinstance(c, dict) else c for c in (result.get("columns") or [])],
 		"rows": (result.get("result") or [])[:100],
 	}
 
 
-def get_document_text(document: str, max_characters: int = 8000) -> dict:
+def get_document_text(
+	document: str | None = None,
+	max_characters: int = 8000,
+	**kwargs,
+) -> dict:
 	"""Return the extracted text of an `AI Document`."""
-	frappe.has_permission("AI Document", "read", doc=document, throw=True)
-	doc = frappe.get_doc("AI Document", document)
+	doc_identifier = (
+		document
+		or kwargs.get("file_path")
+		or kwargs.get("file_name")
+		or kwargs.get("filename")
+		or kwargs.get("file")
+		or kwargs.get("title")
+		or kwargs.get("name")
+		or kwargs.get("doc_name")
+		or kwargs.get("document_name")
+		or kwargs.get("document_title")
+		or kwargs.get("doc")
+		or kwargs.get("query")
+		or kwargs.get("id")
+		or kwargs.get("path")
+	)
+
+	max_chars = (
+		max_characters
+		or kwargs.get("max_chars")
+		or kwargs.get("limit")
+		or kwargs.get("length")
+		or 8000
+	)
+
+	if not doc_identifier:
+		doc_name = _resolve_ai_document("recent")
+		if not doc_name:
+			return {
+				"error": "No document identifier provided. Please specify the document name, title, or filename.",
+				"found": False,
+			}
+	else:
+		doc_name = _resolve_ai_document(str(doc_identifier))
+
+	if not doc_name:
+		return {
+			"error": f"Document '{doc_identifier}' was not found in the knowledge base.",
+			"found": False,
+		}
+
+	frappe.has_permission("AI Document", "read", doc=doc_name, throw=True)
+	doc = frappe.get_doc("AI Document", doc_name)
+
+	# If document text hasn't been extracted yet, trigger processing on demand
+	if (not doc.content or doc.status in ("Queued", "Extracting")) and doc.source_file:
+		try:
+			from ai_fr_hg.ai.ingestion import process_document
+
+			process_document(doc.name)
+			doc.reload()
+		except Exception as exc:
+			frappe.log_error(title="On-demand AI document extraction failed", message=str(exc))
+
+	content = doc.content or ""
+	truncated = len(content) > (cint(max_chars) or 8000)
+
 	return {
 		"document": doc.name,
 		"title": doc.title,
 		"status": doc.status,
 		"summary": doc.summary,
-		"content": (doc.content or "")[: cint(max_characters) or 8000],
-		"truncated": len(doc.content or "") > (cint(max_characters) or 8000),
+		"content": content[: cint(max_chars) or 8000],
+		"truncated": truncated,
+		"total_characters": len(content),
 	}
 
 
-def current_datetime() -> dict:
+def current_datetime(**kwargs) -> dict:
 	"""Return the site's current date and time."""
 	from frappe.utils import get_system_timezone
 

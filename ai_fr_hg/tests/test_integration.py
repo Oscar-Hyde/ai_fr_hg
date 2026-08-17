@@ -541,8 +541,18 @@ class TestBuiltinTools(AIPlatformTestCase):
 		from ai_fr_hg.ai.tools.builtin import get_document_text
 
 		document = self.make_document("Tool Read Document", "Readable content for the tool.")
+		# By primary key name
 		result = get_document_text(document.name)
 		self.assertIn("Readable content", result["content"])
+		self.assertEqual(result["document"], document.name)
+
+		# By title
+		result_by_title = get_document_text(document.title)
+		self.assertIn("Readable content", result_by_title["content"])
+
+		# By file_path alias
+		result_by_path = get_document_text(file_path="Tool Read Document.docx")
+		self.assertIn("Readable content", result_by_path["content"])
 
 	def test_list_documents_respects_limit(self):
 		from ai_fr_hg.ai.tools.builtin import list_documents
