@@ -196,14 +196,29 @@ def rename_conversation(conversation: str, title: str) -> dict:
 
 @frappe.whitelist()
 def submit_feedback(message: str, feedback: str) -> dict:
-	"""Record thumbs up/down on an assistant message."""
+	"""Record thumbs up/down on an assistant message.
+
+	A ``Negative`` rating feeds the Learning Loop: the answer is captured as a
+	knowledge candidate for review, so a human can turn a recurring mistake
+	into a learned correction.
+	"""
 	if feedback not in ("Positive", "Negative", ""):
 		frappe.throw(_("Feedback must be Positive or Negative."))
 
 	doc = frappe.get_doc("AI Message", message)
 	doc.check_permission("write")
 	doc.db_set("feedback", feedback)
-	return {"status": "recorded", "feedback": feedback}
+
+	result = {"status": "recorded", "feedback": feedback}
+	if feedback:
+		try:
+			from ai_fr_hg.ai.learning import observe_feedback
+
+			result.update(observe_feedback(message, feedback))
+		except Exception:
+			# Feedback recording must never break the user's action.
+			frappe.log_error(title="AI feedback loop failed", message=frappe.get_traceback())
+	return result
 
 
 @frappe.whitelist()

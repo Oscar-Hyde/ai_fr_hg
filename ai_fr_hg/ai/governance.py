@@ -40,6 +40,7 @@ def get_effective_policy(user: str | None = None) -> frappe._dict:
 			"allow_document_upload",
 			"allow_pipeline_execution",
 			"allow_model_management",
+			"allow_learning",
 		],
 		order_by="priority asc, creation asc",
 	)
@@ -64,11 +65,12 @@ def get_effective_policy(user: str | None = None) -> frappe._dict:
 				"max_tokens_per_day": cint(settings.max_tokens_per_user_per_day),
 				"max_documents_per_day": 0,
 				"max_concurrent_requests": 0,
-				"allow_tools": 1,
-				"allow_document_upload": 1,
-				"allow_pipeline_execution": 1,
-				"allow_model_management": 0,
-				"allowed_models": [],
+			"allow_tools": 1,
+			"allow_document_upload": 1,
+			"allow_pipeline_execution": 1,
+			"allow_model_management": 0,
+			"allow_learning": 1,
+			"allowed_models": [],
 			}
 		)
 
@@ -136,9 +138,13 @@ def check_capability(capability: str, user: str | None = None) -> None:
 		"document_upload": "allow_document_upload",
 		"pipeline": "allow_pipeline_execution",
 		"model_management": "allow_model_management",
+		"learning": "allow_learning",
 	}.get(capability)
 
-	if field and not cint(policy.get(field)):
+	# Only enforce when the policy record actually carries the flag. This keeps
+	# a freshly-added capability (e.g. allow_learning) from being denied for
+	# role policies that predate its column.
+	if field and policy.get(field) is not None and not cint(policy.get(field)):
 		frappe.throw(
 			_("Your resource policy does not permit this action ({0}).").format(capability),
 			exc=QuotaExceededError,

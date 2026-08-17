@@ -1099,6 +1099,163 @@ class TestModelTypeInference(AIPlatformTestCase):
 			self.assertEqual(_guess_model_type(name), "Chat", name)
 
 
+class TestLearningLoop(AIPlatformTestCase):
+	"""The teach → validate → conflict → approve → recall → observe lifecycle."""
+
+	def make_memory(self, content, candidate_type="Fact"):
+		from ai_fr_hg.ai.learning import _promote_to_memory, create_candidate
+
+		candidate = create_candidate(content=content, candidate_type=candidate_type, user="Administrator")
+		candidate.db_set("status", "Validated")
+		return _promote_to_memory(candidate)["name"]
+
+	def test_teach_creates_a_validated_candidate(self):
+		from ai_fr_hg.ai.learning import create_candidate, validate_candidate
+
+		candidate = create_candidate(
+			content="The refund period is thirty days.", candidate_type="Fact", user="Administrator"
+		)
+		self.assertEqual(candidate.status, "Draft")
+		self.assertEqual(candidate.user, "Administrator")
+
+		report = validate_candidate(candidate)
+		self.assertTrue(report["valid"])
+
+	def test_empty_teaching_is_rejected(self):
+		from ai_fr_hg.ai.learning import LearningError, create_candidate
+
+		with self.assertRaises(LearningError):
+			create_candidate(content="   ", user="Administrator")
+
+	def test_approve_fact_creates_memory_with_embedding(self):
+		from ai_fr_hg.ai.learning import approve_candidate, create_candidate
+
+		candidate = create_candidate(
+			content="Customers are greeted by name on arrival.",
+			candidate_type="Preference",
+			user="Administrator",
+		)
+		candidate.db_set("status", "Validated")
+
+		with patch("ai_fr_hg.ai.engine.run_embedding", return_value=[[0.1, 0.2, 0.3]]):
+			result = approve_candidate(candidate.name)
+
+		self.assertEqual(result["promoted_to"], "AI Memory")
+		memory = frappe.get_doc("AI Memory", result["promoted_name"])
+		self.assertEqual(memory.content, candidate.content)
+		self.assertTrue(memory.embedding)
+		self.assertEqual(memory.embedding_dimensions, 3)
+		self.assertEqual(frappe.db.get_value("AI Knowledge Candidate", candidate.name, "status"), "Approved")
+
+	def test_approve_instruction_creates_a_skill(self):
+		from ai_fr_hg.ai.learning import approve_candidate, create_candidate
+
+		candidate = create_candidate(
+			content="Always use markdown tables when comparing two options.",
+			candidate_type="Instruction",
+			user="Administrator",
+		)
+		candidate.db_set("status", "Validated")
+		result = approve_candidate(candidate.name)
+
+		self.assertEqual(result["promoted_to"], "AI Skill")
+		self.assertTrue(frappe.db.exists("AI Skill", result["promoted_name"]))
+
+	def test_duplicate_teaching_flags_a_conflict(self):
+		from ai_fr_hg.ai.learning import teach
+
+		self.make_memory("The office closes at five on weekdays.")
+		result = teach("The office closes at five on weekdays.", user="Administrator")
+
+		self.assertEqual(result["status"], "Conflict")
+		self.assertTrue(result["conflicts"]["duplicates"])
+
+	def test_reject_never_learns(self):
+		from ai_fr_hg.ai.learning import create_candidate, reject_candidate
+
+		candidate = create_candidate(content="Colours are dark mode only.", user="Administrator")
+		candidate.db_set("status", "Validated")
+		reject_candidate(candidate.name)
+		self.assertEqual(frappe.db.get_value("AI Knowledge Candidate", candidate.name, "status"), "Rejected")
+		self.assertFalse(frappe.db.exists("AI Memory", {"source_candidate": candidate.name}))
+
+	def test_recall_returns_only_relevant_memories(self):
+		from ai_fr_hg.ai.learning import build_memory_context
+
+		self.make_memory("Always cite the source document in answers.")
+		self.make_memory("Colours follow the company dark mode palette.")
+
+		memory_block, _skills = build_memory_context("how do i cite sources in my answers", agent=None)
+		self.assertIn("LEARNED KNOWLEDGE", memory_block)
+		self.assertIn("cite the source document", memory_block)
+
+		# An unrelated question must not pull in the citation memory.
+		memory_block2, _ = build_memory_context("what time does the cafeteria close", agent=None)
+		self.assertNotIn("cite the source document", memory_block2)
+
+	def test_memory_scoping_hides_other_users_memories(self):
+		from ai_fr_hg.ai.learning import recall
+
+		memory_name = self.make_memory("This is a private fact for another user.")
+		frappe.db.set_value("AI Memory", memory_name, {"scope": "User", "scope_value": "alice"})
+
+		memories, _skills = recall("private fact", agent=None, user="Administrator")
+		self.assertFalse(memories)
+
+		memories_alice, _ = recall("private fact", agent=None, user="alice")
+		self.assertTrue(memories_alice)
+
+	def test_observe_negative_feedback_creates_candidate(self):
+		from ai_fr_hg.ai.learning import observe_feedback
+
+		conversation = frappe.get_doc(
+			{
+				"doctype": "AI Conversation",
+				"title": "Learning Feedback",
+				"user": "Administrator",
+				"status": "Active",
+			}
+		).insert(ignore_permissions=True)
+		message = frappe.get_doc(
+			{
+				"doctype": "AI Message",
+				"conversation": conversation.name,
+				"role": "Assistant",
+				"content": "This answer was wrong and should be corrected.",
+				"sequence": 1,
+				"status": "Completed",
+				"user": "Administrator",
+			}
+		).insert(ignore_permissions=True)
+
+		result = observe_feedback(message.name, "Negative")
+		self.assertTrue(result["candidate"])
+		candidate = frappe.get_doc("AI Knowledge Candidate", result["candidate"])
+		self.assertEqual(candidate.source_type, "Chat Correction")
+		self.assertEqual(candidate.source_reference_name, message.name)
+
+	def test_build_system_prompt_includes_memory_block(self):
+		from ai_fr_hg.ai.agent import build_system_prompt
+		from ai_fr_hg.ai.learning_utils import build_memory_block
+
+		agent = frappe.get_doc(
+			{
+				"doctype": "AI Agent",
+				"agent_name": "Learning Prompt Agent",
+				"enabled": 1,
+				"model": self.chat_model.name,
+				"use_knowledge": 0,
+				"system_prompt": "You are a learning test assistant.",
+			}
+		).insert(ignore_permissions=True)
+
+		memory = build_memory_block(
+			[{"name": "m", "content": "Always greet customers by name.", "memory_type": "Instruction"}]
+		)
+		prompt = build_system_prompt(agent, memory=memory)
+		self.assertIn("Always greet customers by name.", prompt)
+
+
 # --------------------------------------------------------------------------
 # Helpers referenced by the pipeline tests above.
 # --------------------------------------------------------------------------

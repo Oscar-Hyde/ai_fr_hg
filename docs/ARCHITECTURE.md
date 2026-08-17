@@ -50,6 +50,8 @@ ai_fr_hg/
 │   ├── monitoring.py        Health checks and model discovery
 │   ├── governance.py        Quotas, capabilities, policies
 │   ├── logging.py           Execution logs, redaction, audit trail
+│   ├── learning_utils.py    Pure scoring / dedup / classification (no Frappe)
+│   ├── learning.py          Learning Loop orchestration
 │   └── exceptions.py        AIError hierarchy
 │
 ├── api/                     Whitelisted endpoints (thin; logic lives in ai/)
@@ -62,6 +64,7 @@ ai_fr_hg/
 ├── ai_conversation/         Module: agents, tools, conversations, messages
 ├── ai_automation/           Module: pipelines, rules, tasks
 ├── ai_operations/           Module: health, audit, policies, usage
+├── ai_learning/             Module: knowledge candidates, memories, skills
 │
 ├── utils/                   network guard, permissions, jinja, file hooks
 ├── public/                  Desk assets (SCSS bundles, form scripts)
@@ -215,6 +218,18 @@ handler returns immediately for any DocType whose name starts with `AI `, and
 during install, migrate and patch. Rules are also blocked at validation time
 from targeting the platform's own DocTypes. The rule index itself is cached, so
 the common case — no rule for this DocType — is a single cache read.
+
+### The Learning Loop: knowledge is approved, then additive
+
+Learned knowledge flows through an explicit, auditable pipeline rather than
+mutating the model or the agent silently. Teaching creates a candidate; the
+candidate is validated for provenance, tested for duplicates/overlaps against
+the existing store, and — by default — held for AI Manager approval. Only then
+is it promoted to an `AI Memory` or `AI Skill`, which is injected additively
+into future turns (never overriding the persona) and recalled by relevance and
+scope. Recall and feedback are best-effort: a failure in the memory layer must
+not break an otherwise healthy chat turn. See
+[`docs/LEARNING.md`](LEARNING.md).
 
 ### Graceful degradation
 

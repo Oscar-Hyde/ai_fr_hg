@@ -64,7 +64,13 @@
   "governance_cb",
   "log_prompts",
   "log_responses",
-  "redact_patterns"
+  "redact_patterns",
+  "learning_tab",
+  "learning_enabled",
+  "require_memory_approval",
+  "learning_cb",
+  "memory_top_k",
+  "max_memory_characters"
  ],
  "fields": [
   {
@@ -399,6 +405,42 @@
    "fieldname": "redact_patterns",
    "fieldtype": "Small Text",
    "label": "Redaction Patterns"
+  },
+  {
+   "fieldname": "learning_tab",
+   "fieldtype": "Tab Break",
+   "label": "Learning"
+  },
+  {
+   "default": "1",
+   "fieldname": "learning_enabled",
+   "fieldtype": "Check",
+   "label": "Enable Learning Loop"
+  },
+  {
+   "default": "1",
+   "fieldname": "require_memory_approval",
+   "fieldtype": "Check",
+   "label": "Require Approval for Learned Knowledge",
+   "description": "When enabled, taught facts, preferences and instructions wait for an AI Manager to approve them before they affect future answers."
+  },
+  {
+   "fieldname": "learning_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "5",
+   "fieldname": "memory_top_k",
+   "fieldtype": "Int",
+   "label": "Memories Recalled Per Turn",
+   "min_value": 1
+  },
+  {
+   "default": "8000",
+   "fieldname": "max_memory_characters",
+   "fieldtype": "Int",
+   "label": "Max Memory Context Characters",
+   "min_value": 100
   }
  ],
  "index_web_pages_for_search": 1,

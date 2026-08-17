@@ -24,6 +24,7 @@
   "capability_cb",
   "allow_pipeline_execution",
   "allow_model_management",
+  "allow_learning",
   "policy_models_sec",
   "allowed_models",
   "notes"
@@ -140,6 +141,12 @@
    "fieldname": "notes",
    "fieldtype": "Small Text",
    "label": "Notes"
+  },
+  {
+   "default": "1",
+   "fieldname": "allow_learning",
+   "fieldtype": "Check",
+   "label": "Allow Learning (Teach & Recall)"
   }
  ],
  "index_web_pages_for_search": 1,

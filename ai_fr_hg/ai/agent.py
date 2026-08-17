@@ -124,8 +124,16 @@ def check_agent_access(agent_doc) -> None:
 		)
 
 
-def build_system_prompt(agent_doc, context: str = "", override: str | None = None) -> str:
-	"""Compose the system prompt from agent settings, grounding rules and context."""
+def build_system_prompt(
+	agent_doc, context: str = "", override: str | None = None, memory: str = "", skills: str = ""
+) -> str:
+	"""Compose the system prompt from agent settings, grounding rules and context.
+
+	`memory` and `skills` are the Learning Loop's contribution: approved,
+	persistent knowledge and procedures that were taught and should shape how
+	the agent answers. They are appended as grounded blocks so the model
+	applies them when relevant without overriding the persona.
+	"""
 	settings = frappe.get_cached_doc("AI Platform Settings")
 
 	base = override or agent_doc.system_prompt or settings.default_system_prompt or DEFAULT_SYSTEM_PROMPT
@@ -139,6 +147,11 @@ def build_system_prompt(agent_doc, context: str = "", override: str | None = Non
 		parts.append(f"CONTEXT:\n{context}")
 	elif agent_doc.strict_grounding and agent_doc.use_knowledge:
 		parts.append("No relevant context was retrieved. Tell the user you do not have that information.")
+
+	if memory:
+		parts.append(memory)
+	if skills:
+		parts.append(skills)
 
 	if agent_doc.response_format == "Markdown":
 		parts.append("Format your response using Markdown.")
@@ -236,7 +249,24 @@ def run_agent_turn(
 
 	# 2. Assemble the message list.
 	override = conversation_doc.system_prompt_override if conversation_doc else None
-	messages = [ChatMessage(role="system", content=build_system_prompt(agent_doc, context, override))]
+
+	# Learning Loop: recall approved knowledge/skills and let them shape the
+	# turn. This is additive and best-effort - a memory failure must never
+	# break an otherwise healthy chat turn.
+	memory_block = skills_block = ""
+	try:
+		from ai_fr_hg.ai.learning import build_memory_context
+
+		memory_block, skills_block = build_memory_context(prompt, agent=agent_doc.name)
+	except Exception:
+		frappe.log_error(title="AI memory recall failed", message=frappe.get_traceback())
+
+	messages = [
+		ChatMessage(
+			role="system",
+			content=build_system_prompt(agent_doc, context, override, memory_block, skills_block),
+		)
+	]
 	if include_history and conversation:
 		messages.extend(get_conversation_history(conversation))
 	messages.append(ChatMessage(role="user", content=prompt))

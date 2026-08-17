@@ -1,0 +1,81 @@
+{
+ "app": "ai_fr_hg",
+ "charts": [],
+ "content": "[{\"id\":\"h1\",\"type\":\"header\",\"data\":{\"text\":\"AI Learning\",\"col\":12,\"level\":4}},{\"id\":\"p1\",\"type\":\"paragraph\",\"data\":{\"text\":\"Teach the platform facts, preferences and procedures. Candidates are validated for provenance, tested for conflicts, approved by an AI Manager, and become persistent memories and skills that shape future answers.\",\"col\":12}},{\"id\":\"sp1\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"c1\",\"type\":\"card\",\"data\":{\"card_name\":\"Learning\",\"col\":12}}]",
+ "creation": "2026-08-17 09:00:00.000000",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "education",
+ "idx": 0,
+ "indicator_color": "green",
+ "is_hidden": 0,
+ "label": "AI Learning",
+ "links": [
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Learning",
+   "link_count": 3,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Knowledge Candidates",
+   "link_count": 0,
+   "link_to": "AI Knowledge Candidate",
+   "link_type": "DocType",
+   "onboard": 1,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Memories",
+   "link_count": 0,
+   "link_to": "AI Memory",
+   "link_type": "DocType",
+   "onboard": 1,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Skills",
+   "link_count": 0,
+   "link_to": "AI Skill",
+   "link_type": "DocType",
+   "onboard": 1,
+   "type": "Link"
+  }
+ ],
+ "modified": "2026-08-17 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Learning",
+ "name": "AI Learning",
+ "number_cards": [],
+ "owner": "Administrator",
+ "public": 1,
+ "quick_lists": [],
+ "roles": [
+  {
+   "role": "AI Manager"
+  },
+  {
+   "role": "System Manager"
+  }
+ ],
+ "sequence_id": 14.0,
+ "shortcuts": [],
+ "sidebar_items": [],
+ "standard": 1,
+ "title": "AI Learning",
+ "type": "Workspace"
+}
