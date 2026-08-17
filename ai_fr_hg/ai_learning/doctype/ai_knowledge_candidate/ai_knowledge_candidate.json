@@ -1,0 +1,232 @@
+{
+ "actions": [],
+ "allow_import": 0,
+ "allow_rename": 0,
+ "autoname": "naming_series:",
+ "creation": "2026-08-17 09:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "title",
+  "candidate_type",
+  "status",
+  "content_cb",
+  "content",
+  "confidence",
+  "validation_sec",
+  "validation_notes",
+  "approval_required",
+  "approved_by",
+  "approved_on",
+  "conflict_sec",
+  "conflict_count",
+  "conflicts_summary",
+  "provenance_sec",
+  "provenance",
+  "user",
+  "source_type",
+  "source_reference_doctype",
+  "source_reference_name"
+ ],
+ "fields": [
+  {
+   "default": "AI-CAND-.YYYY.-",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Series",
+   "options": "AI-CAND-.YYYY.-",
+   "print_hide": 1
+  },
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Title",
+   "reqd": 1
+  },
+  {
+   "default": "Fact",
+   "fieldname": "candidate_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Type",
+   "options": "Fact\nPreference\nInstruction\nFeedback\nDocument"
+  },
+  {
+   "default": "Draft",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Draft\nValidated\nConflict\nApproved\nRejected"
+  },
+  {
+   "fieldname": "content_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "content",
+   "fieldtype": "Long Text",
+   "in_list_view": 1,
+   "label": "Knowledge Content",
+   "reqd": 1
+  },
+  {
+   "fieldname": "confidence",
+   "fieldtype": "Percent",
+   "label": "Confidence"
+  },
+  {
+   "fieldname": "validation_sec",
+   "fieldtype": "Section Break",
+   "label": "Validation"
+  },
+  {
+   "fieldname": "validation_notes",
+   "fieldtype": "Small Text",
+   "label": "Validation Notes"
+  },
+  {
+   "default": "1",
+   "fieldname": "approval_required",
+   "fieldtype": "Check",
+   "label": "Approval Required"
+  },
+  {
+   "fieldname": "approved_by",
+   "fieldtype": "Data",
+   "label": "Approved By"
+  },
+  {
+   "fieldname": "approved_on",
+   "fieldtype": "Datetime",
+   "label": "Approved On"
+  },
+  {
+   "fieldname": "conflict_sec",
+   "fieldtype": "Section Break",
+   "label": "Conflict Test"
+  },
+  {
+   "fieldname": "conflict_count",
+   "fieldtype": "Int",
+   "label": "Conflicts / Overlaps",
+   "read_only": 1
+  },
+  {
+   "fieldname": "conflicts_summary",
+   "fieldtype": "Small Text",
+   "label": "Conflicts Summary",
+   "read_only": 1
+  },
+  {
+   "fieldname": "provenance_sec",
+   "fieldtype": "Section Break",
+   "label": "Provenance"
+  },
+  {
+   "fieldname": "provenance",
+   "fieldtype": "Small Text",
+   "label": "Provenance"
+  },
+  {
+   "fieldname": "user",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Teaching User",
+   "read_only": 1
+  },
+  {
+   "default": "Explicit Teaching",
+   "fieldname": "source_type",
+   "fieldtype": "Select",
+   "label": "Source Type",
+   "options": "Explicit Teaching\nChat Correction\nFeedback\nDocument\nTool Result\nAutomation"
+  },
+  {
+   "fieldname": "source_reference_doctype",
+   "fieldtype": "Link",
+   "label": "Source DocType",
+   "options": "DocType"
+  },
+  {
+   "fieldname": "source_reference_name",
+   "fieldtype": "Dynamic Link",
+   "label": "Source Name",
+   "options": "source_reference_doctype"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [
+  {
+   "link_doctype": "AI Memory",
+   "link_fieldname": "source_candidate"
+  },
+  {
+   "link_doctype": "AI Skill",
+   "link_fieldname": "source_candidate"
+  }
+ ],
+ "modified": "2026-08-17 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Learning",
+ "name": "AI Knowledge Candidate",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI User",
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1
+  },
+  {
+   "role": "AI Auditor",
+   "read": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "share": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "show_title_field_in_link": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "title",
+ "track_changes": 1
+}

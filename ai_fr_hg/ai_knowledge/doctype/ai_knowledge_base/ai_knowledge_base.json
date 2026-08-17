@@ -68,27 +68,37 @@
   },
   {
    "default": "1200",
+   "description": "Target characters per chunk. Larger windows keep more context but reduce retrieval precision.",
    "fieldname": "chunk_size",
    "fieldtype": "Int",
-   "label": "Chunk Size"
+   "in_list_view": 1,
+   "label": "Chunk Size",
+   "min_value": 100
   },
   {
    "default": "150",
+   "description": "Characters carried from one chunk to the next so no fact is split across a boundary. Must be smaller than Chunk Size.",
    "fieldname": "chunk_overlap",
    "fieldtype": "Int",
-   "label": "Chunk Overlap"
+   "label": "Chunk Overlap",
+   "min_value": 0
   },
   {
    "default": "6",
+   "description": "Number of passages retrieved for every query. More passages give the model more evidence but use more context window.",
    "fieldname": "top_k",
    "fieldtype": "Int",
-   "label": "Retrieval Top K"
+   "label": "Retrieval Top K",
+   "min_value": 1
   },
   {
    "default": "0.25",
+   "description": "Minimum cosine similarity a passage needs to be considered relevant. A value of 0 returns everything, 1 only exact matches.",
    "fieldname": "similarity_threshold",
    "fieldtype": "Float",
    "label": "Similarity Threshold",
+   "max_value": 1,
+   "min_value": 0,
    "precision": "3"
   },
   {

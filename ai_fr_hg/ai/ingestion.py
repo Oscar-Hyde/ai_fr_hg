@@ -330,3 +330,53 @@ def enqueue_processing(document: str) -> None:
 		enqueue_after_commit=True,
 	)
 	frappe.db.set_value("AI Document", document, "status", "Queued", update_modified=False)
+
+
+#: Upper bound (in seconds) for waiting on a background index when there is no
+#: active request deadline to constrain the wait.
+DEFAULT_WAIT_SECONDS = 45.0
+
+#: How often to re-check a document's status while waiting.
+POLL_INTERVAL = 0.4
+
+
+def wait_for_indexed(document_names: list[str], timeout: float | None = None) -> dict[str, str]:
+	"""Block until each document reaches a terminal status, bounded by `timeout`.
+
+	Used by interactive chat: a user attaches a file and immediately asks about
+	it. Ingestion runs on a background worker, so without waiting the retrieval
+	step would find nothing and the model would wrongly claim it has no
+	information. This polls the records until they are `Indexed`, `Failed`, or
+	the time budget runs out, then returns the observed statuses.
+
+	When no explicit `timeout` is given, the wait is capped by whatever remains
+	of the active request deadline (minus a small reserve) so the whole turn
+	still finishes before the reverse proxy hangs up.
+	"""
+	from ai_fr_hg.ai.deadline import DEFAULT_RESERVE_SECONDS, remaining_seconds
+
+	names = [name for name in (document_names or []) if name]
+	if not names:
+		return {}
+
+	if timeout is None:
+		remaining = remaining_seconds()
+		if remaining is None:
+			timeout = DEFAULT_WAIT_SECONDS
+		else:
+			timeout = max(remaining - DEFAULT_RESERVE_SECONDS, 0.5)
+
+	hard_deadline = time.monotonic() + max(float(timeout), 0.0)
+	statuses: dict[str, str] = {}
+
+	while True:
+		statuses = {
+			name: frappe.db.get_value("AI Document", name, "status") or "Unknown" for name in names
+		}
+		if all(status in ("Indexed", "Failed") for status in statuses.values()):
+			break
+		if time.monotonic() >= hard_deadline:
+			break
+		time.sleep(POLL_INTERVAL)
+
+	return statuses

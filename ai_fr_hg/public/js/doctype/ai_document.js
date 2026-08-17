@@ -36,8 +36,11 @@ frappe.ui.form.on("AI Document", {
 						reqd: 1,
 					},
 					(values) => {
+						// Scope the answer to this document so the reply is
+						// grounded in the record itself, not the whole KB.
 						frappe.ai.ask(values.question, {
 							knowledge_bases: [frm.doc.knowledge_base],
+							documents: [frm.doc.name],
 						});
 					},
 					__("Ask about {0}", [frm.doc.title]),

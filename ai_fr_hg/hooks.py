@@ -69,6 +69,7 @@ doctype_js = {
 	"AI Extraction Schema": "public/js/doctype/ai_extraction_schema.js",
 	"AI Automation Rule": "public/js/doctype/ai_automation_rule.js",
 	"AI Tool Invocation": "public/js/doctype/ai_tool_invocation.js",
+	"AI Knowledge Candidate": "public/js/doctype/ai_knowledge_candidate.js",
 }
 
 doctype_list_js = {

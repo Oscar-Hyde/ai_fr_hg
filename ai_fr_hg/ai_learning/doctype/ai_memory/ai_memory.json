@@ -1,0 +1,216 @@
+{
+ "actions": [],
+ "allow_import": 0,
+ "allow_rename": 0,
+ "autoname": "naming_series:",
+ "creation": "2026-08-17 09:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "content",
+  "memory_type",
+  "status",
+  "memory_cb",
+  "scope",
+  "scope_value",
+  "confidence",
+  "usage_sec",
+  "usage_count",
+  "helpful_count",
+  "not_helpful_count",
+  "last_used_on",
+  "source_sec",
+  "source_candidate",
+  "source_type",
+  "source_user",
+  "embedding_sec",
+  "embedding_model",
+  "embedding_dimensions"
+ ],
+ "fields": [
+  {
+   "default": "AI-MEM-.YYYY.-",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Series",
+   "options": "AI-MEM-.YYYY.-",
+   "print_hide": 1
+  },
+  {
+   "fieldname": "content",
+   "fieldtype": "Long Text",
+   "in_list_view": 1,
+   "label": "Memory",
+   "reqd": 1
+  },
+  {
+   "default": "Fact",
+   "fieldname": "memory_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Type",
+   "options": "Fact\nPreference\nInstruction\nFeedback"
+  },
+  {
+   "default": "Active",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Active\nArchived"
+  },
+  {
+   "fieldname": "memory_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Global",
+   "fieldname": "scope",
+   "fieldtype": "Select",
+   "label": "Scope",
+   "options": "Global\nUser\nRole\nAgent"
+  },
+  {
+   "depends_on": "eval:doc.scope!='Global'",
+   "fieldname": "scope_value",
+   "fieldtype": "Data",
+   "label": "Scope Value"
+  },
+  {
+   "fieldname": "confidence",
+   "fieldtype": "Percent",
+   "label": "Confidence"
+  },
+  {
+   "fieldname": "usage_sec",
+   "fieldtype": "Section Break",
+   "label": "Usage"
+  },
+  {
+   "fieldname": "usage_count",
+   "fieldtype": "Int",
+   "label": "Times Recalled",
+   "read_only": 1
+  },
+  {
+   "fieldname": "helpful_count",
+   "fieldtype": "Int",
+   "label": "Helpful",
+   "read_only": 1
+  },
+  {
+   "fieldname": "not_helpful_count",
+   "fieldtype": "Int",
+   "label": "Not Helpful",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_used_on",
+   "fieldtype": "Datetime",
+   "label": "Last Used On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "source_sec",
+   "fieldtype": "Section Break",
+   "label": "Source"
+  },
+  {
+   "fieldname": "source_candidate",
+   "fieldtype": "Link",
+   "label": "Source Candidate",
+   "options": "AI Knowledge Candidate"
+  },
+  {
+   "fieldname": "source_type",
+   "fieldtype": "Data",
+   "label": "Source Type"
+  },
+  {
+   "fieldname": "source_user",
+   "fieldtype": "Data",
+   "label": "Teaching User"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "embedding_sec",
+   "fieldtype": "Section Break",
+   "label": "Embedding"
+  },
+  {
+   "fieldname": "embedding_model",
+   "fieldtype": "Link",
+   "label": "Embedding Model",
+   "options": "AI Model"
+  },
+  {
+   "fieldname": "embedding_dimensions",
+   "fieldtype": "Int",
+   "label": "Embedding Dimensions",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-17 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Learning",
+ "name": "AI Memory",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI User",
+   "read": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "AI Auditor",
+   "read": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "share": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "show_title_field_in_link": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "content",
+ "track_changes": 1
+}

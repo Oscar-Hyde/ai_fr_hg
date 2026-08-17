@@ -29,6 +29,10 @@ class AIAssistant {
 		this.context = {};
 		this.sending = false;
 		this.selected_kbs = [];
+		// Documents uploaded in this session but not yet asked about. The next
+		// send grounds retrieval on them so "summarise what I just uploaded"
+		// actually works instead of finding nothing mid-index.
+		this.pending_documents = [];
 
 		this.make();
 		this.load_context();
@@ -563,12 +567,15 @@ class AIAssistant {
 		this.scroll_to_bottom();
 
 		try {
+			const uploaded = this.pending_documents.length ? this.pending_documents : null;
+			this.pending_documents = [];
 			const response = await frappe.xcall("ai_fr_hg.api.chat.send_message", {
 				message,
 				conversation: this.conversation,
 				agent: this.selected_agent,
 				model: this.selected_model || null,
 				knowledge_bases: this.selected_kbs.length ? this.selected_kbs : null,
+				documents: uploaded,
 			});
 
 			$thinking.remove();
@@ -663,9 +670,14 @@ class AIAssistant {
 								title: values.title,
 							}
 						);
+						// Remember this upload so the next send waits for its
+						// indexing and answers from that file specifically.
+						me.pending_documents = (me.pending_documents || []).concat([
+							result.document,
+						]);
 						frappe.show_alert({
 							message: __(
-								"Processing {0}. You will be notified when it is searchable.",
+								"Processing {0}. It will be indexed before your next question.",
 								[values.title]
 							),
 							indicator: "blue",
