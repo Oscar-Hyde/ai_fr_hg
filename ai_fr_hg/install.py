@@ -63,13 +63,19 @@ BUILTIN_TOOLS = [
 		"tool_type": "Builtin",
 		"handler": "get_document_text",
 		"is_readonly_tool": 1,
-		"description": "Read the full extracted text of a specific AI Document by its ID.",
+		"description": (
+			"Read the full extracted text of an uploaded AI Document by its name, title, or filename. "
+			"Use this to answer questions about or summarise a specific uploaded document."
+		),
 		"parameters": [
 			{
 				"parameter": "document",
 				"parameter_type": "String",
 				"required": 1,
-				"description": "The AI Document ID, for example AIDOC-2026-00001.",
+				"description": (
+					"The document ID, title, filename, or file path "
+					"(for example 'Maintenance_Study_Electronics_Electrical_Equipment.docx' or 'AIDOC-2026-00001')."
+				),
 			},
 			{
 				"parameter": "max_characters",

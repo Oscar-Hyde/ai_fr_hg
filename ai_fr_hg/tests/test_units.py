@@ -12,7 +12,10 @@ import math
 from itertools import pairwise
 from unittest.mock import patch
 
-from frappe.tests import UnitTestCase
+try:
+	from frappe.tests import UnitTestCase
+except ImportError:
+	from unittest import TestCase as UnitTestCase
 
 from ai_fr_hg.ai import vector
 from ai_fr_hg.ai.chunking import Chunk, chunk_text, estimate_tokens, split_sentences
