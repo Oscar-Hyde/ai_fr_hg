@@ -1,7 +1,7 @@
 {
  "app": "ai_fr_hg",
  "charts": [],
- "content": "[{\"id\":\"h1\",\"type\":\"header\",\"data\":{\"text\":\"AI Learning\",\"col\":12,\"level\":4}},{\"id\":\"p1\",\"type\":\"paragraph\",\"data\":{\"text\":\"Teach the platform facts, preferences and procedures. Candidates are validated for provenance, tested for conflicts, approved by an AI Manager, and become persistent memories and skills that shape future answers.\",\"col\":12}},{\"id\":\"sp1\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"c1\",\"type\":\"card\",\"data\":{\"card_name\":\"Learning\",\"col\":12}}]",
+ "content": "[{\"id\":\"h1\",\"type\":\"header\",\"data\":{\"text\":\"AI Learning\",\"col\":12,\"level\":4}},{\"id\":\"p1\",\"type\":\"paragraph\",\"data\":{\"text\":\"Teach the platform facts, preferences and procedures. Candidates are validated for provenance, tested for conflicts, approved by an AI Manager, and become persistent memories and skills that shape future answers.\",\"col\":12}},{\"id\":\"sp1\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"c1\",\"type\":\"card\",\"data\":{\"card_name\":\"Learning\",\"col\":6}},{\"id\":\"c2\",\"type\":\"card\",\"data\":{\"card_name\":\"Reports\",\"col\":6}}]",
  "creation": "2026-08-17 09:00:00.000000",
  "custom_blocks": [],
  "docstatus": 0,
@@ -18,7 +18,7 @@
    "hidden": 0,
    "is_query_report": 0,
    "label": "Learning",
-   "link_count": 3,
+   "link_count": 4,
    "onboard": 0,
    "type": "Card Break"
   },
@@ -54,9 +54,61 @@
    "link_type": "DocType",
    "onboard": 1,
    "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Platform Settings",
+   "link_count": 0,
+   "link_to": "AI Platform Settings",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Reports",
+   "link_count": 3,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Learning Activity",
+   "link_count": 0,
+   "link_to": "Learning Activity",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Memory Usage",
+   "link_count": 0,
+   "link_to": "Memory Usage",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Skill Summary",
+   "link_count": 0,
+   "link_to": "Skill Summary",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
   }
  ],
- "modified": "2026-08-17 09:00:00.000000",
+ "modified": "2026-08-17 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "AI Learning",
  "name": "AI Learning",
@@ -70,6 +122,9 @@
   },
   {
    "role": "System Manager"
+  },
+  {
+   "role": "AI Auditor"
   }
  ],
  "sequence_id": 14.0,
