@@ -68,7 +68,7 @@ class AIAutomationRule(Document):
 		try:
 			compile(self.condition, "<condition>", "eval")
 		except SyntaxError as exc:
-			frappe.throw(_("Condition has a syntax error: {0}").format(exc))
+			frappe.throw(_("Condition has a syntax error: {0}").format(str(exc)))
 
 	def validate_target_field(self):
 		if not self.target_field or not self.document_type:

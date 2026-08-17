@@ -274,25 +274,15 @@ def keyword_search(
 	if not terms or not knowledge_bases:
 		return {}
 
-	conditions = " or ".join(["lower(content) like %s"] * len(terms))
-	placeholders = ", ".join(["%s"] * len(knowledge_bases))
-	values = [f"%{term}%" for term in terms] + list(knowledge_bases)
-
-	doc_clause = ""
+	filters: dict = {"knowledge_base": ["in", knowledge_bases]}
 	if documents:
-		doc_placeholders = ", ".join(["%s"] * len(documents))
-		doc_clause = f" and document in ({doc_placeholders})"
-		values += list(documents)
-
-	rows = frappe.db.sql(
-		f"""
-		select name, content
-		from `tabAI Document Chunk`
-		where ({conditions}) and knowledge_base in ({placeholders}){doc_clause}
-		limit {cint(limit)}
-		""",  # nosemgrep: frappe-manual-commit
-		values,
-		as_dict=True,
+		filters["document"] = ["in", documents]
+	rows = frappe.get_all(
+		"AI Document Chunk",
+		filters=filters,
+		or_filters=[["content", "like", f"%{term}%"] for term in terms],
+		fields=["name", "content"],
+		limit_page_length=min(max(cint(limit), 1), 500),
 	)
 
 	scores: dict[str, float] = {}
@@ -530,13 +520,12 @@ def _log_search(query, targets, search_type, results, started) -> None:
 
 def _log_search_job(query, targets, search_type, results, result_count, top_score, duration_ms, user) -> None:
 	try:
-		frappe.set_user(user)
 		doc = frappe.new_doc("AI Search Query")
 		doc.update(
 			{
 				"query": query[:1000],
 				"knowledge_base": targets[0] if len(targets) == 1 else None,
-				"user": frappe.session.user,
+				"user": user,
 				"search_type": search_type,
 				"result_count": result_count,
 				"top_score": top_score,

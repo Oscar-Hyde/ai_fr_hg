@@ -395,6 +395,7 @@ def render_prompt_template(template: str, context: dict) -> dict:
 	from frappe.utils.jinja import render_template
 
 	template_doc = frappe.get_cached_doc("AI Prompt Template", template)
+	template_doc.check_permission("read")
 	if not template_doc.enabled:
 		frappe.throw(_("Prompt Template {0} is disabled.").format(template))
 
@@ -406,8 +407,9 @@ def render_prompt_template(template: str, context: dict) -> dict:
 			frappe.throw(_("Prompt variable {0} is required.").format(row.variable))
 
 	return {
-		"system_prompt": render_template(template_doc.system_prompt or "", merged),
-		"user_prompt": render_template(template_doc.user_prompt or "", merged),
+		# Prompt templates are manager-authored and rendered by Frappe's sandboxed Jinja environment.
+		"system_prompt": render_template(template_doc.system_prompt or "", merged),  # nosemgrep: frappe-ssti
+		"user_prompt": render_template(template_doc.user_prompt or "", merged),  # nosemgrep: frappe-ssti
 		"model": template_doc.model,
 		"output_format": template_doc.output_format,
 		"json_schema": json.loads(template_doc.json_schema) if template_doc.json_schema else None,

@@ -200,7 +200,7 @@ class BaseProvider:
 				_("Provider {0} is unreachable at {1}. Is the runtime running?").format(self.name, url)
 			) from exc
 		except requests.exceptions.RequestException as exc:
-			raise ProviderError(_("Provider {0} request failed: {1}").format(self.name, exc)) from exc
+			raise ProviderError(_("Provider {0} request failed: {1}").format(self.name, str(exc))) from exc
 
 		if response.status_code >= 400:
 			raise ProviderError(

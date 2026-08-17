@@ -68,7 +68,7 @@ frappe.ui.form.on("AI Knowledge Candidate", {
 		if (frm.doc.status === "Conflict" && frm.doc.conflicts_summary) {
 			frm.dashboard.set_headline(
 				`<span class="text-warning">${frappe.utils.escape_html(
-					__("Potential conflicts detected: ") + frm.doc.conflicts_summary
+					__("Potential conflicts detected:") + " " + frm.doc.conflicts_summary
 				)}</span>`
 			);
 		}

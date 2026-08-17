@@ -44,9 +44,6 @@ class AIKnowledgeCandidate(Document):
 			self.user = frappe.session.user
 		if not self.provenance:
 			self.provenance = f"{self.source_type or 'Explicit Teaching'} by {self.user}."
-		configured = frappe.db.get_single_value("AI Platform Settings", "require_memory_approval")
-		if configured is not None:
-			self.approval_required = configured
 		if self.status != "Draft":
 			frappe.throw(_("A new knowledge candidate must start in Draft status."))
 

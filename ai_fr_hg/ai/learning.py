@@ -561,6 +561,9 @@ def process_candidate(candidate_name: str, approve: bool = False) -> dict:
 		frappe.throw(_("The Learning Loop is disabled in AI Platform Settings."), exc=LearningError)
 	candidate = frappe.get_doc("AI Knowledge Candidate", candidate_name)
 	candidate.check_permission("read")
+	approval_required = 1 if cint(_settings().require_memory_approval) else 0
+	if cint(candidate.approval_required) != approval_required:
+		candidate.db_set("approval_required", approval_required, update_modified=False)
 	if candidate.status in {"Approved", "Rejected"}:
 		frappe.throw(_("A decided candidate cannot be processed again."), exc=LearningError)
 

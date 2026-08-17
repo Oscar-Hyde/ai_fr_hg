@@ -41,17 +41,21 @@ def safe_set_value(
 			"modified_by": frappe.session.user,
 		}
 
+	meta = frappe.get_meta(doctype.removeprefix("tab"))
+	allowed_standard_fields = {"modified", "modified_by"}
 	assignments = []
 	params = []
 	for field, field_value in values.items():
-		column = field if field.startswith("`") else f"`{field}`"
-		assignments.append(f"{column} = %s")
+		field = field.strip("`")
+		if field not in allowed_standard_fields and not meta.has_field(field):
+			frappe.throw(f"Cannot update unknown field {field} on {meta.name}.")
+		assignments.append(f"`{field}` = %s")
 		params.append(field_value)
 
-	table = doctype if doctype.startswith("tab") else f"tab{doctype}"
+	table = f"tab{meta.name}"
 	params.append(name)
-	frappe.db.sql(
+	frappe.db.sql(  # nosemgrep: frappe-sql-format-injection -- identifiers are validated against DocType metadata above
 		f"update `{table}` set {', '.join(assignments)} where name = %s",
 		tuple(params),
 	)
-	frappe.clear_cache(doctype=doctype, name=name)
+	frappe.clear_cache(doctype=meta.name, name=name)
