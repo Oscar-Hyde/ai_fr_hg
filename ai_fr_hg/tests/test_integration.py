@@ -14,6 +14,7 @@ from unittest.mock import patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
+from ai_fr_hg.ai.pipeline import pipeline_step_method
 from ai_fr_hg.ai.providers.base import CompletionResult
 
 
@@ -227,6 +228,56 @@ class TestModelDocType(AIPlatformTestCase):
 		with self.assertRaises(frappe.ValidationError):
 			doc.insert(ignore_permissions=True)
 
+	def test_duplicate_discovery_preserves_models_created_earlier_in_batch(self):
+		from types import SimpleNamespace
+
+		from frappe.model.document import Document
+
+		from ai_fr_hg.ai.monitoring import sync_provider_models
+
+		provider = frappe.get_doc(
+			{
+				"doctype": "AI Provider",
+				"provider_name": "Duplicate Reconciliation Provider",
+				"provider_type": "Ollama",
+				"base_url": "http://localhost:11436",
+				"enabled": 1,
+			}
+		).insert(ignore_permissions=True)
+		first_name = "savepoint-first-model"
+		duplicate_name = "savepoint-concurrent-duplicate"
+		models = [
+			SimpleNamespace(
+				name=name,
+				digest=f"digest-{name}",
+				size=100,
+				family="test",
+				parameter_size="1B",
+				quantization="Q4",
+				context_window=4096,
+			)
+			for name in (first_name, duplicate_name)
+		]
+		adapter = SimpleNamespace(list_models=lambda: models)
+		original_insert = Document.insert
+
+		def insert_with_concurrent_duplicate(document, *args, **kwargs):
+			if document.doctype == "AI Model" and document.model_name == duplicate_name:
+				raise frappe.DuplicateEntryError
+			return original_insert(document, *args, **kwargs)
+
+		with (
+			patch("ai_fr_hg.ai.providers.get_provider", return_value=adapter),
+			patch.object(Document, "insert", new=insert_with_concurrent_duplicate),
+		):
+			result = sync_provider_models(provider.name)
+
+		self.assertIn(first_name, result["created"])
+		self.assertNotIn(duplicate_name, result["created"])
+		self.assertTrue(
+			frappe.db.exists("AI Model", {"provider": provider.name, "model_name": first_name})
+		)
+
 	def test_one_default_per_model_type(self):
 		a = frappe.get_doc(
 			{
@@ -306,6 +357,73 @@ class TestIndexing(AIPlatformTestCase):
 		for chunk in chunks:
 			self.assertTrue(chunk.embedding)
 			self.assertEqual(chunk.embedding_dimensions, 8)
+
+	def test_embedding_batch_is_not_partially_written_when_one_vector_is_malformed(self):
+		from ai_fr_hg.ai.exceptions import DocumentProcessingError
+		from ai_fr_hg.ai.knowledge import embed_chunks, index_document
+
+		document = self.make_document(
+			"Atomic Embedding Document",
+			"\n\n".join(f"Section {i}. Distinct enterprise content. " * 12 for i in range(8)),
+		)
+		index_document(document.name, embed=False)
+		chunks = frappe.get_all(
+			"AI Document Chunk",
+			filters={"document": document.name},
+			pluck="name",
+			order_by="chunk_index asc",
+		)
+		self.assertGreaterEqual(len(chunks), 2)
+		vectors = [[1.0] * 8 for _ in chunks]
+		vectors[1] = [1.0] * 7
+
+		with (
+			patch("ai_fr_hg.ai.knowledge.EMBED_BATCH_SIZE", len(chunks)),
+			patch("ai_fr_hg.ai.knowledge.run_embedding", return_value=vectors),
+			self.assertRaises(DocumentProcessingError),
+		):
+			embed_chunks(chunks, model=self.embedding_model.name)
+
+		self.assertEqual(
+			frappe.db.count(
+				"AI Document Chunk", {"name": ["in", chunks], "embedding": ["!=", ""]}
+			),
+			0,
+		)
+
+	def test_missing_and_stale_embeddings_are_backfilled(self):
+		from ai_fr_hg.ai.knowledge import index_document
+
+		document = self.make_document("Embedding Backfill Document", "Backfill this content. " * 80)
+		index_document(document.name, embed=False)
+		chunks = frappe.get_all(
+			"AI Document Chunk",
+			filters={"document": document.name},
+			pluck="name",
+			order_by="chunk_index asc",
+		)
+		self.assertTrue(chunks)
+
+		with stub_embeddings() as first_embed:
+			index_document(document.name)
+		self.assertEqual(sum(len(call.args[0]) for call in first_embed.call_args_list), len(chunks))
+
+		stale = chunks[0]
+		frappe.db.set_value(
+			"AI Document Chunk",
+			stale,
+			{"embedding_model": None, "embedding_dimensions": 0},
+			update_modified=False,
+		)
+		with stub_embeddings() as second_embed:
+			index_document(document.name)
+		self.assertEqual(sum(len(call.args[0]) for call in second_embed.call_args_list), 1)
+		self.assertEqual(
+			frappe.db.get_value("AI Document Chunk", stale, "embedding_model"), self.embedding_model.name
+		)
+		document.reload()
+		self.assertEqual(document.chunk_count, len(chunks))
+		self.assertEqual(document.embedded_chunk_count, len(chunks))
 
 	def test_reindexing_replaces_chunks(self):
 		from ai_fr_hg.ai.knowledge import index_document
@@ -573,6 +691,184 @@ class TestToolDocType(AIPlatformTestCase):
 		self.assertEqual(schema["parameters"]["properties"]["query"]["type"], "string")
 		self.assertIn("query", schema["parameters"]["required"])
 		self.assertNotIn("limit", schema["parameters"]["required"])
+
+
+class TestCanonicalToolExecution(AIPlatformTestCase):
+	def make_clock_tool(self, name="canonical_clock"):
+		return frappe.get_doc(
+			{
+				"doctype": "AI Tool",
+				"tool_name": name,
+				"tool_type": "Builtin",
+				"handler": "current_datetime",
+				"enabled": 1,
+				"is_readonly_tool": 1,
+				"max_runtime_seconds": 30,
+				"description": "Return the current site time.",
+			}
+		).insert(ignore_permissions=True)
+
+	def test_success_is_persisted_with_requester_and_audit(self):
+		from ai_fr_hg.ai.tools import execute_tool
+
+		tool = self.make_clock_tool("canonical_clock_success")
+		outcome = execute_tool(tool.name)
+
+		self.assertEqual(outcome["status"], "Success")
+		invocation = frappe.get_doc("AI Tool Invocation", outcome["invocation"])
+		self.assertEqual(invocation.tool, tool.name)
+		self.assertEqual(invocation.user, frappe.session.user)
+		self.assertEqual(invocation.status, "Success")
+		self.assertTrue(invocation.finished_at)
+		self.assertTrue(
+			frappe.db.exists(
+				"AI Audit Log",
+				{
+					"action": f"Tool Executed: {tool.name}",
+					"reference_doctype": "AI Tool Invocation",
+					"reference_name": invocation.name,
+				},
+			)
+		)
+
+	def test_argument_contract_fails_before_dispatch(self):
+		from ai_fr_hg.ai.tools import execute_tool
+
+		tool = self.make_clock_tool("canonical_clock_contract")
+		with patch("ai_fr_hg.ai.tools._dispatch") as dispatch:
+			outcome = execute_tool(tool.name, {"unexpected": True})
+
+		dispatch.assert_not_called()
+		self.assertEqual(outcome["status"], "Failed")
+		self.assertIn("unsupported arguments", outcome["error"])
+		self.assertEqual(
+			frappe.db.get_value("AI Tool Invocation", outcome["invocation"], "status"), "Failed"
+		)
+
+	def test_invalid_pipeline_context_is_refused_without_an_invocation(self):
+		from ai_fr_hg.ai.tools import execute_tool
+
+		tool = self.make_clock_tool("canonical_clock_context")
+		before = frappe.db.count("AI Tool Invocation", {"tool": tool.name})
+		outcome = execute_tool(tool.name, pipeline_run="missing-run")
+		self.assertEqual(outcome["status"], "Failed")
+		self.assertEqual(frappe.db.count("AI Tool Invocation", {"tool": tool.name}), before)
+
+	def test_write_tool_approval_resumes_once_with_original_provenance(self):
+		from ai_fr_hg.ai.tools import approve_invocation, execute_tool
+
+		description = "Created by governed tool approval test"
+		tool = frappe.get_doc(
+			{
+				"doctype": "AI Tool",
+				"tool_name": "governed_todo_create",
+				"tool_type": "DocType Action",
+				"target_doctype": "ToDo",
+				"enabled": 1,
+				"requires_approval": 1,
+				"max_runtime_seconds": 30,
+				"description": "Create one approved ToDo.",
+				"parameters": [
+					{
+						"parameter": "action",
+						"parameter_type": "String",
+						"required": 1,
+						"enum_values": "create",
+					},
+					{"parameter": "values", "parameter_type": "Object", "required": 1},
+				],
+			}
+		).insert(ignore_permissions=True)
+
+		pending = execute_tool(tool.name, {"action": "create", "values": {"description": description}})
+		self.assertEqual(pending["status"], "Pending Approval")
+		self.assertFalse(frappe.db.exists("ToDo", {"description": description}))
+
+		outcome = approve_invocation(pending["invocation"])
+		self.assertEqual(outcome["status"], "Success")
+		invocation = frappe.get_doc("AI Tool Invocation", pending["invocation"])
+		self.assertEqual(invocation.status, "Success")
+		self.assertEqual(invocation.user, "Administrator")
+		self.assertEqual(invocation.approved_by, "Administrator")
+		self.assertEqual(frappe.db.count("ToDo", {"description": description}), 1)
+		with self.assertRaises(frappe.ValidationError):
+			approve_invocation(pending["invocation"])
+
+	def test_rejected_tool_invocation_never_dispatches(self):
+		from ai_fr_hg.ai.tools import execute_tool, reject_invocation
+
+		description = "Rejected governed tool write"
+		tool = frappe.get_doc(
+			{
+				"doctype": "AI Tool",
+				"tool_name": "governed_todo_reject",
+				"tool_type": "DocType Action",
+				"target_doctype": "ToDo",
+				"enabled": 1,
+				"requires_approval": 1,
+				"max_runtime_seconds": 30,
+				"description": "Reject one proposed ToDo.",
+				"parameters": [
+					{
+						"parameter": "action",
+						"parameter_type": "String",
+						"required": 1,
+						"enum_values": "create",
+					},
+					{"parameter": "values", "parameter_type": "Object", "required": 1},
+				],
+			}
+		).insert(ignore_permissions=True)
+		pending = execute_tool(tool.name, {"action": "create", "values": {"description": description}})
+		outcome = reject_invocation(pending["invocation"])
+
+		self.assertEqual(outcome["status"], "Rejected")
+		invocation = frappe.get_doc("AI Tool Invocation", pending["invocation"])
+		self.assertEqual(invocation.status, "Rejected")
+		self.assertEqual(invocation.rejected_by, frappe.session.user)
+		self.assertTrue(invocation.rejected_at)
+		self.assertFalse(frappe.db.exists("ToDo", {"description": description}))
+		self.assertTrue(
+			frappe.db.exists(
+				"AI Audit Log",
+				{
+					"action": "Tool Invocation Rejected",
+					"reference_doctype": "AI Tool Invocation",
+					"reference_name": invocation.name,
+				},
+			)
+		)
+
+	def test_pipeline_tool_step_records_permitted_run_context(self):
+		from ai_fr_hg.ai.pipeline import run_pipeline
+
+		tool = self.make_clock_tool("canonical_clock_pipeline")
+		pipeline = frappe.get_doc(
+			{
+				"doctype": "AI Pipeline",
+				"pipeline_name": "Canonical Tool Context Pipeline",
+				"enabled": 1,
+				"steps": [
+					{
+						"step_name": "Read Clock",
+						"step_type": "Tool",
+						"tool": tool.name,
+						"enabled": 1,
+					}
+				],
+			}
+		).insert(ignore_permissions=True)
+
+		run = run_pipeline(pipeline.name, enqueue_job=False)
+		run.reload()
+		invocation = frappe.get_doc(
+			"AI Tool Invocation",
+			frappe.db.get_value("AI Tool Invocation", {"pipeline_run": run.name}, "name"),
+		)
+		self.assertEqual(run.status, "Completed")
+		self.assertEqual(invocation.status, "Success")
+		self.assertEqual(invocation.pipeline_run, run.name)
+		self.assertEqual(invocation.user, run.triggered_by)
 
 
 class TestBuiltinTools(AIPlatformTestCase):
@@ -855,6 +1151,372 @@ class TestPipeline(AIPlatformTestCase):
 		with self.assertRaises(frappe.ValidationError):
 			doc.insert(ignore_permissions=True)
 
+	def test_registered_external_custom_method_resolves_from_hook(self):
+		from ai_fr_hg.ai.pipeline import resolve_pipeline_step_method
+
+		dotted_path = "external_enterprise_app.ai.steps.enrich_record"
+		with (
+			patch("ai_fr_hg.ai.pipeline.frappe.get_hooks", return_value={"enrich": dotted_path}) as hooks,
+			patch(
+				"ai_fr_hg.ai.pipeline.frappe.get_attr", return_value=unmarked_pipeline_method
+			) as get_attr,
+		):
+			resolved = resolve_pipeline_step_method(dotted_path)
+
+		self.assertIs(resolved, unmarked_pipeline_method)
+		hooks.assert_called_once_with("ai_pipeline_methods")
+		get_attr.assert_called_once_with(dotted_path)
+
+	def test_unregistered_external_custom_method_is_rejected(self):
+		doc = frappe.get_doc(
+			{
+				"doctype": "AI Pipeline",
+				"pipeline_name": "Untrusted External Method Pipeline",
+				"enabled": 1,
+				"steps": [
+					{
+						"step_name": "Untrusted",
+						"step_type": "Custom Method",
+						"method": "frappe.utils.now",
+						"enabled": 1,
+					}
+				],
+			}
+		)
+		with self.assertRaises(frappe.ValidationError):
+			doc.insert(ignore_permissions=True)
+
+	def test_unmarked_app_custom_method_is_rejected(self):
+		doc = frappe.get_doc(
+			{
+				"doctype": "AI Pipeline",
+				"pipeline_name": "Unmarked App Method Pipeline",
+				"enabled": 1,
+				"steps": [
+					{
+						"step_name": "Unmarked",
+						"step_type": "Custom Method",
+						"method": "ai_fr_hg.tests.test_integration.unmarked_pipeline_method",
+						"enabled": 1,
+					}
+				],
+			}
+		)
+		with self.assertRaises(frappe.ValidationError):
+			doc.insert(ignore_permissions=True)
+
+	def test_custom_method_trust_is_rechecked_at_execution(self):
+		from ai_fr_hg.ai.pipeline import run_pipeline
+
+		pipeline = frappe.get_doc(
+			{
+				"doctype": "AI Pipeline",
+				"pipeline_name": "Runtime Trust Recheck Pipeline",
+				"enabled": 1,
+				"steps": [
+					{
+						"step_name": "Trusted At Validation",
+						"step_type": "Custom Method",
+						"method": "ai_fr_hg.tests.test_integration.always_works",
+						"enabled": 1,
+					}
+				],
+			}
+		).insert(ignore_permissions=True)
+
+		marker = "_ai_pipeline_step_method"
+		delattr(always_works, marker)
+		try:
+			run = run_pipeline(pipeline.name, enqueue_job=False)
+		finally:
+			setattr(always_works, marker, True)
+		run.reload()
+		self.assertEqual(run.status, "Failed")
+		self.assertIn("not been marked", run.error_message)
+
+	def test_nested_pipeline_records_parent_provenance(self):
+		from ai_fr_hg.ai.pipeline import run_pipeline
+
+		child = frappe.get_doc(
+			{
+				"doctype": "AI Pipeline",
+				"pipeline_name": "Nested Child Pipeline",
+				"enabled": 1,
+				"steps": [
+					{
+						"step_name": "Child Work",
+						"step_type": "Custom Method",
+						"method": "ai_fr_hg.tests.test_integration.always_works",
+						"output_field": "child_result",
+						"enabled": 1,
+					}
+				],
+			}
+		).insert(ignore_permissions=True)
+		parent = frappe.get_doc(
+			{
+				"doctype": "AI Pipeline",
+				"pipeline_name": "Nested Parent Pipeline",
+				"enabled": 1,
+				"steps": [
+					{
+						"step_name": "Run Child",
+						"step_type": "Pipeline",
+						"sub_pipeline": child.name,
+						"output_field": "nested",
+						"enabled": 1,
+					}
+				],
+			}
+		).insert(ignore_permissions=True)
+
+		parent_run = run_pipeline(parent.name, input_data={"seed": "value"}, enqueue_job=False)
+		parent_run.reload()
+		child_run = frappe.get_all(
+			"AI Pipeline Run",
+			filters={"parent_pipeline_run": parent_run.name, "pipeline": child.name},
+			fields=["name", "status", "triggered_by"],
+			limit=1,
+		)[0]
+		self.assertEqual(parent_run.status, "Completed")
+		self.assertEqual(child_run.status, "Completed")
+		self.assertEqual(child_run.triggered_by, frappe.session.user)
+		self.assertIn("child_result", frappe.parse_json(parent_run.output_data)["nested"])
+
+	def test_nested_pipeline_failure_is_persisted_in_child_and_parent(self):
+		from ai_fr_hg.ai.pipeline import run_pipeline
+
+		child = frappe.get_doc(
+			{
+				"doctype": "AI Pipeline",
+				"pipeline_name": "Nested Failing Child Pipeline",
+				"enabled": 1,
+				"steps": [
+					{
+						"step_name": "Child Failure",
+						"step_type": "Custom Method",
+						"method": "ai_fr_hg.tests.test_integration.always_fails",
+						"on_error": "Stop",
+						"enabled": 1,
+					}
+				],
+			}
+		).insert(ignore_permissions=True)
+		parent = frappe.get_doc(
+			{
+				"doctype": "AI Pipeline",
+				"pipeline_name": "Nested Failing Parent Pipeline",
+				"enabled": 1,
+				"steps": [
+					{
+						"step_name": "Run Failing Child",
+						"step_type": "Pipeline",
+						"sub_pipeline": child.name,
+						"on_error": "Stop",
+						"enabled": 1,
+					}
+				],
+			}
+		).insert(ignore_permissions=True)
+
+		parent_run = run_pipeline(parent.name, enqueue_job=False)
+		child_run = frappe.get_doc(
+			"AI Pipeline Run",
+			frappe.db.get_value("AI Pipeline Run", {"parent_pipeline_run": parent_run.name}, "name"),
+		)
+		parent_run.reload()
+		self.assertEqual(child_run.status, "Failed")
+		self.assertEqual(parent_run.status, "Failed")
+		self.assertIn("Intentional pipeline failure", child_run.error_message)
+		self.assertIn(child.name, parent_run.error_message)
+		for run in (parent_run, child_run):
+			self.assertTrue(
+				frappe.db.exists(
+					"AI Audit Log",
+					{
+						"action": "Pipeline Run Failed",
+						"reference_doctype": "AI Pipeline Run",
+						"reference_name": run.name,
+					},
+				)
+			)
+
+	def test_nested_pipeline_preserves_tool_approval_request(self):
+		from ai_fr_hg.ai.pipeline import run_pipeline
+
+		tool = frappe.get_doc(
+			{
+				"doctype": "AI Tool",
+				"tool_name": "nested_approval_tool",
+				"tool_type": "DocType Action",
+				"target_doctype": "ToDo",
+				"enabled": 1,
+				"requires_approval": 1,
+				"max_runtime_seconds": 30,
+				"description": "Create an approved ToDo from a nested pipeline.",
+				"parameters": [
+					{
+						"parameter": "action",
+						"parameter_type": "String",
+						"required": 1,
+						"enum_values": "create",
+					},
+					{"parameter": "values", "parameter_type": "Object", "required": 1},
+				],
+			}
+		).insert(ignore_permissions=True)
+		child = frappe.get_doc(
+			{
+				"doctype": "AI Pipeline",
+				"pipeline_name": "Nested Approval Child Pipeline",
+				"enabled": 1,
+				"steps": [
+					{
+						"step_name": "Request Governed Write",
+						"step_type": "Tool",
+						"tool": tool.name,
+						"config": frappe.as_json(
+							{
+								"arguments": {
+									"action": "create",
+									"values": {"description": "Nested pipeline approved write"},
+								}
+							}
+						),
+						"on_error": "Stop",
+						"enabled": 1,
+					}
+				],
+			}
+		).insert(ignore_permissions=True)
+		parent = frappe.get_doc(
+			{
+				"doctype": "AI Pipeline",
+				"pipeline_name": "Nested Approval Parent Pipeline",
+				"enabled": 1,
+				"steps": [
+					{
+						"step_name": "Run Approval Child",
+						"step_type": "Pipeline",
+						"sub_pipeline": child.name,
+						"on_error": "Stop",
+						"enabled": 1,
+					}
+				],
+			}
+		).insert(ignore_permissions=True)
+
+		parent_run = run_pipeline(parent.name, enqueue_job=False)
+		child_run = frappe.get_doc(
+			"AI Pipeline Run",
+			frappe.db.get_value("AI Pipeline Run", {"parent_pipeline_run": parent_run.name}, "name"),
+		)
+		invocation = frappe.get_doc(
+			"AI Tool Invocation",
+			frappe.db.get_value(
+				"AI Tool Invocation", {"pipeline_run": child_run.name, "status": "Pending Approval"}, "name"
+			),
+		)
+		parent_run.reload()
+		self.assertEqual(child_run.status, "Failed")
+		self.assertEqual(parent_run.status, "Failed")
+		self.assertEqual(invocation.user, frappe.session.user)
+		self.assertFalse(frappe.db.exists("ToDo", {"description": "Nested pipeline approved write"}))
+		self.assertIn("requires approval", child_run.error_message)
+		self.assertEqual(invocation.status, "Pending Approval")
+
+	def test_configuration_rejects_indirect_nested_pipeline_cycle(self):
+		pipeline_a = frappe.get_doc(
+			{
+				"doctype": "AI Pipeline",
+				"pipeline_name": "Configuration Cycle Pipeline A",
+				"enabled": 1,
+				"steps": [
+					{
+						"step_name": "Initial Safe Work",
+						"step_type": "Custom Method",
+						"method": "ai_fr_hg.tests.test_integration.always_works",
+						"enabled": 1,
+					}
+				],
+			}
+		).insert(ignore_permissions=True)
+		pipeline_b = frappe.get_doc(
+			{
+				"doctype": "AI Pipeline",
+				"pipeline_name": "Configuration Cycle Pipeline B",
+				"enabled": 1,
+				"steps": [
+					{
+						"step_name": "Call A",
+						"step_type": "Pipeline",
+						"sub_pipeline": pipeline_a.name,
+						"enabled": 1,
+					}
+				],
+			}
+		).insert(ignore_permissions=True)
+		pipeline_a.set("steps", [])
+		pipeline_a.append(
+			"steps",
+			{
+				"step_name": "Call B",
+				"step_type": "Pipeline",
+				"sub_pipeline": pipeline_b.name,
+				"enabled": 1,
+			},
+		)
+		with self.assertRaisesRegex(frappe.ValidationError, "dependency cycle"):
+			pipeline_a.save(ignore_permissions=True)
+
+	def test_runtime_rejects_cycle_in_parent_run_ancestry(self):
+		from ai_fr_hg.ai.exceptions import PipelineError
+		from ai_fr_hg.ai.pipeline import run_pipeline
+
+		def make_pipeline(name):
+			return frappe.get_doc(
+				{
+					"doctype": "AI Pipeline",
+					"pipeline_name": name,
+					"enabled": 1,
+					"steps": [
+						{
+							"step_name": "Safe Work",
+							"step_type": "Custom Method",
+							"method": "ai_fr_hg.tests.test_integration.always_works",
+							"enabled": 1,
+						}
+					],
+				}
+			).insert(ignore_permissions=True)
+
+		pipeline_a = make_pipeline("Runtime Ancestry Pipeline A")
+		pipeline_b = make_pipeline("Runtime Ancestry Pipeline B")
+		run_a = frappe.get_doc(
+			{
+				"doctype": "AI Pipeline Run",
+				"pipeline": pipeline_a.name,
+				"status": "Running",
+				"triggered_by": "Administrator",
+			}
+		).insert(ignore_permissions=True)
+		run_b = frappe.get_doc(
+			{
+				"doctype": "AI Pipeline Run",
+				"pipeline": pipeline_b.name,
+				"status": "Running",
+				"triggered_by": "Administrator",
+				"parent_pipeline_run": run_a.name,
+			}
+		).insert(ignore_permissions=True)
+		before = frappe.db.count("AI Pipeline Run", {"parent_pipeline_run": run_b.name})
+		with self.assertRaisesRegex(PipelineError, "Recursive nested pipeline call"):
+			run_pipeline(pipeline_a.name, enqueue_job=False, _parent_run=run_b.name)
+		self.assertEqual(
+			frappe.db.count("AI Pipeline Run", {"parent_pipeline_run": run_b.name}),
+			before,
+		)
+
 	def test_summarize_pipeline_runs(self):
 		from ai_fr_hg.ai.pipeline import run_pipeline
 
@@ -1012,6 +1674,41 @@ class TestLogging(AIPlatformTestCase):
 			settings.save(ignore_permissions=True)
 			clear_pattern_cache()
 
+	def test_malformed_embedding_closes_execution_log_as_failed(self):
+		from types import SimpleNamespace
+
+		from ai_fr_hg.ai.engine import run_embedding
+		from ai_fr_hg.ai.exceptions import ProviderError
+
+		document = self.make_document("Malformed Embedding Audit", "Audit provider failures.")
+		provider = SimpleNamespace(embed=lambda texts, model: [[1.0, 2.0]])
+		with (
+			patch("ai_fr_hg.ai.engine.get_settings", return_value=SimpleNamespace(platform_enabled=1)),
+			patch("ai_fr_hg.ai.engine.get_provider", return_value=provider),
+			self.assertRaises(ProviderError),
+		):
+			run_embedding(
+				["first", "second"],
+				model=self.embedding_model.name,
+				reference_doctype="AI Document",
+				reference_name=document.name,
+			)
+
+		log = frappe.get_all(
+			"AI Execution Log",
+			filters={
+				"operation": "Embedding",
+				"reference_doctype": "AI Document",
+				"reference_name": document.name,
+			},
+			fields=["status", "error_message", "finished_at"],
+			order_by="creation desc",
+			limit=1,
+		)[0]
+		self.assertEqual(log.status, "Failed")
+		self.assertTrue(log.error_message)
+		self.assertTrue(log.finished_at)
+
 	def test_audit_log_is_written(self):
 		from ai_fr_hg.ai.logging import write_audit_log
 
@@ -1052,6 +1749,165 @@ class TestAPIEndpoints(AIPlatformTestCase):
 		status = get_system_status()
 		self.assertIn("checks", status)
 		self.assertTrue(all("label" in check for check in status["checks"]))
+
+	def test_system_status_rejects_authenticated_non_manager(self):
+		from ai_fr_hg.api.admin import get_system_status
+
+		user = frappe.get_doc(
+			{
+				"doctype": "User",
+				"email": "ai-platform-non-manager@example.com",
+				"first_name": "AI Platform Non Manager",
+				"enabled": 1,
+				"send_welcome_email": 0,
+			}
+		).insert(ignore_permissions=True)
+		user.add_roles("AI User")
+		frappe.set_user(user.name)
+		try:
+			with self.assertRaises(frappe.PermissionError):
+				get_system_status()
+		finally:
+			frappe.set_user("Administrator")
+
+	def test_malformed_knowledge_import_fails_before_mutation_or_queueing(self):
+		from ai_fr_hg.api.admin import import_knowledge_base
+
+		file_doc = frappe.get_doc(
+			{
+				"doctype": "File",
+				"file_name": "malformed-ai-knowledge-export.json",
+				"is_private": 1,
+				"content": frappe.as_json(
+					{
+						"knowledge_base": {"name": self.knowledge_base.name},
+						"documents": [{"title": "Missing Content"}],
+					}
+				),
+			}
+		).insert(ignore_permissions=True)
+		before = frappe.db.count("AI Document", {"knowledge_base": self.knowledge_base.name})
+		with (
+			patch("frappe.enqueue") as enqueue,
+			self.assertRaises(frappe.ValidationError),
+		):
+			import_knowledge_base(file_doc.file_url, self.knowledge_base.name)
+
+		self.assertEqual(
+			frappe.db.count("AI Document", {"knowledge_base": self.knowledge_base.name}),
+			before,
+		)
+		enqueue.assert_not_called()
+
+	def test_log_purge_rejects_non_positive_retention(self):
+		from ai_fr_hg.api.admin import purge_logs
+
+		for days in (0, -1):
+			with self.assertRaises(frappe.ValidationError):
+				purge_logs("AI Execution Log", days)
+
+	def test_document_queue_and_reindex_write_provenance(self):
+		from ai_fr_hg.ai.ingestion import enqueue_processing
+		from ai_fr_hg.api.knowledge import reindex_knowledge_base
+
+		knowledge_base = frappe.get_doc(
+			{
+				"doctype": "AI Knowledge Base",
+				"knowledge_base_name": "Queued Provenance Knowledge Base",
+				"enabled": 1,
+				"is_public": 1,
+				"chunk_size": 400,
+				"chunk_overlap": 40,
+			}
+		).insert(ignore_permissions=True)
+		document = frappe.get_doc(
+			{
+				"doctype": "AI Document",
+				"title": "Queued Provenance",
+				"knowledge_base": knowledge_base.name,
+				"source_type": "Text",
+				"content": "Queue this document with strict provenance.",
+				"status": "Draft",
+			}
+		)
+		document.flags.skip_auto_process = True
+		document.insert(ignore_permissions=True)
+		with patch("frappe.enqueue"):
+			queued = enqueue_processing(document.name)
+
+		self.assertEqual(queued["status"], "Queued")
+		self.assertTrue(
+			frappe.db.exists(
+				"AI Audit Log",
+				{
+					"action": "Document Processing Queued",
+					"reference_doctype": "AI Document",
+					"reference_name": document.name,
+				},
+			)
+		)
+
+		frappe.db.set_value("AI Document", document.name, "status", "Indexed")
+		with patch(
+			"ai_fr_hg.ai_knowledge.doctype.ai_document.ai_document.AIDocument.reprocess",
+			return_value={"document": document.name, "status": "Queued"},
+		):
+			result = reindex_knowledge_base(knowledge_base.name)
+
+		self.assertEqual(result["queued"], 1)
+		self.assertEqual(
+			frappe.db.get_value("AI Knowledge Base", knowledge_base.name, "index_status"),
+			"Indexing",
+		)
+		self.assertTrue(
+			frappe.db.exists(
+				"AI Audit Log",
+				{
+					"action": "Knowledge Base Reindex Queued",
+					"reference_doctype": "AI Knowledge Base",
+					"reference_name": knowledge_base.name,
+				},
+			)
+		)
+
+	def test_model_pull_records_durable_lifecycle_and_worker_failure(self):
+		from types import SimpleNamespace
+
+		from ai_fr_hg.api.admin import _pull_model_job
+
+		adapter = SimpleNamespace(pull_model=lambda model: None)
+		with (
+			patch("ai_fr_hg.ai.providers.get_provider", return_value=adapter),
+			patch("ai_fr_hg.ai.monitoring.sync_provider_models", return_value={"created": ["test"]}),
+			patch("ai_fr_hg.ai.logging.write_audit_log") as audit,
+			patch.object(frappe.db, "commit") as commit,
+			patch("frappe.publish_realtime"),
+		):
+			_pull_model_job(self.provider.name, "test-pull-model", "Administrator")
+
+		self.assertEqual([item.kwargs["action"] for item in audit.call_args_list], ["Model Pull Started", "Model Pulled"])
+		self.assertTrue(all(item.kwargs["raise_on_error"] for item in audit.call_args_list))
+		self.assertEqual(commit.call_count, 2)
+
+		failing_adapter = SimpleNamespace(pull_model=lambda model: (_ for _ in ()).throw(RuntimeError("pull failed")))
+		with (
+			patch("ai_fr_hg.ai.providers.get_provider", return_value=failing_adapter),
+			patch("ai_fr_hg.ai.logging.write_audit_log") as failed_audit,
+			patch.object(frappe.db, "commit") as failed_commit,
+			patch.object(frappe.db, "rollback") as rollback,
+			patch("frappe.publish_realtime"),
+			patch("frappe.log_error"),
+			self.assertRaisesRegex(RuntimeError, "pull failed"),
+		):
+			_pull_model_job(self.provider.name, "test-failing-pull-model", "Administrator")
+
+		self.assertEqual(
+			[item.kwargs["action"] for item in failed_audit.call_args_list],
+			["Model Pull Started", "Model Pull Failed"],
+		)
+		self.assertTrue(all(item.kwargs["raise_on_error"] for item in failed_audit.call_args_list))
+		self.assertEqual(failed_commit.call_count, 2)
+		rollback.assert_called_once_with()
 
 	def test_get_knowledge_overview(self):
 		from ai_fr_hg.api.knowledge import get_knowledge_overview
@@ -1145,6 +2001,87 @@ class TestLearningLoop(AIPlatformTestCase):
 
 		report = validate_candidate(candidate)
 		self.assertTrue(report["valid"])
+
+	def test_provenance_is_server_attributed_and_caller_context_is_labelled_unverified(self):
+		from ai_fr_hg.ai.learning import create_candidate
+
+		candidate = create_candidate(
+			content="A provenance-sensitive fact.",
+			user="Administrator",
+			provenance="Approved by an external authority.",
+		)
+		self.assertIn("Source Type: Explicit Teaching", candidate.provenance)
+		self.assertIn("Teaching User: Administrator", candidate.provenance)
+		self.assertIn("Recorded By: Administrator", candidate.provenance)
+		self.assertIn("User-Provided Context (Unverified)", candidate.provenance)
+		self.assertEqual(candidate.provenance_context, "Approved by an external authority.")
+
+	def test_direct_candidate_insertion_is_attributed_and_audited(self):
+		doc = frappe.get_doc(
+			{
+				"doctype": "AI Knowledge Candidate",
+				"title": "Direct Governed Candidate",
+				"content": "Direct insertions still use authoritative learning provenance.",
+				"candidate_type": "Fact",
+				"source_type": "Explicit Teaching",
+				"status": "Draft",
+				"target_scope": "Global",
+				"provenance": "Client-supplied provenance claim",
+			}
+		).insert(ignore_permissions=True)
+
+		self.assertEqual(doc.user, "Administrator")
+		self.assertIn("Teaching User: Administrator", doc.provenance)
+		self.assertIn("User-Provided Context (Unverified)", doc.provenance)
+		self.assertTrue(
+			frappe.db.exists(
+				"AI Audit Log",
+				{
+					"action": "Knowledge Candidate Created",
+					"reference_doctype": "AI Knowledge Candidate",
+					"reference_name": doc.name,
+				},
+			)
+		)
+
+	def test_direct_candidate_audit_failure_propagates_for_transaction_rollback(self):
+		save_point = "candidate_strict_audit_failure"
+		frappe.db.savepoint(save_point)
+		doc = frappe.get_doc(
+			{
+				"doctype": "AI Knowledge Candidate",
+				"title": "Unaudited Candidate Must Roll Back",
+				"content": "This candidate cannot survive a strict audit failure.",
+				"candidate_type": "Fact",
+				"source_type": "Explicit Teaching",
+				"status": "Draft",
+				"target_scope": "Global",
+			}
+		)
+		with (
+			patch("ai_fr_hg.ai.logging.write_audit_log", side_effect=RuntimeError("audit unavailable")),
+			self.assertRaisesRegex(RuntimeError, "audit unavailable"),
+		):
+			doc.insert(ignore_permissions=True)
+		frappe.db.rollback(save_point=save_point)
+		frappe.db.release_savepoint(save_point)
+
+		self.assertFalse(frappe.db.exists("AI Knowledge Candidate", doc.name))
+
+	def test_direct_candidate_requires_source_record_for_document_provenance(self):
+		doc = frappe.get_doc(
+			{
+				"doctype": "AI Knowledge Candidate",
+				"title": "Missing Source",
+				"content": "This claims to come from a document.",
+				"candidate_type": "Document",
+				"source_type": "Document",
+				"status": "Draft",
+				"target_scope": "Global",
+			}
+		)
+		with self.assertRaises(frappe.ValidationError):
+			doc.insert(ignore_permissions=True)
 
 	def test_empty_teaching_is_rejected(self):
 		from ai_fr_hg.ai.learning import LearningError, create_candidate
@@ -1399,9 +2336,15 @@ class TestLearningLoop(AIPlatformTestCase):
 # --------------------------------------------------------------------------
 
 
+def unmarked_pipeline_method(context=None, step=None, config=None):
+	return {"unsafe": True}
+
+
+@pipeline_step_method
 def always_fails(context=None, step=None, config=None):
 	raise ValueError("This step always fails, by design.")
 
 
+@pipeline_step_method
 def always_works(context=None, step=None, config=None):
 	return {"ok": True}

@@ -1,7 +1,7 @@
 # Extending the platform
 
-Three hooks let any Frappe app add capability without modifying this one. Each
-maps a name to a dotted path, and the platform merges them into its built-in
+Four hooks let any Frappe app add capability without modifying this one. Each
+maps a name to a dotted path, and the platform merges them into its governed
 registry at runtime.
 
 ```python
@@ -10,6 +10,7 @@ registry at runtime.
 ai_providers = {"My Runtime": "your_app.ai.providers.MyRuntimeProvider"}
 ai_document_readers = {"dwg": "your_app.ai.readers.DWGReader"}
 ai_tools = {"lookup_customer": "your_app.ai.tools.lookup_customer"}
+ai_pipeline_methods = {"enrich_erp": "your_app.ai.steps.enrich_with_erp_data"}
 ```
 
 ---
@@ -262,9 +263,15 @@ def enrich_with_erp_data(context, step, config):
     return {"matched": bool(match), "supplier": match, "document": document}
 ```
 
-Set the step's **Method** to `your_app.ai.steps.enrich_with_erp_data`. The
-return value is written into the run context under the step's **Output Field**,
-where later steps read it via their **Input Field**.
+Register the dotted path in the extension app's `ai_pipeline_methods` hook,
+then set the step's **Method** to
+`your_app.ai.steps.enrich_with_erp_data`. Unregistered methods are rejected at
+both configuration and execution time. The callable runs as the user who
+started the Pipeline and must use permission-aware Frappe APIs; it must never
+elevate privileges.
+
+The return value is written into the run context under the step's **Output
+Field**, where later steps read it via their **Input Field**.
 
 ---
 

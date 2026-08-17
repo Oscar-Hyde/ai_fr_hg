@@ -28,6 +28,7 @@
   "conflicts_summary",
   "provenance_sec",
   "provenance",
+  "provenance_context",
   "user",
   "source_type",
   "source_reference_doctype",
@@ -155,9 +156,17 @@
    "label": "Provenance"
   },
   {
+   "description": "System-generated source attribution. This value cannot be supplied by a model or client.",
    "fieldname": "provenance",
    "fieldtype": "Small Text",
-   "label": "Provenance"
+   "label": "Provenance",
+   "read_only": 1
+  },
+  {
+   "description": "Optional source context supplied by the teaching user. It is retained as unverified context, not authoritative attribution.",
+   "fieldname": "provenance_context",
+   "fieldtype": "Small Text",
+   "label": "Source Context"
   },
   {
    "fieldname": "user",

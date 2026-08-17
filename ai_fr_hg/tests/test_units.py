@@ -133,6 +133,9 @@ class TestVectorMath(UnitTestCase):
 		self.assertAlmostEqual(vector.norm([3.0, 4.0]), 5.0, places=5)
 		self.assertEqual(vector.norm([]), 0.0)
 
+	def test_norm_does_not_overflow_for_finite_values(self):
+		self.assertTrue(math.isfinite(vector.norm([1e300, 1e300])))
+
 	def test_normalize_produces_unit_vector(self):
 		normalised = vector.normalize([3.0, 4.0])
 		self.assertAlmostEqual(vector.norm(normalised), 1.0, places=5)
@@ -192,6 +195,51 @@ class TestVectorMath(UnitTestCase):
 			vector.decode_vector(vector.encode_vector(b)),
 		)
 		self.assertAlmostEqual(direct, restored, places=4)
+
+
+class TestEmbeddingProviderContract(UnitTestCase):
+	def setUp(self):
+		from ai_fr_hg.ai.engine import _validate_embedding_response
+
+		self.validate = _validate_embedding_response
+
+	def test_valid_vectors_are_normalised_to_floats(self):
+		self.assertEqual(
+			self.validate([[1, 2], [3.0, 4.0]], expected_count=2),
+			[[1.0, 2.0], [3.0, 4.0]],
+		)
+
+	def test_wrong_vector_count_is_rejected(self):
+		from ai_fr_hg.ai.exceptions import ProviderError
+
+		with self.assertRaises(ProviderError):
+			self.validate([[1.0, 2.0]], expected_count=2)
+
+	def test_non_list_response_is_rejected(self):
+		from ai_fr_hg.ai.exceptions import ProviderError
+
+		with self.assertRaises(ProviderError):
+			self.validate(None, expected_count=1)
+
+	def test_non_finite_zero_boolean_and_mixed_dimensions_are_rejected(self):
+		from ai_fr_hg.ai.exceptions import ProviderError
+
+		invalid = (
+			[[float("nan"), 1.0]],
+			[[0.0, 0.0]],
+			[[True, 1.0]],
+			[["1.0", 2.0]],
+			[[1.0, 2.0], [1.0, 2.0, 3.0]],
+		)
+		for vectors in invalid:
+			with self.subTest(vectors=vectors), self.assertRaises(ProviderError):
+				self.validate(vectors, expected_count=len(vectors))
+
+	def test_configured_dimensions_are_enforced(self):
+		from ai_fr_hg.ai.exceptions import ProviderError
+
+		with self.assertRaises(ProviderError):
+			self.validate([[1.0, 2.0]], expected_count=1, expected_dimensions=3)
 
 
 class TestJSONParsing(UnitTestCase):

@@ -16,12 +16,19 @@ class AIToolInvocation(Document):
 	if TYPE_CHECKING:
 		from frappe.types import DF
 
+		agent: DF.Link | None
+		approved_at: DF.Datetime | None
+		approved_by: DF.Link | None
 		arguments: DF.Code | None
 		conversation: DF.Link | None
 		duration_ms: DF.Int
 		error_message: DF.SmallText | None
 		finished_at: DF.Datetime | None
 		message: DF.Link | None
+		pipeline_run: DF.Link | None
+		rejected_at: DF.Datetime | None
+		rejected_by: DF.Link | None
+		requested_at: DF.Datetime | None
 		result: DF.Code | None
 		started_at: DF.Datetime | None
 		status: DF.Literal["Pending Approval", "Running", "Success", "Failed", "Rejected"]

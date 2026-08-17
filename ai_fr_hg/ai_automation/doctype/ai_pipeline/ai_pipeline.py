@@ -38,10 +38,14 @@ class AIPipeline(Document):
 		self.validate_schedule()
 
 	def validate_steps(self):
+		from ai_fr_hg.ai.exceptions import PipelineError
+		from ai_fr_hg.ai.pipeline import resolve_pipeline_step_method, validate_pipeline_dependencies
+
 		if not self.steps:
 			frappe.throw(_("A pipeline needs at least one step."))
 
 		seen = set()
+		dependencies = []
 		for step in self.steps:
 			if step.step_name in seen:
 				frappe.throw(_("Row {0}: step name {1} is duplicated.").format(step.idx, step.step_name))
@@ -63,8 +67,17 @@ class AIPipeline(Document):
 					)
 				)
 
-			if step.step_type == "Pipeline" and step.sub_pipeline == self.name:
-				frappe.throw(_("Row {0}: a pipeline cannot call itself.").format(step.idx))
+			if step.step_type == "Pipeline":
+				if step.sub_pipeline == self.name:
+					frappe.throw(_("Row {0}: a pipeline cannot call itself.").format(step.idx))
+				if step.sub_pipeline:
+					dependencies.append(step.sub_pipeline)
+
+			if step.step_type == "Custom Method" and step.method:
+				try:
+					resolve_pipeline_step_method(step.method)
+				except Exception as exc:
+					frappe.throw(_("Row {0}: {1}").format(step.idx, str(exc)))
 
 			if step.config:
 				import json
@@ -75,6 +88,11 @@ class AIPipeline(Document):
 					frappe.throw(
 						_("Row {0}: Configuration is not valid JSON: {1}").format(step.idx, str(exc))
 					)
+
+		try:
+			validate_pipeline_dependencies(self.name, dependencies)
+		except PipelineError as exc:
+			frappe.throw(str(exc))
 
 	def validate_schedule(self):
 		if self.trigger_type != "Scheduled":

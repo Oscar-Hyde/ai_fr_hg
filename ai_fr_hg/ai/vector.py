@@ -51,8 +51,12 @@ def norm(vector: list[float]) -> float:
 	if not vector:
 		return 0.0
 	if _np is not None:
-		return float(_np.linalg.norm(_np.asarray(vector, dtype=_np.float32)))
-	return math.sqrt(sum(value * value for value in vector))
+		# Normalisation happens before float32 storage. Keep float64 precision here
+		# so large but finite provider values do not overflow during validation.
+		return float(_np.hypot.reduce(_np.asarray(vector, dtype=_np.float64)))
+	# ``hypot`` scales intermediate values and avoids overflow for otherwise
+	# finite provider output where a naive sum-of-squares would become infinity.
+	return math.hypot(*vector)
 
 
 def normalize(vector: list[float]) -> list[float]:
@@ -61,7 +65,7 @@ def normalize(vector: list[float]) -> list[float]:
 	if not length:
 		return list(vector)
 	if _np is not None:
-		return (_np.asarray(vector, dtype=_np.float32) / length).tolist()
+		return (_np.asarray(vector, dtype=_np.float64) / length).tolist()
 	return [value / length for value in vector]
 
 

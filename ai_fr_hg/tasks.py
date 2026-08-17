@@ -39,19 +39,11 @@ def process_pending_documents() -> None:
 	if not frappe.db.get_single_value("AI Platform Settings", "platform_enabled"):
 		return
 
-	from ai_fr_hg.ai.ingestion import enqueue_processing
+	from ai_fr_hg.ai.ingestion import process_pending_documents as reconcile_documents
 
-	stuck = frappe.get_all(
-		"AI Document",
-		filters={
-			"status": "Queued",
-			"modified": ["<", add_days(now_datetime(), -1)],
-		},
-		pluck="name",
-		limit=25,
-	)
-	for document in stuck:
-		enqueue_processing(document)
+	# Authority, retry limits, queue deduplication, and stale-job inspection all
+	# belong to the canonical ingestion service.
+	reconcile_documents()
 
 	# Chunks that were created but never embedded, e.g. the runtime was down.
 	unembedded = frappe.get_all(

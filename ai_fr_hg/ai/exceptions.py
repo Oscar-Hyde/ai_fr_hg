@@ -50,5 +50,33 @@ class DocumentProcessingError(AIError):
 	"""Raised when a document cannot be read or indexed."""
 
 
+class DocumentSourcePermissionError(DocumentProcessingError):
+	"""The requesting user is not authorised to read the configured source."""
+
+
+class UnsupportedDocumentError(DocumentProcessingError):
+	"""No registered reader can safely process the source format."""
+
+
+class CorruptDocumentError(DocumentProcessingError):
+	"""A registered reader rejected malformed or unreadable content."""
+
+
+class DocumentResourceLimitError(DocumentProcessingError):
+	"""A source exceeded a deterministic ingestion size or redirect limit."""
+
+
+class DocumentFetchError(DocumentProcessingError):
+	"""A URL source could not be fetched safely."""
+
+
 class PipelineError(AIError):
 	"""Raised when a pipeline step fails and the policy is to stop."""
+
+
+class PipelineStepRecordedError(PipelineError):
+	"""A canonical step owner already persisted its failure/audit outcome."""
+
+
+class PipelineApprovalRequired(PipelineStepRecordedError):
+	"""A pipeline tool step created a durable approval request and must stop."""

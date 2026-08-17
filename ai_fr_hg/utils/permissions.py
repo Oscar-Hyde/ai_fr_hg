@@ -1,137 +1,227 @@
 # Copyright (c) 2026, Ai Fr Hg and contributors
 # For license information, please see license.txt
 
-"""Row-level permission rules layered on top of Frappe's role permissions."""
+"""Row-level permission rules for AI_FR_HG records.
+
+Frappe role permissions answer *which DocTypes* a user may use.  These hooks
+answer *which rows* within the shared operational DocTypes they may see or
+change.  Keep both the list-query and direct-document paths here so opening a
+known document name can never bypass the conditions used by ``get_list``.
+"""
+
+from __future__ import annotations
 
 import frappe
 
-MANAGER_ROLES = {"System Manager", "AI Manager"}
-LEARNING_REVIEW_ROLES = MANAGER_ROLES | {"AI Auditor"}
+_MANAGER_ROLES = {"System Manager", "AI Manager"}
+_READ_PERMISSION_TYPES = {"read", "select", "report", "export", "print", "email"}
 
 
 def has_app_permission() -> bool:
-	"""Whether the current user should see the AI Platform on the apps screen."""
-	roles = set(frappe.get_roles())
-	return bool(roles.intersection(MANAGER_ROLES | {"AI User", "AI Auditor"}))
+	"""Whether the current user should see AI_FR_HG on Frappe's apps screen."""
+	return bool(_roles(frappe.session.user).intersection(_MANAGER_ROLES | {"AI User", "AI Auditor"}))
 
 
-def _is_manager(user: str | None = None) -> bool:
-	user = user or frappe.session.user
-	return user == "Administrator" or bool(set(frappe.get_roles(user)).intersection(MANAGER_ROLES))
+def _roles(user: str) -> set[str]:
+	return set(frappe.get_roles(user))
 
 
-def get_accessible_knowledge_base_list(user: str | None = None) -> list[str]:
-	"""Knowledge bases readable by `user`, honouring per-base role restrictions."""
-	from ai_fr_hg.ai.knowledge import get_accessible_knowledge_bases
-
-	return get_accessible_knowledge_bases(user)
+def _is_manager(user: str) -> bool:
+	return user == "Administrator" or bool(_roles(user).intersection(_MANAGER_ROLES))
 
 
-def get_document_query_conditions(user: str | None = None) -> str:
-	"""Restrict AI Document lists to knowledge bases the user may read."""
-	user = user or frappe.session.user
+def _is_auditor(user: str) -> bool:
+	return "AI Auditor" in _roles(user)
+
+
+def _is_read(permission_type: str | None) -> bool:
+	return (permission_type or "read").lower() in _READ_PERMISSION_TYPES
+
+
+def _escape(value: str) -> str:
+	return frappe.db.escape(value)
+
+
+def _role_sql(user: str) -> str:
+	roles = sorted(_roles(user))
+	return ", ".join(_escape(role) for role in roles) or "''"
+
+
+def _owned_condition(doctype: str, field: str, user: str, *, auditors: bool = False) -> str:
+	if _is_manager(user) or (auditors and _is_auditor(user)):
+		return ""
+	return f"`tab{doctype}`.`{field}` = {_escape(user)}"
+
+
+# ---------------------------------------------------------------------------
+# List-query conditions
+# ---------------------------------------------------------------------------
+
+
+def conversation_query(user: str) -> str:
+	return _owned_condition("AI Conversation", "user", user)
+
+
+def message_query(user: str) -> str:
 	if _is_manager(user):
 		return ""
-
-	accessible = get_accessible_knowledge_base_list(user)
-	if not accessible:
-		return "1 = 0"
-
-	rendered = ", ".join(frappe.db.escape(kb) for kb in accessible)
-	return f"`tabAI Document`.`knowledge_base` in ({rendered})"
+	return (
+		"`tabAI Message`.`conversation` in "
+		f"(select name from `tabAI Conversation` where `user` = {_escape(user)})"
+	)
 
 
-def has_document_permission(doc, ptype: str | None = None, user: str | None = None) -> bool:
-	"""Row-level check matching :func:`get_document_query_conditions`."""
-	user = user or frappe.session.user
+def knowledge_base_query(user: str) -> str:
 	if _is_manager(user):
-		return True
-	return doc.knowledge_base in get_accessible_knowledge_base_list(user)
+		return ""
+	return (
+		"(`tabAI Knowledge Base`.`is_public` = 1 or exists ("
+		"select 1 from `tabAI Knowledge Base Role` kb_role "
+		"where kb_role.parent = `tabAI Knowledge Base`.name "
+		"and kb_role.parenttype = 'AI Knowledge Base' "
+		f"and kb_role.role in ({_role_sql(user)})))"
+	)
 
 
-def has_knowledge_base_permission(doc, ptype: str | None = None, user: str | None = None) -> bool:
-	"""Private knowledge bases are visible only to their listed roles."""
-	user = user or frappe.session.user
+def document_query(user: str) -> str:
 	if _is_manager(user):
-		return True
-	if doc.is_public:
-		# Writing to a shared base still needs an explicit grant.
-		if ptype in ("write", "create", "delete"):
-			return _has_write_grant(doc, user)
-		return True
-
-	allowed = [row.role for row in doc.get("restrict_to_roles") or []]
-	if not set(frappe.get_roles(user)).intersection(allowed):
-		return False
-	if ptype in ("write", "create", "delete"):
-		return _has_write_grant(doc, user)
-	return True
-
-
-def _has_write_grant(doc, user: str) -> bool:
-	roles = set(frappe.get_roles(user))
-	for row in doc.get("restrict_to_roles") or []:
-		if row.role in roles and row.can_write:
-			return True
-	return False
-
-
-def _can_review_learning(user: str) -> bool:
-	return user == "Administrator" or bool(set(frappe.get_roles(user)).intersection(LEARNING_REVIEW_ROLES))
-
-
-def get_candidate_query_conditions(user: str | None = None) -> str:
-	"""Learners see their own candidates; reviewers see the complete queue."""
-	user = user or frappe.session.user
-	if _can_review_learning(user):
 		return ""
-	return f"`tabAI Knowledge Candidate`.`user` = {frappe.db.escape(user)}"
+	return (
+		"`tabAI Document`.`knowledge_base` in ("
+		"select kb.name from `tabAI Knowledge Base` kb "
+		"where kb.is_public = 1 or exists ("
+		"select 1 from `tabAI Knowledge Base Role` kb_role "
+		"where kb_role.parent = kb.name and kb_role.parenttype = 'AI Knowledge Base' "
+		f"and kb_role.role in ({_role_sql(user)})))"
+	)
 
 
-def has_candidate_permission(doc, ptype: str | None = None, user: str | None = None) -> bool:
-	user = user or frappe.session.user
-	return _can_review_learning(user) or doc.user == user
+def chunk_query(user: str) -> str:
+	if _is_manager(user):
+		return ""
+	return (
+		"`tabAI Document Chunk`.`knowledge_base` in ("
+		"select kb.name from `tabAI Knowledge Base` kb "
+		"where kb.is_public = 1 or exists ("
+		"select 1 from `tabAI Knowledge Base Role` kb_role "
+		"where kb_role.parent = kb.name and kb_role.parenttype = 'AI Knowledge Base' "
+		f"and kb_role.role in ({_role_sql(user)})))"
+	)
 
 
-def _learning_scope_query(table: str, user: str) -> str:
-	if _can_review_learning(user):
+def agent_query(user: str) -> str:
+	if _is_manager(user):
+		return ""
+	return (
+		"(not exists (select 1 from `tabAI Agent Role` agent_role "
+		"where agent_role.parent = `tabAI Agent`.name and agent_role.parenttype = 'AI Agent') "
+		"or exists (select 1 from `tabAI Agent Role` agent_role "
+		"where agent_role.parent = `tabAI Agent`.name and agent_role.parenttype = 'AI Agent' "
+		f"and agent_role.role in ({_role_sql(user)})))"
+	)
+
+
+def candidate_query(user: str) -> str:
+	if _is_manager(user) or _is_auditor(user):
+		return ""
+	return _owned_condition("AI Knowledge Candidate", "user", user)
+
+
+def _learning_scope_query(doctype: str, user: str) -> str:
+	if _is_manager(user) or _is_auditor(user):
 		return ""
 
-	roles = set(frappe.get_roles(user))
-	escaped_roles = ", ".join(frappe.db.escape(role) for role in roles) or "''"
-	escaped_user = frappe.db.escape(user)
+	table = f"tab{doctype}"
+	roles = _role_sql(user)
 	return f"""(
 		`{table}`.`scope` = 'Global'
-		or (`{table}`.`scope` = 'User' and `{table}`.`scope_value` = {escaped_user})
-		or (`{table}`.`scope` = 'Role' and `{table}`.`scope_value` in ({escaped_roles}))
+		or (`{table}`.`scope` = 'User' and `{table}`.`scope_value` = {_escape(user)})
+		or (`{table}`.`scope` = 'Role' and `{table}`.`scope_value` in ({roles}))
 		or (`{table}`.`scope` = 'Agent' and (
 			not exists (
-				select 1 from `tabAI Agent Role` ar
-				where ar.parent = `{table}`.`scope_value` and ar.parenttype = 'AI Agent'
+				select 1 from `tabAI Agent Role` agent_role
+				where agent_role.parent = `{table}`.`scope_value`
+					and agent_role.parenttype = 'AI Agent'
 			)
 			or exists (
-				select 1 from `tabAI Agent Role` ar
-				where ar.parent = `{table}`.`scope_value`
-					and ar.parenttype = 'AI Agent' and ar.role in ({escaped_roles})
+				select 1 from `tabAI Agent Role` agent_role
+				where agent_role.parent = `{table}`.`scope_value`
+					and agent_role.parenttype = 'AI Agent'
+					and agent_role.role in ({roles})
 			)
 		))
 	)"""
 
 
-def get_memory_query_conditions(user: str | None = None) -> str:
-	return _learning_scope_query("tabAI Memory", user or frappe.session.user)
+def memory_query(user: str) -> str:
+	return _learning_scope_query("AI Memory", user)
 
 
-def get_skill_query_conditions(user: str | None = None) -> str:
-	return _learning_scope_query("tabAI Skill", user or frappe.session.user)
+def skill_query(user: str) -> str:
+	return _learning_scope_query("AI Skill", user)
+
+
+def task_query(user: str) -> str:
+	return _owned_condition("AI Task", "owner", user, auditors=True)
+
+
+def pipeline_run_query(user: str) -> str:
+	return _owned_condition("AI Pipeline Run", "triggered_by", user, auditors=True)
+
+
+def execution_log_query(user: str) -> str:
+	return _owned_condition("AI Execution Log", "user", user, auditors=True)
+
+
+def search_query(user: str) -> str:
+	return _owned_condition("AI Search Query", "user", user, auditors=True)
+
+
+def tool_invocation_query(user: str) -> str:
+	return _owned_condition("AI Tool Invocation", "user", user, auditors=True)
+
+
+# ---------------------------------------------------------------------------
+# Direct-document permission
+# ---------------------------------------------------------------------------
+
+
+def _knowledge_base_access(knowledge_base: str | None, user: str, *, write: bool = False) -> bool:
+	if not knowledge_base:
+		return False
+	if _is_manager(user):
+		return True
+
+	kb = frappe.db.get_value("AI Knowledge Base", knowledge_base, ["is_public"], as_dict=True)
+	if not kb:
+		return False
+
+	roles = _roles(user)
+	grants = frappe.get_all(
+		"AI Knowledge Base Role",
+		filters={"parent": knowledge_base, "parenttype": "AI Knowledge Base"},
+		fields=["role", "can_write"],
+	)
+	matching = [grant for grant in grants if grant.role in roles]
+	if write:
+		return any(bool(grant.can_write) for grant in matching)
+	return bool(kb.is_public or matching)
+
+
+def _owned_document_access(doc, user: str, field: str, permission_type: str, *, auditors=False) -> bool:
+	if _is_manager(user):
+		return True
+	if auditors and _is_auditor(user):
+		return _is_read(permission_type)
+	return doc.get(field) == user
 
 
 def _learning_scope_applies(doc, user: str) -> bool:
-	if _can_review_learning(user):
+	if _is_manager(user) or _is_auditor(user):
 		return True
 	scope = doc.scope or "Global"
 	value = doc.scope_value
-	roles = set(frappe.get_roles(user))
+	roles = _roles(user)
 	if scope == "Global":
 		return True
 	if scope == "User":
@@ -139,14 +229,61 @@ def _learning_scope_applies(doc, user: str) -> bool:
 	if scope == "Role":
 		return bool(value) and value in roles
 	if scope == "Agent" and value:
-		allowed = set(frappe.get_all("AI Agent Role", filters={"parent": value}, pluck="role"))
-		return not allowed or bool(roles.intersection(allowed))
+		allowed = set(
+			frappe.get_all(
+				"AI Agent Role",
+				filters={"parent": value, "parenttype": "AI Agent"},
+				pluck="role",
+			)
+		)
+		return not allowed or bool(allowed.intersection(roles))
 	return False
 
 
-def has_memory_permission(doc, ptype: str | None = None, user: str | None = None) -> bool:
-	return _learning_scope_applies(doc, user or frappe.session.user)
+def has_document_permission(
+	doc,
+	ptype: str | None = None,
+	user: str | None = None,
+	permission_type: str | None = None,
+) -> bool:
+	"""Return row-level access for every shared AI record registered in hooks."""
+	user = user or frappe.session.user
+	permission_type = (permission_type or ptype or "read").lower()
 
+	if _is_manager(user):
+		return True
 
-def has_skill_permission(doc, ptype: str | None = None, user: str | None = None) -> bool:
-	return _learning_scope_applies(doc, user or frappe.session.user)
+	if doc.doctype == "AI Conversation":
+		return doc.user == user or doc.owner == user
+	if doc.doctype == "AI Message":
+		conversation = frappe.db.get_value(
+			"AI Conversation", doc.conversation, ["user", "owner"], as_dict=True
+		)
+		return bool(conversation and user in {conversation.user, conversation.owner})
+	if doc.doctype == "AI Knowledge Base":
+		# can_write controls document ingestion into a base, not modification of
+		# the base's security/configuration record itself.
+		return _knowledge_base_access(doc.name, user, write=False) if _is_read(permission_type) else False
+	if doc.doctype == "AI Document":
+		return _knowledge_base_access(doc.knowledge_base, user, write=not _is_read(permission_type))
+	if doc.doctype == "AI Document Chunk":
+		return _is_read(permission_type) and _knowledge_base_access(doc.knowledge_base, user)
+	if doc.doctype == "AI Agent":
+		if not _is_read(permission_type):
+			return False
+		allowed = {row.role for row in (doc.get("allowed_roles") or [])}
+		return not allowed or bool(allowed.intersection(_roles(user)))
+	if doc.doctype == "AI Knowledge Candidate":
+		if _is_auditor(user):
+			return _is_read(permission_type)
+		return doc.user == user
+	if doc.doctype in {"AI Memory", "AI Skill"}:
+		return _is_read(permission_type) and _learning_scope_applies(doc, user)
+	if doc.doctype == "AI Task":
+		return _owned_document_access(doc, user, "owner", permission_type, auditors=True)
+	if doc.doctype == "AI Pipeline Run":
+		return _owned_document_access(doc, user, "triggered_by", permission_type, auditors=True)
+	if doc.doctype in {"AI Execution Log", "AI Search Query", "AI Tool Invocation"}:
+		return _owned_document_access(doc, user, "user", permission_type, auditors=True)
+
+	return False

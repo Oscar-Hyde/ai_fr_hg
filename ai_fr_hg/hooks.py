@@ -196,22 +196,25 @@ before_uninstall = "ai_fr_hg.uninstall.before_uninstall"
 # Permissions evaluated in scripted ways
 
 permission_query_conditions = {
-	"AI Conversation": "ai_fr_hg.ai_conversation.doctype.ai_conversation.ai_conversation.get_permission_query_conditions",
-	"AI Message": "ai_fr_hg.ai_conversation.doctype.ai_message.ai_message.get_permission_query_conditions",
-	"AI Document": "ai_fr_hg.utils.permissions.get_document_query_conditions",
-	"AI Knowledge Candidate": "ai_fr_hg.utils.permissions.get_candidate_query_conditions",
-	"AI Memory": "ai_fr_hg.utils.permissions.get_memory_query_conditions",
-	"AI Skill": "ai_fr_hg.utils.permissions.get_skill_query_conditions",
+	"AI Conversation": "ai_fr_hg.utils.permissions.conversation_query",
+	"AI Message": "ai_fr_hg.utils.permissions.message_query",
+	"AI Knowledge Base": "ai_fr_hg.utils.permissions.knowledge_base_query",
+	"AI Document": "ai_fr_hg.utils.permissions.document_query",
+	"AI Document Chunk": "ai_fr_hg.utils.permissions.chunk_query",
+	"AI Agent": "ai_fr_hg.utils.permissions.agent_query",
+	"AI Knowledge Candidate": "ai_fr_hg.utils.permissions.candidate_query",
+	"AI Memory": "ai_fr_hg.utils.permissions.memory_query",
+	"AI Skill": "ai_fr_hg.utils.permissions.skill_query",
+	"AI Task": "ai_fr_hg.utils.permissions.task_query",
+	"AI Pipeline Run": "ai_fr_hg.utils.permissions.pipeline_run_query",
+	"AI Execution Log": "ai_fr_hg.utils.permissions.execution_log_query",
+	"AI Search Query": "ai_fr_hg.utils.permissions.search_query",
+	"AI Tool Invocation": "ai_fr_hg.utils.permissions.tool_invocation_query",
 }
 
 has_permission = {
-	"AI Conversation": "ai_fr_hg.ai_conversation.doctype.ai_conversation.ai_conversation.has_permission",
-	"AI Message": "ai_fr_hg.ai_conversation.doctype.ai_message.ai_message.has_permission",
-	"AI Document": "ai_fr_hg.utils.permissions.has_document_permission",
-	"AI Knowledge Base": "ai_fr_hg.utils.permissions.has_knowledge_base_permission",
-	"AI Knowledge Candidate": "ai_fr_hg.utils.permissions.has_candidate_permission",
-	"AI Memory": "ai_fr_hg.utils.permissions.has_memory_permission",
-	"AI Skill": "ai_fr_hg.utils.permissions.has_skill_permission",
+	doctype: "ai_fr_hg.utils.permissions.has_document_permission"
+	for doctype in permission_query_conditions
 }
 
 # Document Events
@@ -364,16 +367,19 @@ default_log_clearing_doctypes = {
 # ai_providers        - new AI runtime adapters       (BaseProvider subclasses)
 # ai_document_readers - new file format readers       (BaseReader subclasses)
 # ai_tools            - new built-in tool handlers    (plain callables)
+# ai_pipeline_methods - trusted Custom Method steps   (plain callables)
 #
 # Example, in another app's hooks.py:
 #
 # ai_providers = {"My Runtime": "my_app.providers.MyRuntimeProvider"}
 # ai_document_readers = {"dwg": "my_app.readers.DWGReader"}
 # ai_tools = {"lookup_customer": "my_app.tools.lookup_customer"}
+# ai_pipeline_methods = {"sync_customer": "my_app.pipelines.sync_customer"}
 
 ai_providers = {}
 ai_document_readers = {}
 ai_tools = {}
+ai_pipeline_methods = {}
 
 # Fixtures shipped with the app
 # -----------------------------

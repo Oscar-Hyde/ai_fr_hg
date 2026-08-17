@@ -45,6 +45,7 @@ class AIPlatformSettings(Document):
 		health_log_retention_days: DF.Int
 		log_prompts: DF.Check
 		log_responses: DF.Check
+		allow_user_url_ingestion: DF.Check
 		max_context_characters: DF.Int
 		max_document_size_mb: DF.Int
 		max_requests_per_user_per_hour: DF.Int

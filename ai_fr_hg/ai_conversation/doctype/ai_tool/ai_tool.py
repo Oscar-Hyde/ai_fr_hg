@@ -4,6 +4,7 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
+from frappe.utils import cint
 
 
 class AITool(Document):
@@ -41,6 +42,7 @@ class AITool(Document):
 	def validate(self):
 		self.validate_name()
 		self.validate_target()
+		self.validate_runtime_limit()
 		self.json_schema = frappe.as_json(self.build_schema())
 
 	def validate_name(self):
@@ -70,8 +72,12 @@ class AITool(Document):
 				_("{0} is required for a {1} tool.").format(_(self.meta.get_label(required)), self.tool_type)
 			)
 
-		if self.tool_type == "DocType Action":
+		if self.tool_type in {"DocType Action", "Server Method", "Pipeline"}:
+			# These targets may mutate state or call external systems; a client-
+			# supplied Read Only checkbox must never bypass the approval policy.
 			self.is_readonly_tool = 0
+		elif self.tool_type in {"DocType Query", "Report"}:
+			self.is_readonly_tool = 1
 		if self.tool_type == "Builtin" and self.handler:
 			from ai_fr_hg.ai.tools import get_builtin_handlers
 
@@ -81,6 +87,12 @@ class AITool(Document):
 						self.handler, ", ".join(sorted(get_builtin_handlers()))
 					)
 				)
+
+	def validate_runtime_limit(self):
+		seconds = cint(self.max_runtime_seconds)
+		if seconds < 1 or seconds > 3600:
+			frappe.throw(_("Maximum Runtime must be between 1 and 3600 seconds."))
+		self.max_runtime_seconds = seconds
 
 	def build_schema(self) -> dict:
 		from ai_fr_hg.ai.tools import build_tool_schema

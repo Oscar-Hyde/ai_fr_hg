@@ -43,6 +43,7 @@
   "ingest_cb",
   "max_document_size_mb",
   "ocr_enabled",
+  "allow_user_url_ingestion",
   "storage_tab",
   "storage_folder",
   "encrypt_documents",
@@ -285,6 +286,13 @@
    "fieldname": "ocr_enabled",
    "fieldtype": "Check",
    "label": "Enable OCR Fallback"
+  },
+  {
+   "default": "0",
+   "description": "Allow non-manager users with knowledge-base write grants to fetch URL sources from Additional Allowed Hosts. Redirects and response sizes remain guarded.",
+   "fieldname": "allow_user_url_ingestion",
+   "fieldtype": "Check",
+   "label": "Allow User URL Ingestion"
   },
   {
    "fieldname": "storage_tab",

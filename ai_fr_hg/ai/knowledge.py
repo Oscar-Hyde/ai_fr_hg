@@ -9,16 +9,19 @@ is materially more reliable than either signal alone for enterprise content
 full of identifiers, part numbers and proper nouns.
 """
 
+import math
 import re
 import time
 from dataclasses import dataclass
+from numbers import Real
 
 import frappe
 from frappe import _
 from frappe.utils import cint, flt, now_datetime
 
 from ai_fr_hg.ai.chunking import chunk_text
-from ai_fr_hg.ai.engine import run_embedding
+from ai_fr_hg.ai.engine import resolve_model, run_embedding
+from ai_fr_hg.ai.exceptions import DocumentProcessingError
 from ai_fr_hg.ai.vector import decode_vector, encode_vector, normalize, rank
 from ai_fr_hg.utils.db import safe_set_value
 
@@ -62,8 +65,8 @@ class RetrievedChunk:
 # ---------------------------------------------------------------------------
 
 
-def index_document(document: str, force: bool = False) -> dict:
-	"""Chunk and embed an `AI Document`. Returns a summary of the work done."""
+def index_document(document: str, force: bool = False, embed: bool = True) -> dict:
+	"""Build an `AI Document` chunk index and optionally embed new chunks."""
 	doc = frappe.get_doc("AI Document", document)
 	if not doc.content or not doc.content.strip():
 		frappe.throw(_("Document {0} has no extracted text to index.").format(document))
@@ -83,31 +86,39 @@ def index_document(document: str, force: bool = False) -> dict:
 		doc.db_set("error_message", "Chunking produced no content.", update_modified=False)
 		return {"document": document, "chunks": 0, "embedded": 0}
 
-	existing = {
-		row.checksum: row.name
-		for row in frappe.get_all(
-			"AI Document Chunk", filters={"document": document}, fields=["name", "checksum"]
-		)
-	}
+	existing_rows = frappe.get_all(
+		"AI Document Chunk",
+		filters={"document": document},
+		fields=["name", "checksum", "embedding", "embedding_model"],
+	)
+	existing = {row.checksum: row for row in existing_rows}
 	incoming = {chunk.checksum for chunk in chunks}
 
 	# Remove chunks that no longer exist in the re-processed document.
-	for checksum, name in existing.items():
+	for checksum, row in existing.items():
 		if force or checksum not in incoming:
-			frappe.delete_doc("AI Document Chunk", name, force=True, ignore_permissions=True)
+			frappe.delete_doc("AI Document Chunk", row.name, force=True, ignore_permissions=True)
 	if force:
 		existing = {}
 
-	model = kb.embedding_model or settings.default_embedding_model
-	doc.db_set("status", "Embedding", update_modified=False)
+	model = None
+	if embed:
+		model = resolve_model(kb.embedding_model or settings.default_embedding_model, "Embedding").name
+		doc.db_set("status", "Embedding", update_modified=False)
 
 	created = 0
 	embedded = 0
-	pending: list = []
+	pending_names = [
+		row.name
+		for checksum, row in existing.items()
+		if embed
+		and checksum in incoming
+		and (not row.embedding or (bool(model) and row.embedding_model != model))
+	]
 
 	for chunk in chunks:
 		if chunk.checksum in existing:
-			continue  # unchanged, keep its existing embedding
+			continue  # unchanged; stale/missing embeddings are queued above
 		row = frappe.new_doc("AI Document Chunk")
 		row.update(
 			{
@@ -125,10 +136,10 @@ def index_document(document: str, force: bool = False) -> dict:
 		row.flags.ignore_permissions = True
 		row.insert(ignore_permissions=True)
 		created += 1
-		pending.append(row)
+		pending_names.append(row.name)
 
-	if model and pending:
-		embedded = embed_chunks([row.name for row in pending], model=model)
+	if embed and pending_names:
+		embedded = embed_chunks(pending_names, model=model)
 
 	total_chunks = frappe.db.count("AI Document Chunk", {"document": document})
 	total_embedded = frappe.db.count("AI Document Chunk", {"document": document, "embedding": ["!=", ""]})
@@ -155,42 +166,98 @@ def index_document(document: str, force: bool = False) -> dict:
 
 
 def embed_chunks(chunk_names: list[str], model: str | None = None) -> int:
-	"""Embed the given chunks in batches. Returns how many were embedded."""
+	"""Embed every requested readable chunk or raise a typed, traceable error."""
 	if not chunk_names:
 		return 0
+	model_doc = resolve_model(model, "Embedding")
+	model = model_doc.name
+	expected_dimensions = cint(model_doc.embedding_dimensions)
 
+	# Preserve caller order so provider vectors can be paired deterministically.
+	requested = list(dict.fromkeys(chunk_names))
 	embedded = 0
-	for start in range(0, len(chunk_names), EMBED_BATCH_SIZE):
-		batch = chunk_names[start : start + EMBED_BATCH_SIZE]
-		rows = frappe.get_all(
-			"AI Document Chunk", filters={"name": ["in", batch]}, fields=["name", "content"]
+	knowledge_bases: set[str] = set()
+	documents: set[str] = set()
+	for start in range(0, len(requested), EMBED_BATCH_SIZE):
+		batch = requested[start : start + EMBED_BATCH_SIZE]
+		found = frappe.get_all(
+			"AI Document Chunk",
+			filters={"name": ["in", batch]},
+			fields=["name", "content", "document", "knowledge_base"],
 		)
-		rows = [row for row in rows if (row.content or "").strip()]
-		if not rows:
-			continue
+		by_name = {row.name: row for row in found}
+		missing = [name for name in batch if name not in by_name]
+		if missing:
+			raise DocumentProcessingError(
+				_("Embedding was requested for missing chunks: {0}").format(", ".join(missing))
+			)
+		rows = [by_name[name] for name in batch]
+		if any(not (row.content or "").strip() for row in rows):
+			raise DocumentProcessingError(_("One or more requested chunks contain no readable text."))
 
 		try:
-			vectors = run_embedding([row.content for row in rows], model=model, operation="Embedding")
+			vectors = run_embedding(
+				[row.content for row in rows],
+				model=model,
+				operation="Embedding",
+				reference_doctype="AI Document",
+				reference_name=rows[0].document if len({row.document for row in rows}) == 1 else None,
+			)
 		except Exception as exc:
 			frappe.log_error(
 				title="AI embedding batch failed",
 				message=f"{exc}\n\nChunks: {[row.name for row in rows]}",
 			)
-			continue
+			raise
 
-		embedding_model_name = model or frappe.db.get_single_value(
-			"AI Platform Settings", "default_embedding_model"
-		)
-		for row, vector in zip(rows, vectors, strict=False):
-			if not vector:
-				continue
-			unit = normalize(vector)
+		if not isinstance(vectors, (list, tuple)):
+			raise DocumentProcessingError(_("The embedding provider returned a malformed response."))
+		if len(vectors) != len(rows):
+			raise DocumentProcessingError(
+				_("The embedding provider returned {0} vectors for {1} chunks.").format(
+					len(vectors), len(rows)
+				)
+			)
+		validated: list[tuple[object, list[float]]] = []
+		for row, vector in zip(rows, vectors, strict=True):
+			if not isinstance(vector, (list, tuple)) or not vector:
+				raise DocumentProcessingError(
+					_("The embedding provider returned an empty vector for chunk {0}.").format(row.name)
+				)
+			if any(isinstance(value, bool) or not isinstance(value, Real) for value in vector):
+				raise DocumentProcessingError(
+					_("The embedding provider returned a non-numeric vector for chunk {0}.").format(row.name)
+				)
+			numeric = [float(value) for value in vector]
+			if not all(math.isfinite(value) for value in numeric) or not any(numeric):
+				raise DocumentProcessingError(
+					_("The embedding provider returned an invalid vector for chunk {0}.").format(row.name)
+				)
+			if expected_dimensions and len(numeric) != expected_dimensions:
+				raise DocumentProcessingError(
+					_("The embedding provider returned {0} dimensions for chunk {1}; expected {2}.").format(
+						len(numeric), row.name, expected_dimensions
+					)
+				)
+			unit = normalize(numeric)
+			if not unit or not all(math.isfinite(value) for value in unit) or not any(unit):
+				raise DocumentProcessingError(
+					_("The embedding provider returned an unnormalizable vector for chunk {0}.").format(
+						row.name
+					)
+				)
+			expected_dimensions = expected_dimensions or len(unit)
+			validated.append((row, unit))
+
+		# Persist only after the entire provider batch has passed validation, so a
+		# malformed later vector cannot leave a partially embedded batch behind.
+		for row, unit in validated:
 			safe_set_value(
 				"AI Document Chunk",
 				row.name,
 				{
 					"embedding": encode_vector(unit),
-					"embedding_model": embedding_model_name,
+					"embedding_model": model,
 					"embedding_dimensions": len(unit),
 					"embedding_norm": 1.0,
 					"embedding_format": "Base64 Float32",
@@ -198,8 +265,20 @@ def embed_chunks(chunk_names: list[str], model: str | None = None) -> int:
 				},
 				update_modified=False,
 			)
+			knowledge_bases.add(row.knowledge_base)
+			documents.add(row.document)
 			embedded += 1
 
+	for document in documents:
+		frappe.db.set_value(
+			"AI Document",
+			document,
+			"embedded_chunk_count",
+			frappe.db.count("AI Document Chunk", {"document": document, "embedding": ["!=", ""]}),
+			update_modified=False,
+		)
+	for knowledge_base in knowledge_bases:
+		update_knowledge_base_stats(knowledge_base)
 	return embedded
 
 
@@ -246,7 +325,7 @@ def update_knowledge_base_stats(knowledge_base: str) -> None:
 def get_accessible_knowledge_bases(user: str | None = None) -> list[str]:
 	"""Knowledge bases the user may read, honouring role restrictions."""
 	user = user or frappe.session.user
-	if "System Manager" in frappe.get_roles(user) or user == "Administrator":
+	if set(frappe.get_roles(user)).intersection({"System Manager", "AI Manager"}) or user == "Administrator":
 		return frappe.get_all("AI Knowledge Base", filters={"enabled": 1}, pluck="name")
 
 	roles = set(frappe.get_roles(user))
