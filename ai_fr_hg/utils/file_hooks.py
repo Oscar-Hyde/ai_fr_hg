@@ -11,9 +11,73 @@ This module also funnels every ``File`` insert through the canonical folder
 service so attachments are never forced into a flat location (§4, §6).
 """
 
-import frappe
+from contextlib import contextmanager
+from contextvars import ContextVar
 
-from ai_fr_hg.ai.exceptions import FolderError
+import frappe
+from frappe import _
+from frappe.utils import cint
+
+from ai_fr_hg.ai.organization import organization_name_key
+
+
+_AI_DOCUMENT_INGESTION_SUPPRESSED = ContextVar("ai_document_file_ingestion_suppressed", default=False)
+
+
+@contextmanager
+def suppress_ai_document_ingestion():
+	"""Suppress attachment ingestion only for an in-process canonical mutation."""
+	token = _AI_DOCUMENT_INGESTION_SUPPRESSED.set(True)
+	try:
+		yield
+	finally:
+		_AI_DOCUMENT_INGESTION_SUPPRESSED.reset(token)
+
+
+def before_file_insert(doc, method: str | None = None) -> None:
+	"""Lock the canonical parent before a File changes subtree membership."""
+	desired = getattr(doc.flags, "folder", None) or getattr(doc, "folder", None)
+	from ai_fr_hg.ai.folders import (
+		_assert_folder_exists,
+		_check_write_access,
+		_lock_folder_rows,
+		_normalize_folder_path,
+		get_default_folder,
+	)
+
+	if not desired and not getattr(doc, "is_folder", 0):
+		desired = get_default_folder(
+			user=frappe.session.user,
+			doctype=getattr(doc, "attached_to_doctype", None),
+			docname=getattr(doc, "attached_to_name", None),
+		)
+	if not desired:
+		return
+	desired = _normalize_folder_path(desired)
+	_assert_folder_exists(desired)
+	_check_write_access(desired, user=frappe.session.user)
+	_lock_folder_rows(desired)
+	doc.folder = desired
+
+
+def before_file_save(doc, method: str | None = None) -> None:
+	"""Serialize direct File moves with recursive tree operations."""
+	if doc.is_new() or not doc.has_value_changed("folder"):
+		return
+	old = doc.get_doc_before_save()
+	old_folder = getattr(old, "folder", None) or "Home"
+	new_folder = getattr(doc, "folder", None) or "Home"
+	# ``Home`` is the canonical tree root; do not allow direct File saves to
+	# create a parallel empty-folder location for AI-managed Files.
+	if not doc.folder:
+		doc.folder = new_folder
+	if old_folder == new_folder:
+		return
+	from ai_fr_hg.ai.folders import _assert_folder_exists, _check_write_access, _lock_folder_rows
+
+	_assert_folder_exists(new_folder)
+	_check_write_access(new_folder, user=frappe.session.user)
+	_lock_folder_rows(old_folder, new_folder)
 
 
 def on_file_upload(doc, method: str | None = None) -> None:
@@ -30,117 +94,127 @@ def on_file_upload(doc, method: str | None = None) -> None:
 	# ------------------------------------------------------------------
 	# 1. Canonicalize folder assignment for every File (not just AI Document)
 	# ------------------------------------------------------------------
-	try:
-		from ai_fr_hg.ai.folders import (
-			_assert_folder_exists,
-			_check_write_access,
-			_normalize_folder_path,
-			get_default_folder,
+	if not getattr(doc, "is_folder", 0):
+		from ai_fr_hg.ai.folders import assign_file_to_folder, get_default_folder
+
+		desired = getattr(doc.flags, "folder", None) or getattr(doc, "folder", None)
+		if not desired:
+			desired = get_default_folder(
+				user=frappe.session.user,
+				doctype=getattr(doc, "attached_to_doctype", None),
+				docname=getattr(doc, "attached_to_name", None),
+			)
+		result = assign_file_to_folder(
+			doc.name,
+			desired,
+			attached_to_doctype=getattr(doc, "attached_to_doctype", None),
+			attached_to_name=getattr(doc, "attached_to_name", None),
+			attached_to_field=getattr(doc, "attached_to_field", None),
+			user=frappe.session.user,
 		)
-
-		# Skip folders themselves
-		if getattr(doc, "is_folder", 0):
-			pass
-		else:
-			# Determine desired folder
-			desired = None
-			if getattr(doc.flags, "folder", None):
-				desired = doc.flags.folder
-			elif getattr(doc, "folder", None):
-				desired = doc.folder
-
-			if not desired:
-				desired = get_default_folder(
-					user=doc.owner or frappe.session.user,
-					doctype=getattr(doc, "attached_to_doctype", None),
-					docname=getattr(doc, "attached_to_name", None),
-				)
-
-			desired = _normalize_folder_path(desired)
-			_assert_folder_exists(desired)
-			_check_write_access(desired, user=doc.owner or frappe.session.user)
-
-			if doc.folder != desired:
-				frappe.db.set_value("File", doc.name, "folder", desired, update_modified=False)
-				doc.folder = desired
-
-	except FolderError as exc:
-		frappe.log_error(title="File folder assignment failed", message=str(exc))
-		if "Folder" in type(exc).__name__ or "Permission" in type(exc).__name__:
-			raise
-	except Exception:
-		frappe.log_error(title="File folder assignment unexpected error", message=frappe.get_traceback())
+		doc.folder = result["folder"]
 
 	# ------------------------------------------------------------------
 	# 2. AI Document ingestion pathway (preserve folder as provenance)
 	# ------------------------------------------------------------------
-	if doc.attached_to_doctype != "AI Document" or not doc.attached_to_name:
+	# Tree copies attach a new, independent File identity and finalize the
+	# copied document explicitly in the same transaction. Do not turn that
+	# reset Draft into an automatic processing run from this generic hook.
+	# This capability is process-local and cannot be forged in a File payload.
+	if _AI_DOCUMENT_INGESTION_SUPPRESSED.get():
 		return
-	if not frappe.db.get_single_value("AI Platform Settings", "auto_process_documents"):
+	if doc.attached_to_doctype != "AI Document" or not doc.attached_to_name:
 		return
 
 	document = doc.attached_to_name
 	if not frappe.db.exists("AI Document", document):
 		return
-
-	current = frappe.db.get_value("AI Document", document, ["source_file", "status", "folder", "source_folder"], as_dict=True)
-	if current.source_file or current.status not in ("Draft", "Queued"):
+	permission_doc = frappe.get_doc("AI Document", document)
+	if not frappe.has_permission(
+		"AI Document",
+		"write",
+		doc=permission_doc,
+		user=frappe.session.user,
+	):
+		frappe.throw(_("You do not have permission to attach a source to this AI Document."), frappe.PermissionError)
+	# ``assign_file_to_folder`` already acquired parent-folder and File locks.
+	# Lock the owning AI Document only afterwards so uploads serialize with
+	# document save/delete without reversing the canonical lock order.
+	current = frappe.db.get_value(
+		"AI Document",
+		document,
+		["source_file", "source_file_record", "status", "folder", "organization_revision"],
+		as_dict=True,
+		for_update=True,
+	)
+	if not current:
+		frappe.throw(_("The AI Document was deleted while its attachment was being saved."), frappe.DoesNotExistError)
+	# Other attachments must not replace an established canonical source, even
+	# when Frappe deduplicates their bytes to the same URL.
+	if current.source_file_record and current.source_file_record != doc.name:
+		return
+	if current.source_file and current.source_file != doc.file_url:
 		return
 
-	folder_path = getattr(doc, "folder", None)
-	if folder_path and frappe.db.exists("File", folder_path):
-		frappe.db.set_value(
-			"AI Document",
-			document,
-			{"source_file": doc.file_url, "source_type": "File", "status": "Queued", "folder": folder_path, "source_folder": folder_path},
-			update_modified=False,
-		)
-	else:
-		frappe.db.set_value(
-			"AI Document",
-			document,
-			{"source_file": doc.file_url, "source_type": "File", "status": "Queued"},
-			update_modified=False,
-		)
+	from ai_fr_hg.ai.document_tree import resolve_document_name
 
-	from ai_fr_hg.ai.ingestion import enqueue_processing
+	folder_path = getattr(doc, "folder", None) or current.folder or "Home"
+	organization_name = resolve_document_name(
+		folder_path,
+		doc.file_name,
+		copy_on_collision=True,
+		exclude=document,
+	)
+	auto_process = bool(frappe.db.get_single_value("AI Platform Settings", "auto_process_documents"))
+	updates = {
+		"source_file": doc.file_url,
+		"source_file_record": doc.name,
+		"source_type": "File",
+		"folder": folder_path,
+		"source_folder": folder_path,
+		"organization_name": organization_name,
+		"organization_name_key": organization_name_key(organization_name),
+		"organization_revision": cint(current.organization_revision) + 1,
+	}
+	if auto_process and current.status in ("Draft", "Queued"):
+		updates["status"] = "Queued"
+	frappe.db.set_value("AI Document", document, updates, update_modified=True)
 
-	enqueue_processing(document)
+	if auto_process and current.status in ("Draft", "Queued"):
+		from ai_fr_hg.ai.ingestion import enqueue_processing
+
+		enqueue_processing(document)
+
 
 def on_file_update(doc, method: str | None = None) -> None:
-	"""Track file moves/renames for audit provenance (§8, §23)."""
-	try:
-		if getattr(doc, "is_folder", 0):
-			return
-		# If folder changed, record audit and update AI Document provenance
-		if doc.has_value_changed("folder"):
-			old = doc.get_doc_before_save().get("folder") if doc.get_doc_before_save() else None
-			new = doc.folder
-			if old != new:
-				from ai_fr_hg.ai.folders import track_folder_operation, _update_document_folder_provenance
+	"""Track File moves and atomically synchronize stable document provenance."""
+	if getattr(doc, "is_folder", 0) or not doc.has_value_changed("folder"):
+		return
+	old = doc.get_doc_before_save().get("folder") if doc.get_doc_before_save() else None
+	new = doc.folder
+	if old == new:
+		return
 
-				track_folder_operation("update_file_folder", doc.name, new, frappe.session.user, details={"old": old})
-				try:
-					_update_document_folder_provenance(doc.name, new)
-				except Exception:
-					frappe.log_error(title="Folder provenance sync failed on file update", message=frappe.get_traceback())
-	except Exception:
-		frappe.log_error(title="File update hook failed", message=frappe.get_traceback())
+	from ai_fr_hg.ai.folders import _update_document_folder_provenance, track_folder_operation
+
+	track_folder_operation("update_file_folder", doc.name, new, frappe.session.user, details={"old": old})
+	# Do not allow a File move to commit while its linked AI Document points to
+	# the old parent. Raising here rolls the complete Frappe save back.
+	_update_document_folder_provenance(doc.name, new)
 
 
 def on_file_delete(doc, method: str | None = None) -> None:
 	"""Clean up folder settings when a folder is deleted and audit file deletes."""
-	try:
-		from ai_fr_hg.ai.folders import track_folder_operation
+	from ai_fr_hg.ai.folders import _lock_folder_rows
 
-		if getattr(doc, "is_folder", 0):
-			# Remove orphaned AI Folder Settings
-			if frappe.db.exists("AI Folder Settings", {"folder": doc.name}):
-				frappe.db.delete("AI Folder Settings", {"folder": doc.name})
-			# Favorites cleanup is not strictly required but keeps UI clean
-			frappe.db.delete("AI Folder Favorite", {"folder": doc.name})
-			track_folder_operation("delete_folder_hook", doc.name, None, frappe.session.user)
-		else:
-			track_folder_operation("delete_file_hook", doc.name, doc.folder, frappe.session.user)
-	except Exception:
-		frappe.log_error(title="File delete hook failed", message=frappe.get_traceback())
+	_lock_folder_rows(getattr(doc, "folder", None))
+	from ai_fr_hg.ai.folders import track_folder_operation
+
+	if getattr(doc, "is_folder", 0):
+		# Remove orphaned AI Folder Settings and favorites in the same transaction.
+		if frappe.db.exists("AI Folder Settings", {"folder": doc.name}):
+			frappe.db.delete("AI Folder Settings", {"folder": doc.name})
+		frappe.db.delete("AI Folder Favorite", {"folder": doc.name})
+		track_folder_operation("delete_folder_hook", doc.name, None, frappe.session.user)
+	else:
+		track_folder_operation("delete_file_hook", doc.name, doc.folder, frappe.session.user)

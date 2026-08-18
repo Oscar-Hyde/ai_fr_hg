@@ -33,27 +33,20 @@ frappe.ui.form.on("AI Document", {
 			}).addClass("btn-primary");
 		}
 
-		// Folder organization actions — always wired to canonical service
+		// Folder organization actions use the same server-authoritative facade as
+		// Tree View; the form never resolves Files or writes provenance itself.
 		frm.add_custom_button(__("Move to Folder…"), async () => {
-			if (!frm.doc.source_file) {
-				frappe.msgprint(__("This document has no source file to move."));
-				return;
-			}
 			const target = await prompt_for_folder({
 				default_folder: frm.doc.folder || "Home",
 				title: __("Select Destination Folder"),
 			});
 			if (!target) return;
-			const file_name = await frappe.db.get_value("File", { file_url: frm.doc.source_file }, "name");
-			const real = file_name.message?.name || file_name?.name || file_name;
-			if (!real) {
-				frappe.msgprint(__("File record not found for {0}", [frm.doc.source_file]));
-				return;
-			}
 			try {
-				await frappe.xcall("ai_fr_hg.api.folders.move_file", { file_name: real, target_folder: target });
-				// Persist provenance on AI Document
-				await frappe.db.set_value("AI Document", frm.doc.name, { folder: target, source_folder: target });
+				await frappe.xcall("ai_fr_hg.api.document_tree.move_node", {
+					node: `document::${frm.doc.name}`,
+					target_folder: target,
+					expected_modified: frm.doc.modified,
+				});
 				frappe.show_alert({ message: __("Moved to {0}", [target]), indicator: "green" });
 				frm.reload_doc();
 			} catch (e) {
@@ -61,25 +54,24 @@ frappe.ui.form.on("AI Document", {
 			}
 		}, __("Folder"));
 
-		frm.add_custom_button(__("Open Files"), () => {
-			frappe.set_route("List", "File", ...(frm.doc.folder || "Home").split("/"));
+		frm.add_custom_button(__("Open Document Tree"), () => {
+			frappe.set_route("Tree", "AI Document");
 		}, __("Folder"));
 
-		frm.add_custom_button(__("Copy File To…"), async () => {
-			if (!frm.doc.source_file) {
-				frappe.msgprint(__("No source file to copy."));
-				return;
-			}
+		frm.add_custom_button(__("Copy Document To…"), async () => {
 			const target = await prompt_for_folder({
 				default_folder: frm.doc.folder || "Home",
 				title: __("Select Destination Folder"),
 			});
 			if (!target) return;
-			const file_name = await frappe.db.get_value("File", { file_url: frm.doc.source_file }, "name");
-			const real = file_name.message?.name || file_name?.name || file_name;
 			try {
-				await frappe.xcall("ai_fr_hg.api.folders.copy_file", { file_name: real, target_folder: target });
-				frappe.show_alert({ message: __("File copied to {0}", [target]), indicator: "green" });
+				const copy = await frappe.xcall("ai_fr_hg.api.document_tree.copy_node", {
+					node: `document::${frm.doc.name}`,
+					target_folder: target,
+					expected_modified: frm.doc.modified,
+				});
+				frappe.show_alert({ message: __("Document copied to {0}", [target]), indicator: "green" });
+				frappe.set_route("Form", "AI Document", copy.name);
 			} catch (e) {
 				frappe.msgprint({ title: __("Copy failed"), message: e.message, indicator: "red" });
 			}

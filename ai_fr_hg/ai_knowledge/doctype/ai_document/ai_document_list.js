@@ -24,7 +24,7 @@ frappe.listview_settings["AI Document"] = {
 		listview.page.add_inner_button(__("Knowledge Explorer"), () =>
 			frappe.set_route("knowledge-explorer")
 		);
-		listview.page.add_inner_button(__("Files"), () => frappe.set_route("List", "File", "Home"));
+		listview.page.add_inner_button(__("Document Tree"), () => frappe.set_route("Tree", "AI Document"));
 
 		listview.page.add_actions_menu_item(__("Re-process"), () => {
 			const selected = listview.get_checked_items(true);
@@ -47,10 +47,9 @@ frappe.listview_settings["AI Document"] = {
 			});
 		});
 
-		// This is a native List View bulk action.  Source File resolution is
-		// presentation-only; the canonical bulk service owns all validation,
-		// permission checks, persistence and provenance updates.
-		listview.page.add_actions_menu_item(__("Move Source Files to Folder…"), async () => {
+		// The public facade accepts stable AI Document identities; client code
+		// never resolves source URLs or performs partial provenance writes.
+		listview.page.add_actions_menu_item(__("Move Documents to Folder…"), async () => {
 			const selected = listview.get_checked_items(true);
 			if (!selected.length) {
 				frappe.msgprint(__("Select at least one document."));
@@ -58,36 +57,19 @@ frappe.listview_settings["AI Document"] = {
 			}
 			const target = await prompt_for_folder({
 				default_folder: "Home",
-				title: __("Move Source Files to Folder"),
+				title: __("Move Documents to Folder"),
 			});
 			if (!target) return;
 
-			const file_names = [];
-			const missing = [];
-			for (const name of selected) {
-				const document = await frappe.db.get_value("AI Document", name, "source_file");
-				const file_url = document.message?.source_file || document.source_file;
-				const file = file_url && (await frappe.db.get_value("File", { file_url }, "name"));
-				const file_name = file?.message?.name || file?.name || file;
-				if (file_name) file_names.push(file_name);
-				else missing.push(name);
-			}
-			if (!file_names.length) {
-				frappe.msgprint(__("None of the selected documents has a source File."));
-				return;
-			}
-
-			const result = await frappe.xcall("ai_fr_hg.api.folders.bulk_move", {
-				file_names,
+			const result = await frappe.xcall("ai_fr_hg.api.document_tree.bulk_move_nodes", {
+				nodes: selected.map((name) => `document::${name}`),
 				target_folder: target,
-				enqueue: file_names.length > 20 ? 1 : 0,
 			});
-			const skipped = missing.length ? ` ${__("{0} document(s) had no source File.", [missing.length])}` : "";
 			frappe.show_alert({
 				message:
 					result.status === "Queued"
-						? __("Bulk move queued.") + skipped
-						: __("{0} source file(s) moved.", [result.moved?.length || 0]) + skipped,
+						? __("Bulk move queued.")
+						: __("{0} document(s) moved.", [result.moved?.length || 0]),
 				indicator: result.status === "Queued" ? "blue" : "green",
 			});
 			listview.refresh();

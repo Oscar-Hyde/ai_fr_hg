@@ -61,7 +61,9 @@ app_include_js = "ai_fr_hg.bundle.js"
 # this app's standard override location.  It augments FileView actions only;
 # it never replaces the native File list/tree/grid presentation.
 doctype_list_js = {"File": "public/js/file_list.js"}
-# doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
+# AI Document remains a normal processing record. Its native Tree View projects
+# canonical File folders and AI Documents through a permission-aware lazy API.
+doctype_tree_js = {"AI Document": "public/js/ai_document_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
 
 # Svg Icons
@@ -196,6 +198,8 @@ doc_events = {
 		"on_trash": "ai_fr_hg.ai.automation.handle_document_event",
 	},
 	"File": {
+		"before_insert": "ai_fr_hg.utils.file_hooks.before_file_insert",
+		"before_save": "ai_fr_hg.utils.file_hooks.before_file_save",
 		"after_insert": "ai_fr_hg.utils.file_hooks.on_file_upload",
 		"on_update": "ai_fr_hg.utils.file_hooks.on_file_update",
 		"on_trash": "ai_fr_hg.utils.file_hooks.on_file_delete",
@@ -263,7 +267,9 @@ before_tests = "ai_fr_hg.install.before_tests"
 # Ignore links to specified DocTypes when deleting documents
 # -----------------------------------------------------------
 
-# ignore_links_on_delete = ["Communication", "ToDo"]
+# Audit references preserve historical identities and must never become
+# retention constraints on the business/File records they describe.
+ignore_links_on_delete = ["AI Audit Log"]
 
 # Request Events
 # ----------------
