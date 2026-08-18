@@ -210,9 +210,10 @@
   },
   {
    "fieldname": "file_size",
-   "fieldtype": "Long Int",
+   "fieldtype": "Float",
    "label": "File Size (bytes)",
-   "read_only": 1
+   "read_only": 1,
+   "precision": "0"
   },
   {
    "fieldname": "page_count",
@@ -232,9 +233,10 @@
   },
   {
    "fieldname": "character_count",
-   "fieldtype": "Long Int",
+   "fieldtype": "Float",
    "label": "Characters",
-   "read_only": 1
+   "read_only": 1,
+   "precision": "0"
   },
   {
    "fieldname": "checksum",

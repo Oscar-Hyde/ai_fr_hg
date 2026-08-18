@@ -8,6 +8,8 @@ Ollama provider, a starter knowledge base, a general-purpose agent, the
 built-in tools and sensible platform defaults.
 """
 
+from pathlib import Path
+
 import frappe
 from frappe import _
 
@@ -264,6 +266,7 @@ def before_install() -> None:
 
 def after_install() -> None:
 	"""Seed roles, defaults and starter records."""
+	ensure_site_file_directories()
 	create_roles()
 	create_settings()
 	create_default_provider()
@@ -289,6 +292,18 @@ def after_install() -> None:
 	print("")
 
 
+
+
+def ensure_site_file_directories() -> None:
+	"""Ensure Frappe's native public/private upload roots exist.
+
+	Frappe's chunked upload endpoint writes temporary files below these roots.
+	A site recreated by restore/reinstall can be missing empty directories (they
+	are normally excluded from backups), which otherwise turns a native upload
+	into a FileNotFoundError before app code receives it.
+	"""
+	for parts in (("public", "files"), ("private", "files")):
+		Path(frappe.get_site_path(*parts)).mkdir(parents=True, exist_ok=True)
 
 def create_default_folders() -> None:
 	"""Create a coherent, navigable folder structure (File & Folder §11, operational)."""
@@ -552,7 +567,14 @@ def _fix_learning_doctype_modules() -> None:
 	fails.  A proper ``bench migrate`` runs the corresponding patch, but the
 	fix is also applied here so test environments do not need a manual migrate.
 	"""
+	# Unit-test bootstraps and minimal Frappe installations may intentionally
+	# expose no database facade.  The model-sync patch performs this repair in
+	# real sites, so cache setup must remain safe in that environment.
+	db = getattr(frappe, "db", None)
+	if not callable(getattr(db, "get_value", None)):
+		return
+
 	for doctype in ("AI Knowledge Candidate", "AI Memory", "AI Skill"):
-		current = frappe.db.get_value("DocType", doctype, "module")
+		current = db.get_value("DocType", doctype, "module")
 		if current and current != "AI Learning":
-			frappe.db.set_value("DocType", doctype, "module", "AI Learning")
+			db.set_value("DocType", doctype, "module", "AI Learning")

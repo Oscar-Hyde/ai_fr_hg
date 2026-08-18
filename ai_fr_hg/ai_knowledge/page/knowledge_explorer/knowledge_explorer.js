@@ -367,11 +367,21 @@ class KnowledgeExplorer {
 						},
 					],
 					async (values) => {
-						await frappe.xcall("ai_fr_hg.api.knowledge.upload_document", {
-							file_url: file.file_url,
-							knowledge_base: values.knowledge_base,
-							title: values.title,
-						});
+						const result = await frappe
+							.xcall("ai_fr_hg.api.knowledge.upload_document", {
+								file_url: file.file_url,
+								knowledge_base: values.knowledge_base,
+								title: values.title,
+							})
+							.catch((error) => {
+								frappe.msgprint({
+									title: __("Upload could not be ingested"),
+									message: error?.message || error?._server_messages || __("The uploaded file could not be read."),
+									indicator: "red",
+								});
+								return null;
+							});
+						if (!result) return;
 						frappe.show_alert({
 							message: __("Processing {0}...", [values.title]),
 							indicator: "blue",

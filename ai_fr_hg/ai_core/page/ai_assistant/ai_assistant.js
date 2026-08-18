@@ -662,14 +662,21 @@ class AIAssistant {
 						},
 					],
 					async (values) => {
-						const result = await frappe.xcall(
-							"ai_fr_hg.api.knowledge.upload_document",
-							{
+						const result = await frappe
+							.xcall("ai_fr_hg.api.knowledge.upload_document", {
 								file_url: file.file_url,
 								knowledge_base: values.knowledge_base,
 								title: values.title,
-							}
-						);
+							})
+							.catch((error) => {
+								frappe.msgprint({
+									title: __("Upload could not be ingested"),
+									message: error?.message || error?._server_messages || __("The uploaded file could not be read."),
+									indicator: "red",
+								});
+								return null;
+							});
+						if (!result) return;
 						// Remember this upload so the next send waits for its
 						// indexing and answers from that file specifically.
 						me.pending_documents = (me.pending_documents || []).concat([

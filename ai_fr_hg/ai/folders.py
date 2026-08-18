@@ -251,7 +251,7 @@ def _write_audit(
 
 		write_audit_log(
 			action=action,
-			category="File Organization",
+			category="Data",
 			message=message,
 			details=details or {},
 			reference_doctype=reference_doctype,
@@ -1481,8 +1481,10 @@ def assign_file_to_folder(
 		updates["attached_to_name"] = attached_to_name
 	if attached_to_field:
 		updates["attached_to_field"] = attached_to_field
-	# Also ensure is_private follows folder.
-	updates["is_private"] = cint(frappe.db.get_value("File", target, "is_private"))
+	# Do not update ``is_private`` with db_set. Frappe stores public and private
+	# uploads at different physical paths; changing the flag without moving the
+	# file makes its existing file_url invalid. The native uploader owns that
+	# choice when it writes the file, while this service owns its folder placement.
 
 	attachment_changed = any(
 		value and getattr(doc, field) != value
@@ -1492,8 +1494,7 @@ def assign_file_to_folder(
 			("attached_to_field", attached_to_field),
 		)
 	)
-	privacy_changed = cint(getattr(doc, "is_private", 0)) != updates["is_private"]
-	if old_folder == target and not attachment_changed and not privacy_changed:
+	if old_folder == target and not attachment_changed:
 		return {"name": file_name, "folder": target, "old_folder": old_folder, "unchanged": True}
 
 	frappe.db.set_value("File", file_name, updates, update_modified=False)
@@ -1585,7 +1586,7 @@ def track_folder_operation(
 
 		write_audit_log(
 			action=f"Folder {action.title()}",
-			category="File Organization",
+			category="Data",
 			message=f"Folder operation '{action}' on '{target}' by '{user}'.",
 			details={"action": action, "target": target, "source": source, "user": user, **(details or {})},
 			reference_doctype="File",

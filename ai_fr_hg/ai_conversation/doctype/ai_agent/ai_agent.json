@@ -221,9 +221,10 @@
   },
   {
    "fieldname": "total_tokens",
-   "fieldtype": "Long Int",
+   "fieldtype": "Float",
    "label": "Total Tokens",
-   "read_only": 1
+   "read_only": 1,
+   "precision": "0"
   },
   {
    "fieldname": "last_used_on",

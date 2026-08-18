@@ -309,9 +309,10 @@
   },
   {
    "fieldname": "size_bytes",
-   "fieldtype": "Long Int",
+   "fieldtype": "Float",
    "label": "Size (bytes)",
-   "read_only": 1
+   "read_only": 1,
+   "precision": "0"
   },
   {
    "fieldname": "status_cb",
@@ -325,9 +326,10 @@
   },
   {
    "fieldname": "total_tokens",
-   "fieldtype": "Long Int",
+   "fieldtype": "Float",
    "label": "Total Tokens",
-   "read_only": 1
+   "read_only": 1,
+   "precision": "0"
   },
   {
    "fieldname": "average_latency_ms",

@@ -22,6 +22,6 @@ class AIModelVersion(Document):
 		parentfield: DF.Data
 		parenttype: DF.Data
 		pulled_on: DF.Datetime | None
-		size_bytes: DF.LongInt
+		size_bytes: DF.Float
 		version: DF.Data
 	# end: auto-generated types

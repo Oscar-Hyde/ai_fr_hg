@@ -148,11 +148,11 @@ class TestFolderService(AIPlatformTestCase):
 		file_doc = frappe.new_doc("File")
 		file_doc.update(
 			{
-				"file_name": "prov_test.pdf",
-				"file_url": "/private/files/prov_test.pdf",
+				"file_name": "prov_test.txt",
+				"file_url": "/private/files/prov_test.txt",
 				"folder": "Home/ProvSrc",
 				"is_private": 0,
-				"content": b"%PDF-1.4 test",
+				"content": b"Provenance test content",
 			}
 		)
 		file_doc.flags.ignore_permissions = True
@@ -214,8 +214,8 @@ class TestFolderService(AIPlatformTestCase):
 		file_doc = frappe.new_doc("File")
 		file_doc.update(
 			{
-				"file_name": "searchable_invoice.pdf",
-				"file_url": "/private/files/searchable_invoice.pdf",
+				"file_name": "searchable_invoice.txt",
+				"file_url": "/private/files/searchable_invoice.txt",
 				"folder": path,
 				"is_private": 0,
 				"content": b"invoice content",
@@ -225,7 +225,7 @@ class TestFolderService(AIPlatformTestCase):
 		file_doc.insert(ignore_permissions=True)
 
 		result = search(query="invoice")
-		self.assertTrue(any(r.file_name == "searchable_invoice.pdf" for r in result["results"]))
+		self.assertTrue(any(r.file_name == "searchable_invoice.txt" for r in result["results"]))
 
 		crumbs = get_breadcrumbs(file_doc.name)
 		self.assertTrue(any(c["name"] == path for c in crumbs))
@@ -374,11 +374,11 @@ class TestAttachmentPlacement(AIPlatformTestCase):
 		file_doc = frappe.new_doc("File")
 		file_doc.update(
 			{
-				"file_name": "e2e_doc.pdf",
-				"file_url": "/private/files/e2e_doc.pdf",
+				"file_name": "e2e_doc.txt",
+				"file_url": "/private/files/e2e_doc.txt",
 				"folder": sub,
 				"is_private": 0,
-				"content": b"%PDF e2e content for retrieval test",
+				"content": b"e2e content for retrieval test",
 			}
 		)
 		file_doc.flags.ignore_permissions = True

@@ -407,7 +407,7 @@ def _approve_candidate(
 
 	write_audit_log(
 		action="Knowledge Candidate Auto-Approved" if policy_approved else "Knowledge Candidate Approved",
-		category="Learning",
+		category="Data",
 		severity="Warning",
 		message=f"{approver} approved candidate {candidate_name}.",
 		details={
@@ -451,7 +451,7 @@ def reject_candidate(candidate_name: str, notes: str | None = None) -> dict:
 	)
 	write_audit_log(
 		action="Knowledge Candidate Rejected",
-		category="Learning",
+		category="Data",
 		severity="Warning",
 		message=_("{0} rejected candidate {1}.").format(frappe.session.user, candidate_name),
 		details={"teaching_user": candidate.user, "decision_notes": notes},
@@ -568,7 +568,7 @@ def _audit_candidate_processing(candidate, state: str, *, details: dict | None =
 	severity = "Warning" if state in {"Validation Failed", "Conflict"} else "Info"
 	write_audit_log(
 		action=f"Knowledge Candidate {state}",
-		category="Learning",
+		category="Data",
 		severity=severity,
 		message=_("Candidate {0} entered learning state {1}.").format(candidate.name, state),
 		details={
@@ -869,7 +869,7 @@ def observe_feedback(
 
 	write_audit_log(
 		action=f"Feedback {feedback}",
-		category="Learning",
+		category="Data",
 		message=reason,
 		details={"previous_feedback": previous_feedback, "has_correction": bool((correction or "").strip())},
 		reference_doctype="AI Message",

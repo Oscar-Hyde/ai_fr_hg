@@ -1,4 +1,5 @@
 [pre_model_sync]
+ai_fr_hg.patches.v0_0_5_normalize_legacy_long_int_values
 # Patches added in this section will be executed before doctypes are migrated
 # Read docs to understand patches: https://docs.frappe.io/framework/user/en/database-migrations
 
@@ -8,3 +9,6 @@ ai_fr_hg.patches.v0_0_2_turn_time_budget
 ai_fr_hg.patches.v0_0_3_fix_learning_doctype_modules
 ai_fr_hg.patches.v0_0_4_folder_organization
 # Patches added in this section will be executed after doctypes are migrated
+ai_fr_hg.patches.v0_0_6_normalize_folder_audit_category
+ai_fr_hg.patches.v0_0_7_ensure_site_file_directories
+ai_fr_hg.patches.v0_0_8_normalize_learning_audit_category

@@ -89,35 +89,47 @@ def index_document(document: str, force: bool = False, embed: bool = True) -> di
 	existing_rows = frappe.get_all(
 		"AI Document Chunk",
 		filters={"document": document},
-		fields=["name", "checksum", "embedding", "embedding_model"],
+		fields=["name", "checksum", "chunk_index", "embedding", "embedding_model", "embedding_dimensions", "embedding_format"],
 	)
-	existing = {row.checksum: row for row in existing_rows}
-	incoming = {chunk.checksum for chunk in chunks}
+	# A document can legitimately contain identical chunk text at different
+	# positions. Chunk index is therefore part of the identity; checksum alone
+	# would silently collapse repeated passages and leave them unembedded.
+	existing = {(row.checksum, cint(row.chunk_index)): row for row in existing_rows}
+	incoming = {(chunk.checksum, chunk.index) for chunk in chunks}
 
 	# Remove chunks that no longer exist in the re-processed document.
-	for checksum, row in existing.items():
-		if force or checksum not in incoming:
+	for key, row in existing.items():
+		if force or key not in incoming:
 			frappe.delete_doc("AI Document Chunk", row.name, force=True, ignore_permissions=True)
 	if force:
 		existing = {}
 
 	model = None
+	expected_embedding_dimensions = 0
 	if embed:
-		model = resolve_model(kb.embedding_model or settings.default_embedding_model, "Embedding").name
+		model_doc = resolve_model(kb.embedding_model or settings.default_embedding_model, "Embedding")
+		model = model_doc.name
+		expected_embedding_dimensions = cint(model_doc.embedding_dimensions)
 		doc.db_set("status", "Embedding", update_modified=False)
 
 	created = 0
 	embedded = 0
 	pending_names = [
 		row.name
-		for checksum, row in existing.items()
+		for key, row in existing.items()
 		if embed
-		and checksum in incoming
-		and (not row.embedding or (bool(model) and row.embedding_model != model))
+		and key in incoming
+		and (
+			not row.embedding
+			or (bool(model) and row.embedding_model != model)
+			or not row.embedding_format
+			or (expected_embedding_dimensions and cint(row.embedding_dimensions) != expected_embedding_dimensions)
+		)
 	]
 
 	for chunk in chunks:
-		if chunk.checksum in existing:
+		chunk_key = (chunk.checksum, chunk.index)
+		if chunk_key in existing:
 			continue  # unchanged; stale/missing embeddings are queued above
 		row = frappe.new_doc("AI Document Chunk")
 		row.update(
