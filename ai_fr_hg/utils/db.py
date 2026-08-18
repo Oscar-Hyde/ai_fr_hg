@@ -42,6 +42,21 @@ def safe_set_value(
 		}
 
 	meta = frappe.get_meta(doctype.removeprefix("tab"))
+
+	# Singles are persisted by Frappe in ``tabSingles``, not in a table named
+	# after the DocType.  Keep this helper on Frappe's canonical Single API
+	# instead of issuing the hot-path SQL used for ordinary DocTypes.
+	if meta.issingle:
+		for field, field_value in values.items():
+			field = field.strip("`")
+			if field in {"modified", "modified_by"}:
+				continue
+			if not meta.has_field(field):
+				frappe.throw(f"Cannot update unknown field {field} on {meta.name}.")
+			frappe.db.set_single_value(meta.name, field, field_value)
+		frappe.clear_cache(doctype=meta.name)
+		return
+
 	allowed_standard_fields = {"modified", "modified_by"}
 	assignments = []
 	params = []
