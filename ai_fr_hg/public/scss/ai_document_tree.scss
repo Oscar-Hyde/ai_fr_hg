@@ -1,0 +1,16 @@
+// Native AI Document Tree View presentation. Hierarchy and authorization stay
+// in Frappe Tree View and the server service respectively.
+
+.ai-document-tree-location {
+	padding: var(--padding-sm) var(--padding-md) 0;
+}
+
+.ai-document-tree-select {
+	margin-inline-end: var(--margin-xs);
+	vertical-align: middle;
+}
+
+.ai-document-tree-document .indicator-pill {
+	margin-inline-start: var(--margin-xs);
+	font-size: var(--text-xs);
+}

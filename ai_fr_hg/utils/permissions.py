@@ -11,6 +11,8 @@ known document name can never bypass the conditions used by ``get_list``.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 import frappe
 
 _MANAGER_ROLES = {"System Manager", "AI Manager"}
@@ -200,26 +202,58 @@ def folder_favorite_query(user: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+@contextmanager
+def scoped_knowledge_base_permission_cache():
+	"""Deduplicate KB grant queries inside one bounded list/tree operation.
+
+	The cache is deliberately opt-in and scoped rather than process- or
+	request-global, so a role mutation followed by a permission check in the same
+	request cannot observe stale authorization state.
+	"""
+	local = frappe.local
+	attribute = "ai_fr_hg_knowledge_base_permission_cache"
+	missing = object()
+	previous = getattr(local, attribute, missing)
+	setattr(local, attribute, {})
+	try:
+		yield
+	finally:
+		if previous is missing:
+			delattr(local, attribute)
+		else:
+			setattr(local, attribute, previous)
+
+
 def _knowledge_base_access(knowledge_base: str | None, user: str, *, write: bool = False) -> bool:
 	if not knowledge_base:
 		return False
 	if _is_manager(user):
 		return True
 
+	cache = getattr(frappe.local, "ai_fr_hg_knowledge_base_permission_cache", None)
+	cache_key = (user, knowledge_base, bool(write))
+	if cache is not None and cache_key in cache:
+		return cache[cache_key]
+
 	kb = frappe.db.get_value("AI Knowledge Base", knowledge_base, ["is_public"], as_dict=True)
 	if not kb:
-		return False
-
-	roles = _roles(user)
-	grants = frappe.get_all(
-		"AI Knowledge Base Role",
-		filters={"parent": knowledge_base, "parenttype": "AI Knowledge Base"},
-		fields=["role", "can_write"],
-	)
-	matching = [grant for grant in grants if grant.role in roles]
-	if write:
-		return any(bool(grant.can_write) for grant in matching)
-	return bool(kb.is_public or matching)
+		result = False
+	else:
+		roles = _roles(user)
+		grants = frappe.get_all(
+			"AI Knowledge Base Role",
+			filters={"parent": knowledge_base, "parenttype": "AI Knowledge Base"},
+			fields=["role", "can_write"],
+		)
+		matching = [grant for grant in grants if grant.role in roles]
+		result = (
+			any(bool(grant.can_write) for grant in matching)
+			if write
+			else bool(kb.is_public or matching)
+		)
+	if cache is not None:
+		cache[cache_key] = result
+	return result
 
 
 def _owned_document_access(doc, user: str, field: str, permission_type: str, *, auditors=False) -> bool:

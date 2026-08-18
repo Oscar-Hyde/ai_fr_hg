@@ -18,6 +18,7 @@ def upload_document(
 	extraction_schema: str | None = None,
 	process_now: bool = False,
 	folder: str | None = None,
+	file_record: str | None = None,
 ) -> dict:
 	"""Ingest an uploaded file into a knowledge base (folder-aware)."""
 	from ai_fr_hg.ai.ingestion import ingest_file
@@ -31,6 +32,7 @@ def upload_document(
 		extraction_schema=extraction_schema,
 		enqueue_job=not cint(process_now),
 		folder=folder,
+		file_record=file_record,
 	)
 	return {
 		"document": document,

@@ -127,11 +127,55 @@ def _as_user(user: str):
 			frappe.set_user(previous)
 
 
-def _file_doc(file_url: str):
-	name = frappe.db.get_value("File", {"file_url": file_url}, "name")
+def _file_doc(file_url: str, file_record: str | None = None, document_name: str | None = None):
+	"""Resolve one stable File identity; ambiguous legacy URLs fail closed."""
+	name = file_record
+	if not name:
+		# Legacy rows have only a URL. An exact attachment to the requesting AI
+		# Document is stable enough to backfill; otherwise URL/content identity
+		# cannot distinguish duplicate File rows and must never select an
+		# arbitrary oldest record.
+		attached = (
+			frappe.get_all(
+				"File",
+				filters={
+					"file_url": file_url,
+					"is_folder": 0,
+					"attached_to_doctype": "AI Document",
+					"attached_to_name": document_name,
+				},
+				pluck="name",
+				order_by="creation asc, name asc",
+				limit_page_length=2,
+			)
+			if document_name
+			else []
+		)
+		if len(attached) > 1:
+			raise DocumentFetchError(
+				_("More than one File is attached as the source of AI Document {0}.").format(document_name)
+			)
+		if attached:
+			name = attached[0]
+		else:
+			matches = frappe.get_all(
+				"File",
+				filters={"file_url": file_url, "is_folder": 0},
+				pluck="name",
+				order_by="creation asc, name asc",
+				limit_page_length=2,
+			)
+			if len(matches) > 1:
+				raise DocumentFetchError(
+					_("More than one File record uses {0}; provide the exact File identity.").format(file_url)
+				)
+			name = matches[0] if matches else None
 	if not name:
 		raise DocumentFetchError(_("File record not found for {0}.").format(file_url))
-	return frappe.get_doc("File", name)
+	file_doc = frappe.get_doc("File", name)
+	if file_doc.file_url != file_url:
+		raise DocumentFetchError(_("File record {0} does not match {1}.").format(name, file_url))
+	return file_doc
 
 
 def validate_source_access(document, user: str | None = None) -> None:
@@ -144,7 +188,9 @@ def validate_source_access(document, user: str | None = None) -> None:
 	if source_type == "File":
 		if not document.source_file:
 			raise DocumentFetchError(_("No source file is attached."))
-		file_doc = _file_doc(document.source_file)
+		file_doc = _file_doc(
+			document.source_file, document.get("source_file_record"), document.name
+		)
 		if not frappe.has_permission("File", "read", doc=file_doc, user=user):
 			raise DocumentSourcePermissionError(
 				_("User {0} cannot read source File {1}.").format(user, file_doc.name)
@@ -522,7 +568,9 @@ def get_source_content(document, user: str | None = None) -> tuple[bytes, str, s
 	validate_source_access(document, user)
 
 	if document.source_type == "File":
-		file_doc = _file_doc(document.source_file)
+		file_doc = _file_doc(
+			document.source_file, document.get("source_file_record"), document.name
+		)
 		content = file_doc.get_content()
 		if isinstance(content, str):
 			content = content.encode("utf-8")
@@ -775,10 +823,14 @@ def _reconcile_file_privacy_from_url(file_doc) -> None:
 		frappe.clear_document_cache("File", file_doc.name)
 
 
-def get_file_content(file_url: str, user: str | None = None) -> tuple[bytes, str]:
-	"""Read a Frappe File only when the authenticated user can read it."""
+def get_file_content(
+	file_url: str,
+	user: str | None = None,
+	file_record: str | None = None,
+) -> tuple[bytes, str]:
+	"""Read an exact Frappe File identity only when the user can read it."""
 	user = _assert_valid_authority(user or frappe.session.user)
-	file_doc = _file_doc(file_url)
+	file_doc = _file_doc(file_url, file_record)
 	_reconcile_file_privacy_from_url(file_doc)
 	if not frappe.has_permission("File", "read", doc=file_doc, user=user):
 		raise DocumentSourcePermissionError(
@@ -849,6 +901,7 @@ def ingest_file(
 	extraction_schema: str | None = None,
 	enqueue_job: bool = True,
 	folder: str | None = None,
+	file_record: str | None = None,
 ) -> str:
 	"""Create an authorized AI Document from a Frappe File.
 
@@ -860,29 +913,31 @@ def ingest_file(
 	authority = _assert_valid_authority(frappe.session.user)
 	check_capability("document_upload")
 	check_document_quota()
-	_, filename = get_file_content(file_url, authority)
 
-	# Resolve folder provenance
-	resolved_folder = None
-	try:
-		from ai_fr_hg.ai.folders import _normalize_folder_path, _assert_folder_exists, get_default_folder
+	# A URL is content identity, not stable File identity. The central resolver
+	# rejects ambiguous legacy URL-only requests instead of selecting another
+	# document's established File row.
+	file_doc = _file_doc(file_url, file_record)
+	resolved_file_record = file_doc.name
+	_, filename = get_file_content(file_url, authority, resolved_file_record)
 
-		if folder:
-			resolved_folder = _normalize_folder_path(folder)
-			_assert_folder_exists(resolved_folder)
-		else:
-			# Use File's current folder or default
-			file_name = frappe.db.get_value("File", {"file_url": file_url}, "name")
-			if file_name:
-				current_folder = frappe.db.get_value("File", file_name, "folder")
-				if current_folder and frappe.db.exists("File", current_folder):
-					resolved_folder = current_folder
-				else:
-					resolved_folder = get_default_folder(user=authority)
-			else:
-				resolved_folder = get_default_folder(user=authority)
-	except Exception:
-		frappe.log_error(title="Folder resolution failed during ingest", message=frappe.get_traceback())
+	from ai_fr_hg.ai.folders import (
+		_assert_folder_exists,
+		_normalize_folder_path,
+		assign_file_to_folder,
+		get_default_folder,
+	)
+	if folder:
+		resolved_folder = _assert_folder_exists(_normalize_folder_path(folder))
+	elif file_doc.folder and frappe.db.exists("File", file_doc.folder):
+		resolved_folder = file_doc.folder
+	else:
+		resolved_folder = get_default_folder(user=authority)
+
+	# The physical File and AI Document parent change atomically in the caller's
+	# transaction. Fail rather than creating a document with stale provenance.
+	if file_doc.folder != resolved_folder:
+		assign_file_to_folder(file_doc.name, resolved_folder, user=authority)
 
 	document = frappe.new_doc("AI Document")
 	document.update(
@@ -891,6 +946,7 @@ def ingest_file(
 			"knowledge_base": knowledge_base,
 			"source_type": "File",
 			"source_file": file_url,
+			"source_file_record": resolved_file_record,
 			"extraction_schema": extraction_schema,
 			"status": "Draft",
 			"folder": resolved_folder,
@@ -902,14 +958,6 @@ def ingest_file(
 		enqueue_processing(document.name, requested_by=authority)
 	else:
 		process_document_now(document.name, requested_by=authority)
-	# Ensure File lives in the same folder (canonical service)
-	try:
-		if resolved_folder:
-			from ai_fr_hg.ai.folders import ensure_file_in_folder
-
-			ensure_file_in_folder(file_url, resolved_folder, user=authority)
-	except Exception:
-		frappe.log_error(title="File folder assignment during ingest failed", message=frappe.get_traceback())
 	return document.name
 
 

@@ -22,9 +22,15 @@
   "language",
   "folder_sec",
   "folder",
+  "organization_name",
+  "organization_name_key",
+  "source_file_record",
   "source_folder",
   "folder_cb",
   "is_private",
+  "organization_revision",
+  "copied_from",
+  "copied_on",
   "content_sec",
   "content",
   "summary_sec",
@@ -147,13 +153,44 @@
    "label": "Folder Organization"
   },
   {
-   "description": "Folder where this document's source file is stored. Selected at attach time and kept in sync when the file is moved.",
+   "description": "Canonical parent in Frappe's native File folder hierarchy. Home represents the tree root.",
    "fieldname": "folder",
    "fieldtype": "Link",
    "in_standard_filter": 1,
    "label": "Folder",
    "options": "File",
-   "in_list_view": 1
+   "in_list_view": 1,
+   "default": "Home",
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "description": "Stable display name within the parent folder. Tree operations enforce uniqueness without conflating it with the document ID or checksum.",
+   "fieldname": "organization_name",
+   "fieldtype": "Data",
+   "label": "Organization Name",
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "description": "Normalized case-folded SHA-256 location-local identity used for collation-independent cross-database collision enforcement.",
+   "fieldname": "organization_name_key",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Organization Name Key",
+   "length": 64,
+   "read_only": 1,
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "description": "Stable File record identity for file-backed documents; source_file remains the canonical attachment URL.",
+   "fieldname": "source_file_record",
+   "fieldtype": "Link",
+   "label": "Source File Record",
+   "options": "File",
+   "read_only": 1,
+   "search_index": 1
   },
   {
    "description": "Denormalised path of the folder for fast filtering and provenance.",
@@ -173,6 +210,27 @@
    "fieldname": "is_private",
    "fieldtype": "Check",
    "label": "Is Private"
+  },
+  {
+   "default": "0",
+   "fieldname": "organization_revision",
+   "fieldtype": "Int",
+   "hidden": 1,
+   "label": "Organization Revision",
+   "read_only": 1
+  },
+  {
+   "description": "Immutable source identity retained for provenance without changing source-document deletion policy.",
+   "fieldname": "copied_from",
+   "fieldtype": "Data",
+   "label": "Copied From",
+   "read_only": 1
+  },
+  {
+   "fieldname": "copied_on",
+   "fieldtype": "Datetime",
+   "label": "Copied On",
+   "read_only": 1
   },
   {
    "fieldname": "content_sec",
@@ -415,7 +473,7 @@
   }
  ],
  "row_format": "Dynamic",
- "search_fields": "title,knowledge_base,status,document_type,folder,source_folder",
+ "search_fields": "title,organization_name,knowledge_base,status,document_type,folder,source_folder,source_file_record",
  "show_title_field_in_link": 1,
  "sort_field": "creation",
  "sort_order": "DESC",

@@ -58,9 +58,9 @@ def create_folder(
 
 @frappe.whitelist()
 def rename_folder(folder_name: str, new_name: str) -> dict:
-	from ai_fr_hg.ai.folders import rename_folder as service_rename
+	from ai_fr_hg.ai.document_tree import rename_folder as tree_rename_folder
 
-	return service_rename(folder_name=folder_name, new_name=new_name, user=frappe.session.user)
+	return tree_rename_folder(folder=folder_name, new_name=new_name)
 
 
 @frappe.whitelist()
@@ -79,9 +79,9 @@ def move_file(file_name: str, target_folder: str) -> dict:
 
 @frappe.whitelist()
 def move_folder(folder_name: str, target_folder: str) -> dict:
-	from ai_fr_hg.ai.folders import move_folder as service_move_folder
+	from ai_fr_hg.ai.document_tree import move_folder as tree_move_folder
 
-	return service_move_folder(folder_name=folder_name, target_folder=target_folder, user=frappe.session.user)
+	return tree_move_folder(folder=folder_name, target_folder=target_folder)
 
 
 @frappe.whitelist()

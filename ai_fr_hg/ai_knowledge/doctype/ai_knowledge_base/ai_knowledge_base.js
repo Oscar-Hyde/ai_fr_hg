@@ -66,6 +66,7 @@ frappe.ui.form.on("AI Knowledge Base", {
 					const result = await frappe
 						.xcall("ai_fr_hg.api.knowledge.upload_document", {
 							file_url: file.file_url,
+							file_record: file.name,
 							knowledge_base: frm.doc.name,
 							title: file.file_name,
 						})
