@@ -63,11 +63,21 @@ frappe.ui.form.on("AI Knowledge Base", {
 			// selector; ingestion then reads the File's persisted folder.
 			new frappe.ui.FileUploader({
 				async on_success(file) {
-					await frappe.xcall("ai_fr_hg.api.knowledge.upload_document", {
-						file_url: file.file_url,
-						knowledge_base: frm.doc.name,
-						title: file.file_name,
-					});
+					const result = await frappe
+						.xcall("ai_fr_hg.api.knowledge.upload_document", {
+							file_url: file.file_url,
+							knowledge_base: frm.doc.name,
+							title: file.file_name,
+						})
+						.catch((error) => {
+							frappe.msgprint({
+								title: __("Upload could not be ingested"),
+								message: error.message || __("The uploaded file could not be read."),
+								indicator: "red",
+							});
+							return null;
+						});
+					if (!result) return;
 					frappe.show_alert({
 						message: __("Processing {0}...", [file.file_name]),
 						indicator: "blue",
