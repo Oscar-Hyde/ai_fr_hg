@@ -7,12 +7,9 @@ frappe.ui.form.on("AI Document", {
 
 		frm.page.set_indicator(frm.doc.status, frappe.ai.status_color(frm.doc.status));
 
-		// Render folder breadcrumb under form heading (Folder Organization §3, §5)
+		// The source folder is a native Link field and a standard list filter.
+		// Deep navigation and breadcrumbs are provided by Frappe's FileView.
 		if (frm.doc.folder) {
-			frappe.xcall("ai_fr_hg.api.folders.get_breadcrumbs", { file_or_folder: frm.doc.folder }).then((crumbs) => {
-				const html = crumbs.map((c) => frappe.utils.escape_html(c.file_name)).join(' <span class="text-muted">›</span> ');
-				frm.dashboard.set_headline(`<span class="text-muted small">📁 ${html}</span>`, "blue");
-			});
 			frm.dashboard.add_indicator(__("Folder: {0}", [frm.doc.folder]), "blue");
 		}
 
@@ -30,7 +27,11 @@ frappe.ui.form.on("AI Document", {
 				frappe.msgprint(__("This document has no source file to move."));
 				return;
 			}
-			const target = await frappe.ai.folder.pick_folder({ default_folder: frm.doc.folder || "Home" });
+			const target = await frappe.ai.folder.prompt_for_folder({
+				default_folder: frm.doc.folder || "Home",
+				title: __("Select Destination Folder"),
+			});
+			if (!target) return;
 			const file_name = await frappe.db.get_value("File", { file_url: frm.doc.source_file }, "name");
 			const real = file_name.message?.name || file_name?.name || file_name;
 			if (!real) {
@@ -48,8 +49,8 @@ frappe.ui.form.on("AI Document", {
 			}
 		}, __("Folder"));
 
-		frm.add_custom_button(__("Open File Manager"), () => {
-			frappe.set_route("ai-file-manager");
+		frm.add_custom_button(__("Open Files"), () => {
+			frappe.set_route("List", "File", ...(frm.doc.folder || "Home").split("/"));
 		}, __("Folder"));
 
 		frm.add_custom_button(__("Copy File To…"), async () => {
@@ -57,7 +58,11 @@ frappe.ui.form.on("AI Document", {
 				frappe.msgprint(__("No source file to copy."));
 				return;
 			}
-			const target = await frappe.ai.folder.pick_folder({ default_folder: frm.doc.folder || "Home" });
+			const target = await frappe.ai.folder.prompt_for_folder({
+				default_folder: frm.doc.folder || "Home",
+				title: __("Select Destination Folder"),
+			});
+			if (!target) return;
 			const file_name = await frappe.db.get_value("File", { file_url: frm.doc.source_file }, "name");
 			const real = file_name.message?.name || file_name?.name || file_name;
 			try {

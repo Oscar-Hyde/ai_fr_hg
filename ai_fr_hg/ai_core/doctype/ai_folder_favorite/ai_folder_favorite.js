@@ -4,8 +4,8 @@
 frappe.ui.form.on("AI Folder Favorite", {
 	refresh(frm) {
 		if (frm.doc.folder) {
-			frm.add_custom_button(__("Open Folder"), () => {
-				frappe.set_route("Form", "File", frm.doc.folder);
+			frm.add_custom_button(__("Open Files"), () => {
+				frappe.set_route("List", "File", ...frm.doc.folder.split("/"));
 			});
 		}
 	},

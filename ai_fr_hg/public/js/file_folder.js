@@ -2,327 +2,333 @@
 // For license information, please see license.txt
 
 /**
- * Canonical folder & file organization client helpers.
+ * Folder selection for Frappe's native FileUploader.
  *
- * Extends Frappe's native attachment/foler mechanism without duplicating it:
- *  - Every upload goes through the single folder selector backed by the
- *    canonical server service (ai_fr_hg.ai.folders).
- *  - Folder choice is persisted server-side (File.folder), not merely client state.
- *  - Permission, collision and circular-nesting errors are surfaced typed from the server.
- *
- * This module patches ``frappe.ui.FileUploader`` to inject a folder selector
- * so that *every* attachment point in the Desk lets the user choose its
- * destination folder (§4). It also exposes utilities for the dedicated
- * file manager page (ai_file_manager) and breadcrumb/tree views.
+ * This module deliberately extends the stock uploader in place.  It does not
+ * create a second upload surface or a separate file browser: Frappe's File
+ * view remains responsible for browsing, search, sorting and navigation.
  */
 
-frappe.provide("frappe.ai.folder");
+(() => {
+	if (typeof frappe === "undefined") return;
 
-Object.assign(frappe.ai.folder, {
-	/** Cached folder tree promise */
-	_tree: null,
-	default_folder: null,
+	frappe.provide("frappe.ai");
+	frappe.ai = frappe.ai || {};
+	const folder = (frappe.ai.folder = frappe.ai.folder || {});
+	const FALLBACK_FOLDER = "Home/Attachments";
 
-	/** Fetch the folder tree from the server (permission-filtered). */
-	async get_tree(root = "Home", max_depth = 4) {
-		return await frappe.xcall("ai_fr_hg.api.folders.get_tree", {
-			root,
-			max_depth,
-			include_files: 0,
-		});
-	},
+	function attachment_context(options = {}) {
+		return {
+			doctype: options.doctype || null,
+			docname: options.docname || null,
+			fieldname: options.fieldname || null,
+		};
+	}
 
-	async get_default_folder(doctype = null, docname = null) {
-		const result = await frappe.xcall("ai_fr_hg.api.folders.get_default_folder", {
-			doctype,
-			docname,
-		});
-		return result.folder || "Home/Attachments";
-	},
+	function error_message(error) {
+		return error?.message || error?._server_messages || __("The folder operation failed.");
+	}
 
-	async get_folder_info(folder) {
-		return await frappe.xcall("ai_fr_hg.api.folders.get_folder_info", { folder_name: folder });
-	},
-
-	async list_folder_contents(folder, opts = {}) {
-		return await frappe.xcall("ai_fr_hg.api.folders.list_folder_contents", {
-			folder,
-			include_files: opts.include_files ?? 1,
-			include_folders: opts.include_folders ?? 1,
-			limit: opts.limit ?? 50,
-			offset: opts.offset ?? 0,
-			search_text: opts.search_text || null,
-		});
-	},
-
-	async get_breadcrumbs(file_or_folder) {
-		return await frappe.xcall("ai_fr_hg.api.folders.get_breadcrumbs", {
-			file_or_folder,
-		});
-	},
-
-	async search(query, folder = null) {
-		return await frappe.xcall("ai_fr_hg.api.folders.search", {
-			query,
-			folder,
-		});
-	},
-
-	/** Render a flat list of folder options from a tree for a <select>. */
-	flatten_tree(node, depth = 0, out = []) {
-		if (!node) return out;
-		out.push({
-			value: node.name,
-			label: `${"— ".repeat(depth)} ${node.file_name || node.name}`.trim(),
-			depth,
-		});
-		(node.children || []).forEach((child) => {
-			if (child.is_folder) this.flatten_tree(child, depth + 1, out);
-		});
-		return out;
-	},
-
-	/** Show a folder picker dialog that resolves to the chosen folder. */
-	async pick_folder(opts = {}) {
-		const current = opts.default_folder || (await this.get_default_folder(opts.doctype, opts.docname));
-		const tree = await this.get_tree("Home", 6);
-		const options = this.flatten_tree(tree);
-
-		return new Promise((resolve) => {
-			const dialog = new frappe.ui.Dialog({
-				title: __("Select Destination Folder"),
-				fields: [
-					{
-						fieldname: "folder",
-						fieldtype: "Select",
-						label: __("Destination Folder"),
-						options: options.map((o) => ({ label: o.label, value: o.value })),
-						reqd: 1,
-						default: current,
-						description: __("Browse the hierarchy or search. Create a new folder inline if needed."),
-					},
-					{
-						fieldname: "new_folder_name",
-						fieldtype: "Data",
-						label: __("Or Create New Folder Here"),
-						placeholder: __("New folder name (optional)"),
-					},
-					{
-						fieldname: "search",
-						fieldtype: "Data",
-						label: __("Search Folders"),
-						placeholder: __("Type to filter folders..."),
-					},
-				],
-				primary_action_label: __("Select"),
+	Object.assign(folder, {
+		async get_tree(root = "Home", max_depth = 6) {
+			return frappe.xcall("ai_fr_hg.api.folders.get_tree", {
+				root,
+				max_depth,
+				include_files: 0,
 			});
+		},
 
-			// Live filter of the select options when user types in search field
-			dialog.fields_dict.search.df.onchange = () => {
-				const term = (dialog.get_value("search") || "").toLowerCase();
-				const select = dialog.fields_dict.folder;
-				const filtered = term
-					? options.filter((o) => o.label.toLowerCase().includes(term))
-					: options;
-				select.df.options = filtered.map((o) => ({ label: o.label, value: o.value }));
-				// Re-render the select control
-				if (select.refresh) select.refresh();
+		async get_default_folder(doctype = null, docname = null) {
+			const result = await frappe.xcall("ai_fr_hg.api.folders.get_default_folder", {
+				doctype,
+				docname,
+			});
+			return result.folder || FALLBACK_FOLDER;
+		},
+
+		async get_breadcrumbs(file_or_folder) {
+			return frappe.xcall("ai_fr_hg.api.folders.get_breadcrumbs", { file_or_folder });
+		},
+
+		async get_file_info(file_name) {
+			return frappe.xcall("ai_fr_hg.api.folders.get_file_info", { file_name });
+		},
+
+		flatten_tree(node, depth = 0, rows = []) {
+			if (!node || !node.is_folder) return rows;
+			rows.push({
+				value: node.name,
+				label: `${"— ".repeat(depth)}${node.file_name || node.name}`,
+			});
+			(node.children || []).forEach((child) => this.flatten_tree(child, depth + 1, rows));
+			return rows;
+		},
+
+		/**
+		 * Use Frappe's standard Dialog and Link control for native list/form bulk
+		 * actions.  The uploader itself receives the richer, inline tree select.
+		 */
+		prompt_for_folder({ title, default_folder } = {}) {
+			return new Promise((resolve) => {
+				let settled = false;
+				const done = (value) => {
+					if (settled) return;
+					settled = true;
+					resolve(value || null);
+				};
+				const dialog = new frappe.ui.Dialog({
+					title: title || __("Select Destination Folder"),
+					fields: [
+						{
+							fieldname: "folder",
+							fieldtype: "Link",
+							label: __("Folder"),
+							options: "File",
+							default: default_folder || "Home",
+							reqd: 1,
+							get_query() {
+								return { filters: { is_folder: 1 } };
+							},
+						},
+					],
+					primary_action_label: __("Select"),
+					primary_action(values) {
+						dialog.hide();
+						done(values.folder);
+					},
+				});
+				dialog.$wrapper.on("hidden.bs.modal", () => done(null));
+				dialog.show();
+			});
+		},
+
+		async confirm_upload(file_doc, destination, context) {
+			const args = {
+				folder: destination,
+				attached_to_doctype: context.doctype,
+				attached_to_name: context.docname,
+				attached_to_field: context.fieldname,
+			};
+			if (file_doc?.name) {
+				return frappe.xcall("ai_fr_hg.api.folders.set_file_folder", {
+					file_name: file_doc.name,
+					...args,
+				});
+			}
+			if (file_doc?.file_url) {
+				return frappe.xcall("ai_fr_hg.api.folders.upload_file_with_folder", {
+					file_url: file_doc.file_url,
+					...args,
+				});
+			}
+			return null;
+		},
+	});
+
+	function make_folder_aware_file_uploader(NativeFileUploader) {
+		return class FolderAwareFileUploader extends NativeFileUploader {
+		constructor(options = {}) {
+			const original_on_success = options.on_success;
+			const context = attachment_context(options);
+			const state = {
+				context,
+				selected_folder: options.folder || FALLBACK_FOLDER,
+				explicit_folder: Boolean(options.folder),
+				initialization_error: null,
+				selector: null,
 			};
 
-			dialog.set_primary_action(async (values) => {
-				let chosen = values.folder;
-				const newName = (values.new_folder_name || "").trim();
-				if (newName) {
+			// The native uploader sends this folder in its initial /upload_file
+			// request.  The confirmation below is idempotent server-side and makes
+			// the canonical folder service the authoritative final check.
+			super({
+				...options,
+				folder: state.selected_folder,
+				on_success: async (file_doc, response) => {
 					try {
-						const result = await frappe.xcall("ai_fr_hg.api.folders.create_folder", {
-							folder_name: newName,
-							parent_folder: chosen,
+						await folder.confirm_upload(file_doc, state.selected_folder, context);
+					} catch (error) {
+						frappe.msgprint({
+							title: __("Folder assignment failed"),
+							message: error_message(error),
+							indicator: "red",
 						});
-						chosen = result.name;
-						frappe.show_alert({ message: __("Folder {0} created.", [chosen]), indicator: "green" });
-					} catch (e) {
-						frappe.msgprint({ title: __("Could not create folder"), message: e.message, indicator: "red" });
 						return;
 					}
-				}
-				dialog.hide();
-				resolve(chosen);
+					return original_on_success?.(file_doc, response);
+				},
 			});
-			dialog.show();
-		});
-	},
 
-	/** Show inline folder creation inside an existing Uploader dialog. */
-	async inject_folder_selector(uploader) {
-		if (!uploader || uploader._folder_selector_injected) return;
-		uploader._folder_selector_injected = true;
-
-		// Resolve default folder based on attached document context
-		const doctype = uploader.args?.doctype || uploader.dialog?.__doctype || null;
-		const docname = uploader.args?.docname || uploader.dialog?.__docname || null;
-		const default_folder = await this.get_default_folder(doctype, docname);
-		uploader._selected_folder = uploader.args?.folder || default_folder;
-
-		const tree = await this.get_tree("Home", 6);
-		const options = this.flatten_tree(tree);
-
-		// Find a place to inject the control: FileUploader dialog has a body; append after file input
-		const $wrapper = uploader.dialog?.$wrapper || uploader.dialog?.$body?.parent();
-		if (!$wrapper || !$wrapper.length) return;
-
-		const $control = $(`
-			<div class="ai-folder-selector" style="margin: 12px 0; padding: 12px; border: 1px solid var(--border-color); border-radius: var(--border-radius); background: var(--control-bg);">
-				<label class="control-label" style="font-weight: 600;">${__("Destination Folder")}</label>
-				<div class="d-flex gap-2" style="gap:8px;">
-					<select class="form-control ai-folder-select" style="flex:1;">
-						${options.map((o) => `<option value="${frappe.utils.escape_html(o.value)}" ${o.value === uploader._selected_folder ? "selected" : ""}>${frappe.utils.escape_html(o.label)}</option>`).join("")}
-					</select>
-					<button class="btn btn-default btn-sm ai-folder-new">${__("New Folder")}</button>
-				</div>
-				<div class="ai-folder-breadcrumbs small text-muted" style="margin-top:6px;"></div>
-				<div class="ai-folder-actions small" style="margin-top:8px; display:none;">
-					<input type="text" class="form-control input-sm ai-new-folder-input" placeholder="${__("New folder name")}" style="max-width:220px; display:inline-block;">
-					<button class="btn btn-xs btn-primary ai-create-folder">${__("Create")}</button>
-					<button class="btn btn-xs btn-default ai-cancel-create">${__("Cancel")}</button>
-				</div>
-			</div>
-		`);
-
-		// Insert before the upload button row
-		const $body = uploader.dialog.$body || $wrapper.find(".modal-body");
-		if ($body && $body.length) {
-			$body.prepend($control);
-		} else {
-			$wrapper.prepend($control);
+			this._ai_folder_state = state;
+			this._ai_folder_ready = this._initialize_folder_selector().catch((error) => {
+				state.initialization_error = error;
+				return null;
+			});
 		}
 
-		const renderBreadcrumbs = async (folder) => {
-			try {
-				const crumbs = await this.get_breadcrumbs(folder);
-				$control.find(".ai-folder-breadcrumbs").html(
-					crumbs.map((c) => frappe.utils.escape_html(c.file_name)).join(' <span class="text-muted">›</span> ')
+		async _initialize_folder_selector() {
+			const state = this._ai_folder_state;
+			if (!state.explicit_folder) {
+				state.selected_folder = await folder.get_default_folder(
+					state.context.doctype,
+					state.context.docname
 				);
-			} catch (_) {}
-		};
-		renderBreadcrumbs(uploader._selected_folder);
-
-		$control.find(".ai-folder-select").on("change", function () {
-			uploader._selected_folder = $(this).val();
-			renderBreadcrumbs(uploader._selected_folder);
-		});
-
-		$control.find(".ai-folder-new").on("click", () => {
-			$control.find(".ai-folder-actions").show();
-			$control.find(".ai-new-folder-input").focus();
-		});
-		$control.find(".ai-cancel-create").on("click", () => {
-			$control.find(".ai-folder-actions").hide();
-			$control.find(".ai-new-folder-input").val("");
-		});
-		$control.find(".ai-create-folder").on("click", async () => {
-			const newName = $control.find(".ai-new-folder-input").val().trim();
-			if (!newName) return;
-			try {
-				const result = await frappe.xcall("ai_fr_hg.api.folders.create_folder", {
-					folder_name: newName,
-					parent_folder: uploader._selected_folder,
-				});
-				frappe.show_alert({ message: __("Folder {0} created.", [result.name]), indicator: "green" });
-				// Refresh tree and select the new folder
-				const newTree = await frappe.ai.folder.get_tree("Home", 6);
-				const newOptions = frappe.ai.folder.flatten_tree(newTree);
-				const $select = $control.find(".ai-folder-select").empty();
-				newOptions.forEach((o) => {
-					$select.append(
-						$("<option>").val(o.value).text(o.label).prop("selected", o.value === result.name)
-					);
-				});
-				uploader._selected_folder = result.name;
-				$control.find(".ai-folder-actions").hide();
-				$control.find(".ai-new-folder-input").val("");
-				renderBreadcrumbs(uploader._selected_folder);
-			} catch (e) {
-				frappe.msgprint({ title: __("Could not create folder"), message: e.message, indicator: "red" });
 			}
-		});
+			this._set_native_destination(state.selected_folder);
 
-		// Monkey-patch the success path to re-file the uploaded File into the chosen folder server-side
-		const original_on_success = uploader.args?.on_success || uploader.on_success;
-		const wrapped_on_success = async (file_doc) => {
-			// Frappe's FileUploader calls on_success with the File doc JSON
-			let file_url = file_doc?.file_url || file_doc?.fileUrl;
-			let file_name = file_doc?.name;
-			if (!file_url && file_name) {
-				// Try to get file_url from doc if not in callback payload
-				try {
-					const info = await frappe.xcall("ai_fr_hg.api.folders.get_file_info", { file_name });
-					file_url = info.file_url;
-				} catch (_) {}
+			if (this.dialog) {
+				await this._inject_folder_selector();
 			}
-			if (file_url && uploader._selected_folder) {
-				try {
-					await frappe.xcall("ai_fr_hg.api.folders.upload_file_with_folder", {
-						file_url,
-						folder: uploader._selected_folder,
-						attached_to_doctype: uploader.args?.doctype || null,
-						attached_to_name: uploader.args?.docname || null,
-					});
-				} catch (e) {
-					frappe.show_alert({ message: e.message, indicator: "red" });
-				}
-			}
-			if (typeof original_on_success === "function") {
-				return original_on_success(file_doc);
-			}
-		};
-
-		// Attach wrapper to both possible hook points
-		if (uploader.args) uploader.args.on_success = wrapped_on_success;
-		uploader.on_success = wrapped_on_success;
-
-		// Also wrap the internal upload method if exists to carry folder flag
-		if (uploader.upload) {
-			const origUpload = uploader.upload.bind(uploader);
-			uploader.upload = function (...args) {
-				// Pass folder via flags so server sees it even if re-file wrapper missed
-				if (uploader.args) uploader.args.folder = uploader._selected_folder;
-				return origUpload(...args);
-			};
 		}
-	},
 
-	/** Initialize global patch once Desk is ready. */
-	init() {
-		if (this._init_done) return;
-		this._init_done = true;
+		_set_native_destination(destination) {
+			const state = this._ai_folder_state;
+			state.selected_folder = destination;
 
-		const tryPatch = () => {
-			if (!window.frappe || !frappe.ui || !frappe.ui.FileUploader) {
-				setTimeout(tryPatch, 600);
-				return;
+			// FileUploader mounts a Vue component.  Its public proxy exposes the
+			// component instance at `$`; updating the reactive props means the
+			// native uploader serialises the selected folder in the initial request.
+			const props = this.uploader?.$?.props;
+			if (props) {
+				props.folder = destination;
 			}
-			const Original = frappe.ui.FileUploader;
-			const self = this;
+		}
 
-			// Wrap construction
-			frappe.ui.FileUploader = function (opts) {
-				// Resolve default folder eagerly via server to ensure server truth
-				const instance = new Original(opts);
-				// Inject selector after dialog is built (next tick)
-				setTimeout(() => self.inject_folder_selector(instance), 250);
-				return instance;
+		async _inject_folder_selector() {
+			const state = this._ai_folder_state;
+			const $body = this.dialog.$body?.length ? this.dialog.$body : $(this.wrapper);
+			if (!$body.length || state.selector) return;
+
+			const tree = await folder.get_tree("Home", 6);
+			const options = folder.flatten_tree(tree);
+			const $section = $("<div class='form-section'></div>");
+			const $breadcrumbs = $("<div class='text-muted small'></div>");
+			$body.prepend($section);
+
+			const destination = frappe.ui.form.make_control({
+				parent: $section,
+				render_input: true,
+				df: {
+					fieldname: "ai_folder_destination",
+					fieldtype: "Select",
+					label: __("Destination Folder"),
+					options,
+					reqd: 1,
+					description: __("Choose where every selected upload in this batch will be stored."),
+				},
+			});
+			destination.set_value(state.selected_folder);
+
+			const $new_folder = $("<div class='form-section'></div>").appendTo($section);
+			const new_folder_name = frappe.ui.form.make_control({
+				parent: $new_folder,
+				render_input: true,
+				df: {
+					fieldname: "ai_new_folder_name",
+					fieldtype: "Data",
+					label: __("New Folder"),
+					placeholder: __("Create inside the selected folder"),
+				},
+			});
+			frappe.ui.form.make_control({
+				parent: $new_folder,
+				render_input: true,
+				df: {
+					fieldname: "ai_create_folder",
+					fieldtype: "Button",
+					label: __("Create Folder"),
+					click: async () => {
+						const name = (new_folder_name.get_value() || "").trim();
+						if (!name) return;
+						try {
+							const created = await frappe.xcall("ai_fr_hg.api.folders.create_folder", {
+								folder_name: name,
+								parent_folder: state.selected_folder,
+							});
+							const refreshed_tree = await folder.get_tree("Home", 6);
+							destination.df.options = folder.flatten_tree(refreshed_tree);
+							destination.set_options();
+							new_folder_name.set_value("");
+							this._set_native_destination(created.name);
+							destination.set_value(created.name);
+							await render_breadcrumbs(created.name);
+							frappe.show_alert({
+								message: __("Folder {0} created.", [created.file_name]),
+								indicator: "green",
+							});
+						} catch (error) {
+							frappe.msgprint({
+								title: __("Could not create folder"),
+								message: error_message(error),
+								indicator: "red",
+							});
+						}
+					},
+				},
+			});
+			$section.append($breadcrumbs);
+
+			const render_breadcrumbs = async (destination_folder) => {
+				const crumbs = await folder.get_breadcrumbs(destination_folder);
+				$breadcrumbs.text(crumbs.map((crumb) => crumb.file_name).join(" › "));
 			};
-			// Preserve prototype and static helpers
-			frappe.ui.FileUploader.prototype = Original.prototype;
-			Object.assign(frappe.ui.FileUploader, Original);
+			destination.$input.on("change", async () => {
+				this._set_native_destination(destination.get_value());
+				try {
+					await render_breadcrumbs(destination.get_value());
+				} catch (error) {
+					$breadcrumbs.text("");
+				}
+			});
+			await render_breadcrumbs(state.selected_folder);
+			state.selector = destination;
+		}
 
-			console.log("[ai_fr_hg] FileUploader patched with folder selector");
+		async upload_files() {
+			await this._ai_folder_ready;
+			const state = this._ai_folder_state;
+			if (state.initialization_error) {
+				frappe.msgprint({
+					title: __("Folder selector unavailable"),
+					message: error_message(state.initialization_error),
+					indicator: "red",
+				});
+				throw state.initialization_error;
+			}
+
+			// FileUploader can also be embedded without a dialog.  In that rare
+			// native context, use a standard Frappe Dialog before sending rather
+			// than silently filing the upload somewhere else.
+			if (!this.dialog && !state.selector) {
+				const selected = await folder.prompt_for_folder({
+					default_folder: state.selected_folder,
+				});
+				if (!selected) return Promise.reject();
+				this._set_native_destination(selected);
+			}
+
+			this._set_native_destination(state.selected_folder);
+			return super.upload_files();
+		}
 		};
-		tryPatch();
-	},
-});
+	}
 
-// Auto-init on desk load
-if (typeof frappe !== "undefined") {
-	frappe.after_ajax ? frappe.after_ajax(() => frappe.ai.folder.init()) : setTimeout(() => frappe.ai.folder.init(), 1000);
-}
+	function patch_file_uploader(remaining_attempts = 20) {
+		const NativeFileUploader = frappe.ui?.FileUploader;
+		if (!NativeFileUploader) {
+			if (remaining_attempts > 0) {
+				setTimeout(() => patch_file_uploader(remaining_attempts - 1), 250);
+			}
+			return;
+		}
+		if (NativeFileUploader.__ai_folder_selector__) return;
+
+		const FolderAwareFileUploader = make_folder_aware_file_uploader(NativeFileUploader);
+		FolderAwareFileUploader.__ai_folder_selector__ = true;
+		FolderAwareFileUploader.__ai_native_file_uploader__ = NativeFileUploader;
+		frappe.ui.FileUploader = FolderAwareFileUploader;
+	}
+
+	folder.install_uploader_extension = patch_file_uploader;
+	patch_file_uploader();
+})();

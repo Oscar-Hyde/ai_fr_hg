@@ -12,9 +12,7 @@ frappe.listview_settings["AI Document"] = {
 		listview.page.add_inner_button(__("Knowledge Explorer"), () =>
 			frappe.set_route("knowledge-explorer")
 		);
-		listview.page.add_inner_button(__("File Manager"), () =>
-			frappe.set_route("ai-file-manager")
-		);
+		listview.page.add_inner_button(__("Files"), () => frappe.set_route("List", "File", "Home"));
 
 		listview.page.add_actions_menu_item(__("Re-process"), () => {
 			const selected = listview.get_checked_items(true);
@@ -37,59 +35,50 @@ frappe.listview_settings["AI Document"] = {
 			});
 		});
 
-		// Folder organization bulk actions (File & Folder §5, §7)
-		listview.page.add_actions_menu_item(__("Move to Folder…"), async () => {
+		// This is a native List View bulk action.  Source File resolution is
+		// presentation-only; the canonical bulk service owns all validation,
+		// permission checks, persistence and provenance updates.
+		listview.page.add_actions_menu_item(__("Move Source Files to Folder…"), async () => {
 			const selected = listview.get_checked_items(true);
 			if (!selected.length) {
 				frappe.msgprint(__("Select at least one document."));
 				return;
 			}
-			const target = await frappe.ai.folder.pick_folder({ default_folder: "Home" });
-			let moved = 0;
-			let errors = [];
+			const target = await frappe.ai.folder.prompt_for_folder({
+				default_folder: "Home",
+				title: __("Move Source Files to Folder"),
+			});
+			if (!target) return;
+
+			const file_names = [];
+			const missing = [];
 			for (const name of selected) {
-				try {
-					const doc = await frappe.db.get_value("AI Document", name, ["source_file", "folder"]);
-					const file_url = doc.message?.source_file || doc.source_file;
-					if (!file_url) {
-						errors.push(`${name}: no source file`);
-						continue;
-					}
-					const file_name = await frappe.db.get_value("File", { file_url }, "name");
-					const real_name = file_name.message?.name || file_name?.name || file_name;
-					if (!real_name) {
-						errors.push(`${name}: file record not found`);
-						continue;
-					}
-					await frappe.xcall("ai_fr_hg.api.folders.move_file", {
-						file_name: real_name,
-						target_folder: target,
-					});
-					// Also update AI Document folder provenance
-					await frappe.db.set_value("AI Document", name, { folder: target, source_folder: target });
-					moved++;
-				} catch (e) {
-					errors.push(`${name}: ${e.message}`);
-				}
+				const document = await frappe.db.get_value("AI Document", name, "source_file");
+				const file_url = document.message?.source_file || document.source_file;
+				const file = file_url && (await frappe.db.get_value("File", { file_url }, "name"));
+				const file_name = file?.message?.name || file?.name || file;
+				if (file_name) file_names.push(file_name);
+				else missing.push(name);
 			}
-			if (errors.length) {
-				frappe.msgprint({
-					title: __("Move completed with errors"),
-					message: `${moved} moved, ${errors.length} errors:<br>${errors.join("<br>")}`,
-					indicator: "orange",
-				});
-			} else {
-				frappe.show_alert({ message: __("{0} document(s) moved to {1}", [moved, target]), indicator: "green" });
+			if (!file_names.length) {
+				frappe.msgprint(__("None of the selected documents has a source File."));
+				return;
 			}
+
+			const result = await frappe.xcall("ai_fr_hg.api.folders.bulk_move", {
+				file_names,
+				target_folder: target,
+				enqueue: file_names.length > 20 ? 1 : 0,
+			});
+			const skipped = missing.length ? ` ${__("{0} document(s) had no source File.", [missing.length])}` : "";
+			frappe.show_alert({
+				message:
+					result.status === "Queued"
+						? __("Bulk move queued.") + skipped
+						: __("{0} source file(s) moved.", [result.moved?.length || 0]) + skipped,
+				indicator: result.status === "Queued" ? "blue" : "green",
+			});
 			listview.refresh();
 		});
-	},
-
-	// Show folder in list row via formatters is handled by standard_filter; indicator already shows status
-	formatters: {
-		folder(value) {
-			if (!value) return "";
-			return `<span title="${frappe.utils.escape_html(value)}">📁 ${frappe.utils.escape_html(value.split("/").pop())}</span>`;
-		},
 	},
 };

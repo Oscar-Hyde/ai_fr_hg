@@ -344,14 +344,9 @@ class KnowledgeExplorer {
 
 	async upload() {
 		const me = this;
-		let chosen_folder;
-		try {
-			chosen_folder = await frappe.ai.folder.pick_folder({ default_folder: "Home" });
-		} catch (e) {
-			chosen_folder = "Home/Attachments";
-		}
+		// The global FileUploader extension supplies the native in-dialog folder
+		// selector, including creation of a child folder when needed.
 		new frappe.ui.FileUploader({
-			folder: chosen_folder,
 			on_success(file) {
 				frappe.prompt(
 					[
@@ -370,34 +365,15 @@ class KnowledgeExplorer {
 							default: file.file_name,
 							reqd: 1,
 						},
-						{
-							fieldtype: "Link",
-							fieldname: "folder",
-							label: __("Destination Folder"),
-							options: "File",
-							default: chosen_folder,
-							get_query() {
-								return { filters: { is_folder: 1 } };
-							},
-							description: __("You can change the folder or create a new one. Leave as is to use the chosen folder."),
-						},
 					],
 					async (values) => {
-						const final_folder = values.folder || chosen_folder;
 						await frappe.xcall("ai_fr_hg.api.knowledge.upload_document", {
 							file_url: file.file_url,
 							knowledge_base: values.knowledge_base,
 							title: values.title,
-							folder: final_folder,
 						});
-						try {
-							await frappe.xcall("ai_fr_hg.api.folders.upload_file_with_folder", {
-								file_url: file.file_url,
-								folder: final_folder,
-							});
-						} catch (e) {}
 						frappe.show_alert({
-							message: __("Processing {0} in {1}...", [values.title, final_folder]),
+							message: __("Processing {0}...", [values.title]),
 							indicator: "blue",
 						});
 						setTimeout(() => me.refresh(), 3000);
