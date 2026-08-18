@@ -3,7 +3,6 @@
 
 """Frappe integration coverage for this DocType and its canonical domain services."""
 
-from itertools import chain, repeat
 from unittest.mock import patch
 
 import frappe
@@ -158,13 +157,13 @@ class TestIngestionWait(AIPlatformTestCase):
 		document = self.make_document("Wait Queued Doc", "content")
 		document.db_set("status", "Queued", update_modified=False)
 
-		# First monotonic call sets the deadline; the second is past it.
-		with (
-			patch("ai_fr_hg.ai.ingestion.time.sleep"),
-			patch("ai_fr_hg.ai.ingestion.time.monotonic", side_effect=chain([0], repeat(10))),
-		):
-			statuses = wait_for_indexed([document.name], timeout=1)
+		# A zero deadline must return after its first status read without sleep.
+		# Do not patch ``time.monotonic``: it is a process-global stdlib module and
+		# changing it can stall Frappe/Redis internals running alongside tests.
+		with patch("ai_fr_hg.ai.ingestion.time.sleep") as sleep:
+			statuses = wait_for_indexed([document.name], timeout=0)
 
+		sleep.assert_not_called()
 		self.assertEqual(statuses.get(document.name), "Queued")
 
 

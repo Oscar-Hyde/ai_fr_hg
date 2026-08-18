@@ -89,7 +89,7 @@ def index_document(document: str, force: bool = False, embed: bool = True) -> di
 	existing_rows = frappe.get_all(
 		"AI Document Chunk",
 		filters={"document": document},
-		fields=["name", "checksum", "embedding", "embedding_model"],
+		fields=["name", "checksum", "embedding", "embedding_model", "embedding_dimensions", "embedding_format"],
 	)
 	existing = {row.checksum: row for row in existing_rows}
 	incoming = {chunk.checksum for chunk in chunks}
@@ -102,8 +102,11 @@ def index_document(document: str, force: bool = False, embed: bool = True) -> di
 		existing = {}
 
 	model = None
+	expected_embedding_dimensions = 0
 	if embed:
-		model = resolve_model(kb.embedding_model or settings.default_embedding_model, "Embedding").name
+		model_doc = resolve_model(kb.embedding_model or settings.default_embedding_model, "Embedding")
+		model = model_doc.name
+		expected_embedding_dimensions = cint(model_doc.embedding_dimensions)
 		doc.db_set("status", "Embedding", update_modified=False)
 
 	created = 0
@@ -113,7 +116,12 @@ def index_document(document: str, force: bool = False, embed: bool = True) -> di
 		for checksum, row in existing.items()
 		if embed
 		and checksum in incoming
-		and (not row.embedding or (bool(model) and row.embedding_model != model))
+		and (
+			not row.embedding
+			or (bool(model) and row.embedding_model != model)
+			or not row.embedding_format
+			or (expected_embedding_dimensions and cint(row.embedding_dimensions) != expected_embedding_dimensions)
+		)
 	]
 
 	for chunk in chunks:
