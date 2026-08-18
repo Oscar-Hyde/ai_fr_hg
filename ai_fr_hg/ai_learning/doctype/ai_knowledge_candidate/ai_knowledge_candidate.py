@@ -129,7 +129,7 @@ class AIKnowledgeCandidate(Document):
 
 		write_audit_log(
 			action="Knowledge Candidate Created",
-			category="Learning",
+			category="Data",
 			message=_("Candidate {0} ({1}) created for {2} scope.").format(
 				self.name, self.candidate_type, self.target_scope
 			),
