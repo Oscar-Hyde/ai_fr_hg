@@ -1,4 +1,5 @@
 [pre_model_sync]
+ai_fr_hg.patches.v0_0_5_normalize_legacy_long_int_values
 # Patches added in this section will be executed before doctypes are migrated
 # Read docs to understand patches: https://docs.frappe.io/framework/user/en/database-migrations
 
