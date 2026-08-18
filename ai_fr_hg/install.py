@@ -552,7 +552,14 @@ def _fix_learning_doctype_modules() -> None:
 	fails.  A proper ``bench migrate`` runs the corresponding patch, but the
 	fix is also applied here so test environments do not need a manual migrate.
 	"""
+	# Unit-test bootstraps and minimal Frappe installations may intentionally
+	# expose no database facade.  The model-sync patch performs this repair in
+	# real sites, so cache setup must remain safe in that environment.
+	db = getattr(frappe, "db", None)
+	if not callable(getattr(db, "get_value", None)):
+		return
+
 	for doctype in ("AI Knowledge Candidate", "AI Memory", "AI Skill"):
-		current = frappe.db.get_value("DocType", doctype, "module")
+		current = db.get_value("DocType", doctype, "module")
 		if current and current != "AI Learning":
-			frappe.db.set_value("DocType", doctype, "module", "AI Learning")
+			db.set_value("DocType", doctype, "module", "AI Learning")

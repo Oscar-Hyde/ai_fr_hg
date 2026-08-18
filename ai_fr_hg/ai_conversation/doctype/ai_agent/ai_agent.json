@@ -221,7 +221,7 @@
   },
   {
    "fieldname": "total_tokens",
-   "fieldtype": "Long Int",
+   "fieldtype": "Int",
    "label": "Total Tokens",
    "read_only": 1
   },

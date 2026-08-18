@@ -309,7 +309,7 @@
   },
   {
    "fieldname": "size_bytes",
-   "fieldtype": "Long Int",
+   "fieldtype": "Int",
    "label": "Size (bytes)",
    "read_only": 1
   },
@@ -325,7 +325,7 @@
   },
   {
    "fieldname": "total_tokens",
-   "fieldtype": "Long Int",
+   "fieldtype": "Int",
    "label": "Total Tokens",
    "read_only": 1
   },

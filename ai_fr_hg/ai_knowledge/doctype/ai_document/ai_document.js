@@ -1,6 +1,18 @@
 // Copyright (c) 2026, Ai Fr Hg and contributors
 // For license information, please see license.txt
 
+/**
+ * App bundles can be refreshed independently from a DocType script.  Do not
+ * let that normal asset-loading window turn a native form/list action into an
+ * uncaught JavaScript error.
+ */
+async function prompt_for_folder(options) {
+	const picker = frappe.ai?.folder?.prompt_for_folder;
+	if (picker) return picker(options);
+	frappe.msgprint(__("The folder selector is still loading. Reload Desk and try again."));
+	return null;
+}
+
 frappe.ui.form.on("AI Document", {
 	refresh(frm) {
 		if (frm.is_new()) return;
@@ -27,7 +39,7 @@ frappe.ui.form.on("AI Document", {
 				frappe.msgprint(__("This document has no source file to move."));
 				return;
 			}
-			const target = await frappe.ai.folder.prompt_for_folder({
+			const target = await prompt_for_folder({
 				default_folder: frm.doc.folder || "Home",
 				title: __("Select Destination Folder"),
 			});
@@ -58,7 +70,7 @@ frappe.ui.form.on("AI Document", {
 				frappe.msgprint(__("No source file to copy."));
 				return;
 			}
-			const target = await frappe.ai.folder.prompt_for_folder({
+			const target = await prompt_for_folder({
 				default_folder: frm.doc.folder || "Home",
 				title: __("Select Destination Folder"),
 			});

@@ -56,7 +56,7 @@
   },
   {
    "fieldname": "total_tokens",
-   "fieldtype": "Long Int",
+   "fieldtype": "Int",
    "in_list_view": 1,
    "label": "Total Tokens"
   },

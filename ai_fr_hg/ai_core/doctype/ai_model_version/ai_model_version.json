@@ -38,7 +38,7 @@
   },
   {
    "fieldname": "size_bytes",
-   "fieldtype": "Long Int",
+   "fieldtype": "Int",
    "label": "Size (bytes)"
   },
   {
