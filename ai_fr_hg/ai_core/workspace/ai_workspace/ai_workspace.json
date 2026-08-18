@@ -1,7 +1,7 @@
 {
  "app": "ai_fr_hg",
  "charts": [],
- "content": "[{\"id\": \"h2788435\", \"type\": \"header\", \"data\": {\"text\": \"AI Workspace\", \"col\": 12, \"level\": 4}}, {\"id\": \"p85979936\", \"type\": \"paragraph\", \"data\": {\"text\": \"Chat with your local models, search your knowledge, and run AI tasks.\", \"col\": 12}}, {\"id\": \"s62141950\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"AI Assistant\", \"col\": 3}}, {\"id\": \"s6397134\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Knowledge Explorer\", \"col\": 3}}, {\"id\": \"s6789980\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"My Conversations\", \"col\": 3}}, {\"id\": \"s99485052\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"AI Tasks\", \"col\": 3}}, {\"id\": \"sp592df5\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"c95862942\", \"type\": \"card\", \"data\": {\"card_name\": \"Conversations\", \"col\": 4}}, {\"id\": \"c83124223\", \"type\": \"card\", \"data\": {\"card_name\": \"Knowledge\", \"col\": 4}}, {\"id\": \"c29315919\", \"type\": \"card\", \"data\": {\"card_name\": \"Tasks\", \"col\": 4}}]",
+ "content": "[{\"id\": \"h2788435\", \"type\": \"header\", \"data\": {\"text\": \"AI Workspace\", \"col\": 12, \"level\": 4}}, {\"id\": \"p85979936\", \"type\": \"paragraph\", \"data\": {\"text\": \"Chat with your local models, search your knowledge, and run AI tasks.\", \"col\": 12}}, {\"id\": \"s62141950\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"AI Assistant\", \"col\": 3}}, {\"id\": \"s6397134\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Knowledge Explorer\", \"col\": 3}}, {\"id\": \"s6789980\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"My Conversations\", \"col\": 3}}, {\"id\": \"s99485052\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"AI Tasks\", \"col\": 3}}, {\"id\": \"s_file_manager\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"File Manager\", \"col\": 3}}, {\"id\": \"sp592df5\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"c95862942\", \"type\": \"card\", \"data\": {\"card_name\": \"Conversations\", \"col\": 4}}, {\"id\": \"c83124223\", \"type\": \"card\", \"data\": {\"card_name\": \"Knowledge\", \"col\": 4}}, {\"id\": \"c29315919\", \"type\": \"card\", \"data\": {\"card_name\": \"Tasks\", \"col\": 4}}]",
  "creation": "2026-08-16 09:00:00.000000",
  "custom_blocks": [],
  "docstatus": 0,
@@ -160,6 +160,12 @@
    "label": "AI Tasks",
    "link_to": "AI Task",
    "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "label": "File Manager",
+   "link_to": "ai-file-manager",
+   "type": "Page"
   }
  ],
  "sidebar_items": [
@@ -184,6 +190,19 @@
    "keep_closed": 0,
    "label": "Knowledge Explorer",
    "link_to": "knowledge-explorer",
+   "link_type": "Page",
+   "open_in_new_tab": 0,
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 0,
+   "collapsible": 1,
+   "icon": "folder",
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "File Manager",
+   "link_to": "ai-file-manager",
    "link_type": "Page",
    "open_in_new_tab": 0,
    "show_arrow": 0,

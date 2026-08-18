@@ -149,6 +149,12 @@
    "label": "Extraction Schemas",
    "link_to": "AI Extraction Schema",
    "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "label": "File Manager",
+   "link_to": "ai-file-manager",
+   "type": "Page"
   }
  ],
  "sidebar_items": [

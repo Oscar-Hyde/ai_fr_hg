@@ -32,7 +32,9 @@ class AIDocument(Document):
 		extracted_data: DF.Code | None
 		extraction_schema: DF.Link | None
 		file_size: DF.LongInt
+		folder: DF.Link | None
 		indexed_on: DF.Datetime | None
+		is_private: DF.Check
 		knowledge_base: DF.Link
 		language: DF.Data | None
 		metadata: DF.Code | None
@@ -48,6 +50,7 @@ class AIDocument(Document):
 		retry_count: DF.Int
 		source_doctype: DF.Link | None
 		source_file: DF.Attach | None
+		source_folder: DF.Data | None
 		source_name: DF.DynamicLink | None
 		source_type: DF.Literal["File", "Text", "URL", "DocType Record", "Folder"]
 		source_url: DF.Data | None
@@ -63,6 +66,34 @@ class AIDocument(Document):
 	def before_insert(self):
 		if not self.title and self.source_file:
 			self.title = self.source_file.rsplit("/", 1)[-1]
+		self.sync_folder_from_file()
+
+	def before_save(self):
+		self.sync_folder_from_file()
+
+	def sync_folder_from_file(self):
+		"""Derive folder provenance from the attached File's folder."""
+		if self.source_type == "File" and self.source_file:
+			try:
+				file_name = frappe.db.get_value("File", {"file_url": self.source_file}, "name")
+				if file_name:
+					folder = frappe.db.get_value("File", file_name, "folder")
+					if folder:
+						self.folder = folder
+						self.source_folder = folder
+					else:
+						# Fallback to default if file has no explicit folder
+						from ai_fr_hg.ai.folders import get_default_folder
+
+						default = get_default_folder(user=self.owner or frappe.session.user)
+						self.folder = default
+						self.source_folder = default
+			except Exception:
+				pass
+		elif self.source_type == "Folder" and self.source_file:
+			# When source is a folder path, preserve it
+			if not self.source_folder:
+				self.source_folder = self.source_file
 
 	def validate(self):
 		self.validate_source()

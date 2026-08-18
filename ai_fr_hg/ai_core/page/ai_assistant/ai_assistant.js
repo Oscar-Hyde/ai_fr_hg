@@ -633,14 +633,21 @@ class AIAssistant {
 		if (!active) $button.addClass("active");
 	}
 
-	attach_document() {
+	async attach_document() {
 		const me = this;
 		if (!this.context.knowledge_bases || !this.context.knowledge_bases.length) {
 			frappe.msgprint(__("Create a knowledge base before uploading documents."));
 			return;
 		}
+		// Let the user choose the destination folder (§4.1) — default is canonical, overridable
+		let chosen_folder;
+		try {
+			chosen_folder = await frappe.ai.folder.pick_folder({ default_folder: await frappe.ai.folder.get_default_folder() });
+		} catch (e) {
+			chosen_folder = "Home/Attachments";
+		}
 		new frappe.ui.FileUploader({
-			folder: "Home/Attachments",
+			folder: chosen_folder,
 			on_success(file) {
 				frappe.prompt(
 					[
@@ -666,8 +673,16 @@ class AIAssistant {
 								file_url: file.file_url,
 								knowledge_base: values.knowledge_base,
 								title: values.title,
+								folder: chosen_folder,
 							}
 						);
+						// Ensure server filed the File into the chosen folder (canonical service)
+						try {
+							await frappe.xcall("ai_fr_hg.api.folders.upload_file_with_folder", {
+								file_url: file.file_url,
+								folder: chosen_folder,
+							});
+						} catch (e) {}
 						// Remember this upload so the next send waits for its
 						// indexing and answers from that file specifically.
 						me.pending_documents = (me.pending_documents || []).concat([

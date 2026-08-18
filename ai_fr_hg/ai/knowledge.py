@@ -416,6 +416,7 @@ def retrieve(
 	model: str | None = None,
 	log: bool = True,
 	documents: list[str] | None = None,
+	folder: str | None = None,
 ) -> list[RetrievedChunk]:
 	"""Retrieve the most relevant chunks for `query`.
 
@@ -431,6 +432,37 @@ def retrieve(
 	settings = frappe.get_cached_doc("AI Platform Settings")
 
 	accessible = set(get_accessible_knowledge_bases())
+
+	# Folder-scoped retrieval (File & Folder §7): constrain to documents in a folder subtree
+	if folder and not documents:
+		try:
+			from ai_fr_hg.ai.folders import _normalize_folder_path
+
+			norm = _normalize_folder_path(folder)
+			folder_docs = frappe.get_all(
+				"AI Document",
+				filters=[
+					["folder", "like", f"{norm}%"]  # includes descendants via prefix match
+				],
+				fields=["name", "knowledge_base"],
+				limit_page_length=500,
+			)
+			# Also include documents where folder exactly equals norm (covered by like) and handle source_folder fallback
+			if not folder_docs:
+				folder_docs = frappe.get_all(
+					"AI Document",
+					filters={"source_folder": ["like", f"{norm}%"]},
+					fields=["name", "knowledge_base"],
+					limit_page_length=500,
+				)
+			if folder_docs:
+				documents = [d.name for d in folder_docs]
+				doc_kbs = {d.knowledge_base for d in folder_docs}
+				targets = [kb for kb in doc_kbs if kb in accessible]
+			else:
+				return []
+		except Exception:
+			frappe.log_error(title="Folder-scoped retrieval failed", message=frappe.get_traceback())
 
 	if documents:
 		# The uploaded files are the source of truth; restrict targets to the

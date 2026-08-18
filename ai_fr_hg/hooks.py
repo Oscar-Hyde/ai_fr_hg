@@ -172,6 +172,8 @@ permission_query_conditions = {
 	"AI Execution Log": "ai_fr_hg.utils.permissions.execution_log_query",
 	"AI Search Query": "ai_fr_hg.utils.permissions.search_query",
 	"AI Tool Invocation": "ai_fr_hg.utils.permissions.tool_invocation_query",
+	"AI Folder Settings": "ai_fr_hg.utils.permissions.folder_settings_query",
+	"AI Folder Favorite": "ai_fr_hg.utils.permissions.folder_favorite_query",
 }
 
 has_permission = {
@@ -193,6 +195,8 @@ doc_events = {
 	},
 	"File": {
 		"after_insert": "ai_fr_hg.utils.file_hooks.on_file_upload",
+		"on_update": "ai_fr_hg.utils.file_hooks.on_file_update",
+		"on_trash": "ai_fr_hg.utils.file_hooks.on_file_delete",
 	},
 }
 

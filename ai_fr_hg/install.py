@@ -273,6 +273,7 @@ def after_install() -> None:
 	create_default_knowledge_base()
 	create_default_agent()
 	create_default_policies()
+	create_default_folders()
 
 	frappe.db.commit()  # nosemgrep: frappe-manual-commit
 
@@ -286,6 +287,41 @@ def after_install() -> None:
 	print("    4. Open /app/ai-control-center and run 'Test All Providers'")
 	print("    5. Run 'Discover Models' to register what the runtime has")
 	print("")
+
+
+
+def create_default_folders() -> None:
+	"""Create a coherent, navigable folder structure (File & Folder §11, operational)."""
+	try:
+		from ai_fr_hg.ai.folders import create_folder as _create_folder
+	except Exception:
+		return
+	folders = [
+		("AI Platform", "Home"),
+		("Contracts", "Home/AI Platform"),
+		("Knowledge Base", "Home/AI Platform"),
+		("Projects", "Home/AI Platform"),
+		("Reports", "Home/AI Platform"),
+		("Agent Outputs", "Home/AI Platform"),
+		("My Uploads", "Home"),
+		("Attachments", "Home"),
+	]
+	for name, parent in folders:
+		try:
+			expected = f"{parent}/{name}"
+			if not frappe.db.exists("File", expected):
+				if frappe.db.exists("File", parent):
+					_create_folder(name, parent_folder=parent, is_private=0)
+		except Exception:
+			frappe.log_error(title=f"Default folder creation failed: {name}", message=frappe.get_traceback())
+	try:
+		settings = frappe.get_single("AI Platform Settings")
+		if not settings.storage_folder:
+			settings.storage_folder = "Home/AI Platform"
+			settings.flags.ignore_permissions = True
+			settings.save(ignore_permissions=True)
+	except Exception:
+		frappe.log_error(title="Storage folder default assignment failed", message=frappe.get_traceback())
 
 
 def create_roles() -> None:

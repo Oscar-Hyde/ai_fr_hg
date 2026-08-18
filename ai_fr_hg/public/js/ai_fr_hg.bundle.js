@@ -3,7 +3,8 @@
 
 /**
  * Bundle entry point. Registers the shared `frappe.ai` client helper used by
- * form scripts, list views and custom pages.
+ * form scripts, list views and custom pages, plus the canonical folder selector.
  */
 
 import "./ai_helpers";
+import "./file_folder";

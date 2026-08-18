@@ -7,6 +7,15 @@ frappe.ui.form.on("AI Document", {
 
 		frm.page.set_indicator(frm.doc.status, frappe.ai.status_color(frm.doc.status));
 
+		// Render folder breadcrumb under form heading (Folder Organization §3, §5)
+		if (frm.doc.folder) {
+			frappe.xcall("ai_fr_hg.api.folders.get_breadcrumbs", { file_or_folder: frm.doc.folder }).then((crumbs) => {
+				const html = crumbs.map((c) => frappe.utils.escape_html(c.file_name)).join(' <span class="text-muted">›</span> ');
+				frm.dashboard.set_headline(`<span class="text-muted small">📁 ${html}</span>`, "blue");
+			});
+			frm.dashboard.add_indicator(__("Folder: {0}", [frm.doc.folder]), "blue");
+		}
+
 		if (["Draft", "Failed", "Queued"].includes(frm.doc.status)) {
 			frm.add_custom_button(__("Process Now"), async () => {
 				await frm.call("process");
@@ -14,6 +23,50 @@ frappe.ui.form.on("AI Document", {
 				frm.reload_doc();
 			}).addClass("btn-primary");
 		}
+
+		// Folder organization actions — always wired to canonical service
+		frm.add_custom_button(__("Move to Folder…"), async () => {
+			if (!frm.doc.source_file) {
+				frappe.msgprint(__("This document has no source file to move."));
+				return;
+			}
+			const target = await frappe.ai.folder.pick_folder({ default_folder: frm.doc.folder || "Home" });
+			const file_name = await frappe.db.get_value("File", { file_url: frm.doc.source_file }, "name");
+			const real = file_name.message?.name || file_name?.name || file_name;
+			if (!real) {
+				frappe.msgprint(__("File record not found for {0}", [frm.doc.source_file]));
+				return;
+			}
+			try {
+				await frappe.xcall("ai_fr_hg.api.folders.move_file", { file_name: real, target_folder: target });
+				// Persist provenance on AI Document
+				await frappe.db.set_value("AI Document", frm.doc.name, { folder: target, source_folder: target });
+				frappe.show_alert({ message: __("Moved to {0}", [target]), indicator: "green" });
+				frm.reload_doc();
+			} catch (e) {
+				frappe.msgprint({ title: __("Move failed"), message: e.message, indicator: "red" });
+			}
+		}, __("Folder"));
+
+		frm.add_custom_button(__("Open File Manager"), () => {
+			frappe.set_route("ai-file-manager");
+		}, __("Folder"));
+
+		frm.add_custom_button(__("Copy File To…"), async () => {
+			if (!frm.doc.source_file) {
+				frappe.msgprint(__("No source file to copy."));
+				return;
+			}
+			const target = await frappe.ai.folder.pick_folder({ default_folder: frm.doc.folder || "Home" });
+			const file_name = await frappe.db.get_value("File", { file_url: frm.doc.source_file }, "name");
+			const real = file_name.message?.name || file_name?.name || file_name;
+			try {
+				await frappe.xcall("ai_fr_hg.api.folders.copy_file", { file_name: real, target_folder: target });
+				frappe.show_alert({ message: __("File copied to {0}", [target]), indicator: "green" });
+			} catch (e) {
+				frappe.msgprint({ title: __("Copy failed"), message: e.message, indicator: "red" });
+			}
+		}, __("Folder"));
 
 		if (frm.doc.status === "Indexed") {
 			frm.add_custom_button(__("Summarise"), async () => {
@@ -36,8 +89,6 @@ frappe.ui.form.on("AI Document", {
 						reqd: 1,
 					},
 					(values) => {
-						// Scope the answer to this document so the reply is
-						// grounded in the record itself, not the whole KB.
 						frappe.ai.ask(values.question, {
 							knowledge_bases: [frm.doc.knowledge_base],
 							documents: [frm.doc.name],
@@ -174,6 +225,11 @@ frappe.ui.form.on("AI Document", {
 				__("{0} embedded", [frm.doc.embedded_chunk_count]),
 				frm.doc.embedded_chunk_count === frm.doc.chunk_count ? "green" : "orange"
 			);
+		}
+
+		// Folder-specific provenance indicator
+		if (frm.doc.source_folder) {
+			frm.dashboard.add_indicator(__("Provenance: {0}", [frm.doc.source_folder]), "gray");
 		}
 	},
 });
