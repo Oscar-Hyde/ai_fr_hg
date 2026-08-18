@@ -20,11 +20,14 @@ Attach a file in chat            (ai_assistant.js  →  FileUploader)
    │
    ▼
 POST /api/method/ai_fr_hg.api.knowledge.upload_document
+   │  file_url + exact file_record + canonical folder
    │  check_capability("document_upload")        governance
    │  check_document_quota()                     governance
    │  ingest_file()
-   │     ├─ resolve the Frappe File by file_url
-   │     ├─ create AI Document (source_type=File, source_file=file_url)
+   │     ├─ resolve exact File by stable file_record (URL-only legacy fails on ambiguity)
+   │     ├─ authorize File + parent + Knowledge Base
+   │     ├─ create AI Document (source_file URL + source_file_record Link)
+   │     ├─ set folder/source_folder + normalized organization identity
    │     └─ enqueue_processing()  → background worker (queue="long")
    ▼
 Background worker: process_document()
@@ -71,13 +74,42 @@ first question.
 | DocType | Role |
 | --- | --- |
 | `AI Knowledge Base` | Owns chunking + embedding policy (chunk size/overlap, top_k, similarity threshold, embedding model). |
-| `AI Document` | One ingested source: extracted text, metadata, source file attachment, status, chunk/embed counts. |
+| `File` | Native physical attachment identity and canonical folder hierarchy. `File.name` is stable even when another File shares the same URL/bytes. |
+| `AI Folder Settings` | Optional metadata for a canonical File folder; never a second hierarchy. |
+| `AI Document` | One stable ingested-source identity: `source_file_record` identifies the exact File; `folder`/`source_folder` place it; `organization_name_key` enforces parent-scoped display identity; extracted content/status/counts remain ordinary processing state. |
 | `AI Document Chunk` | One retrievable slice with its embedding (base64 float32), heading, page, checksum, source document. |
 | `AI Conversation` | Chat thread bound to an agent; conversation-level knowledge bases. |
 | `AI Message` | A turn's user/assistant/tool messages, with citations and token accounting. |
 | `AI Execution Log` | Every model call (redacted). |
 | `AI Audit Log` | Privileged actions (e.g. conversation creation). |
 | `AI Search Query` | Retrieval telemetry (queued, not inline). |
+
+### Stable File identity and placement
+
+A File URL or checksum is content/location identity, not record identity. Frappe
+may retain separate File rows for copies while deduplicating physical bytes.
+Every uploader in this app therefore propagates the exact upload response
+`name` as `file_record` together with `file_url`.
+
+For pre-migration AI Documents that have only a URL, resolution is deliberately
+bounded and fail-closed:
+
+1. one exact File attachment to that AI Document is accepted;
+2. otherwise one globally unique File row for the URL is accepted;
+3. multiple exact or global candidates raise a fetch error and remain
+   unresolved until an operator supplies the exact File.
+
+No pipeline chooses the oldest duplicate. Patch
+`v0_0_9_ai_document_tree_organization` applies the same singleton rule during
+backfill and caps ambiguity tracking at two candidates.
+
+Placement is orthogonal to processing. `AI Document.folder` links to canonical
+native File folder `Home/...`; `source_folder` is synchronized provenance. The
+native AI Document Tree uses those same records for lazy mixed navigation.
+Moving a document retains its AI Document/chunks/index identity. Copying creates
+an independent AI Document and File identity, resets derived processing/index
+state, and does not copy chunks, embeddings, shares, or unrelated attachments.
+See [AI Document Tree](DOCUMENT_TREE.md).
 
 ---
 
@@ -159,6 +191,9 @@ the knowledge dashboard and the AI Document form.
 - **Desk assets** use Frappe's native layout: standard DocType scripts are
   colocated under `<module>/doctype/<doctype>/`, shared bundles remain in
   `public/js/`, and pages live under their owning module's `page/` directory.
+- **Organization** follows UI/native Tree View → `api/document_tree.py` facade →
+  `ai/document_tree.py` service → native File/AI Document and existing
+  processing services. Tree JavaScript contains no business authorization.
 
 ### Extending
 
@@ -178,8 +213,17 @@ bench --site your-site.local run-tests --app ai_fr_hg
 ```
 
 Unit tests cover chunking, vector math, deadlines, JSON parsing, the network
-guard and tool wire formats without touching a database. Integration tests
-stub the chat and embedding engines so CI needs no GPU or Ollama.
+guard and tool wire formats without touching a database. Focused folder/tree
+pure suites additionally cover stable File ambiguity, escaped search/prefixes,
+permission filtering, continuation, collisions, and migration selection.
+Integration tests stub the chat and embedding engines so CI needs no GPU or
+Ollama, and the AI Document integration suite covers organization lifecycle and
+processing relationships.
+
+The latest environment available for this branch passed 23 folder and 28 tree
+pure tests. A live Bench/Frappe v17 site was unavailable there, so browser,
+asset, MariaDB/PostgreSQL, concurrency/load, and complete reader/index/retrieval
+regressions are still production release checks.
 
 ---
 
@@ -187,9 +231,10 @@ stub the chat and embedding engines so CI needs no GPU or Ollama.
 
 1. **Runtime** — keep `ollama serve` running; pull a chat model and an
    embedding model (`nomic-embed-text` is required for semantic search).
-2. **Background workers + scheduler** — ingestion, indexing, health checks and
-   usage rollups run on workers and the scheduler:
-   `bench --site your-site.local enable-scheduler` and run `bench worker`.
+2. **Background workers + scheduler** — ingestion, indexing, health checks,
+   usage rollups, and AI Document recursive/bulk organization run on workers and
+   the scheduler: `bench --site your-site.local enable-scheduler`; keep a
+   `bench worker --queue long` process available.
 3. **Tuning** — if chats time out, raise **Request Timeout** / **Max Turn
    Seconds** in AI Platform Settings or switch to a smaller model. If retrieval
    misses relevant passages, lower the similarity threshold / raise top_k; if
@@ -219,3 +264,10 @@ stub the chat and embedding engines so CI needs no GPU or Ollama.
 | `ai_knowledge_base.py` | Clearer validation messages that name the offending value. |
 | `ai_knowledge/doctype/ai_knowledge_base/ai_knowledge_base.js` | Client-side validation + auto-correction of chunk overlap. |
 | `ai_assistant.js` | Tracks just-uploaded documents and passes them on the next send. |
+| `ai/document_tree.py` + `api/document_tree.py` | Native mixed-tree lazy reads and transactional create/rename/move/copy/delete/bulk services with permissions, locks, stale-state fingerprints, audit, and workers. |
+| `public/js/ai_document_tree.js` | Frappe-native AI Document Tree View, capability-aware actions, breadcrumbs, filters/search, loaded expansion, refresh, and bulk selection. |
+| `ai/folders.py` + `utils/file_hooks.py` | Canonical File-folder lifecycle, direct-move locking, stable-link-first provenance synchronization, and fail-closed legacy ambiguity. |
+| `api/knowledge.py` + upload clients | Propagate exact `file_record` and canonical folder into ingestion. |
+| `AI Document` schema/controller | Indexed folder, normalized scoped organization identity, stable File Link, copy provenance, revision/stale validation, and uniqueness enforcement. |
+| `v0_0_9_ai_document_tree_organization` | Paged retry-safe backfill and scoped uniqueness migration; singleton-only File identity resolution. |
+| `tests/test_folder_units.py` + `tests/test_document_tree_units.py` | Focused no-Bench permission, ambiguity, literal-LIKE, continuation, portable-locking, no-op move, and migration regressions (latest: 23 + 28 passed). |

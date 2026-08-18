@@ -40,12 +40,16 @@ except ImportError:
 
 from ai_fr_hg.ai.document_tree import (
 	_coerce_nodes,
+	_decode_page,
+	_encode_page,
 	_source_files_for_documents,
 	_subtree_state,
+	_tree_rows,
 	bulk_delete_nodes,
 	copy_name_candidates,
 	delete_document,
 	document_node_value,
+	move_document,
 	rename_document,
 	rename_folder,
 	split_node_value,
@@ -278,6 +282,105 @@ class TestDocumentTreeIdentity(UnitTestCase):
 		self.assertEqual(fetch.call_count, 4)
 
 
+class TestPermissionSafeSearchPagination(UnitTestCase):
+	@staticmethod
+	def _document_row(name: str, folder: str):
+		return SimpleNamespace(
+			name=name,
+			title=name,
+			organization_name=name,
+			folder=folder,
+			status="Indexed",
+			knowledge_base="KB-1",
+			modified="2026-01-01",
+			owner="owner@example.com",
+		)
+
+	def test_document_keyset_cursor_contains_visible_identity_not_hidden_offset(self):
+		value = _encode_page("Home", "document_after", "DOC-0002")
+		node_type, payload = split_node_value(value)
+
+		self.assertEqual(node_type, "page")
+		self.assertEqual(_decode_page(payload), ("Home", "document_after", "DOC-0002"))
+
+	def test_hidden_parent_candidates_are_bounded_and_do_not_create_a_cursor(self):
+		hidden_rows = [
+			self._document_row(f"DOC-{index:04d}", "Home/Hidden")
+			for index in range(1000)
+		]
+		ai_queries = []
+
+		def get_list(doctype, **kwargs):
+			if doctype == "File":
+				return []
+			ai_queries.append(kwargs)
+			anchor_filter = kwargs["filters"].get("name")
+			anchor = anchor_filter[1] if anchor_filter else ""
+			start = next(
+				(index for index, row in enumerate(hidden_rows) if row.name > anchor),
+				len(hidden_rows),
+			)
+			length = kwargs["limit_page_length"]
+			return hidden_rows[start : start + length]
+
+		with patch.object(frappe, "get_list", side_effect=get_list):
+			nodes, cursor = _tree_rows(
+				"Home",
+				knowledge_base=None,
+				search="DOC",
+				cursor_kind="folder",
+				position=0,
+				page_length=10,
+			)
+
+		self.assertEqual(nodes, [])
+		self.assertIsNone(cursor)
+		self.assertEqual(len(ai_queries), 4)
+		self.assertTrue(all(query["limit_page_length"] == 250 for query in ai_queries))
+
+	def test_search_continuation_starts_after_last_visible_document(self):
+		rows = [
+			self._document_row("DOC-0001", "Home/Hidden"),
+			self._document_row("DOC-0002", "Home/Visible"),
+			self._document_row("DOC-0003", "Home/Visible"),
+		]
+		ai_queries = []
+
+		def get_list(doctype, **kwargs):
+			if doctype == "File":
+				return ["Home/Visible"] if kwargs.get("pluck") == "name" else []
+			ai_queries.append(kwargs)
+			anchor_filter = kwargs["filters"].get("name")
+			anchor = anchor_filter[1] if anchor_filter else ""
+			return [row for row in rows if row.name > anchor]
+
+		with patch.object(frappe, "get_list", side_effect=get_list), patch.object(
+			frappe, "has_permission", return_value=True
+		):
+			first_nodes, first_cursor = _tree_rows(
+				"Home",
+				knowledge_base=None,
+				search="DOC",
+				cursor_kind="folder",
+				position=0,
+				page_length=1,
+			)
+			second_nodes, second_cursor = _tree_rows(
+				"Home",
+				knowledge_base=None,
+				search="DOC",
+				cursor_kind=first_cursor[0],
+				position=first_cursor[1],
+				page_length=1,
+			)
+
+		self.assertEqual([node["document"] for node in first_nodes], ["DOC-0002"])
+		self.assertEqual(first_cursor, ("document_after", "DOC-0002"))
+		self.assertEqual([node["document"] for node in second_nodes], ["DOC-0003"])
+		self.assertIsNone(second_cursor)
+		self.assertEqual(ai_queries[1]["filters"]["name"], [">", "DOC-0002"])
+
+
 class TestStableFileResolution(UnitTestCase):
 	def test_ambiguous_legacy_url_is_rejected_instead_of_selecting_oldest_file(self):
 		from ai_fr_hg.ai.exceptions import DocumentFetchError
@@ -327,6 +430,35 @@ class TestStableFileResolution(UnitTestCase):
 class TestLifecycleLockingAndPermissions(UnitTestCase):
 	class Row(dict):
 		__getattr__ = dict.__getitem__
+
+	def test_same_folder_move_stops_before_physical_source_or_shared_owner_resolution(self):
+		snapshot = self.Row(name="DOC-1", folder="Home/Documents")
+		current = self.Row(snapshot)
+
+		with (
+			patch("ai_fr_hg.ai.document_tree._document", side_effect=[snapshot, current]),
+			patch("ai_fr_hg.ai.document_tree._lock_names") as lock_names,
+			patch("ai_fr_hg.ai.document_tree._lock") as lock_document,
+			patch("ai_fr_hg.ai.document_tree._check_write_access"),
+			patch("ai_fr_hg.ai.document_tree._folder"),
+			patch("ai_fr_hg.ai.ingestion._file_doc") as resolve_file,
+			patch("ai_fr_hg.ai.document_tree._remaining_source_owner") as remaining_owner,
+		):
+			result = move_document(
+				"DOC-1",
+				"Home/Documents",
+				expected_modified="2026-01-01 00:00:00",
+			)
+
+		self.assertTrue(result["unchanged"])
+		lock_names.assert_called_once_with("File", ["Home/Documents"])
+		lock_document.assert_called_once_with(
+			"AI Document",
+			"DOC-1",
+			"2026-01-01 00:00:00",
+		)
+		resolve_file.assert_not_called()
+		remaining_owner.assert_not_called()
 
 	def test_rename_locks_parent_and_source_before_document_save(self):
 		events = []
@@ -429,3 +561,122 @@ class TestLifecycleLockingAndPermissions(UnitTestCase):
 
 		row_lock.assert_not_called()
 		update.assert_not_called()
+
+
+class _TreeLockField:
+	def __init__(self, name):
+		self.name = name
+
+	def isin(self, values):
+		return ("in", self.name, list(values))
+
+
+class _TreeLockQuery:
+	def __init__(self, table):
+		self.table = table
+		self.condition = None
+		self.ordered_by = None
+		self.is_for_update = False
+
+	def select(self, _field):
+		return self
+
+	def where(self, condition):
+		self.condition = condition
+		return self
+
+	def orderby(self, field):
+		self.ordered_by = field
+		return self
+
+	def for_update(self):
+		self.is_for_update = True
+		return self
+
+	def run(self):
+		return [(name,) for name in self.condition[2]]
+
+
+class TestPortableTreeLocking(UnitTestCase):
+	def test_recursive_rows_use_sorted_bounded_query_builder_locks(self):
+		from ai_fr_hg.ai import document_tree
+
+		queries = []
+		qb = SimpleNamespace()
+		qb.DocType = lambda _doctype: SimpleNamespace(name=_TreeLockField("name"))
+
+		def from_(table):
+			query = _TreeLockQuery(table)
+			queries.append(query)
+			return query
+
+		qb.from_ = from_
+		names = [f"FILE-{number:04d}" for number in range(401, 0, -1)]
+		with patch.object(frappe, "qb", qb), patch.object(frappe.db, "sql") as raw_sql:
+			document_tree._lock_names("File", names + ["FILE-0001", ""])
+
+		self.assertEqual(len(queries), 2)
+		self.assertEqual([len(query.condition[2]) for query in queries], [400, 1])
+		self.assertEqual(queries[0].condition[2], sorted(set(names))[:400])
+		self.assertEqual(queries[1].condition[2], sorted(set(names))[400:])
+		self.assertTrue(all(query.is_for_update for query in queries))
+		self.assertTrue(all(query.ordered_by is query.table.name for query in queries))
+		raw_sql.assert_not_called()
+
+
+class TestTreeLikeEscaping(UnitTestCase):
+	def test_search_treats_like_metacharacters_as_literal_text(self):
+		queries = []
+
+		def get_list(_doctype, **kwargs):
+			queries.append(kwargs)
+			return []
+
+		with patch.object(frappe, "get_list", side_effect=get_list):
+			nodes, cursor = _tree_rows(
+				"Home",
+				knowledge_base=None,
+				search=r"100%_\Q",
+				cursor_kind="folder",
+				position=0,
+				page_length=10,
+			)
+
+		self.assertEqual(nodes, [])
+		self.assertIsNone(cursor)
+		self.assertEqual(queries[0]["or_filters"][0][2], r"%100\%\_\\Q%")
+		self.assertEqual(queries[1]["or_filters"][0][2], r"%100\%\_\\Q%")
+
+	def test_subtree_prefix_treats_folder_metacharacters_as_literal(self):
+		from ai_fr_hg.ai.document_tree import _folder_paths
+
+		with patch.object(frappe, "get_all", return_value=[]) as query, patch(
+			"ai_fr_hg.ai.document_tree._assert_folder_exists",
+			return_value="Home/Reports_100%",
+		):
+			self.assertEqual(_folder_paths("Home/Reports_100%"), ["Home/Reports_100%"])
+
+		self.assertEqual(
+			query.call_args.kwargs["filters"]["name"],
+			["like", r"Home/Reports\_100\%/%"],
+		)
+
+
+class TestTreeMigrationIdentity(UnitTestCase):
+	def test_backfill_helper_never_selects_an_arbitrary_duplicate_candidate(self):
+		from ai_fr_hg.patches.v0_0_9_ai_document_tree_organization import (
+			_unambiguous_candidates,
+		)
+
+		unique = SimpleNamespace(name="FILE-UNIQUE")
+		oldest = SimpleNamespace(name="FILE-OLD")
+		newest = SimpleNamespace(name="FILE-NEW")
+		resolved = _unambiguous_candidates(
+			{
+				"/private/files/unique.pdf": [unique],
+				"/private/files/duplicate.pdf": [oldest, newest],
+			}
+		)
+
+		self.assertEqual(resolved, {"/private/files/unique.pdf": unique})
+		self.assertNotIn("/private/files/duplicate.pdf", resolved)

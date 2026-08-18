@@ -275,6 +275,113 @@ Field**, where later steps read it via their **Input Field**.
 
 ---
 
+## Extending AI Document organization
+
+The AI Document Tree is intentionally not an open client-side persistence hook.
+Its supported boundary is:
+
+```text
+frappe.treeview_settings["AI Document"]
+  -> ai_fr_hg.api.document_tree
+    -> ai_fr_hg.ai.document_tree
+      -> native File / AI Document / existing services
+```
+
+Read the complete contract in [AI Document Tree](DOCUMENT_TREE.md) before adding
+an action.
+
+### Rules for a new tree operation
+
+1. Put only prompts, routing, labels, and refresh behavior in
+   `public/js/ai_document_tree.js`. Never authorize or compute canonical paths
+   in JavaScript.
+2. Add a narrow whitelisted facade function in `api/document_tree.py`. Validate
+   JSON shape and request bounds there, then delegate immediately.
+3. Implement behavior in `ai/document_tree.py` or an existing authoritative
+   service. Do not import the API package from the service layer.
+4. Resolve mixed IDs with `split_node_value`; do not infer identity from labels.
+5. Use native `File` folders and `AI Document.folder`. Do not add a second tree,
+   custom folder table, client cache of relationships, or manual `lft`/`rgt`
+   writes.
+6. Treat `AI Document.name` and `source_file_record` as stable identities. URLs,
+   names, and hashes may be shared and are not record identifiers.
+7. Check every source, destination, physical File, and affected descendant with
+   Frappe permissions. Internal recursive discovery must not silently omit
+   hidden rows; denial must fail without naming them.
+8. Use the tree savepoint helper, deterministic parent → File → AI Document lock
+   order, post-lock re-discovery, `expected_modified`/fingerprint checks, and
+   fail-closed audit writes. Do not commit in a request-path service.
+9. Keep reads lazy and bounded. Add opaque continuation rather than loading a
+   complete folder or recursively expanding the browser tree.
+10. Preserve existing readers, processing runs, chunks, embeddings, retrieval,
+    attachment retention, Knowledge Base statistics, and lifecycle hooks.
+
+### Creating a document in a folder
+
+Use the canonical ingestion/API path and propagate exact upload identity:
+
+```python
+from ai_fr_hg.ai.ingestion import ingest_file
+
+name = ingest_file(
+    file_url=uploaded.file_url,
+    file_record=uploaded.name,
+    folder="Home/Engineering",
+    knowledge_base="Engineering Knowledge",
+    title=uploaded.file_name,
+    enqueue_job=True,
+)
+```
+
+Do not insert a URL-only AI Document when the exact `File.name` is available.
+If more than one File row uses a legacy URL, runtime resolution deliberately
+fails until the caller supplies the stable record.
+
+For text documents, ordinary `ingest_text`/`add_text` behavior remains
+canonical. Placement is organization metadata; it must not create an alternate
+chunk/index path.
+
+### Calling organization behavior from Python
+
+Server code may call the service layer directly while running under an
+intentional Frappe user/transaction:
+
+```python
+from ai_fr_hg.ai.document_tree import copy_document, move_document
+
+moved = move_document(
+    "AIDOC-2026-00008",
+    "Home/Archive",
+    expected_modified="2026-08-18 12:02:00.000000",
+)
+copy = copy_document("AIDOC-2026-00008", "Home/Working Copies")
+```
+
+Do not call private worker functions directly. Do not set process-local copy or
+ingestion suppression contexts outside the canonical service; those contexts
+protect lifecycle assembly and are not extension authorization mechanisms.
+
+### Required tests
+
+A new organization action needs coverage for:
+
+- root and nested lifecycle behavior;
+- case/Unicode name collision and deterministic copy suffixes;
+- source/destination/descendant denial without disclosure;
+- rollback of data and audit on a mid-operation failure;
+- stale timestamps, late descendants, and concurrent source changes;
+- direct File hooks and stable/ambiguous source identity;
+- large lazy pages or background threshold behavior;
+- chunks, processing/index state, retrieval, and native attachment retention;
+- UI capability/action visibility plus forged API authorization.
+
+Run focused pure tests and the live Bench suite on the supported MariaDB and
+PostgreSQL configurations. The repository's current implementation has pure
+coverage, but browser, asset-build, live Frappe, load/concurrency, and full
+processing/retrieval regressions remain deployment release checks.
+
+---
+
 ## Adding AI to your own forms
 
 `frappe.ai` is available on every Desk page.

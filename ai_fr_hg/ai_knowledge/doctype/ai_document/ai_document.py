@@ -283,19 +283,53 @@ class AIDocument(Document):
 		enqueue_processing(self.name, requested_by=self.owner)
 
 	def on_trash(self):
-		"""Lock location, native Files, then identity before lifecycle cleanup."""
-		from ai_fr_hg.ai.folders import _lock_file_rows, _lock_folder_rows
+		"""Lock location, Files, and stable source owners before cleanup."""
+		from ai_fr_hg.ai.folders import (
+			_check_permission,
+			_lock_ai_document_rows,
+			_lock_file_rows,
+			_lock_folder_rows,
+			_remaining_source_owner,
+			track_folder_operation,
+		)
+
+		attachment_fields = [
+			"name",
+			"folder",
+			"file_url",
+			"attached_to_doctype",
+			"attached_to_name",
+			"attached_to_field",
+		]
+
+		def attached_files():
+			return frappe.get_all(
+				"File",
+				filters={"attached_to_doctype": self.doctype, "attached_to_name": self.name},
+				fields=attachment_fields,
+				order_by="name asc",
+				limit_page_length=0,
+			)
+
+		def attachment_state(rows) -> list[tuple]:
+			return [
+				(
+					row.name,
+					row.folder or "Home",
+					row.file_url,
+					row.attached_to_doctype,
+					row.attached_to_name,
+					row.attached_to_field,
+				)
+				for row in rows
+			]
 
 		# Frappe removes every native attachment after deleting the parent row.
-		# Discover them before that lifecycle step and use the same deterministic
-		# lock order as tree mutations, including the canonical source even when it
-		# is not attached to this identity.
-		files = frappe.get_all(
-			"File",
-			filters={"attached_to_doctype": self.doctype, "attached_to_name": self.name},
-			fields=["name", "folder"],
-			limit_page_length=0,
-		)
+		# Lock all known parent and File rows first. The physical File lock then
+		# serializes stable source-link changes while a replacement attachment
+		# owner is resolved.
+		files = attached_files()
+		snapshot_attachments = attachment_state(files)
 		file_names = {row.name for row in files}
 		if self.source_file_record and frappe.db.exists("File", self.source_file_record):
 			file_names.add(self.source_file_record)
@@ -307,19 +341,68 @@ class AIDocument(Document):
 				folder_names.add(source_folder)
 		_lock_folder_rows(*folder_names)
 		_lock_file_rows(*file_names)
+
+		remaining_owners = {
+			row.name: _remaining_source_owner(row.name, row.file_url, self.name)
+			for row in files
+		}
+		_lock_ai_document_rows(self.name, *remaining_owners.values())
 		current = frappe.db.get_value(
 			self.doctype,
 			self.name,
 			["folder", "source_file_record", "source_file"],
 			as_dict=True,
-			for_update=True,
 		)
+		locked_files = attached_files()
 		if not current or (
 			(current.folder or "Home") != (self.folder or "Home")
 			or current.source_file_record != self.source_file_record
 			or current.source_file != self.source_file
+			or attachment_state(locked_files) != snapshot_attachments
 		):
 			frappe.throw(_("The document changed while it was being deleted. Refresh and try again."), frappe.TimestampMismatchError)
+
+		# Attachment cleanup must not attempt to delete a File that another stable
+		# AI Document still owns. Transfer only to the deterministic locked owner;
+		# URL-only legacy references fail in _remaining_source_owner instead of
+		# being selected by name/order.
+		for file_row in locked_files:
+			owner = remaining_owners[file_row.name]
+			if _remaining_source_owner(file_row.name, file_row.file_url, self.name) != owner:
+				frappe.throw(
+					_("The documents sharing an attachment changed. Refresh and try again."),
+					frappe.TimestampMismatchError,
+				)
+			if not owner:
+				continue
+			owner_doc = frappe.get_doc("AI Document", owner)
+			_check_permission("AI Document", "write", user=frappe.session.user, doc=owner_doc)
+			if (
+				owner_doc.source_type != "File"
+				or owner_doc.source_file_record != file_row.name
+				or owner_doc.source_file != file_row.file_url
+			):
+				frappe.throw(
+					_("The remaining attachment owner changed. Refresh and try again."),
+					frappe.TimestampMismatchError,
+				)
+			frappe.db.set_value(
+				"File",
+				file_row.name,
+				{
+					"attached_to_doctype": "AI Document",
+					"attached_to_name": owner,
+					"attached_to_field": "source_file",
+				},
+				update_modified=False,
+			)
+			track_folder_operation(
+				"transfer_attachment_owner",
+				file_row.name,
+				self.name,
+				frappe.session.user,
+				details={"from_document": self.name, "to_document": owner},
+			)
 		frappe.db.delete("AI Document Chunk", {"document": self.name})
 
 	def after_delete(self):

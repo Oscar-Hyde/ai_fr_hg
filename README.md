@@ -19,11 +19,17 @@ event rules run unattended on background workers.
 | --- | --- |
 | **Local AI engine** | Ollama first-class, plus llama.cpp, vLLM, LM Studio, Text Generation WebUI and any OpenAI-compatible runtime. Automatic model discovery, health monitoring, failover and performance tracking. |
 | **Document intelligence** | 30+ file formats through one pipeline: extract → chunk → embed → index. Summarisation, classification, structured extraction and document comparison. |
+| **Native document organization** | Frappe v17 `AI Document` Tree View over canonical File folders, with lazy mixed folder/document pages, root items, permission-aware search, collision-safe copy/move, recursive and bulk operations, stale-state protection, and audit. |
 | **Knowledge & search** | Hybrid retrieval (dense vectors + keyword, fused with RRF) computed entirely in Python. Embeddings live in DocTypes — no external vector database. |
 | **Conversational AI** | Multi-session chat with retrieval grounding, inline citations, tool calling and a full audit trail of every invocation. |
 | **Automation** | Declarative pipelines and event-driven rules that bind any Frappe document event to an AI action. |
 | **Governance** | Per-role and per-user quotas, capability gates, prompt redaction, approval gates for write actions, and a complete audit log. |
 | **Extensibility** | Three hooks — `ai_providers`, `ai_document_readers`, `ai_tools` — let any app add runtimes, formats and tools without touching this one. |
+
+Open **AI Document** in Desk and choose **Document Tree** from the list or form
+action to enter the native Tree View. See the [AI Document Tree operational
+guide](docs/DOCUMENT_TREE.md) for identity, permissions, migration, worker, API,
+and release-validation details.
 
 ---
 

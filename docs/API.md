@@ -94,8 +94,10 @@ Ingest a previously uploaded file. Processing is queued by default.
 | Parameter | Type | Notes |
 | --- | --- | --- |
 | `file_url` | string | Required. From Frappe's file upload. |
+| `file_record` | string | Exact native `File.name` returned by upload. Strongly recommended and required to disambiguate duplicate URL/content rows. |
 | `knowledge_base` | string | Required. |
 | `title` | string | Defaults to the filename. |
+| `folder` | string | Canonical native File folder. Defaults through the existing folder policy. |
 | `extraction_schema` | string | Run structured extraction after indexing. |
 | `process_now` | bool | Process synchronously instead of queuing. |
 
@@ -152,6 +154,211 @@ but nothing is persisted.
 Classification is constrained to the supplied categories: if the model invents
 one, the platform maps it back or returns `null` rather than passing through a
 hallucinated label.
+
+---
+
+## AI Document Tree
+
+All tree methods are under `ai_fr_hg.api.document_tree`. This module is a thin
+whitelisted facade; authorization, locking, stale-state checks, collisions,
+transactions, and audit live in `ai_fr_hg.ai.document_tree`.
+
+Node identifiers are mixed but unambiguous:
+
+- folders use canonical native `File.name` paths such as `Home/Policies`;
+- documents use `document::<AI Document.name>`;
+- the visible root is `AI Documents` and maps to `Home`;
+- pagination nodes are opaque values beginning `__ai_document_page__:` and must
+  be returned unchanged as the next `parent`.
+
+### `get_children`
+
+```text
+ai_fr_hg.api.document_tree.get_children(
+    doctype=None,
+    parent=None,
+    is_root=False,
+    knowledge_base=None,
+    search=None,
+    limit=100,
+)
+```
+
+| Parameter | Type | Notes |
+| --- | --- | --- |
+| `doctype` | string | If supplied, must be `AI Document`. |
+| `parent` | string | Omit for root capability discovery; otherwise a node value or opaque page value. |
+| `is_root` | bool | Native Tree View compatibility flag; maps the visible root to `Home`. |
+| `knowledge_base` | string | Optional server-side document filter. Folders remain navigable. |
+| `search` | string | Literal case-insensitive folder/document search. `%`, `_`, and backslash are not wildcards. |
+| `limit` | integer | Defaults to 100; clamped to 10–250. |
+
+Root discovery returns one capability-bearing node:
+
+```json
+[
+  {
+    "value": "AI Documents",
+    "title": "AI Documents",
+    "node_type": "root",
+    "folder": "Home",
+    "expandable": true,
+    "modified": "2026-08-18 12:00:00.000000",
+    "can_read": true,
+    "can_write": true,
+    "can_create_folder": true,
+    "can_create_document": true,
+    "can_create_child": true,
+    "can_delete": false
+  }
+]
+```
+
+A child page contains native folder/document payloads and, when needed, a final
+`Load more…` page node:
+
+```json
+[
+  {
+    "value": "Home/Policies",
+    "title": "Policies",
+    "node_type": "folder",
+    "folder": "Home",
+    "expandable": true,
+    "modified": "2026-08-18 12:01:00.000000",
+    "can_read": true,
+    "can_write": true,
+    "can_copy": true,
+    "can_delete": true
+  },
+  {
+    "value": "document::AIDOC-2026-00008",
+    "title": "Returns Policy.pdf",
+    "node_type": "document",
+    "document": "AIDOC-2026-00008",
+    "folder": "Home",
+    "status": "Indexed",
+    "knowledge_base": "General Knowledge",
+    "expandable": false,
+    "modified": "2026-08-18 12:02:00.000000",
+    "can_read": true,
+    "can_write": true,
+    "can_copy": true,
+    "can_delete": false
+  },
+  {
+    "value": "__ai_document_page__:<opaque>",
+    "title": "Load more…",
+    "node_type": "page",
+    "folder": "Home",
+    "expandable": true,
+    "can_read": true,
+    "can_write": false,
+    "can_delete": false
+  }
+]
+```
+
+Capability values are display hints, not authorization grants. The server
+re-checks every mutation. Global search intersects permission-visible documents
+with permission-visible parent folders, uses a parent/search-bound keyset
+continuation, scans at most 1,000 candidates per request, and emits no cursor
+based only on hidden rows.
+
+### Individual mutations
+
+| Method | Parameters | Result/behavior |
+| --- | --- | --- |
+| `create_folder` | `folder_name`, `parent`, `expected_parent_modified` | Creates a native File folder and returns its node/path. |
+| `rename_node` | `node`, `new_name`, `expected_modified` | Preserves stable document identity; folders update descendant paths. |
+| `move_node` | `node`, `target_folder`, `expected_modified` | Moves to a canonical folder or `Home`; may return a queued job for a large folder. |
+| `copy_node` | `node`, `target_folder`, `new_name`, `expected_modified` | Creates a new identity; an omitted name gets a deterministic copy suffix. Large folder copies may queue. |
+| `delete_node` | `node`, `recursive`, `expected_modified` | Applies native retention/attachment policy; non-empty folders require `recursive=1`. Large recursive deletion may queue. |
+
+`expected_modified` is the timestamp returned in the node payload. Supply it on
+interactive mutations. A stale value raises Frappe `TimestampMismatchError`;
+the client must refresh rather than retry with guessed state. Queue workers also
+check an internal complete-subtree fingerprint, so a late descendant or source
+change makes the job stale before mutation.
+
+Completed response example:
+
+```json
+{
+  "status": "Completed",
+  "node": "Home/Archive/Policies",
+  "name": "Home/Archive/Policies"
+}
+```
+
+Queued response example:
+
+```json
+{
+  "status": "Queued",
+  "job_id": "ai-document-tree-move::a1b2c3d4e5",
+  "source": "Home/Policies",
+  "target_folder": "Home/Archive"
+}
+```
+
+Queued operations execute on the long worker under the original session user.
+Permissions and stale state are checked again. A job ID is an acknowledgement,
+not evidence of completion; use the ordinary Frappe job/worker observability
+used by the Operations UI.
+
+### Bulk mutations
+
+```text
+bulk_move_nodes(nodes, target_folder, enqueue=None)
+bulk_delete_nodes(nodes, recursive=False, enqueue=None)
+```
+
+- `nodes` may be a JSON array or an encoded JSON array string.
+- At most 500 identifiers are accepted.
+- Every explicit selection is authorized before duplicate/nested nodes are
+  pruned.
+- Destination and complete descendant permissions are checked server-side.
+- The full operation is atomic; there is no per-item partial-success response.
+- `enqueue` may force/disable queuing. When omitted, work over 100 affected
+  folder/document/File rows queues automatically.
+- Bulk delete of a non-empty folder requires `recursive=1`.
+
+```json
+{
+  "status": "Completed",
+  "moved": [
+    {"node": "document::AIDOC-2026-00008", "name": "AIDOC-2026-00008", "folder": "Home/Archive"}
+  ],
+  "target_folder": "Home/Archive"
+}
+```
+
+### Identity, authorization, and legacy boundaries
+
+- Moving an AI Document never creates another AI Document identity. A move to
+  its current folder returns `unchanged: true` after stale/permission checks and
+  performs no physical File or shared-owner mutation.
+- Copying never mutates the source and never copies chunks, embeddings, shares,
+  unrelated attachments, or prior processing/index state.
+- Same-folder name collision is enforced by normalized organization identity;
+  equal hashes and URLs may remain separate documents.
+- File-backed clients should always propagate exact `file_record` from upload.
+  URL-only read/backfill resolution accepts a singleton exact attachment or
+  singleton global File row. Multiple candidates fail closed; no API selects
+  the oldest match. Ownership-changing move/delete operations are stricter:
+  only a stable remaining File link can receive native attachment ownership,
+  and a remaining URL-only legacy reference must be backfilled first. Write
+  access to a replacement owner is required only when its attachment relation
+  is actually changed; an already-attached, unchanged owner is only revalidated
+  under lock.
+- Folder and AI Document visibility are both required for a document node.
+- Source and destination authorization, hidden descendants, direct File
+  provenance synchronization, audit writes, and rollback are all enforced by
+  the server even if an endpoint is called outside the Tree UI.
+
+For the complete transaction, copy/delete, migration, and validation contract,
+see [AI Document Tree](DOCUMENT_TREE.md).
 
 ---
 
@@ -301,7 +508,12 @@ with open("policy.pdf", "rb") as handle:
 document = requests.post(
     f"{BASE}/ai_fr_hg.api.knowledge.upload_document",
     headers=AUTH,
-    json={"file_url": upload["file_url"], "knowledge_base": "General Knowledge"},
+    json={
+        "file_url": upload["file_url"],
+        "file_record": upload["name"],
+        "folder": "Home/Policies",
+        "knowledge_base": "General Knowledge",
+    },
 ).json()["message"]
 
 # 3. Ask about it once indexing finishes

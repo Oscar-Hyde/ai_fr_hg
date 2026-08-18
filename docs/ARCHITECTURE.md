@@ -43,7 +43,10 @@ ai_fr_hg/
 │   ├── vector.py            Base64 float32 vectors, cosine similarity, ranking
 │   ├── knowledge.py         Indexing and hybrid retrieval
 │   ├── intelligence.py      Summarise, classify, extract, compare
-│   ├── ingestion.py         Unified document pipeline
+│   ├── ingestion.py         Unified document pipeline + stable File resolution
+│   ├── document_tree.py     Native mixed-tree service, locks, mutations, workers
+│   ├── folders.py           Canonical Frappe File-folder service
+│   ├── organization.py      Collation-independent organization identity keys
 │   ├── agent.py             Agent runtime: prompt → retrieve → tools → answer
 │   ├── pipeline.py          Pipeline execution engine
 │   ├── automation.py        Event-driven rules
@@ -57,6 +60,7 @@ ai_fr_hg/
 ├── api/                     Whitelisted endpoints (thin; logic lives in ai/)
 │   ├── chat.py              Conversations and messaging
 │   ├── knowledge.py         Upload, search, ask, summarise, extract
+│   ├── document_tree.py     Thin whitelisted mixed-tree facade
 │   └── admin.py             Providers, models, dashboards, export/import
 │
 ├── ai_core/                 Module: settings, providers, models, prompts, logs
@@ -93,9 +97,13 @@ metrics. `AI Prompt Template` holds reusable Jinja prompts.
 
 **AI Knowledge** — the corpus.
 `AI Knowledge Base` groups documents and owns the chunking and embedding
-policy. `AI Document` is one source item in any format. `AI Document Chunk` is
-a retrievable slice with its embedding stored as base64 float32.
-`AI Extraction Schema` defines structured extraction targets.
+policy. `AI Document` is one source item in any format. Its `folder` Link points
+to the canonical native `File` hierarchy; `organization_name` and the normalized
+`organization_name_key` provide a parent-scoped display identity; and
+`source_file_record` preserves stable physical File identity independently of a
+possibly shared URL or checksum. `AI Document Chunk` is a retrievable slice with
+its embedding stored as base64 float32. `AI Extraction Schema` defines
+structured extraction targets.
 
 **AI Conversation** — the interaction.
 `AI Agent` binds a model, a system prompt, knowledge bases and tools into a
@@ -158,6 +166,40 @@ itself rather than the whole knowledge base. See
 ---
 
 ## Design decisions
+
+### Native File folders project a mixed AI Document tree
+
+`AI Document` stays a stable processing identity while its `folder` Link places
+it in Frappe's canonical `File` hierarchy. The native Tree View is therefore a
+permission-aware projection of two DocTypes, not a second persistence model.
+`Home` is the canonical root, and root-level folders/documents are first-class.
+Folder paths and parent links are maintained through Frappe File services; the
+app does not write Nested Set `lft`/`rgt` values.
+
+The path is strictly UI → `api.document_tree` facade → `ai.document_tree`
+service → DocTypes/existing services. Retrieval, readers, chunks, embeddings,
+processing jobs, File retention, Knowledge Base authorization, and audit remain
+authoritative. Lazy pages are bounded (100 by default, 250 maximum); recursive
+mutations discover internally, authorize the complete subtree, acquire
+parent/File/document locks in deterministic order, and revalidate stale state.
+Work over 100 affected rows defaults to a long-queue job under the initiating
+user.
+
+Organization and content identity are intentionally separate. A move retains
+`AI Document.name`; a copy generates a new document and File identity, resets
+processing derivatives, and preserves only intended provenance/configuration.
+The `(folder, organization_name_key)` uniqueness boundary uses a normalized
+SHA-256 key so behavior is consistent across MariaDB and PostgreSQL collations.
+`source_file_record` is stable provenance; URL-only legacy rows are backfilled
+only from a singleton exact attachment or singleton global URL candidate.
+Ambiguity remains unresolved rather than selecting an arbitrary File. Physical
+attachment ownership changes during shared-source move/delete require a locked,
+write-authorized stable remaining link; URL-only candidates fail closed until
+backfilled. Bulk row locks use Frappe Query Builder `for_update()` in bounded
+batches so MariaDB/PostgreSQL quoting stays portable without per-row N+1 locks.
+
+See [AI Document Tree](DOCUMENT_TREE.md) for the full operations, permissions,
+transaction, migration, and validation contract.
 
 ### Embeddings in DocTypes, not a vector database
 

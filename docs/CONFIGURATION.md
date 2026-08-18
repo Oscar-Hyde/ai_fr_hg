@@ -102,6 +102,79 @@ contracts can each be tuned appropriately.
 
 ---
 
+## AI Document organization
+
+The native AI Document Tree has no separate hierarchy setting: canonical
+placement is always `AI Document.folder` → native `File` folder, with `Home` as
+the root. This avoids a second folder subsystem and keeps ordinary File forms,
+uploads, processing, search, and retention consistent.
+
+Operational constants are currently service defaults rather than mutable site
+settings:
+
+| Behavior | Current value | Operational effect |
+| --- | --- | --- |
+| Lazy page size | 100 | One direct child page; clients may request 10–250. |
+| Maximum page size | 250 | Prevents an unbounded Tree View request. |
+| Search candidate scan | 1,000 per request | Hidden-parent-safe global search truncates fail-closed at the bound. |
+| Background threshold | 100 affected rows | Recursive/bulk work above this defaults to the long queue. |
+| Bulk request maximum | 500 selected node IDs | Nested/duplicate selections are pruned only after authorization. |
+| Worker timeout | 7,200 seconds | Queued copy/move/delete and bulk jobs use the long queue. |
+| Organization name | 140 characters | Normalized parent-scoped display identity. |
+
+### Permissions
+
+- Assign ordinary `AI User`, `AI Manager`, and Frappe File/Knowledge Base
+  permissions; there is no tree-specific superuser role.
+- A document appears only when the user can read both the AI Document and its
+  parent File folder.
+- Create requires AI Document/File create permission and destination-folder
+  write permission.
+- Rename, move, copy, delete, and recursive operations check source,
+  destination, physical File, and every affected descendant server-side.
+- Folder metadata is copied only through the caller's `AI Folder Settings`
+  read permission and after the complete source folder set is readable.
+- Queued workers restore the initiating user and re-check authority. Do not run
+  organization jobs as Administrator to work around a missing grant.
+
+Client capability flags affect menus only. They are not an authorization cache;
+forged RPC calls receive the same server checks.
+
+### Workers and deployment
+
+Keep at least one long-queue worker available when repositories may contain more
+than 100 affected rows:
+
+```bash
+bench worker --queue long
+```
+
+Run schema changes through normal migration and rebuild assets after upgrading:
+
+```bash
+bench --site your-site.local migrate
+bench build --app ai_fr_hg
+bench restart
+```
+
+Patch `v0_0_9_ai_document_tree_organization` backfills placement, normalized
+location identity, stable File links when unambiguous, and the scoped unique
+constraint. After migration, inspect legacy File-backed documents whose
+`source_file_record` is still empty. Multiple Files may intentionally share one
+URL/hash; attach or select the exact File identity instead of deleting or
+merging duplicates.
+
+Before production rollout, run the Bench integration suite and verify assets,
+workers, direct File moves/uploads, recursive jobs, MariaDB/PostgreSQL behavior,
+and the existing processing/index/retrieval regressions. The implementation
+environment's latest pure run passed 23 folder and 28 document-tree tests, but
+it did not provide live Frappe/browser/cross-database validation.
+
+See [AI Document Tree](DOCUMENT_TREE.md) for the complete behavior and release
+checklist.
+
+---
+
 ## Governance
 
 | Setting | Purpose |
@@ -238,4 +311,9 @@ Knowledge bases move the same way, as exported JSON.
   every request.
 - **Watch the Operations dashboard.** Average latency above ~10 s usually means
   the model is too large for the hardware, or is being reloaded each call.
-- **Scale workers** with `bench worker --queue long` for heavy ingestion.
+- **Scale workers** with `bench worker --queue long` for heavy ingestion and
+  recursive AI Document tree copy/move/delete jobs.
+- **Keep tree operations lazy.** Use `Load more…` and Expand Loaded; do not add
+  client code that recursively expands or searches the complete hierarchy.
+- **Preserve indexes.** `AI Document.folder`, `organization_name_key`, and
+  `source_file_record` are indexed; always migrate before load testing.

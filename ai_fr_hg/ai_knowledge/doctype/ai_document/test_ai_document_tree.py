@@ -16,6 +16,7 @@ from ai_fr_hg.ai.document_tree import (
 	copy_document,
 	copy_folder,
 	create_folder,
+	delete_document,
 	delete_folder,
 	get_children,
 	move_document,
@@ -52,6 +53,47 @@ class TestAIDocumentTree(AIPlatformTestCase):
 		doc.flags.skip_auto_process = True
 		doc.insert()
 		return doc
+
+	def make_shared_file_documents(self, folder: str, stem: str, count: int = 2):
+		file_doc = frappe.get_doc(
+			{
+				"doctype": "File",
+				"file_name": f"{stem}.txt",
+				"folder": folder,
+				"is_private": 1,
+				"content": f"shared source for {stem}",
+			}
+		).insert()
+		documents = []
+		for index in range(count):
+			document = frappe.get_doc(
+				{
+					"doctype": "AI Document",
+					"title": f"{stem} {index}",
+					"organization_name": f"{stem}-{index}.txt",
+					"knowledge_base": self.knowledge_base.name,
+					"source_type": "File",
+					"source_file": file_doc.file_url,
+					"source_file_record": file_doc.name,
+					"folder": folder,
+					"source_folder": folder,
+					"status": "Draft",
+				}
+			)
+			document.flags.skip_auto_process = True
+			document.insert()
+			documents.append(document.name)
+		frappe.db.set_value(
+			"File",
+			file_doc.name,
+			{
+				"attached_to_doctype": "AI Document",
+				"attached_to_name": documents[0],
+				"attached_to_field": "source_file",
+			},
+			update_modified=False,
+		)
+		return file_doc, documents
 
 	def test_lifecycle_keeps_one_identity_on_move_and_rejects_same_location_collision(self):
 		source = create_folder("Source", self.root)["name"]
@@ -122,6 +164,257 @@ class TestAIDocumentTree(AIPlatformTestCase):
 			frappe.db.get_value("AI Document", documents[1], "source_file_record"),
 			file_doc.name,
 		)
+
+	def test_move_rejects_stale_replacement_owner_membership(self):
+		source = create_folder("Stale Shared Source", self.root)["name"]
+		destination = create_folder("Stale Shared Destination", self.root)["name"]
+		file_doc, documents = self.make_shared_file_documents(source, "stale-shared-owner")
+
+		with patch(
+			"ai_fr_hg.ai.document_tree._remaining_source_owner",
+			side_effect=[documents[1], None],
+		):
+			with self.assertRaises(frappe.TimestampMismatchError):
+				move_document(documents[0], destination)
+
+		self.assertEqual(frappe.db.get_value("AI Document", documents[0], "folder"), source)
+		self.assertEqual(
+			frappe.db.get_value("AI Document", documents[0], "source_file_record"),
+			file_doc.name,
+		)
+		self.assertEqual(frappe.db.get_value("File", file_doc.name, "folder"), source)
+		self.assertEqual(frappe.db.get_value("File", file_doc.name, "attached_to_name"), documents[0])
+
+	def test_same_folder_move_is_a_noop_before_shared_owner_resolution(self):
+		source = create_folder("Shared Noop Move", self.root)["name"]
+		file_doc, documents = self.make_shared_file_documents(source, "shared-noop-move")
+
+		with patch("ai_fr_hg.ai.document_tree._remaining_source_owner") as remaining_owner:
+			result = move_document(documents[0], source)
+
+		remaining_owner.assert_not_called()
+		self.assertTrue(result["unchanged"])
+		self.assertEqual(result["name"], documents[0])
+		self.assertEqual(frappe.db.get_value("AI Document", documents[0], "folder"), source)
+		self.assertEqual(frappe.db.get_value("AI Document", documents[0], "source_file_record"), file_doc.name)
+		self.assertEqual(frappe.db.get_value("File", file_doc.name, "folder"), source)
+		self.assertEqual(frappe.db.get_value("File", file_doc.name, "attached_to_name"), documents[0])
+
+	def test_shared_move_does_not_require_write_on_an_unchanged_attachment_owner(self):
+		from ai_fr_hg.ai import document_tree
+
+		source = create_folder("Shared Existing Owner", self.root)["name"]
+		destination = create_folder("Shared Existing Owner Destination", self.root)["name"]
+		file_doc, documents = self.make_shared_file_documents(source, "shared-existing-owner")
+		frappe.db.set_value(
+			"File",
+			file_doc.name,
+			"attached_to_name",
+			documents[1],
+			update_modified=False,
+		)
+		original_check = document_tree._check_permission
+
+		def deny_unchanged_owner(doc_or_doctype, permission_type="write", user=None, doc=None):
+			target = doc if doc is not None else doc_or_doctype
+			if (
+				doc_or_doctype == "AI Document"
+				and permission_type == "write"
+				and getattr(target, "name", None) == documents[1]
+			):
+				raise frappe.PermissionError("unchanged attachment owner denied")
+			return original_check(doc_or_doctype, permission_type, user=user, doc=doc)
+
+		with patch.object(document_tree, "_check_permission", side_effect=deny_unchanged_owner):
+			result = move_document(documents[0], destination)
+
+		new_file = frappe.db.get_value("AI Document", documents[0], "source_file_record")
+		self.assertEqual(result["folder"], destination)
+		self.assertNotEqual(new_file, file_doc.name)
+		self.assertEqual(frappe.db.get_value("AI Document", documents[0], "folder"), destination)
+		self.assertEqual(frappe.db.get_value("AI Document", documents[1], "folder"), source)
+		self.assertEqual(frappe.db.get_value("File", file_doc.name, "folder"), source)
+		self.assertEqual(frappe.db.get_value("File", file_doc.name, "attached_to_name"), documents[1])
+		self.assertEqual(frappe.db.get_value("File", new_file, "folder"), destination)
+		self.assertEqual(frappe.db.get_value("File", new_file, "attached_to_name"), documents[0])
+
+	def test_individual_delete_transfers_a_shared_source_attachment(self):
+		source = create_folder("Shared Individual Delete", self.root)["name"]
+		file_doc = frappe.get_doc(
+			{
+				"doctype": "File",
+				"file_name": "shared-delete.txt",
+				"folder": source,
+				"is_private": 1,
+				"content": "shared delete source",
+			}
+		).insert()
+		documents = []
+		for index in range(2):
+			document = frappe.get_doc(
+				{
+					"doctype": "AI Document",
+					"title": f"Shared Delete {index}",
+					"organization_name": f"shared-delete-{index}.txt",
+					"knowledge_base": self.knowledge_base.name,
+					"source_type": "File",
+					"source_file": file_doc.file_url,
+					"source_file_record": file_doc.name,
+					"folder": source,
+					"source_folder": source,
+					"status": "Draft",
+				}
+			)
+			document.flags.skip_auto_process = True
+			document.insert()
+			documents.append(document.name)
+		frappe.db.set_value(
+			"File",
+			file_doc.name,
+			{
+				"attached_to_doctype": "AI Document",
+				"attached_to_name": documents[0],
+				"attached_to_field": "source_file",
+			},
+			update_modified=False,
+		)
+
+		result = delete_document(documents[0])
+
+		self.assertEqual(result["deleted"], documents[0])
+		self.assertFalse(frappe.db.exists("AI Document", documents[0]))
+		self.assertTrue(frappe.db.exists("AI Document", documents[1]))
+		self.assertTrue(frappe.db.exists("File", file_doc.name))
+		self.assertEqual(frappe.db.get_value("File", file_doc.name, "attached_to_name"), documents[1])
+		self.assertTrue(
+			frappe.db.exists(
+				"AI Audit Log",
+				{
+					"action": "Folder Transfer_Attachment_Owner",
+					"reference_doctype": "File",
+					"reference_name": file_doc.name,
+				},
+			)
+		)
+
+	def test_individual_delete_rolls_back_when_shared_owner_write_is_denied(self):
+		from ai_fr_hg.ai import folders
+
+		source = create_folder("Denied Shared Delete", self.root)["name"]
+		file_doc = frappe.get_doc(
+			{
+				"doctype": "File",
+				"file_name": "denied-shared-delete.txt",
+				"folder": source,
+				"is_private": 1,
+				"content": "denied shared delete source",
+			}
+		).insert()
+		documents = []
+		for index in range(2):
+			document = frappe.get_doc(
+				{
+					"doctype": "AI Document",
+					"title": f"Denied Shared Delete {index}",
+					"organization_name": f"denied-shared-delete-{index}.txt",
+					"knowledge_base": self.knowledge_base.name,
+					"source_type": "File",
+					"source_file": file_doc.file_url,
+					"source_file_record": file_doc.name,
+					"folder": source,
+					"source_folder": source,
+					"status": "Draft",
+				}
+			)
+			document.flags.skip_auto_process = True
+			document.insert()
+			documents.append(document.name)
+		frappe.db.set_value(
+			"File",
+			file_doc.name,
+			{
+				"attached_to_doctype": "AI Document",
+				"attached_to_name": documents[0],
+				"attached_to_field": "source_file",
+			},
+			update_modified=False,
+		)
+		original_check = folders._check_permission
+
+		def deny_replacement_owner(doc_or_doctype, permission_type="write", user=None, doc=None):
+			target = doc if doc is not None else doc_or_doctype
+			if (
+				doc_or_doctype == "AI Document"
+				and permission_type == "write"
+				and getattr(target, "name", None) == documents[1]
+			):
+				raise frappe.PermissionError("replacement owner denied")
+			return original_check(doc_or_doctype, permission_type, user=user, doc=doc)
+
+		with patch.object(folders, "_check_permission", side_effect=deny_replacement_owner):
+			with self.assertRaises(frappe.PermissionError):
+				delete_document(documents[0])
+
+		self.assertTrue(frappe.db.exists("AI Document", documents[0]))
+		self.assertTrue(frappe.db.exists("AI Document", documents[1]))
+		self.assertTrue(frappe.db.exists("File", file_doc.name))
+		self.assertEqual(frappe.db.get_value("File", file_doc.name, "attached_to_name"), documents[0])
+
+	def test_move_rejects_url_only_legacy_sharing_instead_of_transferring_to_it(self):
+		source = create_folder("Legacy Shared Move", self.root)["name"]
+		destination = create_folder("Legacy Shared Destination", self.root)["name"]
+		file_doc = frappe.get_doc(
+			{
+				"doctype": "File",
+				"file_name": "legacy-shared-move.txt",
+				"folder": source,
+				"is_private": 1,
+				"content": "legacy shared move source",
+			}
+		).insert()
+		documents = []
+		for index in range(2):
+			document = frappe.get_doc(
+				{
+					"doctype": "AI Document",
+					"title": f"Legacy Shared Move {index}",
+					"organization_name": f"legacy-shared-move-{index}.txt",
+					"knowledge_base": self.knowledge_base.name,
+					"source_type": "File",
+					"source_file": file_doc.file_url,
+					"source_file_record": file_doc.name,
+					"folder": source,
+					"source_folder": source,
+					"status": "Draft",
+				}
+			)
+			document.flags.skip_auto_process = True
+			document.insert()
+			documents.append(document.name)
+		frappe.db.set_value(
+			"AI Document",
+			documents[1],
+			"source_file_record",
+			None,
+			update_modified=False,
+		)
+		frappe.db.set_value(
+			"File",
+			file_doc.name,
+			{
+				"attached_to_doctype": "AI Document",
+				"attached_to_name": documents[0],
+				"attached_to_field": "source_file",
+			},
+			update_modified=False,
+		)
+
+		with self.assertRaises(DocumentFetchError):
+			move_document(documents[0], destination)
+
+		self.assertEqual(frappe.db.get_value("AI Document", documents[0], "folder"), source)
+		self.assertEqual(frappe.db.get_value("File", file_doc.name, "folder"), source)
+		self.assertEqual(frappe.db.get_value("File", file_doc.name, "attached_to_name"), documents[0])
 
 	def test_copy_creates_new_identity_and_does_not_clone_processing_derivatives(self):
 		document = self.make_tree_document("Indexed Contract.txt")

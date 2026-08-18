@@ -34,6 +34,7 @@ from frappe.utils import cint, now_datetime
 
 from ai_fr_hg.ai.exceptions import (
 	CircularFolderError,
+	DocumentFetchError,
 	FileNotFoundError,
 	FolderAlreadyExistsError,
 	FolderNotEmptyError,
@@ -91,6 +92,18 @@ def _clean_name(name: str) -> str:
 	if "/" in name or "\\" in name:
 		_throw(InvalidFolderNameError, "Name cannot contain path separators.")
 	return name
+
+
+def _escape_like(value: str) -> str:
+	"""Escape a literal value used inside a SQL ``LIKE`` pattern.
+
+	Frappe forwards these patterns to both MariaDB and PostgreSQL, where
+	backslash is the default LIKE escape character. Folder names may legally
+	contain ``%`` and ``_``; leaving them unescaped widens recursive scans and
+	searches to unrelated rows even when a later Python predicate filters the
+	result.
+	"""
+	return str(value or "").replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 def _normalize_folder_path(folder: str | None) -> str:
@@ -201,6 +214,74 @@ def _lock_file_rows(*file_names: str | None) -> None:
 	for file_name in sorted({name for name in file_names if name}):
 		if not frappe.db.get_value("File", file_name, "name", for_update=True):
 			_throw(FileNotFoundError, f"File '{file_name}' does not exist.")
+
+
+def _lock_ai_document_rows(*document_names: str | None) -> None:
+	"""Lock AI Document identities in bounded, deterministic, portable batches."""
+	names = sorted({name for name in document_names if name})
+	for start in range(0, len(names), 400):
+		batch = names[start : start + 400]
+		document = frappe.qb.DocType("AI Document")
+		rows = (
+			frappe.qb.from_(document)
+			.select(document.name)
+			.where(document.name.isin(batch))
+			.orderby(document.name)
+			.for_update()
+		).run()
+		if len(rows) != len(batch):
+			frappe.throw(
+				_("A linked document changed while the file operation was being prepared. Refresh and try again."),
+				frappe.TimestampMismatchError,
+			)
+
+
+def _remaining_source_owner(file_name: str, file_url: str | None, excluding_document: str) -> str | None:
+	"""Return a deterministic stable owner, and fail closed for legacy sharing.
+
+	The caller must hold the physical File row lock. Stable
+	``source_file_record`` links identify this exact File and can safely receive
+	native attachment ownership. A URL-only row cannot prove which duplicate
+	File it owns under concurrent inserts, so ownership-changing operations must
+	stop until that legacy row is backfilled instead of attaching the File to an
+	arbitrary name match.
+	"""
+	stable = frappe.get_all(
+		"AI Document",
+		filters={
+			"source_type": "File",
+			"source_file_record": file_name,
+			"name": ["!=", excluding_document],
+		},
+		pluck="name",
+		order_by="name asc",
+		limit_page_length=1,
+	)
+	if stable:
+		return stable[0]
+	if not file_url:
+		return None
+	legacy = frappe.get_all(
+		"AI Document",
+		filters={
+			"source_type": "File",
+			"source_file_record": ["is", "not set"],
+			"source_file": file_url,
+			"name": ["!=", excluding_document],
+		},
+		pluck="name",
+		order_by="name asc",
+		limit_page_length=1,
+	)
+	if legacy:
+		frappe.throw(
+			_(
+				"A legacy document still uses this File URL without a stable File identity. "
+				"Backfill its Source File Record before moving or deleting the attachment owner."
+			),
+			DocumentFetchError,
+		)
+	return None
 
 
 def _check_permission(
@@ -477,7 +558,7 @@ def list_folder_contents(
 	if search_text:
 		text = str(search_text).strip()
 		if text:
-			or_filters = [["file_name", "like", f"%{text}%"], ["file_url", "like", f"%{text}%"]]
+			or_filters = [["file_name", "like", f"%{_escape_like(text)}%"], ["file_url", "like", f"%{_escape_like(text)}%"]]
 
 	# Frappe's native list path applies role, user-permission, and sharing query
 	# conditions before pagination. Per-row checks below remain a fail-closed
@@ -786,7 +867,7 @@ def rename_folder(folder_name: str, new_name: str, *, user: str | None = None) -
 		row
 		for row in frappe.get_all(
 			"File",
-			filters={"name": ["like", f"{old_prefix}%"]},
+			filters={"name": ["like", f"{_escape_like(old_prefix)}%"]},
 			fields=[
 				"name",
 				"folder",
@@ -805,7 +886,7 @@ def rename_folder(folder_name: str, new_name: str, *, user: str | None = None) -
 		row
 		for row in frappe.get_all(
 			"File",
-			filters={"folder": ["like", f"{folder_name}%"]},
+			filters={"folder": ["like", f"{_escape_like(folder_name)}%"]},
 			fields=[
 				"name",
 				"folder",
@@ -833,7 +914,7 @@ def rename_folder(folder_name: str, new_name: str, *, user: str | None = None) -
 		row.name
 		for row in frappe.get_all(
 			"File",
-			filters={"name": ["like", f"{old_prefix}%"]},
+			filters={"name": ["like", f"{_escape_like(old_prefix)}%"]},
 			fields=["name"],
 			limit_page_length=0,
 		)
@@ -843,7 +924,7 @@ def rename_folder(folder_name: str, new_name: str, *, user: str | None = None) -
 		row.name
 		for row in frappe.get_all(
 			"File",
-			filters={"folder": ["like", f"{folder_name}%"]},
+			filters={"folder": ["like", f"{_escape_like(folder_name)}%"]},
 			fields=["name", "folder"],
 			limit_page_length=0,
 		)
@@ -907,7 +988,7 @@ def rename_folder(folder_name: str, new_name: str, *, user: str | None = None) -
 	# Update descendant AI Folder Settings
 	settings = frappe.get_all(
 		"AI Folder Settings",
-		filters={"folder": ["like", f"{old_prefix}%"]},
+		filters={"folder": ["like", f"{_escape_like(old_prefix)}%"]},
 		fields=["name", "folder"],
 		limit_page_length=0,
 	)
@@ -1036,7 +1117,7 @@ def move_folder(folder_name: str, target_folder: str, *, user: str | None = None
 			row
 			for row in frappe.get_all(
 				"File",
-				filters={"name": ["like", f"{old_prefix}%"]},
+				filters={"name": ["like", f"{_escape_like(old_prefix)}%"]},
 				fields=[
 					"name",
 					"folder",
@@ -1057,7 +1138,7 @@ def move_folder(folder_name: str, target_folder: str, *, user: str | None = None
 		row
 		for row in frappe.get_all(
 			"File",
-			filters={"folder": ["like", f"{old_path}%"]},
+			filters={"folder": ["like", f"{_escape_like(old_path)}%"]},
 			fields=[
 				"name",
 				"folder",
@@ -1081,7 +1162,7 @@ def move_folder(folder_name: str, target_folder: str, *, user: str | None = None
 		row.name
 		for row in frappe.get_all(
 			"File",
-			filters={"name": ["like", f"{old_prefix}%"]},
+			filters={"name": ["like", f"{_escape_like(old_prefix)}%"]},
 			fields=["name"],
 			limit_page_length=0,
 		)
@@ -1091,7 +1172,7 @@ def move_folder(folder_name: str, target_folder: str, *, user: str | None = None
 		row.name
 		for row in frappe.get_all(
 			"File",
-			filters={"folder": ["like", f"{old_path}%"]},
+			filters={"folder": ["like", f"{_escape_like(old_path)}%"]},
 			fields=["name", "folder"],
 			limit_page_length=0,
 		)
@@ -1142,7 +1223,7 @@ def move_folder(folder_name: str, target_folder: str, *, user: str | None = None
 		frappe.db.set_value("AI Folder Settings", {"folder": old_path}, "folder", new_path)
 	settings_rows = frappe.get_all(
 		"AI Folder Settings",
-		filters={"folder": ["like", f"{old_prefix}%"]},
+		filters={"folder": ["like", f"{_escape_like(old_prefix)}%"]},
 		fields=["name", "folder"],
 		limit_page_length=0,
 	)
@@ -1205,7 +1286,7 @@ def delete_folder(
 			row.name: row
 			for row in frappe.get_all(
 				"File",
-				filters={"name": ["like", f"{prefix}%"]},
+				filters={"name": ["like", f"{_escape_like(prefix)}%"]},
 				fields=[
 					"name",
 					"folder",
@@ -1222,7 +1303,7 @@ def delete_folder(
 		}
 		for row in frappe.get_all(
 			"File",
-			filters={"folder": ["like", f"{folder_name}%"]},
+			filters={"folder": ["like", f"{_escape_like(folder_name)}%"]},
 			fields=[
 				"name",
 				"folder",
@@ -1579,10 +1660,10 @@ def search(
 		text = str(query).strip()
 		if text:
 			or_filters = [
-				["file_name", "like", f"%{text}%"],
-				["folder", "like", f"%{text}%"],
-				["file_url", "like", f"%{text}%"],
-				["attached_to_name", "like", f"%{text}%"],
+				["file_name", "like", f"%{_escape_like(text)}%"],
+				["folder", "like", f"%{_escape_like(text)}%"],
+				["file_url", "like", f"%{_escape_like(text)}%"],
+				["attached_to_name", "like", f"%{_escape_like(text)}%"],
 			]
 
 	# Filter through permission-aware AI Document rows and stable File links.
@@ -1652,7 +1733,7 @@ def get_folder_info(folder_name: str, *, user: str | None = None) -> dict:
 	# Keep folder statistics on the same Frappe permission-aware query path as
 	# listings. Escaping LIKE metacharacters prevents a legal ``%`` or ``_`` in
 	# a folder name from widening the recursive prefix to unrelated paths.
-	escaped_prefix = folder_name.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+	escaped_prefix = _escape_like(folder_name)
 	stats = {
 		"folder_count": _permission_aware_count("File", {"folder": folder_name, "is_folder": 1}),
 		"file_count": _permission_aware_count("File", {"folder": folder_name, "is_folder": 0}),
@@ -1934,27 +2015,92 @@ def ensure_file_in_folder(
 
 
 def _update_document_folder_provenance(file_name: str, folder: str) -> None:
-	"""Update AI Document's folder provenance if this File is its source_file."""
-	doc = frappe.get_doc("File", file_name)
-	if not doc.file_url:
+	"""Synchronise authorized AI Documents after a direct File mutation.
+
+	Stable ``source_file_record`` links are authoritative. A legacy URL-only
+	row may claim this File only when the File is its sole exact attachment or
+	the URL has exactly one File row globally. Ambiguous URL/content identity is
+	left unresolved rather than linked to whichever duplicate happened to move.
+	Every affected AI Document requires explicit write permission; denial aborts
+	the surrounding File transaction so physical and logical placement cannot
+	drift.
+	"""
+	file_doc = frappe.get_doc("File", file_name)
+	if not file_doc.file_url:
 		return
-	# Stable File identity is authoritative.  URL fallback is restricted to
-	# legacy rows that have not yet been backfilled, since multiple File records
-	# may intentionally reference the same physical content after a copy.
+
 	provenance_fields = [
 		"name",
 		"folder",
 		"source_folder",
+		"source_type",
 		"source_file",
 		"source_file_record",
 		"organization_revision",
 	]
 	meta = frappe.get_meta("AI Document")
 
-	def sync_candidates(source_filters: dict) -> None:
-		# Keyset pagination remains correct while legacy rows acquire their stable
-		# source_file_record and leave the filter. Process stable rows first so a
-		# backfilled legacy row cannot be visited twice.
+	# Stable links are always synchronized. Legacy rows are considered only
+	# after proving identity without selecting an arbitrary oldest URL match.
+	candidate_filters = [
+		({"source_type": "File", "source_file_record": file_name}, None),
+	]
+	attached_document = (
+		file_doc.attached_to_name
+		if file_doc.attached_to_doctype == "AI Document"
+		else None
+	)
+	exact_file_names = []
+	if attached_document:
+		exact_file_names = frappe.get_all(
+			"File",
+			filters={
+				"file_url": file_doc.file_url,
+				"is_folder": 0,
+				"attached_to_doctype": "AI Document",
+				"attached_to_name": attached_document,
+			},
+			pluck="name",
+			order_by="creation asc, name asc",
+			limit_page_length=2,
+		)
+	url_file_names = frappe.get_all(
+		"File",
+		filters={"file_url": file_doc.file_url, "is_folder": 0},
+		pluck="name",
+		order_by="creation asc, name asc",
+		limit_page_length=2,
+	)
+	if url_file_names == [file_name]:
+		candidate_filters.append(
+			(
+				{
+					"source_type": "File",
+					"source_file": file_doc.file_url,
+					"source_file_record": ["is", "not set"],
+				},
+				None,
+			)
+		)
+	elif exact_file_names == [file_name]:
+		# Duplicate URL rows exist globally, but this File is the sole exact
+		# attachment to one legacy AI Document.
+		candidate_filters.append(
+			(
+				{
+					"name": attached_document,
+					"source_type": "File",
+					"source_file": file_doc.file_url,
+					"source_file_record": ["is", "not set"],
+				},
+				attached_document,
+			)
+		)
+
+	def sync_candidates(source_filters: dict, exact_legacy_document: str | None) -> None:
+		# Keyset pagination remains correct while URL-only rows acquire stable
+		# identity and leave their filter. Stable rows are processed first, so a
+		# newly backfilled row cannot be visited twice.
 		cursor = None
 		while True:
 			filters = dict(source_filters)
@@ -1970,11 +2116,20 @@ def _update_document_folder_provenance(file_name: str, folder: str) -> None:
 			if not candidate_names:
 				return
 			cursor = candidate_names[-1]
-			placeholders = ", ".join(["%s"] * len(candidate_names))
-			frappe.db.sql(
-				f"select name from `tabAI Document` where name in ({placeholders}) order by name for update",  # nosemgrep
-				tuple(candidate_names),
-			)
+
+			# Internal discovery uses get_all so hidden linked rows cannot be
+			# silently skipped. Authorize every row explicitly before locking or
+			# changing this page.
+			for candidate_name in candidate_names:
+				candidate_doc = frappe.get_doc("AI Document", candidate_name)
+				_check_permission(
+					"AI Document",
+					"write",
+					user=frappe.session.user,
+					doc=candidate_doc,
+				)
+
+			_lock_ai_document_rows(*candidate_names)
 			locked_rows = frappe.get_all(
 				"AI Document",
 				filters={"name": ["in", candidate_names]},
@@ -1983,11 +2138,14 @@ def _update_document_folder_provenance(file_name: str, folder: str) -> None:
 				limit_page_length=400,
 			)
 			for row in locked_rows:
-				# Recheck after locking: a concurrent document edit may have detached
-				# the source while this File move waited for its row lock.
-				if row.source_file_record != file_name and not (
-					not row.source_file_record and row.source_file == doc.file_url
-				):
+				stable_match = row.source_file_record == file_name
+				legacy_match = (
+					not row.source_file_record
+					and row.source_type == "File"
+					and row.source_file == file_doc.file_url
+					and (not exact_legacy_document or row.name == exact_legacy_document)
+				)
+				if not stable_match and not legacy_match:
 					continue
 				if meta.has_field("folder"):
 					values = {"folder": folder}
@@ -2011,7 +2169,13 @@ def _update_document_folder_provenance(file_name: str, folder: str) -> None:
 						metadata = {}
 					metadata["folder"] = folder
 					metadata["folder_updated_on"] = str(now_datetime())
-					frappe.db.set_value("AI Document", row.name, "metadata", frappe.as_json(metadata), update_modified=False)
+					frappe.db.set_value(
+						"AI Document",
+						row.name,
+						"metadata",
+						frappe.as_json(metadata),
+						update_modified=False,
+					)
 				_write_audit(
 					"Document Folder Provenance Updated",
 					f"AI Document '{row.name}' folder provenance updated to '{folder}'.",
@@ -2020,8 +2184,8 @@ def _update_document_folder_provenance(file_name: str, folder: str) -> None:
 					reference_name=row.name,
 				)
 
-	sync_candidates({"source_file_record": file_name})
-	sync_candidates({"source_file_record": ["is", "not set"], "source_file": doc.file_url})
+	for filters, exact_legacy_document in candidate_filters:
+		sync_candidates(filters, exact_legacy_document)
 
 
 def track_folder_operation(

@@ -71,6 +71,11 @@ def _remember_hint(hints: OrderedDict, key: tuple[str, str], number: int) -> Non
 		hints.popitem(last=False)
 
 
+def _unambiguous_candidates(candidates: dict) -> dict:
+	"""Return only keys with exactly one stable identity candidate."""
+	return {key: rows[0] for key, rows in candidates.items() if len(rows) == 1}
+
+
 def _paged_files(filters: dict):
 	"""Stream File candidates without materializing every duplicate URL row."""
 	offset = 0
@@ -179,14 +184,17 @@ def execute() -> None:
 			break
 		offset += len(rows)
 
-		# Prefer the oldest File attached to this exact document, then the
-		# oldest File for its URL. Separate fixed-size streams keep pathological
-		# duplicate URLs bounded without issuing a query per document.
+		# Stable File identity is not content identity. Accept one exact File
+		# attachment to the AI Document, or one globally unique URL match. If
+		# either lookup has multiple rows, leave ``source_file_record`` empty;
+		# choosing the oldest duplicate would permanently claim an arbitrary
+		# physical record. Candidate lists are capped at two while the paged
+		# queries continue, so pathological duplicate URLs do not grow memory.
 		file_documents = {
 			row.name: row for row in rows if row.source_type == "File" and row.source_file
 		}
 		urls = sorted({row.source_file for row in file_documents.values()})
-		exact_files = {}
+		exact_candidates = {}
 		if urls:
 			for item in _paged_files(
 				{
@@ -198,27 +206,31 @@ def execute() -> None:
 			):
 				document = file_documents.get(item.attached_to_name)
 				if document and document.source_file == item.file_url:
-					exact_files.setdefault(document.name, item)
+					bucket = exact_candidates.setdefault(document.name, [])
+					if len(bucket) < 2:
+						bucket.append(item)
+		exact_files = _unambiguous_candidates(exact_candidates)
 
 		fallback_urls = sorted(
 			{
 				document.source_file
 				for document in file_documents.values()
-				if document.name not in exact_files
+				if document.name not in exact_candidates
 			}
 		)
-		fallback_files = {}
+		fallback_candidates = {}
 		for url_batch in _chunks(fallback_urls, _BATCH_SIZE):
 			for item in _paged_files({"file_url": ["in", url_batch], "is_folder": 0}):
-				fallback_files.setdefault(item.file_url, item)
+				bucket = fallback_candidates.setdefault(item.file_url, [])
+				if len(bucket) < 2:
+					bucket.append(item)
+		fallback_files = _unambiguous_candidates(fallback_candidates)
 
 		resolved = []
 		for row in rows:
-			file_row = (
-				exact_files.get(row.name) or fallback_files.get(row.source_file)
-				if row.source_type == "File"
-				else None
-			)
+			file_row = None
+			if row.source_type == "File":
+				file_row = exact_files.get(row.name) or fallback_files.get(row.source_file)
 			resolved.append((row, file_row))
 
 		requested_folders = sorted({(file_row and file_row.folder) or row.folder or "Home" for row, file_row in resolved})

@@ -116,6 +116,50 @@ what is not.
 
 ---
 
+## Organized documents and the learning boundary
+
+The native AI Document Tree organizes the existing corpus; it does not create a
+second learning or retrieval store. Canonical placement is
+`AI Document.folder` → native `File` folder, while candidate provenance still
+references stable `AI Document.name` (and, for file-backed documents, exact
+`source_file_record`).
+
+The boundary has several important consequences:
+
+- **Move is organizational only.** Moving or renaming a document retains its AI
+  Document identity, chunks, embeddings, processing status, Knowledge Base,
+  candidate references, and any learned provenance. It does not create a
+  teaching event or trigger duplicate promotion.
+- **Copy is a new source identity, not learned truth.** A tree copy records
+  `copied_from`, creates a new File/document identity, and resets processing and
+  indexing derivatives. It does not clone chunks, embeddings, memories,
+  skills, candidates, shares, or feedback counters. The copy must be processed
+  through the normal pipeline before retrieval can use it.
+- **Equal content is allowed.** Separate documents may have the same URL/hash;
+  stable `source_file_record` and `AI Document.name` distinguish provenance.
+  Learning dedup remains semantic/content policy and must not merge physical
+  File identities.
+- **Folders are not scope.** A folder does not grant Learning visibility and is
+  not a replacement for Global/User/Role/Agent scope or Knowledge Base access.
+  Tree visibility requires both document and parent-folder read permission;
+  recall continues to enforce its own scoped Frappe permissions.
+- **Deletion remains governed.** Normal Frappe link/retention behavior remains
+  authoritative. Recursive tree deletion preflights all descendants and
+  physical Files, rejects hidden or externally referenced content, and cannot
+  silently erase learning provenance to make a folder removable.
+- **Search boundaries stay separate.** Tree search finds names/locations; hybrid
+  retrieval ranks authorized chunks. Neither is implemented in terms of the
+  other, so moving a document cannot alter semantic relevance or leak a hidden
+  parent through tree results.
+
+Document-derived candidates should store the stable originating AI Document
+reference. New integrations must propagate exact File record identity when
+available and must not infer provenance from a display path, URL, checksum, or
+folder name. See [AI Document Tree](DOCUMENT_TREE.md) and
+[File to Answer](FILE_TO_ANSWER.md).
+
+---
+
 ## Governance and control
 
 - **Capability:** teaching is gated by the `learning` capability
@@ -129,6 +173,8 @@ what is not.
   role, or agent.
 - **Retirement:** memories can be archived and skills disabled, instantly
   stopping their influence on future answers.
+- **Organization:** folder/tree actions are independently permission-checked,
+  transactional, and audited; they never authorize promotion or widen recall.
 
 ---
 
@@ -144,6 +190,8 @@ what is not.
 | `ai_learning/doctype/ai_skill` | Approved learned procedures, injected into future turns. |
 | `ai_learning/workspace/ai_learning` | Desk workspace linking the three doctypes. |
 | `ai_learning/doctype/ai_knowledge_candidate/ai_knowledge_candidate.js` | Approve / Reject buttons on the candidate form. |
+| `ai/document_tree.py` + `api/document_tree.py` | Independent organization service/facade; retains stable provenance on moves and resets derivatives on copies. |
+| `docs/DOCUMENT_TREE.md` | Organization identity, permissions, mutation, copy, audit, migration, and operational contract. |
 
 Wiring into the agent lives in `ai/agent.py` (`build_system_prompt` +
 `run_agent_turn`) and feedback capture in `api/chat.py` (`submit_feedback`).

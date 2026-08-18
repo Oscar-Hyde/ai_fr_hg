@@ -277,14 +277,18 @@ class TestPermissionAwareFolderReads(UnitTestCase):
 			folders, "_check_permission"
 		), patch.object(folders, "get_folder_path", return_value=[]), patch.object(
 			folders.frappe, "get_list", side_effect=get_list
-		), patch.object(folders.frappe, "get_doc") as get_doc:
+		) as list_query, patch.object(folders.frappe, "get_doc") as get_doc:
 			result = folders.list_folder_contents("Home/Visible", limit=999, offset=-5)
 
 		self.assertEqual(result["total"], 1)
 		self.assertEqual([row.name for row in result["items"]], ["FILE-2"])
 		self.assertEqual(result["items"][0]["ai_document"], "DOC-2")
 		get_doc.assert_not_called()
-		file_page_call = next(call for call in folders.frappe.get_list.call_args_list if call.args[0] == "File" and call.kwargs["fields"] != ["count(name) as total"])
+		file_page_call = next(
+			call
+			for call in list_query.call_args_list
+			if call.args[0] == "File" and call.kwargs["fields"] != ["count(name) as total"]
+		)
 		self.assertEqual(file_page_call.kwargs["limit_page_length"], 200)
 		self.assertEqual(file_page_call.kwargs["limit_start"], 0)
 
@@ -322,3 +326,185 @@ class TestPermissionAwareFolderReads(UnitTestCase):
 		size.assert_called_once_with({"folder": "Home/Reports_100%", "is_folder": 0})
 		folders.frappe.db.count.assert_not_called()
 		folders.frappe.db.sql.assert_not_called()
+
+
+class TestLiteralLikeEscaping(UnitTestCase):
+	def test_like_metacharacters_and_backslashes_are_literal(self):
+		from ai_fr_hg.ai.folders import _escape_like
+
+		self.assertEqual(_escape_like(r"Home/Reports_100%\Q"), r"Home/Reports\_100\%\\Q")
+
+
+class TestFolderProvenanceSynchronization(UnitTestCase):
+	def test_ambiguous_legacy_url_is_not_claimed_by_file_move(self):
+		from ai_fr_hg.ai import folders
+
+		file_doc = SimpleNamespace(
+			name="FILE-2",
+			file_url="/private/files/shared.pdf",
+			attached_to_doctype=None,
+			attached_to_name=None,
+		)
+
+		def get_all(doctype, **kwargs):
+			if doctype == "File":
+				return ["FILE-1", "FILE-2"]
+			self.assertEqual(kwargs["filters"]["source_file_record"], "FILE-2")
+			return []
+
+		with patch.object(folders.frappe, "get_doc", return_value=file_doc) as get_doc, patch.object(
+			folders.frappe, "get_all", side_effect=get_all
+		), patch.object(folders.frappe, "get_meta") as get_meta, patch.object(
+			folders.frappe.db, "sql"
+		) as lock, patch.object(folders.frappe.db, "set_value") as update:
+			folders._update_document_folder_provenance("FILE-2", "Home/New")
+
+		get_meta.assert_called_once_with("AI Document")
+		get_doc.assert_called_once_with("File", "FILE-2")
+		lock.assert_not_called()
+		update.assert_not_called()
+
+	def test_stable_link_requires_document_write_before_lock_or_update(self):
+		from ai_fr_hg.ai import folders
+		from ai_fr_hg.ai.exceptions import FolderPermissionError
+
+		file_doc = SimpleNamespace(
+			name="FILE-2",
+			file_url="/private/files/shared.pdf",
+			attached_to_doctype=None,
+			attached_to_name=None,
+		)
+		document = SimpleNamespace(name="DOC-HIDDEN", doctype="AI Document")
+
+		def get_doc(doctype, name):
+			return file_doc if doctype == "File" else document
+
+		def get_all(doctype, **kwargs):
+			if doctype == "File":
+				return ["FILE-1", "FILE-2"]
+			filters = kwargs["filters"]
+			return ["DOC-HIDDEN"] if filters.get("source_file_record") == "FILE-2" else []
+
+		with patch.object(folders.frappe, "get_doc", side_effect=get_doc), patch.object(
+			folders.frappe, "get_all", side_effect=get_all
+		), patch.object(folders, "_check_permission", side_effect=FolderPermissionError("denied")), patch.object(
+			folders.frappe.db, "sql"
+		) as lock, patch.object(folders.frappe.db, "set_value") as update:
+			with self.assertRaises(FolderPermissionError):
+				folders._update_document_folder_provenance("FILE-2", "Home/New")
+
+		lock.assert_not_called()
+		update.assert_not_called()
+
+
+class _LockField:
+	def __init__(self, name):
+		self.name = name
+
+	def isin(self, values):
+		return ("in", self.name, list(values))
+
+
+class _LockQuery:
+	def __init__(self, table):
+		self.table = table
+		self.selected = None
+		self.condition = None
+		self.ordered_by = None
+		self.is_for_update = False
+
+	def select(self, field):
+		self.selected = field
+		return self
+
+	def where(self, condition):
+		self.condition = condition
+		return self
+
+	def orderby(self, field):
+		self.ordered_by = field
+		return self
+
+	def for_update(self):
+		self.is_for_update = True
+		return self
+
+	def run(self):
+		return [(name,) for name in self.condition[2]]
+
+
+class TestPortableDocumentLocking(UnitTestCase):
+	def test_ai_document_rows_use_sorted_bounded_query_builder_locks(self):
+		from ai_fr_hg.ai import folders
+
+		queries = []
+		qb = SimpleNamespace()
+		qb.DocType = lambda _doctype: SimpleNamespace(name=_LockField("name"))
+
+		def from_(table):
+			query = _LockQuery(table)
+			queries.append(query)
+			return query
+
+		qb.from_ = from_
+		names = [f"DOC-{number:04d}" for number in range(401, 0, -1)]
+		with patch.object(folders.frappe, "qb", qb), patch.object(folders.frappe.db, "sql") as raw_sql:
+			folders._lock_ai_document_rows(*names, "DOC-0001", None)
+
+		self.assertEqual(len(queries), 2)
+		self.assertEqual([len(query.condition[2]) for query in queries], [400, 1])
+		self.assertEqual(queries[0].condition[2], sorted(set(names))[:400])
+		self.assertEqual(queries[1].condition[2], sorted(set(names))[400:])
+		self.assertTrue(all(query.is_for_update for query in queries))
+		self.assertTrue(all(query.ordered_by is query.table.name for query in queries))
+		raw_sql.assert_not_called()
+
+
+class TestSharedSourceOwnership(UnitTestCase):
+	def test_stable_file_link_is_selected_before_any_legacy_url_match(self):
+		from ai_fr_hg.ai import folders
+
+		def get_all(_doctype, **kwargs):
+			filters = kwargs["filters"]
+			if filters.get("source_file_record") == "FILE-1":
+				return ["DOC-STABLE"]
+			self.fail("legacy lookup must not run after a stable owner is found")
+
+		with patch.object(folders.frappe, "get_all", side_effect=get_all) as query:
+			owner = folders._remaining_source_owner(
+				"FILE-1",
+				"/private/files/shared.pdf",
+				"DOC-MOVING",
+			)
+
+		self.assertEqual(owner, "DOC-STABLE")
+		self.assertEqual(query.call_count, 1)
+		self.assertEqual(query.call_args.kwargs["limit_page_length"], 1)
+
+	def test_url_only_remaining_reference_fails_closed(self):
+		from ai_fr_hg.ai import folders
+		from ai_fr_hg.ai.exceptions import DocumentFetchError
+
+		def get_all(_doctype, **kwargs):
+			filters = kwargs["filters"]
+			return [] if filters.get("source_file_record") == "FILE-1" else ["DOC-LEGACY"]
+
+		with patch.object(folders.frappe, "get_all", side_effect=get_all):
+			with self.assertRaises(DocumentFetchError):
+				folders._remaining_source_owner(
+					"FILE-1",
+					"/private/files/shared.pdf",
+					"DOC-MOVING",
+				)
+
+	def test_unshared_file_has_no_replacement_owner(self):
+		from ai_fr_hg.ai import folders
+
+		with patch.object(folders.frappe, "get_all", return_value=[]):
+			self.assertIsNone(
+				folders._remaining_source_owner(
+					"FILE-1",
+					"/private/files/unshared.pdf",
+					"DOC-MOVING",
+				)
+			)

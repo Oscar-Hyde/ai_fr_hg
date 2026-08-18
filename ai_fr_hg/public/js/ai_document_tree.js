@@ -374,6 +374,7 @@ frappe.provide("frappe.treeview_settings");
 		],
 		onload(treeview) {
 			view = treeview;
+			selected.clear();
 			// Frappe's native root discovery keeps only `value`. Perform that one
 			// request here instead, then construct the tree exactly once with the
 			// complete server-derived root capability payload. Queue framework
@@ -381,8 +382,15 @@ frappe.provide("frappe.treeview_settings");
 			let root_ready = false;
 			let pending_make_tree = null;
 			const native_make_tree = treeview.make_tree.bind(treeview);
+			const reset_and_make_tree = (...args) => {
+				// Filter changes and native refreshes also rebuild the node map. Never
+				// retain invisible selections or stale capability payloads across it.
+				selected.clear();
+				update_bulk_actions();
+				return native_make_tree(...args);
+			};
 			treeview.make_tree = (...args) => {
-				if (root_ready) return native_make_tree(...args);
+				if (root_ready) return reset_and_make_tree(...args);
 				pending_make_tree = args;
 				return undefined;
 			};
@@ -398,7 +406,7 @@ frappe.provide("frappe.treeview_settings");
 					root_ready = true;
 					const pending_args = pending_make_tree || [];
 					pending_make_tree = null;
-					native_make_tree(...pending_args);
+					reset_and_make_tree(...pending_args);
 				},
 				error: () => {
 					// Restore native refresh behavior even when capability discovery
@@ -406,7 +414,7 @@ frappe.provide("frappe.treeview_settings");
 					root_ready = true;
 					const pending_args = pending_make_tree || [];
 					pending_make_tree = null;
-					native_make_tree(...pending_args);
+					reset_and_make_tree(...pending_args);
 				},
 			});
 			location_wrapper = $('<div class="ai-document-tree-location text-muted mb-3"></div>');

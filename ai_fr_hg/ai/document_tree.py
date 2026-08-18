@@ -44,8 +44,10 @@ from ai_fr_hg.ai.folders import (
 	_check_permission,
 	_check_write_access,
 	_clean_name,
+	_escape_like,
 	_get_folder_doc,
 	_normalize_folder_path,
+	_remaining_source_owner,
 )
 from ai_fr_hg.ai.logging import write_audit_log
 from ai_fr_hg.ai.organization import organization_name_key
@@ -167,14 +169,9 @@ def _audit(action: str, message: str, *, details: dict | None = None, reference:
 def _lock(doctype: str, name: str, expected_modified: str | None = None) -> Any:
 	if doctype not in {"AI Document", "File"}:
 		raise ValueError("Unsupported lock DocType")
-	rows = frappe.db.sql(
-		f"select modified from `tab{doctype}` where name=%s for update",  # nosemgrep: trusted table set above
-		(name,),
-		as_dict=True,
-	)
-	if not rows:
+	actual = frappe.db.get_value(doctype, name, "modified", for_update=True)
+	if actual is None:
 		frappe.throw(_("The selected item no longer exists."), frappe.DoesNotExistError)
-	actual = rows[0].modified
 	if expected_modified and get_datetime(expected_modified) != get_datetime(actual):
 		frappe.throw(
 			_("This item changed after the tree was loaded. Refresh and try again."),
@@ -184,15 +181,18 @@ def _lock(doctype: str, name: str, expected_modified: str | None = None) -> Any:
 
 
 def _lock_names(doctype: str, names: list[str]) -> None:
-	"""Lock a stable snapshot in deterministic batches for recursive mutation."""
+	"""Lock a stable snapshot in deterministic, portable batches."""
 	if doctype not in {"AI Document", "File"}:
 		raise ValueError("Unsupported lock DocType")
 	for batch in _chunks(sorted({name for name in names if name})):
-		placeholders = ", ".join(["%s"] * len(batch))
-		rows = frappe.db.sql(
-			f"select name from `tab{doctype}` where name in ({placeholders}) order by name for update",  # nosemgrep
-			tuple(batch),
-		)
+		table = frappe.qb.DocType(doctype)
+		rows = (
+			frappe.qb.from_(table)
+			.select(table.name)
+			.where(table.name.isin(batch))
+			.orderby(table.name)
+			.for_update()
+		).run()
 		if len(rows) != len(batch):
 			frappe.throw(_("The selected subtree changed. Refresh and try again."), frappe.TimestampMismatchError)
 
@@ -300,7 +300,7 @@ def _folder_paths(source: str) -> list[str]:
 	prefix = f"{source}/"
 	rows = frappe.get_all(
 		"File",
-		filters={"name": ["like", f"{prefix}%"], "is_folder": 1},
+		filters={"name": ["like", f"{_escape_like(prefix)}%"], "is_folder": 1},
 		pluck="name",
 		order_by="name asc",
 		limit_page_length=0,
@@ -661,10 +661,14 @@ def _tree_rows(
 	folder_or_filters = None
 	document_or_filters = None
 	if search:
-		folder_or_filters = [["file_name", "like", f"%{search}%"], ["name", "like", f"%{search}%"]]
+		escaped_search = _escape_like(search)
+		folder_or_filters = [
+			["file_name", "like", f"%{escaped_search}%"],
+			["name", "like", f"%{escaped_search}%"],
+		]
 		document_or_filters = [
-			["organization_name", "like", f"%{search}%"],
-			["title", "like", f"%{search}%"],
+			["organization_name", "like", f"%{escaped_search}%"],
+			["title", "like", f"%{escaped_search}%"],
 		]
 	else:
 		folder_filters["folder"] = parent
@@ -1018,6 +1022,28 @@ def move_document(
 	target_folder = _normalize_folder_path(target_folder or _HOME)
 	snapshot = _document(document, "write")
 	snapshot_folder = snapshot.folder or _HOME
+	if snapshot_folder == target_folder:
+		# A no-op needs no physical source or replacement-owner mutation. Keep it
+		# stale- and permission-safe, but do not reject an unchanged document only
+		# because its legacy shared File identity still needs operator backfill.
+		with _atomic("move_document_noop"):
+			_lock_names("File", [target_folder])
+			_lock("AI Document", document, expected_modified)
+			doc = _document(document, "write")
+			if (doc.folder or _HOME) != snapshot_folder:
+				frappe.throw(
+					_("The document location changed. Refresh and try again."),
+					frappe.TimestampMismatchError,
+				)
+			_check_write_access(target_folder, user=frappe.session.user)
+			_folder(target_folder, "write")
+			return {
+				"node": document_node_value(doc.name),
+				"name": doc.name,
+				"folder": target_folder,
+				"unchanged": True,
+			}
+
 	snapshot_source_type = snapshot.source_type
 	snapshot_source_record = snapshot.get("source_file_record")
 	snapshot_source_url = snapshot.source_file
@@ -1032,7 +1058,25 @@ def move_document(
 	with _atomic("move_document"):
 		_lock_names("File", [target_folder, snapshot_folder, snapshot_source_folder])
 		_lock_names("File", [source_file_name])
-		_lock("AI Document", document, expected_modified)
+		remaining_reference = None
+		if source_file_name:
+			# The physical File lock serializes stable source-link changes. Resolve
+			# any surviving owner before locking all involved AI identities in one
+			# deterministic batch; URL-only legacy sharing fails closed here.
+			remaining_reference = _remaining_source_owner(
+				source_file_name,
+				snapshot_source_url,
+				document,
+			)
+		_lock_names("AI Document", [document, remaining_reference])
+		actual_modified = frappe.db.get_value("AI Document", document, "modified")
+		if actual_modified is None:
+			frappe.throw(_("The selected item no longer exists."), frappe.DoesNotExistError)
+		if expected_modified and get_datetime(expected_modified) != get_datetime(actual_modified):
+			frappe.throw(
+				_("This item changed after the tree was loaded. Refresh and try again."),
+				frappe.TimestampMismatchError,
+			)
 		doc = _document(document, "write")
 		if (
 			(doc.folder or _HOME) != snapshot_folder
@@ -1044,8 +1088,6 @@ def move_document(
 		_check_write_access(target_folder, user=frappe.session.user)
 		old_folder = doc.folder or _HOME
 		_folder(old_folder, "write")
-		if old_folder == target_folder:
-			return {"node": document_node_value(doc.name), "name": doc.name, "folder": target_folder, "unchanged": True}
 		if _document_collision(target_folder, doc.organization_name, exclude=doc.name):
 			frappe.throw(
 				_("A document named {0} already exists in the destination.").format(
@@ -1062,32 +1104,47 @@ def move_document(
 				frappe.throw(_("The source file location changed. Refresh and try again."), frappe.TimestampMismatchError)
 			new_file_record = file_doc.name
 			_check_permission("File", "write", doc=file_doc, user=frappe.session.user)
-			remaining_reference = frappe.db.get_value(
-				"AI Document",
-				{"source_file_record": new_file_record, "name": ["!=", doc.name]},
-				"name",
-				order_by="name asc",
-			)
-			if not remaining_reference:
-				remaining_reference = frappe.db.get_value(
-					"AI Document",
-					{
-						"source_file_record": ["is", "not set"],
-						"source_file": doc.source_file,
-						"name": ["!=", doc.name],
-					},
-					"name",
-					order_by="name asc",
+			if (
+				_remaining_source_owner(file_doc.name, file_doc.file_url, doc.name)
+				!= remaining_reference
+			):
+				frappe.throw(
+					_("The documents sharing this source changed. Refresh and try again."),
+					frappe.TimestampMismatchError,
 				)
 			if remaining_reference:
 				# Keep other document identities at their current location while this
-				# identity moves; the physical bytes remain deduplicated by File. If
-				# the shared File was attached to the moving identity, transfer native
-				# attachment ownership to a deterministic remaining source identity.
+				# identity moves; the physical bytes remain deduplicated by File. Read
+				# the locked owner's source fields internally to detect stale sharing,
+				# but require its write permission only when attachment ownership will
+				# actually be transferred to it.
+				remaining_state = frappe.db.get_value(
+					"AI Document",
+					remaining_reference,
+					["source_type", "source_file_record", "source_file"],
+					as_dict=True,
+				)
+				if (
+					not remaining_state
+					or remaining_state.source_type != "File"
+					or remaining_state.source_file_record != file_doc.name
+					or remaining_state.source_file != file_doc.file_url
+				):
+					frappe.throw(
+						_("The remaining source owner changed. Refresh and try again."),
+						frappe.TimestampMismatchError,
+					)
 				if (
 					file_doc.attached_to_doctype == "AI Document"
 					and file_doc.attached_to_name == doc.name
 				):
+					remaining_doc = frappe.get_doc("AI Document", remaining_reference)
+					_check_permission(
+						"AI Document",
+						"write",
+						doc=remaining_doc,
+						user=frappe.session.user,
+					)
 					frappe.db.set_value(
 						"File",
 						file_doc.name,
@@ -1488,7 +1545,9 @@ def copy_folder(
 			new_name or source_doc.file_name,
 			copy_on_collision=new_name is None,
 		)
-		settings_rows = frappe.get_all(
+		# Folder metadata is copied only when it is visible to the caller; File
+		# read permission alone must not expose a restricted settings record.
+		settings_rows = frappe.get_list(
 			"AI Folder Settings",
 			filters={"folder": ["in", folders]},
 			fields=["folder", "description", "knowledge_base"],
