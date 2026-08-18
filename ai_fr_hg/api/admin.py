@@ -405,16 +405,36 @@ def export_knowledge_base(knowledge_base: str, include_embeddings: bool = False)
 	}
 
 	filename = f"ai-kb-{frappe.scrub(knowledge_base)}-{frappe.utils.today()}.json"
-	file_doc = frappe.get_doc(
-		{
-			"doctype": "File",
-			"file_name": filename,
-			"is_private": 1,
-			"content": frappe.as_json(payload, indent=1),
-		}
-	)
-	file_doc.flags.ignore_permissions = True
-	file_doc.insert(ignore_permissions=True)
+	# Persist via canonical folder service so exports are organized (File & Folder §2, §7)
+	try:
+		from ai_fr_hg.ai.folders import create_file_with_content, get_default_folder
+
+		folder = get_default_folder(user=frappe.session.user)
+		# Prefer the configured AI Platform exports folder if it exists
+		preferred = "Home/AI Platform/Exports"
+		if frappe.db.exists("File", preferred):
+			folder = preferred
+		result = create_file_with_content(
+			filename,
+			frappe.as_json(payload, indent=1),
+			folder=folder,
+			is_private=1,
+			user=frappe.session.user,
+		)
+		file_doc = frappe.get_doc("File", result["name"])
+	except Exception:
+		# Fallback to legacy direct creation if folder service fails (graceful degradation)
+		frappe.log_error(title="Folder-aware export failed, falling back", message=frappe.get_traceback())
+		file_doc = frappe.get_doc(
+			{
+				"doctype": "File",
+				"file_name": filename,
+				"is_private": 1,
+				"content": frappe.as_json(payload, indent=1),
+			}
+		)
+		file_doc.flags.ignore_permissions = True
+		file_doc.insert(ignore_permissions=True)
 
 	from ai_fr_hg.ai.logging import write_audit_log
 

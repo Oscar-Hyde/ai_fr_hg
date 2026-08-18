@@ -1,0 +1,159 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "allow_rename": 0,
+ "autoname": "hash",
+ "creation": "2026-08-18 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "folder",
+  "description",
+  "settings_sec",
+  "knowledge_base",
+  "knowledge_tag",
+  "color",
+  "cb_knowledge",
+  "access_policy",
+  "audit_sec",
+  "last_operation",
+  "last_operation_by",
+  "last_operation_on",
+  "cb_audit",
+  "is_archived"
+ ],
+ "fields": [
+  {
+   "fieldname": "folder",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Folder",
+   "options": "File",
+   "reqd": 1,
+   "unique": 1,
+   "description": "Native File folder this settings record extends (is_folder=1)."
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "fieldname": "settings_sec",
+   "fieldtype": "Section Break",
+   "label": "Folder Intelligence"
+  },
+  {
+   "description": "If set, retrieval scoped to this folder can be constrained to a knowledge base.",
+   "fieldname": "knowledge_base",
+   "fieldtype": "Link",
+   "label": "Knowledge Base Scope",
+   "options": "AI Knowledge Base"
+  },
+  {
+   "description": "Free-form tag for folder-level knowledge tagging and filtered retrieval.",
+   "fieldname": "knowledge_tag",
+   "fieldtype": "Data",
+   "label": "Knowledge Tag"
+  },
+  {
+   "description": "Optional color for UI (e.g. #4A90E2).",
+   "fieldname": "color",
+   "fieldtype": "Data",
+   "label": "Color"
+  },
+  {
+   "fieldname": "cb_knowledge",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Reference to a resource or approval policy governing access to this folder (informational; actual permission uses Frappe sharing).",
+   "fieldname": "access_policy",
+   "fieldtype": "Link",
+   "label": "Access Policy",
+   "options": "AI Resource Policy"
+  },
+  {
+   "fieldname": "audit_sec",
+   "fieldtype": "Section Break",
+   "label": "Audit"
+  },
+  {
+   "fieldname": "last_operation",
+   "fieldtype": "Data",
+   "label": "Last Operation",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_operation_by",
+   "fieldtype": "Link",
+   "label": "Last Operation By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_operation_on",
+   "fieldtype": "Datetime",
+   "label": "Last Operation On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb_audit",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_archived",
+   "fieldtype": "Check",
+   "label": "Archived"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-08-18 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Core",
+ "name": "AI Folder Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1,
+   "role": "System Manager"
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1,
+   "role": "AI Manager"
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "role": "AI User"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

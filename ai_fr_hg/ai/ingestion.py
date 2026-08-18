@@ -824,14 +824,41 @@ def ingest_file(
 	title: str | None = None,
 	extraction_schema: str | None = None,
 	enqueue_job: bool = True,
+	folder: str | None = None,
 ) -> str:
-	"""Create an authorized AI Document from a Frappe File."""
+	"""Create an authorized AI Document from a Frappe File.
+
+	Folder provenance is preserved via the canonical folder service (§7).
+	If ``folder`` is not supplied, the File's current folder is used.
+	"""
 	from ai_fr_hg.ai.governance import check_capability, check_document_quota
 
 	authority = _assert_valid_authority(frappe.session.user)
 	check_capability("document_upload")
 	check_document_quota()
 	_, filename = get_file_content(file_url, authority)
+
+	# Resolve folder provenance
+	resolved_folder = None
+	try:
+		from ai_fr_hg.ai.folders import _normalize_folder_path, _assert_folder_exists, get_default_folder
+
+		if folder:
+			resolved_folder = _normalize_folder_path(folder)
+			_assert_folder_exists(resolved_folder)
+		else:
+			# Use File's current folder or default
+			file_name = frappe.db.get_value("File", {"file_url": file_url}, "name")
+			if file_name:
+				current_folder = frappe.db.get_value("File", file_name, "folder")
+				if current_folder and frappe.db.exists("File", current_folder):
+					resolved_folder = current_folder
+				else:
+					resolved_folder = get_default_folder(user=authority)
+			else:
+				resolved_folder = get_default_folder(user=authority)
+	except Exception:
+		frappe.log_error(title="Folder resolution failed during ingest", message=frappe.get_traceback())
 
 	document = frappe.new_doc("AI Document")
 	document.update(
@@ -842,6 +869,8 @@ def ingest_file(
 			"source_file": file_url,
 			"extraction_schema": extraction_schema,
 			"status": "Draft",
+			"folder": resolved_folder,
+			"source_folder": resolved_folder,
 		}
 	)
 	document.insert()
@@ -849,6 +878,14 @@ def ingest_file(
 		enqueue_processing(document.name, requested_by=authority)
 	else:
 		process_document_now(document.name, requested_by=authority)
+	# Ensure File lives in the same folder (canonical service)
+	try:
+		if resolved_folder:
+			from ai_fr_hg.ai.folders import ensure_file_in_folder
+
+			ensure_file_in_folder(file_url, resolved_folder, user=authority)
+	except Exception:
+		frappe.log_error(title="File folder assignment during ingest failed", message=frappe.get_traceback())
 	return document.name
 
 

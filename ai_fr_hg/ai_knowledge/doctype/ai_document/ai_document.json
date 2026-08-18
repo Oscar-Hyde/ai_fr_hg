@@ -20,6 +20,11 @@
   "source_doctype",
   "source_name",
   "language",
+  "folder_sec",
+  "folder",
+  "source_folder",
+  "folder_cb",
+  "is_private",
   "content_sec",
   "content",
   "summary_sec",
@@ -135,6 +140,37 @@
    "fieldname": "language",
    "fieldtype": "Data",
    "label": "Language"
+  },
+  {
+   "fieldname": "folder_sec",
+   "fieldtype": "Section Break",
+   "label": "Folder Organization"
+  },
+  {
+   "description": "Folder where this document's source file is stored. Selected at attach time and kept in sync when the file is moved.",
+   "fieldname": "folder",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Folder",
+   "options": "File"
+  },
+  {
+   "description": "Denormalised path of the folder for fast filtering and provenance.",
+   "fieldname": "source_folder",
+   "fieldtype": "Data",
+   "in_standard_filter": 1,
+   "label": "Source Folder Path",
+   "read_only": 1
+  },
+  {
+   "fieldname": "folder_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Follows the folder's privacy setting at creation.",
+   "fieldname": "is_private",
+   "fieldtype": "Check",
+   "label": "Is Private"
   },
   {
    "fieldname": "content_sec",

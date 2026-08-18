@@ -181,6 +181,20 @@ def tool_invocation_query(user: str) -> str:
 	return _owned_condition("AI Tool Invocation", "user", user, auditors=True)
 
 
+def folder_settings_query(user: str) -> str:
+	if _is_manager(user):
+		return ""
+	# Settings are visible if the user can read the underlying folder (checked via File permission on UI), but list query falls back to allow.
+	# We keep it open for discovery; row-level has_document_permission enforces true check.
+	return ""
+
+
+def folder_favorite_query(user: str) -> str:
+	if _is_manager(user):
+		return ""
+	return _owned_condition("AI Folder Favorite", "user", user)
+
+
 # ---------------------------------------------------------------------------
 # Direct-document permission
 # ---------------------------------------------------------------------------
@@ -285,5 +299,23 @@ def has_document_permission(
 		return _owned_document_access(doc, user, "triggered_by", permission_type, auditors=True)
 	if doc.doctype in {"AI Execution Log", "AI Search Query", "AI Tool Invocation"}:
 		return _owned_document_access(doc, user, "user", permission_type, auditors=True)
+	if doc.doctype == "AI Folder Favorite":
+		if _is_auditor(user) and _is_read(permission_type):
+			return True
+		return doc.get("user") == user
+	if doc.doctype == "AI Folder Settings":
+		if _is_read(permission_type):
+			# Read allowed if user can read the underlying folder
+			try:
+				folder_doc = frappe.get_doc("File", doc.folder)
+				return frappe.has_permission("File", "read", doc=folder_doc, user=user)
+			except Exception:
+				return False
+		# Write requires write on underlying folder
+		try:
+			folder_doc = frappe.get_doc("File", doc.folder)
+			return frappe.has_permission("File", "write", doc=folder_doc, user=user)
+		except Exception:
+			return False
 
 	return False

@@ -80,3 +80,35 @@ class PipelineStepRecordedError(PipelineError):
 
 class PipelineApprovalRequired(PipelineStepRecordedError):
 	"""A pipeline tool step created a durable approval request and must stop."""
+
+
+class FolderError(AIError):
+	"""Base class for folder / file organization errors."""
+
+
+class FolderNotFoundError(FolderError):
+	"""Raised when a folder does not exist or is not a folder."""
+
+
+class FolderAlreadyExistsError(FolderError):
+	"""Raised when a folder or file name already exists in the target parent."""
+
+
+class CircularFolderError(FolderError):
+	"""Raised when a folder would become its own descendant."""
+
+
+class FolderPermissionError(FolderError):
+	"""Raised when the user lacks permission for the folder operation."""
+
+
+class FolderNotEmptyError(FolderError):
+	"""Raised when a non-empty folder is deleted without confirmation."""
+
+
+class FileNotFoundError(FolderError):
+	"""Raised when a file does not exist."""
+
+
+class InvalidFolderNameError(FolderError):
+	"""Raised when a folder or file name is invalid."""

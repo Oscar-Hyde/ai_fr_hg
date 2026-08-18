@@ -17,8 +17,9 @@ def upload_document(
 	title: str | None = None,
 	extraction_schema: str | None = None,
 	process_now: bool = False,
+	folder: str | None = None,
 ) -> dict:
-	"""Ingest an uploaded file into a knowledge base."""
+	"""Ingest an uploaded file into a knowledge base (folder-aware)."""
 	from ai_fr_hg.ai.ingestion import ingest_file
 
 	frappe.has_permission("AI Document", "create", throw=True)
@@ -29,10 +30,12 @@ def upload_document(
 		title=title,
 		extraction_schema=extraction_schema,
 		enqueue_job=not cint(process_now),
+		folder=folder,
 	)
 	return {
 		"document": document,
 		"status": frappe.db.get_value("AI Document", document, "status"),
+		"folder": frappe.db.get_value("AI Document", document, "folder"),
 	}
 
 
@@ -99,8 +102,9 @@ def search(
 	knowledge_bases: str | list | None = None,
 	top_k: int = 10,
 	search_type: str | None = None,
+	folder: str | None = None,
 ) -> dict:
-	"""Search the knowledge base and return ranked passages."""
+	"""Search the knowledge base and return ranked passages (folder-scoped if provided)."""
 	from ai_fr_hg.ai.knowledge import retrieve
 
 	if isinstance(knowledge_bases, str):
@@ -114,8 +118,9 @@ def search(
 		knowledge_bases=knowledge_bases,
 		top_k=cint(top_k) or 10,
 		search_type=search_type,
+		folder=folder,
 	)
-	return {"query": query, "count": len(results), "results": [r.as_dict() for r in results]}
+	return {"query": query, "count": len(results), "results": [r.as_dict() for r in results], "folder": folder}
 
 
 @frappe.whitelist()
@@ -125,11 +130,13 @@ def ask(
 	agent: str | None = None,
 	model: str | None = None,
 	documents: str | list | None = None,
+	folder: str | None = None,
 ) -> dict:
 	"""One-shot grounded question answering, without creating a conversation.
 
 	`documents` scopes the answer to specific `AI Document` records (e.g. the
 	"Ask About This" button), waiting for indexing if they were just uploaded.
+	`folder` scopes retrieval to a folder subtree (folder-scoped retrieval).
 	"""
 	from ai_fr_hg.ai.agent import run_agent_turn
 	from ai_fr_hg.ai.deadline import turn_budget
@@ -143,6 +150,21 @@ def ask(
 			knowledge_bases = [knowledge_bases]
 
 	documents = _coerce_documents(documents)
+
+	# Folder-scoped ask: if folder is provided and no explicit documents, resolve folder documents
+	folder_docs = None
+	if folder and not documents:
+		try:
+			from ai_fr_hg.ai.folders import _normalize_folder_path
+
+			norm = _normalize_folder_path(folder)
+			folder_docs = frappe.get_all("AI Document", filters={"folder": ["like", f"{norm}%"]}, pluck="name")
+			if not folder_docs:
+				folder_docs = frappe.get_all("AI Document", filters={"source_folder": ["like", f"{norm}%"]}, pluck="name")
+			if folder_docs:
+				documents = folder_docs
+		except Exception:
+			pass
 
 	# Interactive, so it carries the same proxy deadline as chat.
 	with turn_budget(_get_turn_budget()):
