@@ -752,10 +752,34 @@ def _validate_archive(content: bytes, filename: str) -> None:
 		raise CorruptDocumentError(_("The Office document container is corrupt.")) from exc
 
 
+def _reconcile_file_privacy_from_url(file_doc) -> None:
+	"""Keep File privacy metadata consistent with Frappe's canonical URL path.
+
+	Frappe stores public and private files in different directories and derives
+	the on-disk path from ``is_private``.  A legacy direct update can leave the
+	flag out of sync with an otherwise valid native upload URL; reconcile only
+	the two canonical local URL forms before Frappe reads the file.  Remote and
+	unknown URLs are intentionally left to Frappe's own validation.
+	"""
+	file_url = file_doc.file_url or ""
+	if file_url.startswith("/private/files/"):
+		expected_private = 1
+	elif file_url.startswith("/files/"):
+		expected_private = 0
+	else:
+		return
+
+	if cint(file_doc.is_private) != expected_private:
+		frappe.db.set_value("File", file_doc.name, "is_private", expected_private, update_modified=False)
+		file_doc.is_private = expected_private
+		frappe.clear_document_cache("File", file_doc.name)
+
+
 def get_file_content(file_url: str, user: str | None = None) -> tuple[bytes, str]:
 	"""Read a Frappe File only when the authenticated user can read it."""
 	user = _assert_valid_authority(user or frappe.session.user)
 	file_doc = _file_doc(file_url)
+	_reconcile_file_privacy_from_url(file_doc)
 	if not frappe.has_permission("File", "read", doc=file_doc, user=user):
 		raise DocumentSourcePermissionError(
 			_("User {0} cannot read source File {1}.").format(user, file_doc.name)

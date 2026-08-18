@@ -671,7 +671,7 @@ class AIAssistant {
 							.catch((error) => {
 								frappe.msgprint({
 									title: __("Upload could not be ingested"),
-									message: error.message || __("The uploaded file could not be read."),
+									message: error?.message || error?._server_messages || __("The uploaded file could not be read."),
 									indicator: "red",
 								});
 								return null;
