@@ -332,6 +332,13 @@ class TestAttachmentPlacement(AIPlatformTestCase):
 		persisted = frappe.db.get_value("File", file_doc.name, "folder")
 		self.assertEqual(persisted, dest)
 
+		# Native FileUploader persists the chosen folder during its first insert
+		# and then confirms it through the canonical API. That confirmation is
+		# intentionally idempotent: the File itself is not a name collision.
+		confirmed = assign_file_to_folder(file_doc.name, dest)
+		self.assertTrue(confirmed["unchanged"])
+		self.assertEqual(frappe.db.get_value("File", file_doc.name, "folder"), dest)
+
 		# Re-file again: move to another folder preserves attached_to link
 		other = "Home/UserChoiceTest2"
 		if not frappe.db.exists("File", other):

@@ -57,8 +57,10 @@ app_include_js = "ai_fr_hg.bundle.js"
 # include js in page
 # page_js = {"page" : "public/js/file.js"}
 
-# Standard DocType form and list scripts are colocated with their controllers and
-# schemas so Frappe discovers them through its native asset conventions.
+# File is a Frappe core DocType, so its supported list-view extension lives in
+# this app's standard override location.  It augments FileView actions only;
+# it never replaces the native File list/tree/grid presentation.
+doctype_list_js = {"File": "public/js/file_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
 

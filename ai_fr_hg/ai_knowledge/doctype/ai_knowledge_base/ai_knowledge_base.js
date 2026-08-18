@@ -59,8 +59,9 @@ frappe.ui.form.on("AI Knowledge Base", {
 		frm.page.set_indicator(frm.doc.index_status, frappe.ai.status_color(frm.doc.index_status));
 
 		frm.add_custom_button(__("Upload Document"), () => {
+			// The globally extended native uploader supplies the destination
+			// selector; ingestion then reads the File's persisted folder.
 			new frappe.ui.FileUploader({
-				folder: "Home/Attachments",
 				async on_success(file) {
 					await frappe.xcall("ai_fr_hg.api.knowledge.upload_document", {
 						file_url: file.file_url,

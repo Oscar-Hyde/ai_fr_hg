@@ -1464,9 +1464,16 @@ def assign_file_to_folder(
 	_assert_folder_exists(target)
 	_check_permission("File", "write", doc=doc, user=user)
 	_check_write_access(target, user=user)
-	_assert_unique_in_parent(doc.file_name, target, is_folder=False)
 
 	old_folder = doc.folder
+	# A native FileUploader already persists its selected ``folder`` with the
+	# initial File insert.  Treat a confirmation of that same destination as an
+	# idempotent operation: the File itself must not be counted as a collision.
+	# This is particularly important for attachment callbacks, which confirm the
+	# server-side destination immediately after Frappe has created the File.
+	if old_folder != target:
+		_assert_unique_in_parent(doc.file_name, target, is_folder=False)
+
 	updates: dict = {"folder": target}
 	if attached_to_doctype:
 		updates["attached_to_doctype"] = attached_to_doctype
@@ -1474,8 +1481,20 @@ def assign_file_to_folder(
 		updates["attached_to_name"] = attached_to_name
 	if attached_to_field:
 		updates["attached_to_field"] = attached_to_field
-	# Also ensure is_private follows folder
+	# Also ensure is_private follows folder.
 	updates["is_private"] = cint(frappe.db.get_value("File", target, "is_private"))
+
+	attachment_changed = any(
+		value and getattr(doc, field) != value
+		for field, value in (
+			("attached_to_doctype", attached_to_doctype),
+			("attached_to_name", attached_to_name),
+			("attached_to_field", attached_to_field),
+		)
+	)
+	privacy_changed = cint(getattr(doc, "is_private", 0)) != updates["is_private"]
+	if old_folder == target and not attachment_changed and not privacy_changed:
+		return {"name": file_name, "folder": target, "old_folder": old_folder, "unchanged": True}
 
 	frappe.db.set_value("File", file_name, updates, update_modified=False)
 	frappe.clear_document_cache("File", file_name)
@@ -1491,7 +1510,7 @@ def assign_file_to_folder(
 		_update_document_folder_provenance(file_name, target)
 	except Exception:
 		frappe.log_error(title="Folder provenance update failed", message=frappe.get_traceback())
-	return {"name": file_name, "folder": target, "old_folder": old_folder}
+	return {"name": file_name, "folder": target, "old_folder": old_folder, "unchanged": False}
 
 
 def ensure_file_in_folder(
