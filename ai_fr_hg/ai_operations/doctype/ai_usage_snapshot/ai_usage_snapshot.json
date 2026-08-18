@@ -56,9 +56,10 @@
   },
   {
    "fieldname": "total_tokens",
-   "fieldtype": "Int",
+   "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Total Tokens"
+   "label": "Total Tokens",
+   "precision": "0"
   },
   {
    "fieldname": "failure_count",

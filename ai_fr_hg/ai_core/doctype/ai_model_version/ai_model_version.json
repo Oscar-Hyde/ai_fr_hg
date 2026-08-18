@@ -38,8 +38,9 @@
   },
   {
    "fieldname": "size_bytes",
-   "fieldtype": "Int",
-   "label": "Size (bytes)"
+   "fieldtype": "Float",
+   "label": "Size (bytes)",
+   "precision": "0"
   },
   {
    "columns": 1,

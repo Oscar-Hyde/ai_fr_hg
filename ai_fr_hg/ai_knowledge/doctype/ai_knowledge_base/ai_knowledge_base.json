@@ -153,9 +153,10 @@
   },
   {
    "fieldname": "total_characters",
-   "fieldtype": "Int",
+   "fieldtype": "Float",
    "label": "Total Characters",
-   "read_only": 1
+   "read_only": 1,
+   "precision": "0"
   },
   {
    "fieldname": "last_indexed_on",

@@ -37,7 +37,7 @@ class AIKnowledgeBase(Document):
 		restrict_to_roles: DF.Table[AIKnowledgeBaseRole]
 		similarity_threshold: DF.Float
 		top_k: DF.Int
-		total_characters: DF.LongInt
+		total_characters: DF.Float
 	# end: auto-generated types
 
 	def validate(self):

@@ -45,7 +45,7 @@ class AIAgent(Document):
 		temperature: DF.Float
 		tools: DF.Table[AIAgentTool]
 		top_k: DF.Int
-		total_tokens: DF.LongInt
+		total_tokens: DF.Float
 		use_knowledge: DF.Check
 		use_tools: DF.Check
 	# end: auto-generated types

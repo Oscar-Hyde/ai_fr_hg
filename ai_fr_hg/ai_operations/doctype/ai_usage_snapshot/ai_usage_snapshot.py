@@ -22,6 +22,6 @@ class AIUsageSnapshot(Document):
 		model: DF.Link | None
 		request_count: DF.Int
 		snapshot_date: DF.Date
-		total_tokens: DF.LongInt
+		total_tokens: DF.Float
 		user: DF.Link | None
 	# end: auto-generated types

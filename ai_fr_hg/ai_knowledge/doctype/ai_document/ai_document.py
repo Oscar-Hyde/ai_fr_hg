@@ -21,7 +21,7 @@ class AIDocument(Document):
 
 		from ai_fr_hg.ai_knowledge.doctype.ai_document_tag.ai_document_tag import AIDocumentTag
 
-		character_count: DF.LongInt
+		character_count: DF.Float
 		checksum: DF.Data | None
 		chunk_count: DF.Int
 		confidence: DF.Percent
@@ -31,7 +31,7 @@ class AIDocument(Document):
 		error_message: DF.SmallText | None
 		extracted_data: DF.Code | None
 		extraction_schema: DF.Link | None
-		file_size: DF.LongInt
+		file_size: DF.Float
 		folder: DF.Link | None
 		indexed_on: DF.Datetime | None
 		is_private: DF.Check

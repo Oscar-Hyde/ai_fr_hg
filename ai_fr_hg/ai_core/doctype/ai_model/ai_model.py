@@ -47,7 +47,7 @@ class AIModel(Document):
 		provider: DF.Link
 		quantization: DF.Data | None
 		repeat_penalty: DF.Float
-		size_bytes: DF.LongInt
+		size_bytes: DF.Float
 		status: DF.Literal["Unknown", "Available", "Missing", "Error"]
 		stop_sequences: DF.SmallText | None
 		supports_json_mode: DF.Check
@@ -59,7 +59,7 @@ class AIModel(Document):
 		top_k: DF.Int
 		top_p: DF.Float
 		total_requests: DF.Int
-		total_tokens: DF.LongInt
+		total_tokens: DF.Float
 		versions: DF.Table[AIModelVersion]
 	# end: auto-generated types
 
