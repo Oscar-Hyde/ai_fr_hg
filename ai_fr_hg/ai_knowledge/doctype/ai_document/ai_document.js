@@ -17,6 +17,104 @@ async function prompt_for_folder(options) {
 	return null;
 }
 
+/**
+ * Translation is a first-class document action: pick a target language (Arabic,
+ * English or Hebrew), an optional glossary and register, and the platform
+ * translates the extracted text on a background worker into a reviewable
+ * `AI Translation` record.
+ */
+const TRANSLATION_LANGUAGES = [
+	{ value: "ar", label: __("Arabic") },
+	{ value: "en", label: __("English") },
+	{ value: "he", label: __("Hebrew") },
+];
+
+async function open_translation_dialog(frm) {
+	let languages = TRANSLATION_LANGUAGES;
+	try {
+		const info = await frappe.xcall("ai_fr_hg.api.translation.get_languages");
+		if (!info.enabled) {
+			frappe.msgprint(__("Translation is disabled in AI Platform Settings."));
+			return;
+		}
+		if (info.languages?.length) {
+			languages = info.languages.map((item) => ({
+				value: item.code,
+				label: `${item.name} (${item.endonym})`,
+			}));
+		}
+	} catch (error) {
+		// Fall back to the built-in list; the endpoint is only used for labels.
+	}
+
+	const detected = (frm.doc.language || "").split(",")[0];
+	const dialog = new frappe.ui.Dialog({
+		title: __("Translate {0}", [frm.doc.title]),
+		fields: [
+			{
+				fieldtype: "Select",
+				fieldname: "target_language",
+				label: __("Translate Into"),
+				options: languages,
+				reqd: 1,
+				default: languages.find((item) => item.value !== detected)?.value,
+			},
+			{
+				fieldtype: "Select",
+				fieldname: "source_language",
+				label: __("Source Language"),
+				options: [{ value: "", label: __("Detect automatically") }, ...languages],
+				default: "",
+			},
+			{ fieldtype: "Column Break" },
+			{
+				fieldtype: "Select",
+				fieldname: "tone",
+				label: __("Register"),
+				options: ["Neutral", "Formal", "Informal", "Technical", "Legal"],
+				default: "Neutral",
+			},
+			{
+				fieldtype: "Link",
+				fieldname: "glossary",
+				label: __("Glossary"),
+				options: "AI Translation Glossary",
+				get_query: () => ({ filters: { enabled: 1 } }),
+			},
+			{ fieldtype: "Section Break" },
+			{
+				fieldtype: "Data",
+				fieldname: "domain",
+				label: __("Domain"),
+				description: __("Optional, for example: construction contracts."),
+			},
+			{
+				fieldtype: "Check",
+				fieldname: "index_output",
+				label: __("Index the translation as its own document"),
+				default: 0,
+			},
+		],
+		primary_action_label: __("Translate"),
+		primary_action: async (values) => {
+			dialog.hide();
+			try {
+				const result = await frm.call("translate", { ...values, background: true });
+				frappe.show_alert({
+					message: __("Translation queued"),
+					indicator: "blue",
+				});
+				if (result.message?.translation) {
+					frappe.set_route("Form", "AI Translation", result.message.translation);
+				}
+			} catch (error) {
+				// frappe already surfaced the server message.
+			}
+		},
+	});
+	dialog.show();
+}
+
 frappe.ui.form.on("AI Document", {
 	refresh(frm) {
 		if (frm.is_new()) return;
@@ -177,6 +275,21 @@ frappe.ui.form.on("AI Document", {
 					);
 				},
 				__("Intelligence")
+			);
+
+			frm.add_custom_button(
+				__("Translate…"),
+				() => open_translation_dialog(frm),
+				__("Intelligence")
+			);
+
+			frm.add_custom_button(
+				__("View Translations"),
+				() =>
+					frappe.set_route("List", "AI Translation", {
+						source_document: frm.doc.name,
+					}),
+				__("View")
 			);
 
 			frm.add_custom_button(

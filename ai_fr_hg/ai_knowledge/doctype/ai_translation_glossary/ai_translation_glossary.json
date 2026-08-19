@@ -1,0 +1,113 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "allow_rename": 1,
+ "autoname": "field:glossary_name",
+ "creation": "2026-08-19 09:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "glossary_name",
+  "enabled",
+  "glossary_cb",
+  "knowledge_base",
+  "description",
+  "terms_sec",
+  "terms"
+ ],
+ "fields": [
+  {
+   "fieldname": "glossary_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Glossary Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Enabled"
+  },
+  {
+   "fieldname": "glossary_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Optional: the knowledge base this terminology belongs to.",
+   "fieldname": "knowledge_base",
+   "fieldtype": "Link",
+   "label": "Knowledge Base",
+   "options": "AI Knowledge Base"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "fieldname": "terms_sec",
+   "fieldtype": "Section Break",
+   "label": "Terminology"
+  },
+  {
+   "description": "Each row is one concept in English, Arabic and Hebrew. The direction being translated decides which column is the source and which is the required output.",
+   "fieldname": "terms",
+   "fieldtype": "Table",
+   "label": "Terms",
+   "options": "AI Translation Term"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-19 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Knowledge",
+ "name": "AI Translation Glossary",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "AI Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "AI User"
+  },
+  {
+   "export": 1,
+   "read": 1,
+   "report": 1,
+   "role": "AI Auditor"
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

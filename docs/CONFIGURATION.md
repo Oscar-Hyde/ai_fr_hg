@@ -125,6 +125,25 @@ model such as `qwen2.5:0.5b` can name every language in the file.
 
 ---
 
+## Translation
+
+Arabic / English / Hebrew translation. Full guide:
+[`TRANSLATION.md`](TRANSLATION.md).
+
+| Setting | Default | Notes |
+| --- | --- | --- |
+| Enable Translation | on | Master switch for translation, its tool and its pipeline step. |
+| Default Target Language | `en` | Used when a caller does not name one. |
+| Default Translation Model | empty | Falls back to the default chat model. Must be a Chat or Vision model. |
+| Default Glossary | empty | Terminology applied when a translation names none. |
+| Segment Size (characters) | 1800 | How much source text is translated as one unit. Minimum 200. Lower it for small context windows. |
+| Segments per Model Call | 6 | Batch size. Larger batches mean fewer round trips but a longer prompt. |
+| Run Quality Checks | on | Score every segment locally: placeholders, script, length, glossary, refusals, repetition. |
+| Repair Flagged Segments | on | One stricter retry per flagged segment, kept only when it scores better. |
+| Use Translation Memory | on | Reuse identical segments already translated in the same knowledge base. |
+| Back-Translation Samples | 0 | Verify this many segments by translating them back and comparing embeddings. Costs extra model calls. |
+| Index Translations as Documents | off | Default for new translations: store the result as its own searchable document. |
+
 ## Governance
 
 | Setting | Purpose |

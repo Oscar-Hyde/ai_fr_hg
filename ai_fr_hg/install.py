@@ -87,6 +87,39 @@ BUILTIN_TOOLS = [
 		],
 	},
 	{
+		"tool_name": "translate_content",
+		"tool_type": "Builtin",
+		"handler": "translate_content",
+		"is_readonly_tool": 1,
+		"description": (
+			"Translate an uploaded document, or a passage of text, between Arabic, English and Hebrew. "
+			"Use this whenever the user asks for content in another one of those languages."
+		),
+		"parameters": [
+			{
+				"parameter": "target_language",
+				"parameter_type": "String",
+				"required": 1,
+				"description": "The language to translate into: 'ar' (Arabic), 'en' (English) or 'he' (Hebrew).",
+			},
+			{
+				"parameter": "document",
+				"parameter_type": "String",
+				"description": "The document ID, title or filename to translate. Omit when passing 'text'.",
+			},
+			{
+				"parameter": "text",
+				"parameter_type": "String",
+				"description": "A passage to translate directly, instead of a stored document.",
+			},
+			{
+				"parameter": "source_language",
+				"parameter_type": "String",
+				"description": "Optional source language ('ar', 'en' or 'he'). Detected automatically when omitted.",
+			},
+		],
+	},
+	{
 		"tool_name": "list_documents",
 		"tool_type": "Builtin",
 		"handler": "list_documents",

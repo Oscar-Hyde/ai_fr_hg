@@ -968,14 +968,28 @@ def ingest_text(
 	knowledge_base: str,
 	title: str,
 	enqueue_job: bool = True,
+	folder: str | None = None,
+	language: str | None = None,
 ) -> str:
-	"""Create an authorized AI Document from bounded inline text."""
+	"""Create an authorized AI Document from bounded inline text.
+
+	``folder`` places the document in an existing folder (the default folder is
+	used when it is omitted) and ``language`` records a known ISO 639-1 code so
+	generated content - a translation, for example - does not have to be
+	re-detected from its own text.
+	"""
 	from ai_fr_hg.ai.governance import check_capability, check_document_quota
 
 	authority = _assert_valid_authority(frappe.session.user)
 	check_capability("document_upload")
 	check_document_quota()
 	_validate_size((text or "").encode("utf-8"))
+
+	resolved_folder = None
+	if folder:
+		from ai_fr_hg.ai.folders import _assert_folder_exists, _normalize_folder_path
+
+		resolved_folder = _assert_folder_exists(_normalize_folder_path(folder))
 
 	document = frappe.new_doc("AI Document")
 	document.update(
@@ -987,6 +1001,11 @@ def ingest_text(
 			"status": "Draft",
 		}
 	)
+	if resolved_folder:
+		document.folder = resolved_folder
+		document.source_folder = resolved_folder
+	if codes := parse_language_codes(language):
+		document.language = ",".join(codes)
 	document.insert()
 	if enqueue_job:
 		enqueue_processing(document.name, requested_by=authority)

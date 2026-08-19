@@ -97,6 +97,9 @@ metrics. `AI Prompt Template` holds reusable Jinja prompts.
 policy. `AI Document` is one source item in any format. `AI Document Chunk` is
 a retrievable slice with its embedding stored as base64 float32.
 `AI Extraction Schema` defines structured extraction targets.
+`AI Translation` stores one Arabic / English / Hebrew translation of a document
+with its per-segment review state, and `AI Translation Glossary` holds the
+trilingual terminology enforced while producing it.
 
 **AI Conversation** — the interaction.
 `AI Agent` binds a model, a system prompt, knowledge bases and tools into a
