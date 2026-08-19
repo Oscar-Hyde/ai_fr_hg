@@ -89,6 +89,29 @@ def process_pending_documents() -> None:
 			pass
 
 
+def scan_pending_pattern_entities() -> None:
+	"""Backfill high-precision pattern entities for indexed documents.
+
+	Strictly opt-in: nothing runs until "Auto Pattern Scan" is enabled in AI
+	Platform Settings. The scan itself only reads already-extracted content
+	and writes the pattern layer's own AI Pattern Entity rows.
+	"""
+	try:
+		if not frappe.db.get_single_value("AI Platform Settings", "platform_enabled"):
+			return
+		if not frappe.db.get_single_value("AI Platform Settings", "auto_scan_patterns"):
+			return
+
+		from ai_fr_hg.ai.patterns import scan_pending_documents
+
+		scan_pending_documents()
+	except Exception:
+		try:
+			frappe.log_error(title="AI scan_pending_pattern_entities failed", message=frappe.get_traceback())
+		except Exception:
+			pass
+
+
 def run_scheduled_pipelines() -> None:
 	"""Start pipelines whose cron schedule is due."""
 	if not frappe.db.get_single_value("AI Platform Settings", "platform_enabled"):

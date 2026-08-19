@@ -78,7 +78,7 @@
    "hidden": 0,
    "is_query_report": 0,
    "label": "Intelligence",
-   "link_count": 2,
+   "link_count": 3,
    "onboard": 0,
    "type": "Card Break"
   },
@@ -89,6 +89,17 @@
    "label": "Extraction Schemas",
    "link_count": 0,
    "link_to": "AI Extraction Schema",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Pattern Entities",
+   "link_count": 0,
+   "link_to": "AI Pattern Entity",
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link"

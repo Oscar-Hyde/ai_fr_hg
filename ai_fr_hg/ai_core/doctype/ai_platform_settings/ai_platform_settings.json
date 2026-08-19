@@ -44,6 +44,8 @@
   "max_document_size_mb",
   "ocr_enabled",
   "allow_user_url_ingestion",
+  "auto_scan_patterns",
+  "max_pattern_entities",
   "translation_sec",
   "translation_enabled",
   "default_target_language",
@@ -311,6 +313,20 @@
    "fieldname": "allow_user_url_ingestion",
    "fieldtype": "Check",
    "label": "Allow User URL Ingestion"
+  },
+  {
+   "default": "0",
+   "description": "Periodically extract high-precision pattern entities (emails, URLs, phones, IPs, hashes, dates, identifiers, money) from indexed documents into AI Pattern Entity rows. Reads only already-extracted content; off by default.",
+   "fieldname": "auto_scan_patterns",
+   "fieldtype": "Check",
+   "label": "Auto Pattern Scan"
+  },
+  {
+   "default": "500",
+   "description": "Upper bound of distinct pattern entities stored per document scan. The scan itself samples at most 1 MB of extracted text (head and tail).",
+   "fieldname": "max_pattern_entities",
+   "fieldtype": "Int",
+   "label": "Max Pattern Entities per Document"
   },
   {
    "fieldname": "translation_sec",

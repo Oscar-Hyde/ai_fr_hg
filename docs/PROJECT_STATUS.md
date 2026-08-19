@@ -8,20 +8,19 @@ a how-to. For how things work see the other docs listed at the end.
 | --- | --- |
 | App version | `0.0.1` (`ai_fr_hg/__init__.py`) |
 | Target | Frappe v17, Python 3.14+ |
-| Branch | `arena/01a01846-ai-fr-hg` (remediation pass after `7316b4c`) |
-| Base | `main` @ `e960ed2` (PR #22 merged) |
-| Pull request | [#23](https://github.com/Oscar-Hyde/ai_fr_hg/pull/23) — **open, mergeable** |
+| Branch | `arena/01a0196a-ai-fr-hg` (pattern extraction layer) |
+| Base | `main` @ `77df474` (PR #25 translation merged) |
+| Pull request | [#26](https://github.com/Oscar-Hyde/ai_fr_hg/pull/26) — **open, mergeable** (conflicts with PR #25 resolved) |
 | Site (local) | `site1.local` (Sofia) |
 | Default runtime | Ollama at `http://127.0.0.1:11434` / `http://localhost:11434` |
-| Working tree | language detection + attach→ask retrieve |
+| Working tree | AI Pattern Entity: high-precision pattern extraction |
 
-**PR #23 commits (this session's work):**
+**PR #26 commits (this session's work):**
 
-1. `fe773c4` — unbounded local chat, faster attach→ask, % similarity, File preview guard
-2. `1d4ad5f` — local `relative_time` so Knowledge Explorer does not crash on a stale `frappe.ai`
-3. `885e58e` — AI Document Tree View JS owned by the DocType (`doctype_tree_js`)
+1. `b0ae3fe` — `AI Pattern Entity` DocType + `ai/patterns.py`: verbatim port of the File Analysis reference tokenizer (email, url, phone, ip, hash, date, identifier, money), per-type canonical identity, provenance quotes, idempotent `(document, entity_type, normalized_value)` sync, trash cascade, opt-in hourly backfill, API endpoints, Desk buttons, settings. Also repairs the latent import-time `NameError` in `utils/permissions.py` (wrapper assigned before the function it wraps).
+2. `f15c87e` — merge of PR #25 (offline ar/en/he translation): both button sets on AI Document, both settings groups, both permission entries; restored the `AI Document` `on_trash` cascade the auto-merge dropped.
 
-**CI on #23 (diagnosed from check annotations):** Server failed on Frappe v17 `get_list` COUNT syntax, folder-unit mocks against a real `frappe`, and a nested-pipeline assertion string. Those are fixed in this pass. Confirm green checks after push.
+**Note:** main fixed the same `has_document_permission` wrapper ordering independently in PR #25; the merge keeps one copy. Verified after merge: compile, JSON, `node --check`, 14/14 pattern unit tests, stub imports, ruff identical to the main baseline.
 
 ---
 
@@ -48,6 +47,7 @@ a how-to. For how things work see the other docs listed at the end.
 | Hybrid retrieval + citations | **IMPLEMENTED** | Dense + keyword, RRF fusion, numbered citations on the answer. |
 | One-shot ask / search | **IMPLEMENTED** | Knowledge Explorer + `api.knowledge.ask` / `search`. |
 | Document intelligence | **IMPLEMENTED** | Summarise, classify, extract, compare. Map-reduce for long text. |
+| Pattern extraction | **IMPLEMENTED** | `ai/patterns.py` + `AI Pattern Entity`. High-precision regexes ported verbatim from the File Analysis reference (email, url, phone, ip, hash, date, identifier, money + `custom` bucket). Reads only already-extracted `AI Document.content`; idempotent rescans; provenance quotes; needle-guards keep scans linear on giant base64/hex dumps. Manual **Extract Patterns** button + opt-in hourly backfill. |
 | Translation (ar/en/he) | **IMPLEMENTED** | `ai/translation.py` + pure `ai/translation_utils.py`. Structure-preserving segments, protected placeholders, glossary, translation memory, local quality gate with one repair pass, bilingual review UI, `Translate` pipeline step, `translate_content` tool. Patch `v0_0_13`. |
 | Model discovery & health | **IMPLEMENTED** | Operations + Model Manager pages. Scheduler probes every 5 min. |
 | Tool calling | **IMPLEMENTED** | Approval gate for writes. Tools run as the session user. |
@@ -166,6 +166,24 @@ Caps: 50 MB default, archive member limits, zip-bomb checks, File identity disam
 
 `Translate` is a first-class `operation` on `AI Execution Log`, so every
 translation call carries the same audit trail as chat.
+
+### 2.7b Patterns — `ai/patterns.py` — **IMPLEMENTED** (unit-tested)
+
+High-precision pattern extraction as a pure enhancement layer over the
+existing pipeline: the only input is `AI Document` content that the platform
+has already extracted and stored. Ported from the File Analysis reference
+(`core/shared/tokenizer.py` + `semantic_candidates.py` canonicalization).
+
+| Function | Role |
+| --- | --- |
+| `PATTERN_SPECS` / `PATTERN_ENTITY_TYPES` | Verbatim regex registry (email, url, phone, ip, hash, date, identifier, money) + `custom` safety bucket |
+| `extract_pattern_entities(text, max_entities)` | Bounded scan (head+tail 1 MB sampling), canonical identity merge, occurrences, `first_offset` + 220-char `context_quote` |
+| `canonicalize_pattern_value(type, value)` | ISO dates (D/M vs M/D heuristic, 2-digit year), identifier dash collapse, money noise strip, casefold |
+| `persistable_pattern_type(type)` | Unknown types land in `custom`; nothing extracted is dropped |
+| `scan_document(document)` | Idempotent upsert by `(document, entity_type, normalized_value)` + prune of stale rows + checksum stamping; never writes the document |
+| `handle_document_trashed(doc)` | `AI Document` `on_trash` cascade (runs before link validation) |
+| `scan_pending_documents(limit)` | Scheduler backfill (25/run) for Indexed documents whose stored content was not scanned at the current checksum |
+| `_guard_passes(...)` | Necessary-literal needle-guards: a regex is skipped at native string speed when its required literal is absent — provably identical results, no quadratic freeze on base64/hex dumps |
 
 ### 2.8 Chunking — `ai/chunking.py` — **READY** (unit-tested)
 
@@ -330,7 +348,7 @@ Form buttons call these; they delegate into `ai/`:
 
 ---
 
-## 4. Data model (42 DocTypes)
+## 4. Data model (47 DocTypes)
 
 ### AI Core (9)
 
@@ -344,13 +362,14 @@ Form buttons call these; they delegate into `ai/`:
 | AI Folder Settings | 14 fields | **IMPLEMENTED** |
 | AI Folder Favorite | 2 fields | **IMPLEMENTED** |
 
-### AI Knowledge (8)
+### AI Knowledge (9)
 
 | DocType | Kind | Status |
 | --- | --- | --- |
 | AI Knowledge Base + Role | 20 fields | **IMPLEMENTED** — client + server threshold / chunk validation |
 | AI Document | 55 fields, **not** NestedSet | **READY** — tree JS on DocType |
 | AI Document Chunk | 19 fields (embedding Long Text) | **IMPLEMENTED** |
+| AI Pattern Entity | 12 fields, hash names | **IMPLEMENTED** — machine-written, denormalized `knowledge_base`, chunk-mirroring permissions |
 | AI Document Tag | child | **IMPLEMENTED** |
 | AI Extraction Schema + Field | — | **SEEDED** Invoice Data, Contract Summary |
 | AI Search Query | telemetry | **IMPLEMENTED** |
@@ -410,7 +429,8 @@ Learning Activity, Memory Usage, Skill Summary.
 - `doctype_js = {File: public/js/file.js}`
 - `doctype_list_js = {File: public/js/file_list.js}`
 - `doctype_tree_js = {AI Document: ai_knowledge/doctype/ai_document/ai_document_tree.js}`
-- Row-level `permission_query_conditions` + `has_permission` for 16 DocTypes
+- Row-level `permission_query_conditions` + `has_permission` for 18 DocTypes (PR #26 added `AI Pattern Entity`; PR #25 added `AI Translation`)
+- `doc_events` on `AI Document` (`on_trash` → pattern row cascade, runs before link validation)
 - `doc_events` on `*` (automation) and `File` (ingest + folder lock)
 - Roles fixture: AI Manager, AI User, AI Auditor
 - Extension hooks (empty by default): `ai_providers`, `ai_document_readers`, `ai_tools`, `ai_pipeline_methods`
@@ -424,6 +444,7 @@ Learning Activity, Memory Usage, Skill Summary.
 | `health_check` | cron `*/5` (throttled to settings interval, default 15 min) | **IMPLEMENTED** |
 | `run_scheduled_pipelines` | cron `*/10` | **IMPLEMENTED** (needs optional `croniter`) |
 | `process_pending_documents` | hourly_long | **IMPLEMENTED** |
+| `scan_pending_pattern_entities` | hourly_long | **IMPLEMENTED** — opt-in (`Auto Pattern Scan`, off by default) |
 | `sync_models` | daily_long | **IMPLEMENTED** |
 | `rollup_usage` | daily_long | **IMPLEMENTED** |
 | `backup_knowledge` | daily_long | **IMPLEMENTED** (off until enabled) |
@@ -456,15 +477,17 @@ Default log retention (also in `hooks.default_log_clearing_doctypes`): Execution
 
 ## 8. Tests
 
-19 test modules, **56 classes, 298 methods**.
+23 test modules, **75 classes, 392 methods**.
 
 | Suite | Methods | Needs Frappe DB? |
 | --- | --- | --- |
 | `tests/test_units.py` | 97 | No — chunking, vectors, JSON, network, readers, tools, threshold, deadline, wait default, language detection (EN/AR/HE mixed), streaming decision |
+| `tests/test_translation_utils.py` | 47 | No |
+| `tests/test_pattern_units.py` | 14 | No — regexes per type, canonicalization matrix, merge under identity, caps, head/tail sampling, provenance, linearity on pathological dumps |
 | `tests/test_learning_utils.py` | 19 | No |
 | `tests/test_folder_units.py` | 16 | No |
 | `tests/test_document_tree_units.py` | 20 | No |
-| Colocated DocType integration | 146 | Yes — runtime stubbed, no GPU |
+| Colocated DocType integration | 179 | Yes — runtime stubbed, no GPU (incl. 8 pattern-entity: scan, idempotency, prune, cascade, permissions, API, scheduler opt-in, canonical identity) |
 
 This sandbox has **no Frappe**, so `python -m unittest` fails with `ModuleNotFoundError: frappe`. `compileall` succeeds. Full suite: `bench --site site1.local run-tests --app ai_fr_hg`.
 
@@ -492,7 +515,7 @@ Small doc drift: CONFIGURATION says OCR default **off**; the DocType default is 
 1. **Live site may lag git.** Pull `885e58e`, then **full** `bench build` (not `--app` only), `clear-cache`, supervisor restart, hard refresh.
 2. **Chat cutoff after migrate.** Confirm `AI Platform Settings.max_turn_seconds` is `0`. The patch does not overwrite a custom non-90 value.
 3. **Desk chat is not streamed.** First token on a cold 7B/8B can look “stuck” even with an unlimited budget.
-4. **CI on PR #23 is red** (linter + server). Not reproduced here.
+4. **CI on PR #26** must confirm green (this sandbox has no Frappe DB; pattern units pass standalone, ruff is at the main baseline).
 5. **Default agent** does not auto-retrieve the whole KB (`use_knowledge = 0`); attached files, knowledge chips, or the `search_knowledge_base` tool still ground the turn.
 6. **Streaming, OpenDocument, richer default-agent tools** (`list_documents`, `get_document`, `run_report`) are code-complete as building blocks but not first-class in the default UX.
 7. **Upstream moment warning** remains in Frappe core.
@@ -505,7 +528,7 @@ Small doc drift: CONFIGURATION says OCR default **off**; the DocType default is 
 ```bash
 cd ~/frappe-bench/apps/ai_fr_hg
 git fetch origin
-git checkout arena/01a01846-ai-fr-hg
+git checkout arena/01a0196a-ai-fr-hg
 git pull
 
 cd ~/frappe-bench

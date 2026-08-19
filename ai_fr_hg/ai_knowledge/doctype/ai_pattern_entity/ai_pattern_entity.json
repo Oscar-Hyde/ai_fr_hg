@@ -1,0 +1,184 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "allow_rename": 0,
+ "autoname": "hash",
+ "creation": "2026-08-19 09:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "document_sec",
+  "document",
+  "knowledge_base",
+  "pattern_cb",
+  "entity_type",
+  "occurrences",
+  "value_sec",
+  "value",
+  "normalized_value",
+  "provenance_sec",
+  "first_offset",
+  "context_quote",
+  "scan_sec",
+  "source_checksum"
+ ],
+ "fields": [
+  {
+   "fieldname": "document_sec",
+   "fieldtype": "Section Break",
+   "label": "Document"
+  },
+  {
+   "fieldname": "document",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Document",
+   "options": "AI Document",
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "description": "Denormalized from the document so knowledge-base row permissions apply without a join.",
+   "fieldname": "knowledge_base",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Knowledge Base",
+   "options": "AI Knowledge Base",
+   "read_only": 1,
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "pattern_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "custom",
+   "fieldname": "entity_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_preview": 1,
+   "in_standard_filter": 1,
+   "label": "Entity Type",
+   "options": "email\nurl\nphone\nip\nhash\ndate\nidentifier\nmoney\ncustom"
+  },
+  {
+   "default": "1",
+   "fieldname": "occurrences",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Occurrences",
+   "non_negative": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "value_sec",
+   "fieldtype": "Section Break",
+   "label": "Pattern Match"
+  },
+  {
+   "fieldname": "value",
+   "fieldtype": "Data",
+   "in_preview": 1,
+   "label": "Value",
+   "length": 500,
+   "reqd": 1
+  },
+  {
+   "description": "Deterministic canonical identity for this type, used for deduplication.",
+   "fieldname": "normalized_value",
+   "fieldtype": "Data",
+   "label": "Normalized Value",
+   "length": 500,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "provenance_sec",
+   "fieldtype": "Section Break",
+   "label": "Provenance"
+  },
+  {
+   "description": "Character offset of the first match within the scanned text window.",
+   "fieldname": "first_offset",
+   "fieldtype": "Int",
+   "label": "First Offset",
+   "read_only": 1
+  },
+  {
+   "description": "Bounded quote around the first occurrence, for citation re-anchoring.",
+   "fieldname": "context_quote",
+   "fieldtype": "Small Text",
+   "label": "Context Quote",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "scan_sec",
+   "fieldtype": "Section Break",
+   "label": "Scan"
+  },
+  {
+   "description": "Checksum of the document source when this row was written. Rescans refresh it.",
+   "fieldname": "source_checksum",
+   "fieldtype": "Data",
+   "label": "Source Checksum",
+   "read_only": 1,
+   "search_index": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-19 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Knowledge",
+ "name": "AI Pattern Entity",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI User",
+   "read": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "search_fields": "document,entity_type,value,normalized_value",
+ "show_title_field_in_link": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "value",
+ "track_changes": 0
+}
