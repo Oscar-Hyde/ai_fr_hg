@@ -545,6 +545,31 @@ def _enable_github_test_annotations() -> None:
 	unittest.TestResult._ai_fr_hg_annotations = True
 
 
+def after_migrate() -> None:
+	"""Clear Desk and boot caches after every migrate.
+
+	A stale `bootinfo` or `assets.json` hash is the common cause of
+	"Loading failed for .../build_events.bundle.XXX.js" and the subsequent
+	"xhr poll error" when the Desk router retries with a mismatched socket
+	host. Clearing the cache here makes returning to Desk after `bench
+	migrate` or `bench build` never reuse a stale hashed asset.
+	"""
+	try:
+		frappe.clear_cache()
+	except Exception:
+		pass
+	try:
+		ensure_site_file_directories()
+	except Exception:
+		pass
+	try:
+		# Re-ensure the module fix so Desk workspaces that were cached with
+		# the old module name render on the first Desk return after migrate.
+		_fix_learning_doctype_modules()
+	except Exception:
+		pass
+
+
 def before_tests() -> None:
 	"""Clear cached metadata before the standalone app fixtures are created.
 

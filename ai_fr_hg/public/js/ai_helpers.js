@@ -2,12 +2,16 @@
 // For license information, please see license.txt
 
 /**
- * Shared client-side helpers, exposed as `frappe.ai`.
+ * Shared client-side helpers, exposed as `frappe.ai`. Loaded on every Desk
+ * boot via `ai_fr_hg.bundle.js`. All helpers are defensive so returning to
+ * Desk via SPA navigation never throws.
  */
 
-frappe.provide("frappe.ai");
+(() => {
+	if (typeof frappe === "undefined" || typeof frappe.provide !== "function") return;
+	frappe.provide("frappe.ai");
 
-Object.assign(frappe.ai, {
+	Object.assign(frappe.ai, {
 	/** Colour for a status indicator pill. */
 	status_color(status) {
 		return (
@@ -54,8 +58,9 @@ Object.assign(frappe.ai, {
 	relative_time(value) {
 		if (!value) return "";
 		try {
+			if (!frappe.datetime || typeof frappe.datetime.comment_when !== "function") return "";
 			return frappe.datetime.comment_when(value);
-		} catch (error) {
+		} catch (_error) {
 			return "";
 		}
 	},
@@ -120,21 +125,27 @@ Object.assign(frappe.ai, {
 	 *   });
 	 */
 	add_form_button(frm, label) {
-		frm.add_custom_button(label || __("Ask AI"), () => {
-			frappe.prompt(
-				{
-					fieldtype: "Small Text",
-					fieldname: "question",
-					label: __("Question"),
-					reqd: 1,
-					default: __("Summarise this {0}.", [__(frm.doctype)]),
-				},
-				(values) => {
-					frappe.ai.ask(`${values.question}\n\nDocument: ${frm.doctype} ${frm.docname}`);
-				},
-				__("Ask AI"),
-				__("Ask")
-			);
-		});
+		if (!frm || typeof frm.add_custom_button !== "function") return;
+		try {
+			frm.add_custom_button(label || __("Ask AI"), () => {
+				frappe.prompt(
+					{
+						fieldtype: "Small Text",
+						fieldname: "question",
+						label: __("Question"),
+						reqd: 1,
+						default: __("Summarise this {0}.", [__(frm.doctype)]),
+					},
+					(values) => {
+						frappe.ai.ask(`${values.question}\n\nDocument: ${frm.doctype} ${frm.docname}`);
+					},
+					__("Ask AI"),
+					__("Ask")
+				);
+			});
+		} catch (_e) {
+			// Never let a helper break the form when Desk is re-entered.
+		}
 	},
-});
+	});
+})();

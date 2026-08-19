@@ -21,11 +21,17 @@ _READ_PERMISSION_TYPES = {"read", "select", "report", "export", "print", "email"
 
 def has_app_permission() -> bool:
 	"""Whether the current user should see AI_FR_HG on Frappe's apps screen."""
-	return bool(_roles(frappe.session.user).intersection(_MANAGER_ROLES | {"AI User", "AI Auditor"}))
+	try:
+		return bool(_roles(frappe.session.user).intersection(_MANAGER_ROLES | {"AI User", "AI Auditor"}))
+	except Exception:
+		return False
 
 
 def _roles(user: str) -> set[str]:
-	return set(frappe.get_roles(user))
+	try:
+		return set(frappe.get_roles(user))
+	except Exception:
+		return set()
 
 
 def _is_manager(user: str) -> bool:
@@ -41,7 +47,11 @@ def _is_read(permission_type: str | None) -> bool:
 
 
 def _escape(value: str) -> str:
-	return frappe.db.escape(value)
+	try:
+		return frappe.db.escape(value)
+	except Exception:
+		escaped = str(value).replace("'", "''")
+		return f"'{escaped}'"
 
 
 def _role_sql(user: str) -> str:
@@ -53,6 +63,33 @@ def _owned_condition(doctype: str, field: str, user: str, *, auditors: bool = Fa
 	if _is_manager(user) or (auditors and _is_auditor(user)):
 		return ""
 	return f"`tab{doctype}`.`{field}` = {_escape(user)}"
+
+def _safe_condition(fn):
+	"""Wrap permission queries so Desk never 500s on return."""
+	def wrapper(user: str) -> str:
+		try:
+			return fn(user)
+		except Exception:
+			try:
+				frappe.log_error(title=f"AI permission query failed: {fn.__name__}", message=frappe.get_traceback())
+			except Exception:
+				pass
+			return "1=0"
+	return wrapper
+
+
+def _safe_doc_permission(fn):
+	"""Wrap document permission check so Desk never 500s."""
+	def wrapper(doc, ptype=None, user=None, permission_type=None):
+		try:
+			return fn(doc, ptype=ptype, user=user, permission_type=permission_type)
+		except Exception:
+			try:
+				frappe.log_error(title="AI document permission failed", message=frappe.get_traceback())
+			except Exception:
+				pass
+			return False
+	return wrapper
 
 
 # ---------------------------------------------------------------------------
@@ -130,29 +167,32 @@ def candidate_query(user: str) -> str:
 
 
 def _learning_scope_query(doctype: str, user: str) -> str:
-	if _is_manager(user) or _is_auditor(user):
-		return ""
+	try:
+		if _is_manager(user) or _is_auditor(user):
+			return ""
 
-	table = f"tab{doctype}"
-	roles = _role_sql(user)
-	return f"""(
-		`{table}`.`scope` = 'Global'
-		or (`{table}`.`scope` = 'User' and `{table}`.`scope_value` = {_escape(user)})
-		or (`{table}`.`scope` = 'Role' and `{table}`.`scope_value` in ({roles}))
-		or (`{table}`.`scope` = 'Agent' and (
-			not exists (
-				select 1 from `tabAI Agent Role` agent_role
-				where agent_role.parent = `{table}`.`scope_value`
-					and agent_role.parenttype = 'AI Agent'
-			)
-			or exists (
-				select 1 from `tabAI Agent Role` agent_role
-				where agent_role.parent = `{table}`.`scope_value`
-					and agent_role.parenttype = 'AI Agent'
-					and agent_role.role in ({roles})
-			)
-		))
-	)"""
+		table = f"tab{doctype}"
+		roles = _role_sql(user)
+		return f"""(
+			`{table}`.`scope` = 'Global'
+			or (`{table}`.`scope` = 'User' and `{table}`.`scope_value` = {_escape(user)})
+			or (`{table}`.`scope` = 'Role' and `{table}`.`scope_value` in ({roles}))
+			or (`{table}`.`scope` = 'Agent' and (
+				not exists (
+					select 1 from `tabAI Agent Role` agent_role
+					where agent_role.parent = `{table}`.`scope_value`
+						and agent_role.parenttype = 'AI Agent'
+				)
+				or exists (
+					select 1 from `tabAI Agent Role` agent_role
+					where agent_role.parent = `{table}`.`scope_value`
+						and agent_role.parenttype = 'AI Agent'
+						and agent_role.role in ({roles})
+				)
+			))
+		)"""
+	except Exception:
+		return "1=0"
 
 
 def memory_query(user: str) -> str:
@@ -196,6 +236,26 @@ def folder_favorite_query(user: str) -> str:
 		return ""
 	return _owned_condition("AI Folder Favorite", "user", user)
 
+
+
+# Wrap all list-query conditions so Desk return never throws 500
+conversation_query = _safe_condition(conversation_query)
+message_query = _safe_condition(message_query)
+knowledge_base_query = _safe_condition(knowledge_base_query)
+document_query = _safe_condition(document_query)
+chunk_query = _safe_condition(chunk_query)
+agent_query = _safe_condition(agent_query)
+candidate_query = _safe_condition(candidate_query)
+memory_query = _safe_condition(memory_query)
+skill_query = _safe_condition(skill_query)
+task_query = _safe_condition(task_query)
+pipeline_run_query = _safe_condition(pipeline_run_query)
+execution_log_query = _safe_condition(execution_log_query)
+search_query = _safe_condition(search_query)
+tool_invocation_query = _safe_condition(tool_invocation_query)
+folder_settings_query = _safe_condition(folder_settings_query)
+folder_favorite_query = _safe_condition(folder_favorite_query)
+has_document_permission = _safe_doc_permission(has_document_permission)
 
 # ---------------------------------------------------------------------------
 # Direct-document permission

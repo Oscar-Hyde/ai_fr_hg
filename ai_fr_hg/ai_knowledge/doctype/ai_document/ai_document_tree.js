@@ -94,10 +94,22 @@ frappe.provide("frappe.treeview_settings");
 	}
 
 	function refresh_tree(result) {
-		notify_result(result);
+		try {
+			notify_result(result);
+		} catch (_e) {
+			// ignore
+		}
 		selected.clear();
-		view.make_tree();
-		update_bulk_actions();
+		try {
+			view && view.make_tree && view.make_tree();
+		} catch (error) {
+			console.warn("AI tree: refresh failed", error);
+		}
+		try {
+			update_bulk_actions();
+		} catch (_e) {
+			// ignore
+		}
 	}
 
 	// ------------------------------------------------------------------
@@ -250,17 +262,47 @@ frappe.provide("frappe.treeview_settings");
 	}
 
 	function update_location(node) {
-		if (!location_wrapper) return;
-		const folder = folder_for(node);
+		if (!location_wrapper || !location_wrapper.length) return;
+		let folder;
+		try {
+			folder = folder_for(node);
+		} catch (_e) {
+			return;
+		}
 		const paths = folder === "Home" ? ["Home"] : folder.split("/").map((_, i, all) => all.slice(0, i + 1).join("/"));
-		location_wrapper.empty().append(`<span class="text-muted">${__("Location")}: </span>`);
+		try {
+			location_wrapper.empty().append(`<span class="text-muted">${__("Location")}: </span>`);
+		} catch (_e) {
+			return;
+		}
 		paths.forEach((path, index) => {
-			const label = index === 0 ? __("Home") : path.split("/").pop();
-			const link = $(`<a href="#">${frappe.utils.escape_html(String(label || ""))}</a>`);
+			let label;
+			try {
+				label = index === 0 ? __("Home") : path.split("/").pop();
+			} catch (_e) {
+				label = path;
+			}
+			let link;
+			try {
+				link = $(`<a href="#">${frappe.utils.escape_html(String(label || ""))}</a>`);
+			} catch (_e) {
+				return;
+			}
 			link.on("click", (event) => {
 				event.preventDefault();
-				const target = path === "Home" ? view.tree.root_node : view.tree.nodes[path];
-				if (target) view.tree.on_node_click(target);
+				let target;
+				try {
+					target = path === "Home" ? view.tree.root_node : view.tree.nodes[path];
+				} catch (_e) {
+					target = null;
+				}
+				if (target) {
+					try {
+						view.tree.on_node_click(target);
+					} catch (_e) {
+						// ignore
+					}
+				}
 			});
 			location_wrapper.append(link);
 			if (index < paths.length - 1) location_wrapper.append(" / ");
@@ -269,8 +311,17 @@ frappe.provide("frappe.treeview_settings");
 
 	function update_bulk_actions() {
 		if (!view?.page) return;
-		const count = selected.size;
-		view.page.set_indicator(count ? __("{0} selected", [count]) : "", count ? "blue" : "gray");
+		let count;
+		try {
+			count = selected.size;
+		} catch (_e) {
+			count = 0;
+		}
+		try {
+			view.page.set_indicator(count ? __("{0} selected", [count]) : "", count ? "blue" : "gray");
+		} catch (_e) {
+			// page may be destroyed when returning to Desk
+		}
 	}
 
 	async function bulk_move() {
@@ -304,16 +355,24 @@ frappe.provide("frappe.treeview_settings");
 	}
 
 	function collapse_loaded() {
-		Object.values(view.tree.nodes).forEach((node) => {
-			if (!node.is_root && node.expanded) view.tree.expand_node(node, false);
-		});
+		try {
+			Object.values(view.tree.nodes).forEach((node) => {
+				if (!node.is_root && node.expanded) view.tree.expand_node(node, false);
+			});
+		} catch (_e) {
+			// tree may not be ready when Desk is re-entered quickly
+		}
 	}
 
 	function expand_loaded() {
-		Object.values(view.tree.nodes).forEach((node) => {
-			// Never invoke deep retrieval. Only reveal branches already fetched.
-			if (node.expandable && node.loaded && !node.expanded) view.tree.expand_node(node, false);
-		});
+		try {
+			Object.values(view.tree.nodes).forEach((node) => {
+				// Never invoke deep retrieval. Only reveal branches already fetched.
+				if (node.expandable && node.loaded && !node.expanded) view.tree.expand_node(node, false);
+			});
+		} catch (_e) {
+			// ignore
+		}
 	}
 
 	// ------------------------------------------------------------------
@@ -412,14 +471,31 @@ frappe.provide("frappe.treeview_settings");
 			},
 		],
 		onload(treeview) {
+			// Clean up any stale Desk return state: previous tree instances
+			// leave DOM nodes and stale selected sets that would otherwise
+			// leak and corrupt bulk actions after returning from Desk.
+			try {
+				if (location_wrapper && location_wrapper.length) location_wrapper.remove();
+			} catch (_e) {
+				// ignore
+			}
+			selected.clear();
 			view = treeview;
+			root_capabilities = {};
 			// Frappe's native root discovery keeps only `value`. Request the
 			// complete capability payload once, then construct the tree.
 			let root_ready = false;
 			let pending_make_tree = null;
-			const native_make_tree = treeview.make_tree.bind(treeview);
+			let make_tree_bound = false;
+			let native_make_tree;
+			try {
+				native_make_tree = treeview.make_tree.bind(treeview);
+				make_tree_bound = true;
+			} catch (_e) {
+				native_make_tree = (..._args) => {};
+			}
 			treeview.make_tree = (...args) => {
-				if (root_ready) return native_make_tree(...args);
+				if (root_ready && make_tree_bound) return native_make_tree(...args);
 				pending_make_tree = args;
 				return undefined;
 			};
@@ -429,28 +505,66 @@ frappe.provide("frappe.treeview_settings");
 				method: `${METHOD}.get_children`,
 				args: { doctype: "AI Document" },
 				callback: (response) => {
-					root_capabilities = response.message?.[0] || {};
-					treeview.root_label = root_capabilities.value || ROOT;
-					treeview.root_value = treeview.root_label;
+					try {
+						root_capabilities = response.message?.[0] || {};
+						treeview.root_label = root_capabilities.value || ROOT;
+						treeview.root_value = treeview.root_label;
+					} catch (_e) {
+						root_capabilities = {};
+					}
 					root_ready = true;
 					const pending_args = pending_make_tree || [];
 					pending_make_tree = null;
-					native_make_tree(...pending_args);
+					try {
+						native_make_tree(...pending_args);
+					} catch (error) {
+						console.warn("AI tree: make_tree after root failed", error);
+					}
 				},
 				error: () => {
 					root_ready = true;
 					const pending_args = pending_make_tree || [];
 					pending_make_tree = null;
-					native_make_tree(...pending_args);
+					try {
+						native_make_tree(...pending_args);
+					} catch (error) {
+						console.warn("AI tree: make_tree error fallback failed", error);
+					}
 				},
 			});
 			location_wrapper = $('<div class="ai-document-tree-location text-muted mb-3"></div>');
-			treeview.page.main.prepend(location_wrapper);
-			treeview.page.add_inner_button(__("Expand Loaded"), expand_loaded, __("Tree"));
-			treeview.page.add_inner_button(__("Collapse All"), collapse_loaded, __("Tree"));
-			treeview.page.add_inner_button(__("Move Selected"), bulk_move, __("Bulk Actions"));
-			treeview.page.add_inner_button(__("Delete Selected"), bulk_delete, __("Bulk Actions"));
-			treeview.page.add_inner_button(__("Refresh"), () => treeview.make_tree());
+			try {
+				treeview.page.main.prepend(location_wrapper);
+			} catch (_e) {
+				// page may not be ready during fast SPA navigation back from Desk
+			}
+			// Avoid duplicate buttons when Desk is revisited and onload fires again.
+			const addOnce = (label, fn, group) => {
+				try {
+					const existing = (treeview.page.inner_toolbar || []).find
+						? treeview.page.inner_toolbar.find((b) => b.label === label)
+						: null;
+					if (existing) return;
+				} catch (_e) {
+					// ignore
+				}
+				try {
+					treeview.page.add_inner_button(label, fn, group);
+				} catch (_e) {
+					// ignore if toolbar not ready
+				}
+			};
+			addOnce(__("Expand Loaded"), expand_loaded, __("Tree"));
+			addOnce(__("Collapse All"), collapse_loaded, __("Tree"));
+			addOnce(__("Move Selected"), bulk_move, __("Bulk Actions"));
+			addOnce(__("Delete Selected"), bulk_delete, __("Bulk Actions"));
+			addOnce(__("Refresh"), () => {
+				try {
+					treeview.make_tree();
+				} catch (_e) {
+					// ignore
+				}
+			}, null);
 			update_location({ is_root: true, data: { value: ROOT } });
 		},
 		menu_items: [
