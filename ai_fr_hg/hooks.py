@@ -169,6 +169,7 @@ permission_query_conditions = {
 	"AI Knowledge Base": "ai_fr_hg.utils.permissions.knowledge_base_query",
 	"AI Document": "ai_fr_hg.utils.permissions.document_query",
 	"AI Document Chunk": "ai_fr_hg.utils.permissions.chunk_query",
+	"AI Pattern Entity": "ai_fr_hg.utils.permissions.pattern_entity_query",
 	"AI Agent": "ai_fr_hg.utils.permissions.agent_query",
 	"AI Knowledge Candidate": "ai_fr_hg.utils.permissions.candidate_query",
 	"AI Memory": "ai_fr_hg.utils.permissions.memory_query",
@@ -224,6 +225,8 @@ scheduler_events = {
 	},
 	"hourly_long": [
 		"ai_fr_hg.tasks.process_pending_documents",
+		# Opt-in high-precision pattern extraction for indexed documents.
+		"ai_fr_hg.tasks.scan_pending_pattern_entities",
 	],
 	"daily_long": [
 		"ai_fr_hg.tasks.sync_models",

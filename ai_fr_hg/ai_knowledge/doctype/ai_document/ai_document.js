@@ -179,8 +179,79 @@ frappe.ui.form.on("AI Document", {
 				__("Intelligence")
 			);
 
-			frm.add_custom_button(
-				__("View Chunks"),
+		frm.add_custom_button(
+			__("Extract Patterns"),
+			async () => {
+				frappe.dom.freeze(__("Scanning patterns..."));
+				try {
+					const result = await frappe.xcall(
+						"ai_fr_hg.api.knowledge.scan_pattern_entities",
+						{ document: frm.doc.name }
+					);
+					frappe.dom.unfreeze();
+					frappe.show_alert({
+						message: __("Extracted {0} pattern entities", [result.total]),
+						indicator: "green",
+					});
+					frm.reload_doc();
+				} catch (error) {
+					frappe.dom.unfreeze();
+				}
+			},
+			__("Intelligence")
+		);
+
+		frm.add_custom_button(
+			__("View Patterns"),
+			async () => {
+				const result = await frappe.xcall(
+					"ai_fr_hg.api.knowledge.get_pattern_entities",
+					{ document: frm.doc.name }
+				);
+				if (!result.entities.length) {
+					frappe.msgprint({
+						title: __("Pattern Entities"),
+						message: __(
+							"No pattern entities yet. Use Extract Patterns to scan this document."
+						),
+						indicator: "blue",
+					});
+					return;
+				}
+				const groups = Object.keys(result.entity_counts)
+					.map(
+						(type) => `
+					<h5 style="margin:12px 0 4px">${type}
+						<span class="text-muted small">(${result.entity_counts[type]})</span>
+					</h5>
+					${result.entities
+						.filter((entity) => entity.entity_type === type)
+						.map(
+							(entity) => `
+						<div style="border-bottom:1px solid var(--border-color);padding:4px 0">
+							${frappe.utils.escape_html(entity.value)}
+							<span class="text-muted small">× ${entity.occurrences}</span>
+							${entity.context_quote
+								? `<div class="text-muted small" style="margin-top:2px">…${frappe.utils.escape_html(
+										entity.context_quote
+								  )}…</div>`
+								: ""}
+						</div>`
+						)
+						.join("")}`
+					)
+					.join("");
+				frappe.msgprint({
+					title: __("Pattern Entities"),
+					wide: true,
+					message: groups,
+				});
+			},
+			__("View")
+		);
+
+		frm.add_custom_button(
+			__("View Chunks"),
 				async () => {
 					const chunks = await frappe.xcall(
 						"ai_fr_hg.api.knowledge.get_document_chunks",

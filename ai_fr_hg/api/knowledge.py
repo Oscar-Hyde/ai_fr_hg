@@ -298,6 +298,67 @@ def get_document_chunks(document: str, limit: int = 100) -> list:
 
 
 @frappe.whitelist()
+def scan_pattern_entities(document: str) -> dict:
+	"""Extract high-precision pattern entities from a document's stored content.
+
+	An enhancement layer over the existing pipeline: it only reads the
+	document's already-extracted ``content`` and writes its own
+	``AI Pattern Entity`` rows. Like the other document intelligence actions,
+	it requires write access to the document.
+	"""
+	from ai_fr_hg.ai.patterns import scan_document
+
+	doc = frappe.get_doc("AI Document", document)
+	doc.check_permission("read")
+	doc.check_permission("write")
+
+	if not (doc.content or "").strip():
+		frappe.throw(_("Document {0} has no extracted content to scan.").format(document))
+
+	return scan_document(document)
+
+
+@frappe.whitelist()
+def get_pattern_entities(document: str, entity_type: str | None = None, limit: int = 200) -> dict:
+	"""List a document's pattern entities, grouped and counted by type."""
+	frappe.has_permission("AI Document", "read", doc=document, throw=True)
+
+	filters = {"document": document}
+	if entity_type:
+		filters["entity_type"] = entity_type
+
+	entities = frappe.get_all(
+		"AI Pattern Entity",
+		filters=filters,
+		fields=[
+			"name",
+			"entity_type",
+			"value",
+			"normalized_value",
+			"occurrences",
+			"first_offset",
+			"context_quote",
+		],
+		order_by="occurrences desc, entity_type asc",
+		limit_page_length=max(1, cint(limit) or 200),
+	)
+
+	counts = frappe.get_all(
+		"AI Pattern Entity",
+		filters={"document": document},
+		fields=["entity_type", "count(name) as total"],
+		group_by="entity_type",
+		order_by="total desc",
+	)
+
+	return {
+		"document": document,
+		"entities": entities,
+		"entity_counts": {row.entity_type: cint(row.total) for row in counts},
+	}
+
+
+@frappe.whitelist()
 def get_knowledge_overview() -> dict:
 	"""Summary counters for the knowledge dashboard."""
 	from ai_fr_hg.ai.knowledge import get_accessible_knowledge_bases

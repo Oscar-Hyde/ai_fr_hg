@@ -25,6 +25,7 @@ class AIPlatformSettings(Document):
 		auto_backup_enabled: DF.Check
 		auto_embed_on_ingest: DF.Check
 		auto_process_documents: DF.Check
+		auto_scan_patterns: DF.Check
 		default_agent: DF.Link | None
 		default_chat_model: DF.Link | None
 		default_chunk_overlap: DF.Int
@@ -50,6 +51,7 @@ class AIPlatformSettings(Document):
 		max_context_characters: DF.Int
 		max_document_size_mb: DF.Int
 		max_memory_characters: DF.Int
+		max_pattern_entities: DF.Int
 		max_requests_per_user_per_hour: DF.Int
 		max_retries: DF.Int
 		max_turn_seconds: DF.Int
