@@ -134,7 +134,7 @@ The model-version exposure portion of PROV-03 is hidden, but PROV-03 remains ope
 The list below is exact for this Phase 0 working tree. The broad Python/JavaScript set includes deterministic Ruff/Prettier baseline normalization required to make the configured linter gate pass; functional Phase 0 changes are concentrated in workflows, metadata/controllers/readers/model discovery, tests, patch registration, and documentation.
 
 <details>
-<summary>115 files</summary>
+<summary>116 files</summary>
 
 - `.github/workflows/ci.yml`
 - `.github/workflows/linter.yml`
@@ -250,6 +250,7 @@ The list below is exact for this Phase 0 working tree. The broad Python/JavaScri
 - `docs/PROJECT_STATUS.md`
 - `docs/TRANSLATION.md`
 - `docs/phase-reports/PHASE_0.md`
+- `docs/phase-reports/PHASE_0_WORKFLOW.patch.gz`
 - `pyproject.toml`
 
 </details>
@@ -337,6 +338,7 @@ Additional checks attempted:
 - After correcting all 76 Frappe Semgrep findings, PR Quality run `32287915332` at `755131b84260eec96e823a202b60c363b1969f85` passed all three jobs: `Linter` in 1m6s, `Frontend static` in 8s, and `Dependency audit` in 24s.
 - PR Server run `32287915407` still failed during pinned-bench initialization because the remote branch necessarily retains the old workflow. Python, Node, MariaDB, Redis, and system setup succeeded before the immutable-SHA fetch used nonexistent Frappe remote `origin`.
 - The final local workflow uses Bench's canonical `upstream` remote, pins the pre-commit/Semgrep/rules revisions, enables strict Semgrep error handling, and audits all optional dependency extras. GitHub still rejects that commit because `arena-ai-coding-agent[bot]` lacks workflow-file permission.
+- The exact three-file workflow/contract diff is uploaded as `docs/phase-reports/PHASE_0_WORKFLOW.patch.gz`. A repository owner can apply it from PR #30's branch with `gzip -dc docs/phase-reports/PHASE_0_WORKFLOW.patch.gz | git apply`, review, commit, and push using owner credentials.
 
 ### Runtime verification
 
@@ -377,7 +379,7 @@ The hosted runner successfully started MariaDB 11.8/Redis services and configure
 
 ### Remaining issues
 
-1. The connected `arena-ai-coding-agent[bot]` still lacks workflow-file permission, so the final CI/code corrections cannot be pushed.
+1. The connected `arena-ai-coding-agent[bot]` still lacks workflow-file permission. The final three-file diff is uploaded as `PHASE_0_WORKFLOW.patch.gz` for an owner-authorized commit.
 2. The corrected code passes the remote Quality workflow, but the repaired Server workflow and final strict/pinned quality workflow have not executed; all four required checks must pass on the final SHA.
 3. The repository is now public, removing the prior plan restriction, but `main` remains unprotected. An attempt to require pull requests and all four statuses returned HTTP 403 because the Arena GitHub App lacks branch-administration permission.
 4. No current real-bench install/migrate/test result exists for this patchset.
