@@ -32,7 +32,7 @@ Observed external state on 2026-08-19:
 
 | ID | Finding | Current State | Required State | Files | Tests | Migration | Frontend | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| P0-01 / OPS-01 | CI execution | Server is not pinned to v17 and hosted jobs stop before steps; lint has inconsistent event/job conditions. | Pin the audited Frappe v17 revision; run Server, Linter, frontend static, and dependency checks on PR/push/manual events; obtain green hosted runs. | `.github/workflows/*.yml` | Workflow contract checks plus hosted runs | None | Static JavaScript parse gate | BLOCKED — GitHub App still lacks workflow permission |
+| P0-01 / OPS-01 | CI execution | Server is not pinned to v17 and hosted jobs stop before steps; lint has inconsistent event/job conditions. | Pin the audited Frappe v17 revision; run Server, Linter, frontend static, and dependency checks on PR/push/manual events; obtain green hosted runs. | `.github/workflows/*.yml` | Workflow contract checks plus hosted runs | None | Static JavaScript parse gate | BLOCKED — GitHub billing and App workflow permission |
 | P0-02 / OPS-01 | Branch protection | `main` is unprotected. | Require all Phase 0 checks and pull requests before merge. | GitHub repository settings; documented policy | GitHub API verification | None | N/A | BLOCKED — repository owner/plan |
 | P0-03 / SEC-05 | Encryption claim | A visible setting implies stored-text encryption although no encryption exists. | Preserve schema compatibility but disable and hide the setting; state plainly that application-level document encryption is unsupported. | Platform Settings schema/controller, docs | Metadata and controller regression | Idempotently normalize dormant setting to `0` | Setting absent from Desk | COMPLETE — local evidence |
 | P0-04 / ING-01 | Folder ingestion claim | `Folder` is selectable but ingestion rejects it. | Remove it from selectable source types and reject new Folder-source records clearly; retain native Frappe File folders as the only folder authority. | AI Document schema/controller, docs | Metadata and validation regression | Preserve legacy rows without destructive conversion | Option absent from form | COMPLETE — local evidence |
@@ -320,6 +320,14 @@ Additional checks attempted:
 - `python -m unittest ai_fr_hg.tests.test_pattern_units -v` could not import `frappe` in the system-Python environment. This test module remains covered by the Bench suite; it is not counted as a local pass.
 - A local real bench setup was attempted, but Debian package repositories were unreachable and MariaDB/Redis packages were unavailable. No current full Frappe suite result is claimed.
 
+### Hosted execution
+
+- Pull request [#30](https://github.com/Oscar-Hyde/ai_fr_hg/pull/30) was opened from the session branch at `79df64fcfe1ee2255ab16c41fce92c0a2257e38e`.
+- Push runs: CI `32282855642`; Quality `32282855696`.
+- Pull-request runs: CI `32282871069`; Quality `32282871059`.
+- All four named PR checks (`Server`, `Linter`, `Frontend static`, and `Dependency audit`) failed before executing any step. Each check has one GitHub annotation: “The job was not started because recent account payments have failed or your spending limit needs to be increased. Please check the 'Billing & plans' section in your settings”.
+- These runs prove event/status wiring but provide no application, migration, lint, dependency, or runtime evidence.
+
 ### Runtime verification
 
 No current code was executed on a real Frappe v17 bench in this sandbox. The historical pre-Phase-0 evidence is 392 passed/1 skipped, but it does not cover this patchset and is not counted as completion evidence. The CI workflow is prepared to install, migrate, build, verify Frappe version, and run the app suite when GitHub Actions can start jobs.
@@ -359,12 +367,13 @@ No current code was executed on a real Frappe v17 bench in this sandbox. The his
 
 ### Remaining issues
 
-1. The connected `arena-ai-coding-agent[bot]` still lacks workflow-file permission; the Phase 0 implementation cannot be pushed and its GitHub Actions jobs cannot execute.
-2. `main` is unprotected. The repository owner selected “Keep private and blocked,” so the current plan restriction is intentionally unresolved; the Arena integration also lacks branch-administration permission.
-3. No current real-bench install/migrate/test result exists for this patchset.
-4. No real Desk/browser verification exists for the metadata changes.
-5. Upstream stable Frappe v17 does not exist; the reproducible target is an immutable `17.0.0-dev` revision.
-6. All findings still marked `OPEN` in `GAP_REGISTER.md` remain unresolved. Phase 1 has not started.
+1. GitHub billing/spending remains unresolved: PR #30 created all four required checks, but every job failed with zero steps.
+2. The connected `arena-ai-coding-agent[bot]` still lacks workflow-file permission, so the final Semgrep/dependency-audit hardening commit cannot be pushed.
+3. `main` is unprotected. The repository owner selected “Keep private and blocked,” so the current plan restriction is intentionally unresolved; the Arena integration also lacks branch-administration permission.
+4. No current real-bench install/migrate/test result exists for this patchset.
+5. No real Desk/browser verification exists for the metadata changes.
+6. Upstream stable Frappe v17 does not exist; the reproducible target is an immutable `17.0.0-dev` revision.
+7. All findings still marked `OPEN` in `GAP_REGISTER.md` remain unresolved. Phase 1 has not started.
 
 ## Phase verdict
 
