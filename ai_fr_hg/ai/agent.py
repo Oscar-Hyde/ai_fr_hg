@@ -19,7 +19,6 @@ from frappe.utils import cint, flt, now_datetime
 from ai_fr_hg.ai.deadline import allows as budget_allows
 from ai_fr_hg.ai.deadline import expired as budget_expired
 from ai_fr_hg.ai.engine import resolve_model, run_chat
-from ai_fr_hg.ai.settings import should_stream_completion
 from ai_fr_hg.ai.exceptions import (
 	DeadlineExceededError,
 	ProviderOfflineError,
@@ -28,6 +27,7 @@ from ai_fr_hg.ai.exceptions import (
 from ai_fr_hg.ai.knowledge import build_context, retrieve
 from ai_fr_hg.ai.logging import write_audit_log
 from ai_fr_hg.ai.providers.base import ChatMessage
+from ai_fr_hg.ai.settings import should_stream_completion
 from ai_fr_hg.utils.db import safe_set_value
 
 DEFAULT_SYSTEM_PROMPT = (
@@ -316,6 +316,13 @@ def run_agent_turn(
 				tools=offer_tools,
 				operation="Chat",
 				conversation=conversation,
+				on_token=on_token
+				if should_stream_completion(
+					requested=bool(on_token),
+					enabled=True,
+					offer_tools=offer_tools,
+				)
+				else None,
 			)
 		except DeadlineExceededError:
 			# The whole turn ran out of its shared time budget.
