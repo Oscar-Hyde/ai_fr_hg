@@ -595,6 +595,110 @@ class TestTurnBudgetConfig(UnitTestCase):
 		self.assertEqual(coerce_turn_budget("45"), 45)
 
 
+class TestLanguageDetection(UnitTestCase):
+	"""Document language is detected from extracted text, without extra packages."""
+
+	def test_empty_and_short_text_are_unknown(self):
+		from ai_fr_hg.ai.language import detect_language
+
+		self.assertEqual(detect_language(""), "")
+		self.assertEqual(detect_language(None), "")
+		self.assertEqual(detect_language("   \n"), "")
+		self.assertEqual(detect_language("too short"), "")
+
+	def test_bulgarian_is_first_class(self):
+		from ai_fr_hg.ai.language import detect_language, language_name
+
+		text = (
+			"Това е документ за България. В него се описва как да се работи "
+			"с файловете, които са качени към базата знания, и какво трябва "
+			"да се направи за обработката им."
+		)
+		self.assertEqual(detect_language(text), "bg")
+		self.assertEqual(language_name("bg"), "Bulgarian")
+
+	def test_english_is_detected(self):
+		from ai_fr_hg.ai.language import detect_language
+
+		text = (
+			"This is the report for the project and the team. The results are "
+			"from the meeting on Monday with the client and the notes that follow."
+		)
+		self.assertEqual(detect_language(text), "en")
+
+	def test_russian_is_not_bulgarian(self):
+		from ai_fr_hg.ai.language import detect_language
+
+		text = (
+			"Это документ о том, что он и она должны сделать для проекта. "
+			"Они были в офисе и это было важно для его работы."
+		)
+		self.assertEqual(detect_language(text), "ru")
+
+	def test_german_and_french(self):
+		from ai_fr_hg.ai.language import detect_language
+
+		german = "Das ist der Bericht und die Analyse von dem Projekt mit einer neuen Methode."
+		french = "Le rapport et les notes de la réunion sont dans le dossier pour une revue."
+		self.assertEqual(detect_language(german), "de")
+		self.assertEqual(detect_language(french), "fr")
+
+	def test_script_gates(self):
+		from ai_fr_hg.ai.language import detect_language
+
+		self.assertEqual(detect_language("这是一份中文文件内容足够长可以识别语言了"), "zh")
+		self.assertEqual(detect_language("これはひらがなと漢字が混ざった日本語の文書です"), "ja")
+		self.assertEqual(detect_language("이것은 한글로 작성된 문서이며 언어를 식별합니다"), "ko")
+		self.assertEqual(detect_language("هذا مستند مكتوب باللغة العربية وهو طويل بما يكفي"), "ar")
+		self.assertEqual(detect_language("Αυτό είναι ένα ελληνικό κείμενο για αναγνώριση"), "el")
+
+	def test_stored_code_wins_over_detection(self):
+		from ai_fr_hg.ai.language import resolve_document_language
+
+		english = "This is the report for the project and the team with the results."
+		self.assertEqual(resolve_document_language("bg", english), "bg")
+		self.assertEqual(resolve_document_language("", english), "en")
+		self.assertEqual(resolve_document_language(None, ""), "")
+
+	def test_build_context_labels_language(self):
+		from ai_fr_hg.ai.knowledge import RetrievedChunk, build_context
+
+		context = build_context(
+			[
+				RetrievedChunk(
+					chunk="c1",
+					document="DOC-1",
+					document_title="Договор",
+					knowledge_base="KB",
+					content="Това е текст на договора за тази услуга и за клиента.",
+					score=0.9,
+					language="bg",
+				)
+			],
+			max_characters=4000,
+		)
+		self.assertIn("language=Bulgarian", context)
+		self.assertIn("Договор", context)
+
+	def test_build_context_detects_language_when_field_is_empty(self):
+		from ai_fr_hg.ai.knowledge import RetrievedChunk, build_context
+
+		context = build_context(
+			[
+				RetrievedChunk(
+					chunk="c1",
+					document="DOC-1",
+					document_title="Notes",
+					knowledge_base="KB",
+					content="This is the report for the project and the team with the results.",
+					score=0.9,
+				)
+			],
+			max_characters=4000,
+		)
+		self.assertIn("language=English", context)
+
+
 class TestStreamingDecision(UnitTestCase):
 	def test_streams_only_the_final_tool_free_completion(self):
 		from ai_fr_hg.ai.settings import should_stream_completion

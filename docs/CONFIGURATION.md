@@ -102,11 +102,18 @@ does not pay an embedding round-trip on a site that may have no documents yet.
 Grounded answers still happen when:
 
 - the user selects one or more knowledge chips in the Assistant,
-- a file is attached (the next send is scoped to that upload),
+- a file is attached (the next send is scoped to that upload, including
+  already-indexed files),
 - the agent calls the `search_knowledge_base` tool,
 - or an administrator turns **Use Knowledge** on for that agent.
 
 This is intentional, not a missing retrieval path.
+
+Extracted text is labelled with its written language (`AI Document.language`,
+ISO 639-1). Bulgarian is first-class. The label is written on ingest, backfilled
+for existing documents by patch `v0_0_11`, and injected into the prompt as
+`language=Bulgarian` so the model can identify the file and answer in the
+user's language.
 
 ### Tuning guidance
 

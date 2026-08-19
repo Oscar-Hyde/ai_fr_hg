@@ -30,7 +30,7 @@ POST /api/method/ai_fr_hg.api.knowledge.upload_document
 Background worker: process_document()
    ├─ 1. read      extract_source_text()  → reader dispatcher
    │                 (PDF/DOCX/XLSX/PPTX/TXT/MD/CSV/JSON/HTML/…)  → bytes → text
-   ├─ 2. extract   store content, counts, checksum, metadata on AI Document
+   ├─ 2. extract   store content, language, counts, checksum, metadata on AI Document
    ├─ 3. chunk     chunk_text()            structure-aware, heading-aware windows
    ├─ 4. embed     index_document()        embed_chunks() in batches of 16
    ├─ 5. index     write AI Document Chunk rows (base64 float32 vectors)
@@ -213,7 +213,8 @@ stub the chat and embedding engines so CI needs no GPU or Ollama.
 | --- | --- |
 | `ai/ingestion.py` | `prepare_documents_for_turn()` extracts unread uploads inline and only polls briefly when nothing readable exists. |
 | `api/chat.py` | `send_message` accepts `documents`, checks read permission, prepares them, and passes indexed names plus extracted text to the agent. |
-| `ai/agent.py` | `run_agent_turn` accepts `documents` and scopes retrieval; catches `ProviderTimeoutError`/`ProviderOfflineError` gracefully with friendly saved answers. |
+| `ai/agent.py` | `run_agent_turn` accepts `documents` and scopes retrieval even when `use_knowledge` is off; language instructions when context is labelled; catches provider OOM/timeout/offline as saved answers. |
+| `ai/language.py` | Detects written language (BG first-class) and labels excerpts / retrieved chunks. |
 | `ai/knowledge.py` | `retrieve`, `semantic_search`, `keyword_search` accept a `documents` filter and scope targets to the uploaded files' knowledge bases. |
 | `api/knowledge.py` | One-shot `ask` accepts `documents`, waits for indexing, and grounds the answer on the chosen records. |
 | `public/js/ai_helpers.js` | `frappe.ai.ask` forwards `documents` so the AI Document "Ask About This" button answers from that record. |

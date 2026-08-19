@@ -13,7 +13,7 @@ a how-to. For how things work see the other docs listed at the end.
 | Pull request | [#23](https://github.com/Oscar-Hyde/ai_fr_hg/pull/23) — **open, mergeable** |
 | Site (local) | `site1.local` (Sofia) |
 | Default runtime | Ollama at `http://127.0.0.1:11434` / `http://localhost:11434` |
-| Working tree | clean |
+| Working tree | language detection + attach→ask retrieve |
 
 **PR #23 commits (this session's work):**
 
@@ -43,7 +43,8 @@ a how-to. For how things work see the other docs listed at the end.
 | Capability | Status | Notes |
 | --- | --- | --- |
 | Local chat (AI Assistant) | **READY / STALE-SITE** | `send_message` → `run_agent_turn`. Default **Max Turn Duration = 0**. Patch `v0_0_10` only resets a leftover **90**. |
-| Attach file then ask | **READY / STALE-SITE** | `prepare_documents_for_turn` extracts inline; wait default **8s** (was 45s). |
+| Attach file then ask | **READY / STALE-SITE** | `prepare_documents_for_turn` extracts inline; wait default **8s** (was 45s). Indexed attachments are retrieved even when `use_knowledge` is off. |
+| Document language | **READY** | `AI Document.language` is written on extract, backfilled by `v0_0_11`, and labelled in chat context. |
 | Hybrid retrieval + citations | **IMPLEMENTED** | Dense + keyword, RRF fusion, numbered citations on the answer. |
 | One-shot ask / search | **IMPLEMENTED** | Knowledge Explorer + `api.knowledge.ask` / `search`. |
 | Document intelligence | **IMPLEMENTED** | Summarise, classify, extract, compare. Map-reduce for long text. |
@@ -87,10 +88,10 @@ Business logic lives here. Nothing in `ai/` imports `api/`. DocType controllers 
 | --- | --- |
 | `get_agent(agent)` | Named or default agent |
 | `check_agent_access(agent_doc)` | Role gate |
-| `build_system_prompt(...)` | Persona + grounding + memory/skills + numbered context |
+| `build_system_prompt(...)` | Persona + user-language + grounding + document-language + memory/skills + numbered context |
 | `get_agent_knowledge_bases(...)` | Conversation overrides agent |
 | `get_conversation_history(...)` | Recent turns as chat messages |
-| `run_agent_turn(...)` | Full turn: retrieve → prompt → tools → persist. Accepts `documents` + `extra_context`. Catches deadline / provider timeout / offline and **saves a friendly answer** instead of HTTP 417. |
+| `run_agent_turn(...)` | Full turn: retrieve → prompt → tools → persist. Accepts `documents` + `extra_context`. Retrieves attached files even when `use_knowledge` is off. Catches deadline / provider timeout / offline / OOM and **saves a friendly answer** instead of HTTP 417. |
 | `save_message` / `update_conversation_stats` / `update_agent_stats` | Persistence |
 | `create_conversation(...)` | New thread |
 
@@ -120,7 +121,7 @@ Interactive default is unlimited. Background jobs never install a budget.
 | `get_accessible_knowledge_bases(user)` | Role-filtered |
 | `keyword_search` / `semantic_search` | Ranked lists; optional `documents` filter |
 | `retrieve(...)` | Hybrid / semantic / keyword + RRF (`K=60`) + optional folder scope |
-| `build_context(results, max_characters)` | Numbered citation block |
+| `build_context(results, max_characters)` | Numbered citation block, with `[language=…]` when known |
 
 Vectors live on `AI Document Chunk` as base64 float32, pre-normalised. NumPy if present, pure Python otherwise.
 
@@ -132,7 +133,7 @@ Vectors live on `AI Document Chunk` as base64 float32, pre-normalised. NumPy if 
 | `fetch_url_content(url, user)` | Manual redirect validation, size caps, local-only |
 | `ingest_file` / `ingest_text` | Create `AI Document` + enqueue |
 | `enqueue_processing` / `process_document` / `process_document_now` | Canonical extract → index |
-| **`prepare_documents_for_turn(names)`** | Inline extract; inject unread text; short wait only if nothing readable |
+| **`prepare_documents_for_turn(names)`** | Inline extract; inject unread text labelled with language; short wait only if nothing readable |
 | `wait_for_indexed(names, timeout)` | `DEFAULT_WAIT_SECONDS = 8.0` |
 | `process_pending_documents()` | Hourly backfill / retry |
 
@@ -240,11 +241,15 @@ Mixed **folder + AI Document** tree for Desk Tree View. Not NestedSet.
 
 Public: `get_children`, `create_folder`, `rename_document` / `rename_folder` / `rename_node`, `move_*`, `copy_*`, `delete_*`, `bulk_move_nodes`, `bulk_delete_nodes`, `resolve_document_name`, `split_node_value`. Large folder jobs enqueue with subtree fingerprints and optimistic concurrency (`expected_modified`).
 
-### 2.21 Organization — `ai/organization.py` — **IMPLEMENTED**
+### 2.21 Language — `ai/language.py` — **READY**
+
+`detect_language`, `language_name`, `resolve_document_language`. Script counts plus function-word hints. No extra packages. Bulgarian is first-class; also EN/DE/FR/ES/IT/RU/UK and script gates for EL/AR/HE/ZH/JA/KO.
+
+### 2.22 Organization — `ai/organization.py` — **IMPLEMENTED**
 
 `organization_name_key(value)` — collation-independent, case-insensitive location key for AI Document names.
 
-### 2.22 Exceptions — `ai/exceptions.py` — **IMPLEMENTED**
+### 2.23 Exceptions — `ai/exceptions.py` — **IMPLEMENTED**
 
 `AIError` hierarchy: provider (offline / timeout / deadline), model, local-only, quota, tool, document (source permission / unsupported / corrupt / resource / fetch), pipeline (recorded / approval), folder (not found / exists / circular / permission / not empty / file / invalid name).
 
@@ -427,16 +432,17 @@ Default log retention (also in `hooks.default_log_clearing_doctypes`): Execution
 | v0_0_8 | Learning audit category |
 | v0_0_9 | AI Document tree organization |
 | **v0_0_10** | **90 → 0** for `max_turn_seconds` only if still the shipped 90 |
+| **v0_0_11** | Detect `AI Document.language` for already extracted documents |
 
 ---
 
 ## 8. Tests
 
-19 test modules, **55 classes, 274 methods**.
+19 test modules, **56 classes, 287 methods**.
 
 | Suite | Methods | Needs Frappe DB? |
 | --- | --- | --- |
-| `tests/test_units.py` | 80 | No — chunking, vectors, JSON, network, readers, tools, threshold, deadline, wait default, streaming decision |
+| `tests/test_units.py` | 89 | No — chunking, vectors, JSON, network, readers, tools, threshold, deadline, wait default, language detection, streaming decision |
 | `tests/test_learning_utils.py` | 19 | No |
 | `tests/test_folder_units.py` | 16 | No |
 | `tests/test_document_tree_units.py` | 20 | No |
@@ -469,7 +475,7 @@ Small doc drift: CONFIGURATION says OCR default **off**; the DocType default is 
 2. **Chat cutoff after migrate.** Confirm `AI Platform Settings.max_turn_seconds` is `0`. The patch does not overwrite a custom non-90 value.
 3. **Desk chat is not streamed.** First token on a cold 7B/8B can look “stuck” even with an unlimited budget.
 4. **CI on PR #23 is red** (linter + server). Not reproduced here.
-5. **Default agent** does not auto-retrieve (`use_knowledge = 0`); it relies on the `search_knowledge_base` tool or an explicit conversation KB.
+5. **Default agent** does not auto-retrieve the whole KB (`use_knowledge = 0`); attached files, knowledge chips, or the `search_knowledge_base` tool still ground the turn.
 6. **Streaming, OpenDocument, richer default-agent tools** (`list_documents`, `get_document`, `run_report`) are code-complete as building blocks but not first-class in the default UX.
 7. **Upstream moment warning** remains in Frappe core.
 8. Optional extras: `bench pip install --editable "./apps/ai_fr_hg[documents]"` (and `[ocr]`, `[performance]`, `[scheduling]`).

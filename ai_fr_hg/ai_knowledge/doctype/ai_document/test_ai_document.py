@@ -182,6 +182,29 @@ class TestIngestionWait(AIPlatformTestCase):
 		self.assertIn("draft body ready now", extra)
 		self.assertNotIn("indexed body", extra)
 
+	def test_prepare_labels_and_stores_document_language(self):
+		from ai_fr_hg.ai.ingestion import prepare_documents_for_turn
+
+		english = self.make_document(
+			"English Draft",
+			"This is the report for the project and the team with the results from the meeting.",
+		)
+		english.db_set("status", "Draft", update_modified=False)
+		bulgarian = self.make_document(
+			"Bulgarian Draft",
+			"Това е документ за България и за обработката на файловете, които са качени към базата.",
+		)
+		bulgarian.db_set("status", "Draft", update_modified=False)
+
+		with patch("ai_fr_hg.ai.ingestion.wait_for_indexed") as wait:
+			_ready, extra = prepare_documents_for_turn([english.name, bulgarian.name])
+
+		wait.assert_not_called()
+		self.assertIn("language=English", extra)
+		self.assertIn("language=Bulgarian", extra)
+		self.assertEqual(frappe.db.get_value("AI Document", english.name, "language"), "en")
+		self.assertEqual(frappe.db.get_value("AI Document", bulgarian.name, "language"), "bg")
+
 
 class TestDocumentAPI(AIPlatformTestCase):
 	def test_get_supported_formats(self):

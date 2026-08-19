@@ -14,3 +14,4 @@ ai_fr_hg.patches.v0_0_7_ensure_site_file_directories
 ai_fr_hg.patches.v0_0_8_normalize_learning_audit_category
 ai_fr_hg.patches.v0_0_9_ai_document_tree_organization
 ai_fr_hg.patches.v0_0_10_unbounded_local_turns
+ai_fr_hg.patches.v0_0_11_detect_document_languages

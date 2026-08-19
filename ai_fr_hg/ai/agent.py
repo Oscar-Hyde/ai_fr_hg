@@ -47,6 +47,16 @@ CITATION_INSTRUCTIONS = (
 	"Place each citation immediately after the statement it supports."
 )
 
+LANGUAGE_INSTRUCTIONS = (
+	"When CONTEXT labels a document with language=..., that is the written language of that file. "
+	"If the user asks what language a document is in, use that label. "
+	"Reply in the same language as the user's message unless they ask for a different one."
+)
+
+USER_LANGUAGE_INSTRUCTIONS = (
+	"Reply in the same language the user wrote in, unless they ask for a different one."
+)
+
 #: Conversation history window sent to the model, in messages.
 HISTORY_LIMIT = 20
 
@@ -162,13 +172,15 @@ def build_system_prompt(
 	settings = frappe.get_cached_doc("AI Platform Settings")
 
 	base = override or agent_doc.system_prompt or settings.default_system_prompt or DEFAULT_SYSTEM_PROMPT
-	parts = [base.strip()]
+	parts = [base.strip(), USER_LANGUAGE_INSTRUCTIONS]
 
 	if context:
 		if agent_doc.strict_grounding:
 			parts.append(GROUNDING_INSTRUCTIONS)
 		if agent_doc.citation_mode and agent_doc.citation_mode != "None":
 			parts.append(CITATION_INSTRUCTIONS)
+		if "language=" in context:
+			parts.append(LANGUAGE_INSTRUCTIONS)
 		parts.append(f"CONTEXT:\n{context}")
 	elif agent_doc.strict_grounding and agent_doc.use_knowledge:
 		parts.append("No relevant context was retrieved. Tell the user you do not have that information.")
@@ -253,7 +265,10 @@ def run_agent_turn(
 	# 1. Retrieve supporting knowledge.
 	retrieved = []
 	context = extra_context or ""
-	if agent_doc.use_knowledge:
+	# Attached files are this turn's source of truth even when the agent does
+	# not auto-retrieve from its knowledge bases (the seeded General Assistant
+	# keeps use_knowledge off so empty-site small talk stays cheap).
+	if agent_doc.use_knowledge or documents:
 		targets = knowledge_bases or get_agent_knowledge_bases(agent_doc, conversation_doc)
 		# A configured agent with no attached knowledge bases still returns fast
 		# instead of paying an access/query round-trip on every chat.

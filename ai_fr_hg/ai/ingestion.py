@@ -25,6 +25,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, now_datetime
 
+from ai_fr_hg.ai.language import detect_language, language_name, resolve_document_language
 from ai_fr_hg.ai.logging import write_audit_log
 from ai_fr_hg.ai.exceptions import (
 	CorruptDocumentError,
@@ -402,6 +403,7 @@ def process_document(
 				document.db_set(
 					{
 						"content": result.text,
+						"language": detect_language(result.text) or document.language,
 						"reader_used": reader.label,
 						"mime_type": mime_type or mimetypes.guess_type(filename)[0],
 						"file_size": len(content),
@@ -1037,7 +1039,7 @@ def prepare_documents_for_turn(document_names: list[str]) -> tuple[list[str], st
 					message=frappe.get_traceback(),
 				)
 		if content:
-			excerpts.append(f"[{title}]\n{content[:MAX_INLINE_CONTEXT_CHARS]}")
+			excerpts.append(_document_excerpt(name, title, content, doc.language))
 		else:
 			pending.append(name)
 
@@ -1050,10 +1052,19 @@ def prepare_documents_for_turn(document_names: list[str]) -> tuple[list[str], st
 				continue
 			content = (frappe.db.get_value("AI Document", name, "content") or "").strip()
 			title = frappe.db.get_value("AI Document", name, "title") or name
+			language = frappe.db.get_value("AI Document", name, "language")
 			if content:
-				excerpts.append(f"[{title}]\n{content[:MAX_INLINE_CONTEXT_CHARS]}")
+				excerpts.append(_document_excerpt(name, title, content, language))
 
 	return indexed, "\n\n".join(excerpts)
+
+
+def _document_excerpt(name: str, title: str, content: str, language: str | None) -> str:
+	code = resolve_document_language(language, content)
+	if code and code != (language or "").strip():
+		frappe.db.set_value("AI Document", name, "language", code, update_modified=False)
+	label = f"{title} | language={language_name(code)}" if code else title
+	return f"[{label}]\n{content[:MAX_INLINE_CONTEXT_CHARS]}"
 
 
 def wait_for_indexed(document_names: list[str], timeout: float | None = None) -> dict[str, str]:

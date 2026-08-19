@@ -143,8 +143,10 @@
    "options": "source_doctype"
   },
   {
+   "description": "Detected written language as an ISO 639-1 code. Filled when text is extracted; you can correct it.",
    "fieldname": "language",
    "fieldtype": "Data",
+   "in_standard_filter": 1,
    "label": "Language"
   },
   {
