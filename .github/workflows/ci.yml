@@ -1,18 +1,23 @@
 name: CI
+
 on:
   push:
   pull_request:
   workflow_dispatch:
+
 permissions:
   contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
 env:
   # Upstream identifies develop as 17.0.0-dev. There is no stable version-17
   # branch yet, so the quality gate uses an immutable audited revision.
   FRAPPE_BRANCH: develop
   FRAPPE_SHA: d7000da3d5862087d3df08e009fe76518ea649c4
+
 jobs:
   tests:
     name: Server
@@ -21,6 +26,7 @@ jobs:
     env:
       CI: "Yes"
       DB_ROOT_PASSWORD: root
+
     services:
       redis-cache:
         image: redis:alpine
@@ -41,23 +47,28 @@ jobs:
           --health-interval=5s
           --health-timeout=2s
           --health-retries=12
+
     steps:
       - name: Clone application
         uses: actions/checkout@v7
+
       - name: Setup Python
         uses: actions/setup-python@v7
         with:
           python-version: "3.14"
           cache: pip
+
       - name: Setup Node
         uses: actions/setup-node@v7
         with:
           node-version: 24
           check-latest: true
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install --yes mariadb-client
+
       - name: Initialize pinned Frappe v17 bench
         run: |
           python -m pip install --upgrade pip frappe-bench
@@ -67,9 +78,11 @@ jobs:
             --frappe-branch "$FRAPPE_BRANCH" \
             --python "$(command -v python)" \
             /home/runner/frappe-bench
-          git -C /home/runner/frappe-bench/apps/frappe fetch --depth 1 origin "$FRAPPE_SHA"
+          # Bench clones Frappe with its canonical remote name, `upstream`.
+          git -C /home/runner/frappe-bench/apps/frappe fetch --depth 1 upstream "$FRAPPE_SHA"
           git -C /home/runner/frappe-bench/apps/frappe checkout --detach "$FRAPPE_SHA"
           test "$(git -C /home/runner/frappe-bench/apps/frappe rev-parse HEAD)" = "$FRAPPE_SHA"
+
       - name: Install application and migrate
         working-directory: /home/runner/frappe-bench
         run: |
@@ -84,6 +97,7 @@ jobs:
           bench --site test_site migrate
           bench build --app ai_fr_hg
           env/bin/python -c 'import frappe; assert frappe.__version__ == "17.0.0-dev", frappe.__version__'
+
       - name: Run server tests
         working-directory: /home/runner/frappe-bench
         run: |

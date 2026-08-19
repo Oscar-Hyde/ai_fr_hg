@@ -103,6 +103,7 @@ class TestControlledBaseline(TestCase):
 
 		self.assertIn(f"FRAPPE_SHA: {FRAPPE_V17_SHA}", workflow)
 		self.assertIn('--frappe-branch "$FRAPPE_BRANCH"', workflow)
+		self.assertIn('fetch --depth 1 upstream "$FRAPPE_SHA"', workflow)
 		self.assertIn('frappe.__version__ == "17.0.0-dev"', workflow)
 		self.assertIn("bench --site test_site migrate", workflow)
 		self.assertIn("bench --site test_site run-tests --app ai_fr_hg", workflow)
@@ -113,6 +114,12 @@ class TestControlledBaseline(TestCase):
 		for status in ("Linter", "Frontend static", "Dependency audit"):
 			self.assertIn(f"name: {status}", workflow)
 		self.assertIn("node --check", workflow)
+		self.assertIn("pre-commit==4.6.2", workflow)
+		self.assertIn("FRAPPE_SEMGREP_SHA: b101a16e69df049b3fed1478bcc16223e957cca2", workflow)
+		self.assertIn("semgrep==1.173.0", workflow)
+		self.assertIn("--no-suppress-errors", workflow)
+		self.assertIn("python -m pip install --editable '.[all]'", workflow)
+		self.assertIn("pip-audit --strict --local --skip-editable --desc on", workflow)
 
 	def test_normalization_patch_is_registered(self):
 		patches = (APP / "patches.txt").read_text().splitlines()
