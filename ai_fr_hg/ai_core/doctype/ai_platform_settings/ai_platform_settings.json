@@ -109,8 +109,8 @@
    "label": "Request Timeout (s)"
   },
   {
-   "default": "90",
-   "description": "Overall budget for one interactive chat turn, including retries, failover and tool calls. Keep it below your reverse proxy's timeout so users get a real answer instead of a 504. Set 0 to disable.",
+   "default": "0",
+   "description": "Optional budget for one interactive chat turn, including retries, failover and tool calls. 0 (the default) waits for the model with no extra cutoff. Set a value only when a reverse proxy would otherwise return 504, and keep it below that proxy timeout.",
    "fieldname": "max_turn_seconds",
    "fieldtype": "Int",
    "label": "Max Turn Duration (s)"
@@ -237,6 +237,7 @@
   },
   {
    "default": "0.25",
+   "description": "Minimum cosine score from 0 to 1. Values such as 25 are treated as 25%.",
    "fieldname": "similarity_threshold",
    "fieldtype": "Float",
    "label": "Similarity Threshold",

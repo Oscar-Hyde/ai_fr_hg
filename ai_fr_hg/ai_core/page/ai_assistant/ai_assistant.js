@@ -338,9 +338,7 @@ class AIAssistant {
 			list
 				.map((conv) => {
 					const active = conv.name === this.conversation ? " active" : "";
-					const when = conv.last_message_on
-						? frappe.datetime.comment_when(conv.last_message_on)
-						: "";
+					const when = frappe.ai.relative_time(conv.last_message_on);
 					return `
 						<div class="ai-conversation-item${active}" data-name="${conv.name}">
 							<div class="ai-conv-title">
@@ -559,6 +557,7 @@ class AIAssistant {
 				<div class="ai-body">
 					<div class="ai-bubble">
 						<span class="ai-dot"></span><span class="ai-dot"></span><span class="ai-dot"></span>
+						<span class="ai-thinking-label text-muted small">${__("Waiting for the local model…")}</span>
 					</div>
 				</div>
 			</div>
@@ -569,7 +568,7 @@ class AIAssistant {
 		try {
 			const uploaded = this.pending_documents.length ? this.pending_documents : null;
 			this.pending_documents = [];
-			const response = await frappe.xcall("ai_fr_hg.api.chat.send_message", {
+			const response = await this.call_send_message({
 				message,
 				conversation: this.conversation,
 				agent: this.selected_agent,
@@ -620,6 +619,29 @@ class AIAssistant {
 			this.scroll_to_bottom();
 			this.$input.focus();
 		}
+	}
+
+	call_send_message(args) {
+		// Do not impose a browser timeout on unbounded local turns. A
+		// configured Max Turn Duration still gets a small client cushion so a
+		// dead socket is noticed after the server has already saved an answer.
+		const budget = Number(this.context?.settings?.max_turn_seconds || 0);
+		const options = {
+			method: "ai_fr_hg.api.chat.send_message",
+			args,
+		};
+		if (budget > 0) {
+			options.timeout = (budget + 30) * 1000;
+		}
+		return new Promise((resolve, reject) => {
+			frappe.call({
+				...options,
+				callback(response) {
+					resolve(response.message);
+				},
+				error: reject,
+			});
+		});
 	}
 
 	async send_feedback(message, value, $button) {
@@ -683,10 +705,10 @@ class AIAssistant {
 							result.document,
 						]);
 						frappe.show_alert({
-							message: __(
-								"Processing {0}. It will be indexed before your next question.",
-								[values.title]
-							),
+						message: __(
+							"Processing {0}. Your next question will use this file even if indexing is still running.",
+							[values.title]
+						),
 							indicator: "blue",
 						});
 						me.$input

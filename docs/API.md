@@ -65,9 +65,11 @@ supplied.
 }
 ```
 
-`timed_out` is `true` when the turn hit its **Max Turn Duration** budget. The
-call still returns `200` with a saved `answer` explaining the timeout, rather
-than leaving the connection open for the proxy to terminate with a `504`.
+`timed_out` is `true` when a positive **Max Turn Duration** budget ran out.
+The default is `0` (unlimited), so local models are not cut off. When a budget
+is configured the call still returns `200` with a saved `answer` explaining
+the timeout, rather than leaving the connection open for the proxy to
+terminate with a `504`.
 
 ### Other chat endpoints
 

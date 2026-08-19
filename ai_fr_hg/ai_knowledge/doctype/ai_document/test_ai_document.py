@@ -166,6 +166,22 @@ class TestIngestionWait(AIPlatformTestCase):
 		sleep.assert_not_called()
 		self.assertEqual(statuses.get(document.name), "Queued")
 
+	def test_prepare_uses_extracted_text_without_waiting(self):
+		from ai_fr_hg.ai.ingestion import prepare_documents_for_turn
+
+		indexed = self.make_document("Prepare Indexed Doc", "indexed body")
+		indexed.db_set("status", "Indexed", update_modified=False)
+		draft = self.make_document("Prepare Draft Doc", "draft body ready now")
+		draft.db_set("status", "Draft", update_modified=False)
+
+		with patch("ai_fr_hg.ai.ingestion.wait_for_indexed") as wait:
+			ready, extra = prepare_documents_for_turn([indexed.name, draft.name])
+
+		wait.assert_not_called()
+		self.assertEqual(ready, [indexed.name])
+		self.assertIn("draft body ready now", extra)
+		self.assertNotIn("indexed body", extra)
+
 
 class TestDocumentAPI(AIPlatformTestCase):
 	def test_get_supported_formats(self):

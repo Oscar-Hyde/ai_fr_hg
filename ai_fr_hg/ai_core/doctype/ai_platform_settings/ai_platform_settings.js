@@ -70,4 +70,27 @@ frappe.ui.form.on("AI Platform Settings", {
 			});
 		}
 	},
+
+	similarity_threshold(frm) {
+		const next = frappe.ai.normalize_similarity_threshold(frm.doc.similarity_threshold);
+		if (next !== null && next !== parseFloat(frm.doc.similarity_threshold)) {
+			frm.set_value("similarity_threshold", next);
+		}
+	},
+
+	validate(frm) {
+		const threshold = frappe.ai.normalize_similarity_threshold(frm.doc.similarity_threshold);
+		if (
+			frm.doc.similarity_threshold !== "" &&
+			frm.doc.similarity_threshold != null &&
+			threshold === null
+		) {
+			frappe.throw(
+				__("Similarity Threshold must be between 0 and 1, or 1–100 as a percentage.")
+			);
+		}
+		if (threshold !== null) {
+			frm.doc.similarity_threshold = threshold;
+		}
+	},
 });

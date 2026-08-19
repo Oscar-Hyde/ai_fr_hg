@@ -15,7 +15,7 @@ needs to intervene — everything else is automatic.
 | Additional Allowed Hosts | empty | Hostnames exempt from the local-only guard, one per line. |
 | Default System Prompt | seeded | Used by agents that do not define their own. |
 | Request Timeout | 120 s | Per-request HTTP timeout. Raise it for large models on CPU. |
-| Max Turn Duration | 90 s | Total budget for one interactive chat turn, across retries, failover and tool calls. Set 0 to disable. |
+| Max Turn Duration | **0** (unlimited) | Optional budget for one interactive chat turn, across retries, failover and tool calls. Leave at 0 on a local bench so a slow first token is not cut off. Set a positive value only when a reverse proxy would otherwise return 504. |
 | Max Retries | 2 | Retry attempts for transient failures before failover. |
 | Enable Failover | on | Try the next provider by priority when one is unreachable. |
 | Streaming Enabled | on | Allow token streaming where the runtime supports it. |
@@ -28,16 +28,19 @@ retry may be tried against every enabled provider. Multiplied out, the worst
 case is far longer than any reverse proxy will hold a connection open, and the
 user sees a bare `504 Gateway Time-out` — no answer, and no error to explain it.
 
-`Max Turn Duration` is the budget for the whole turn. Every layer beneath it
+`Max Turn Duration` is an *optional* budget for the whole turn. The default is
+`0`: the platform waits for the local model and does not invent a second
+deadline on top of **Request Timeout**. Every layer beneath a positive budget
 checks the remaining time before starting more work: socket timeouts are
 clamped to what is left, retries and failover stop when they cannot finish, and
 tool calling gives way to a final answer as the deadline approaches. If the
 budget does run out, the turn still saves a reply explaining what happened.
 
-Keep it comfortably below your proxy's timeout (nginx `proxy_read_timeout`
-defaults to 60 s). Set it to `0` for unbounded turns — appropriate only when
-nothing with a timeout sits in front of the site. Background jobs, pipelines
-and scheduled tasks are never budgeted, since no client is waiting on them.
+On a local bench (`site1.local`, no nginx in front) leave this at `0`. Only set
+a positive value when something with a timeout sits in front of the site, and
+keep it comfortably below that proxy timeout (nginx `proxy_read_timeout`
+defaults to 60 s). Background jobs, pipelines and scheduled tasks are never
+budgeted, since no client is waiting on them.
 
 ### On Strict Local Only
 
@@ -79,7 +82,7 @@ search again.
 | Default Chunk Size | 1200 chars | Larger keeps more context per passage; smaller improves precision. |
 | Default Chunk Overlap | 150 chars | Prevents facts being orphaned at a boundary. Must be smaller than chunk size. |
 | Default Top K | 6 | Passages retrieved per query. |
-| Similarity Threshold | 0.25 | Minimum cosine score. Raise it if answers cite loosely related passages. |
+| Similarity Threshold | 0.25 | Minimum cosine score from 0 to 1. Values such as `25` are stored as `0.25`. Raise it if answers cite loosely related passages. |
 | Enable Hybrid Search | on | Fuse dense and keyword ranking. Recommended. |
 | Max Context Characters | 12000 | Ceiling on retrieved context injected into a prompt. |
 | Auto Process Documents | on | Ingest and index on upload with no further action. |

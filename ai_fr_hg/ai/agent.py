@@ -60,14 +60,16 @@ TIMED_OUT_ANSWER = (
 	"I ran out of time while answering that. The local model is still loading or is "
 	"responding slowly.\n\n"
 	"This usually settles after the model's first run. If it keeps happening, try a "
-	"smaller model, or raise **Request Timeout** in AI Platform Settings."
+	"smaller model, raise **Request Timeout**, or set **Max Turn Duration** to 0 in "
+	"AI Platform Settings so the turn is not cut off."
 )
 
 PROVIDER_TIMEOUT_ANSWER = (
 	"The AI model did not respond within the allowed time and I could not finish an "
 	"answer.\n\n"
 	"Local models are slowest on their first run, so try again first. If it keeps "
-	"happening, pick a smaller model or raise **Request Timeout** in AI Platform Settings."
+	"happening, pick a smaller model or raise **Request Timeout** on the provider "
+	"and in AI Platform Settings."
 )
 
 PROVIDER_OFFLINE_ANSWER = (

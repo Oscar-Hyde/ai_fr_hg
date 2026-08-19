@@ -227,7 +227,7 @@ class KnowledgeExplorer {
 					<div class="text-muted small">
 						${frappe.utils.escape_html(doc.knowledge_base)} ·
 						${doc.chunk_count || 0} ${__("chunks")} ·
-						${frappe.datetime.comment_when(doc.modified)}
+						${frappe.ai.relative_time(doc.modified)}
 					</div>
 				</div>`
 				)

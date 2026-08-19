@@ -60,6 +60,7 @@ app_include_js = "ai_fr_hg.bundle.js"
 # File is a Frappe core DocType, so its supported list-view extension lives in
 # this app's standard override location.  It augments FileView actions only;
 # it never replaces the native File list/tree/grid presentation.
+doctype_js = {"File": "public/js/file.js"}
 doctype_list_js = {"File": "public/js/file_list.js"}
 # AI Document remains a normal processing record. Its native Tree View projects
 # canonical File folders and AI Documents through a permission-aware lazy API.

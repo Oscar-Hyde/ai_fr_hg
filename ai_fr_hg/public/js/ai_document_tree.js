@@ -81,8 +81,13 @@ frappe.provide("frappe.treeview_settings");
 	function open_node(node) {
 		if (node_type(node) === "document") {
 			frappe.set_route("Form", "AI Document", data(node).document);
-		} else if (node_type(node) === "folder") {
-			frappe.set_route("Form", "File", data(node).value);
+			return;
+		}
+		if (node_type(node) === "folder") {
+			// FileView owns folder browsing. Opening a folder as Form/File
+			// hits Frappe's preview_file path, which crashes when file_type
+			// is missing (folders and new drafts).
+			frappe.set_route("List", "File", folder_for(node));
 		}
 	}
 

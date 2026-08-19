@@ -44,6 +44,7 @@ ai_fr_hg/
 │   ├── knowledge.py         Indexing and hybrid retrieval
 │   ├── intelligence.py      Summarise, classify, extract, compare
 │   ├── ingestion.py         Unified document pipeline
+│   ├── settings.py          Shared settings helpers (threshold normalisation)
 │   ├── agent.py             Agent runtime: prompt → retrieve → tools → answer
 │   ├── pipeline.py          Pipeline execution engine
 │   ├── automation.py        Event-driven rules
@@ -148,12 +149,13 @@ User message
 
 A file attached in chat is ingested on a background worker, so a question
 asked in the same breath would race the index. `send_message` accepts the
-just-uploaded `documents`, waits for them to reach `Indexed` within the turn
-budget (`ai.ingestion.wait_for_indexed`), and passes them to
-`run_agent_turn`. `retrieve(..., documents=…)` then scopes retrieval to those
-records, so "summarise the file I just uploaded" is grounded in the upload
-itself rather than the whole knowledge base. See
-[`docs/FILE_TO_ANSWER.md`](FILE_TO_ANSWER.md) for the full lifecycle.
+just-uploaded `documents` and `prepare_documents_for_turn` makes them usable
+immediately: already-indexed records stay in the retrieval scope, extracted
+text is injected as extra context, and a short wait is used only when nothing
+readable exists. Interactive turns default to an unbounded budget so a local
+model is not cut off; a positive **Max Turn Duration** remains available
+behind a reverse proxy. See [`docs/FILE_TO_ANSWER.md`](FILE_TO_ANSWER.md) for
+the full lifecycle.
 
 ---
 

@@ -7,7 +7,7 @@ frappe.ui.form.on("AI Knowledge Base", {
 		// bad value is caught inline instead of bouncing the save as a 417.
 		const size = parseFloat(frm.doc.chunk_size);
 		const overlap = parseFloat(frm.doc.chunk_overlap);
-		const threshold = parseFloat(frm.doc.similarity_threshold);
+		const threshold = frappe.ai.normalize_similarity_threshold(frm.doc.similarity_threshold);
 
 		if (frm.doc.chunk_size && !isNaN(size) && size < 100) {
 			frappe.throw(__("Chunk Size must be at least 100 characters."));
@@ -18,10 +18,21 @@ frappe.ui.form.on("AI Knowledge Base", {
 		if (
 			frm.doc.similarity_threshold !== "" &&
 			frm.doc.similarity_threshold != null &&
-			!isNaN(threshold) &&
-			(threshold < 0 || threshold > 1)
+			threshold === null
 		) {
-			frappe.throw(__("Similarity Threshold must be between 0 and 1."));
+			frappe.throw(
+				__("Similarity Threshold must be between 0 and 1, or 1–100 as a percentage.")
+			);
+		}
+		if (threshold !== null) {
+			frm.doc.similarity_threshold = threshold;
+		}
+	},
+
+	similarity_threshold(frm) {
+		const next = frappe.ai.normalize_similarity_threshold(frm.doc.similarity_threshold);
+		if (next !== null && next !== parseFloat(frm.doc.similarity_threshold)) {
+			frm.set_value("similarity_threshold", next);
 		}
 	},
 

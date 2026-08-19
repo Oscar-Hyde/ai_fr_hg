@@ -299,7 +299,7 @@ class AIOperations {
 						<code>${frappe.utils.escape_html(approval.tool)}</code>
 						<div class="text-muted small">
 							${frappe.utils.escape_html(approval.user)} ·
-							${frappe.datetime.comment_when(approval.creation)}
+							${frappe.ai.relative_time(approval.creation)}
 						</div>
 						<div class="ai-approval-args small">${frappe.utils.escape_html(
 							(approval.arguments || "").slice(0, 200)

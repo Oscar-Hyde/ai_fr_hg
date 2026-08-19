@@ -439,6 +439,36 @@ class TestToolCallWireFormats(UnitTestCase):
 		self.assertEqual(payload["tool_calls"][0]["function"]["arguments"], '{"doctype": "User"}')
 
 
+class TestSimilarityThreshold(UnitTestCase):
+	"""Desk users type 25 meaning 25%; the store keeps a 0–1 cosine score."""
+
+	def test_fraction_is_unchanged(self):
+		from ai_fr_hg.ai.settings import normalize_similarity_threshold
+
+		self.assertEqual(normalize_similarity_threshold(0.25), 0.25)
+		self.assertEqual(normalize_similarity_threshold(0), 0.0)
+		self.assertEqual(normalize_similarity_threshold(1), 1.0)
+
+	def test_percentage_is_converted(self):
+		from ai_fr_hg.ai.settings import normalize_similarity_threshold
+
+		self.assertAlmostEqual(normalize_similarity_threshold(25), 0.25)
+		self.assertAlmostEqual(normalize_similarity_threshold(100), 1.0)
+		self.assertAlmostEqual(normalize_similarity_threshold(1.5), 0.015)
+
+	def test_out_of_range_is_rejected(self):
+		from ai_fr_hg.ai.settings import normalize_similarity_threshold
+
+		class Thrown(Exception):
+			pass
+
+		with patch("ai_fr_hg.ai.settings.frappe.throw", side_effect=Thrown):
+			with self.assertRaises(Thrown):
+				normalize_similarity_threshold(-0.1)
+			with self.assertRaises(Thrown):
+				normalize_similarity_threshold(150)
+
+
 class TestDeadline(UnitTestCase):
 	"""The time budget that keeps a chat turn inside the proxy's patience."""
 
@@ -540,3 +570,11 @@ class TestTurnBudget(UnitTestCase):
 		self.assertTrue(allows(9999))
 		self.assertFalse(expired())
 		self.assertIsNone(remaining_seconds())
+
+
+class TestInteractiveDefaults(UnitTestCase):
+	def test_document_wait_is_short(self):
+		from ai_fr_hg.ai.ingestion import DEFAULT_WAIT_SECONDS
+
+		# Interactive chat must not sit on a 45s poll before the model starts.
+		self.assertLessEqual(DEFAULT_WAIT_SECONDS, 10)
