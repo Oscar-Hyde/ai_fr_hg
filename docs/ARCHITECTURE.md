@@ -43,6 +43,7 @@ ai_fr_hg/
 │   ├── vector.py            Base64 float32 vectors, cosine similarity, ranking
 │   ├── knowledge.py         Indexing and hybrid retrieval
 │   ├── intelligence.py      Summarise, classify, extract, compare
+│   ├── patterns.py          High-precision pattern entities (pure layer)
 │   ├── ingestion.py         Unified document pipeline
 │   ├── settings.py          Shared settings helpers (threshold normalisation)
 │   ├── agent.py             Agent runtime: prompt → retrieve → tools → answer
@@ -97,6 +98,12 @@ metrics. `AI Prompt Template` holds reusable Jinja prompts.
 policy. `AI Document` is one source item in any format. `AI Document Chunk` is
 a retrievable slice with its embedding stored as base64 float32.
 `AI Extraction Schema` defines structured extraction targets.
+`AI Pattern Entity` holds high-precision pattern matches (email, url,
+phone, ip, hash, date, identifier, money, custom) extracted from a
+document's already-stored content — an enhancement layer that never
+touches the ingestion pipeline, keyed by
+`(document, entity_type, normalized_value)` with denormalized
+`knowledge_base` so it rides the same row-level permissions as chunks.
 `AI Translation` stores one Arabic / English / Hebrew translation of a document
 with its per-segment review state, and `AI Translation Glossary` holds the
 trilingual terminology enforced while producing it.

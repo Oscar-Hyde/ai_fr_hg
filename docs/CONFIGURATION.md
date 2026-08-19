@@ -90,6 +90,8 @@ search again.
 | Max Document Size (MB) | 50 | Rejected above this, before any parsing work. |
 | OCR Enabled | **off** | Requires `pytesseract` and the Tesseract binary. Off on a fresh install so missing OCR packages do not surprise the pipeline. |
 | Processing Queue | long | Which Frappe queue handles ingestion. |
+| Auto Pattern Scan | **off** | Hourly background extraction of high-precision pattern entities (emails, URLs, phones, IPs, hashes, dates, identifiers, money) from indexed documents into `AI Pattern Entity` rows. Reads only already-extracted content; manual **Extract Patterns** on the AI Document form works regardless. |
+| Max Pattern Entities | 500 | Upper bound of distinct entities stored per document. The scan samples at most 1 MB of extracted text (head and tail) with linear-time guards. |
 
 Knowledge bases override chunk size, overlap, top K, threshold and embedding
 model individually, so a base of short policy notes and a base of long
