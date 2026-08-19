@@ -433,12 +433,13 @@ Default log retention (also in `hooks.default_log_clearing_doctypes`): Execution
 | v0_0_9 | AI Document tree organization |
 | **v0_0_10** | **90 → 0** for `max_turn_seconds` only if still the shipped 90 |
 | **v0_0_11** | Detect `AI Document.language` for already extracted documents |
+| **v0_0_12** | Re-detect mixed English / Arabic / Hebrew labels |
 
 ---
 
 ## 8. Tests
 
-19 test modules, **56 classes, 295 methods**.
+19 test modules, **56 classes, 296 methods**.
 
 | Suite | Methods | Needs Frappe DB? |
 | --- | --- | --- |

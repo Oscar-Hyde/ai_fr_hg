@@ -89,6 +89,23 @@ class TestModelDocType(AIPlatformTestCase):
 			frappe.db.exists("AI Model", {"provider": provider.name, "model_name": first_name})
 		)
 
+	def test_probe_returns_friendly_oom_instead_of_raising(self):
+		"""Desk Test must not 417 when Ollama rejects the model for RAM."""
+		from ai_fr_hg.ai.agent import PROVIDER_OOM_ANSWER
+		from ai_fr_hg.ai.exceptions import ProviderError
+		from ai_fr_hg.api.admin import test_model
+
+		exc = ProviderError(
+			'Provider Local Ollama returned HTTP 500: {"error":"model requires more system memory (10.8 GiB) than is available (9.3 GiB)"}'
+		)
+		with patch("ai_fr_hg.ai.engine.run_chat", side_effect=exc):
+			result = test_model(self.chat_model.name)
+
+		self.assertEqual(result["status"], "Failed")
+		self.assertEqual(result["reason"], "oom")
+		self.assertEqual(result["response"], PROVIDER_OOM_ANSWER)
+		self.assertEqual(frappe.db.get_value("AI Model", self.chat_model.name, "status"), "Error")
+
 	def test_one_default_per_model_type(self):
 		a = frappe.get_doc(
 			{

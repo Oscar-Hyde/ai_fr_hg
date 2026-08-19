@@ -10,25 +10,37 @@ frappe.ui.form.on("AI Model", {
 		frm.add_custom_button(__("Test Model"), async () => {
 			frappe.dom.freeze(__("Running a probe prompt..."));
 			try {
-				const result = await frm.call("test_model");
-				frappe.dom.unfreeze();
-				const data = result.message;
-				frappe.msgprint({
-					title: __("Model Test"),
-					indicator: "green",
-					message: data.response
+			const result = await frm.call("test_model");
+			frappe.dom.unfreeze();
+			const data = result.message || {};
+			const failed = data.status && data.status !== "OK";
+			frappe.msgprint({
+				title: __("Model Test"),
+				indicator: failed ? "orange" : "green",
+				message: failed
+					? `<p>${frappe.utils.escape_html(
+							data.response || data.error || __("The model could not start.")
+					  ).replace(/\n/g, "<br>")}</p>`
+					: data.response
 						? `<p><b>${__("Response")}:</b> ${frappe.utils.escape_html(
 								data.response
 						  )}</p>
-						   <p class="text-muted">${data.duration_ms} ms · ${data.total_tokens} ${__("tokens")} · ${
+					   <p class="text-muted">${data.duration_ms} ms · ${data.total_tokens} ${__("tokens")} · ${
 								data.tokens_per_second
 						  } ${__("tok/s")}</p>`
 						: __("Returned {0}-dimensional embeddings.", [data.dimensions]),
-				});
-				frm.reload_doc();
-			} catch (error) {
-				frappe.dom.unfreeze();
-			}
+			});
+			frm.reload_doc();
+		} catch (error) {
+			frappe.dom.unfreeze();
+			frappe.msgprint({
+				title: __("Model Test Failed"),
+				indicator: "red",
+				message:
+					(error && (error.message || error.exc)) ||
+					__("The model could not start. Try qwen2.5:0.5b on this machine."),
+			});
+		}
 		}).addClass("btn-primary");
 
 		frm.add_custom_button(__("Refresh Metadata"), async () => {

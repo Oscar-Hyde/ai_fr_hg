@@ -195,29 +195,90 @@ def _pull_model_job(provider: str, model_name: str, user: str) -> None:
 		frappe.log_error(title="AI model pull notification failed", message=frappe.get_traceback())
 
 
+def _probe_provider_failure(model: str, exc: Exception) -> dict:
+	"""Turn an Ollama OOM / timeout into a saved probe result, not HTTP 417."""
+	from ai_fr_hg.ai.agent import answer_for_provider_error
+	from ai_fr_hg.ai.exceptions import ProviderOfflineError, ProviderTimeoutError
+
+	if isinstance(exc, ProviderOfflineError):
+		reason = "offline"
+	elif isinstance(exc, ProviderTimeoutError):
+		reason = "timeout"
+	else:
+		reason = "oom" if "system memory" in str(exc).lower() else "provider"
+
+	response = answer_for_provider_error(exc)
+	try:
+		frappe.db.set_value(
+			"AI Model",
+			model,
+			{
+				"status": "Error",
+				"last_error": str(exc)[:1000],
+				"last_checked": now_datetime(),
+			},
+			update_modified=False,
+		)
+	except Exception:
+		frappe.log_error(title="AI model probe status write failed", message=frappe.get_traceback())
+	return {
+		"model": model,
+		"status": "Failed",
+		"reason": reason,
+		"response": response,
+		"error": str(exc)[:500],
+		"duration_ms": 0,
+		"total_tokens": 0,
+		"tokens_per_second": 0,
+	}
+
+
 @frappe.whitelist()
 def test_model(model: str, prompt: str = "Reply with the single word: OK") -> dict:
-	"""Send a short prompt to a model to verify it responds."""
+	"""Send a short prompt to a model to verify it responds.
+
+	Ollama memory errors and other provider failures are returned as
+	``status=Failed`` so Desk Test does not surface a bare HTTP 417.
+	"""
 	_require_manager()
 
 	from ai_fr_hg.ai.engine import run_chat, run_embedding
+	from ai_fr_hg.ai.exceptions import ProviderError
 
 	model_doc = frappe.get_doc("AI Model", model)
 
-	if model_doc.model_type == "Embedding":
-		vectors = run_embedding(["health check"], model=model)
-		return {
-			"model": model,
-			"status": "OK" if vectors and vectors[0] else "Failed",
-			"dimensions": len(vectors[0]) if vectors and vectors[0] else 0,
-		}
+	try:
+		if model_doc.model_type == "Embedding":
+			vectors = run_embedding(["health check"], model=model)
+			ok = bool(vectors and vectors[0])
+			if ok:
+				frappe.db.set_value(
+					"AI Model",
+					model,
+					{"status": "Available", "last_error": None, "last_checked": now_datetime()},
+					update_modified=False,
+				)
+			return {
+				"model": model,
+				"status": "OK" if ok else "Failed",
+				"dimensions": len(vectors[0]) if ok else 0,
+			}
 
-	result = run_chat(
-		[{"role": "user", "content": prompt}],
-		model=model,
-		options={"max_tokens": 64},
-		operation="Health Check",
-		allow_failover=False,
+		result = run_chat(
+			[{"role": "user", "content": prompt}],
+			model=model,
+			options={"max_tokens": 64},
+			operation="Health Check",
+			allow_failover=False,
+		)
+	except ProviderError as exc:
+		return _probe_provider_failure(model, exc)
+
+	frappe.db.set_value(
+		"AI Model",
+		model,
+		{"status": "Available", "last_error": None, "last_checked": now_datetime()},
+		update_modified=False,
 	)
 	return {
 		"model": model,
