@@ -276,10 +276,13 @@ def _guess_model_type(model_name: str) -> str | None:
 	"""Infer an executable model role, or return None for known unsupported roles."""
 	lowered = (model_name or "").lower()
 
-	if any(token in lowered for token in ("embed", "bge", "gte", "e5-", "minilm", "nomic")):
-		return "Embedding"
+	# Reranker names often also contain an embedding-family token (for example,
+	# ``bge-reranker-v2``), so unsupported executable roles must win before
+	# embedding-family inference.
 	if any(token in lowered for token in ("rerank", "reranker")):
 		return None
+	if any(token in lowered for token in ("embed", "bge", "gte", "e5-", "minilm", "nomic")):
+		return "Embedding"
 	if any(token in lowered for token in ("llava", "vision", "-vl", "bakllava", "moondream", "minicpm-v")):
 		return "Vision"
 	return "Chat"
