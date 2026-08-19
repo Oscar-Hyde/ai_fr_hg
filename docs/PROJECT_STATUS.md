@@ -439,7 +439,7 @@ Default log retention (also in `hooks.default_log_clearing_doctypes`): Execution
 
 ## 8. Tests
 
-19 test modules, **56 classes, 296 methods**.
+19 test modules, **56 classes, 298 methods**.
 
 | Suite | Methods | Needs Frappe DB? |
 | --- | --- | --- |

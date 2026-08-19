@@ -290,6 +290,13 @@ def run_agent_turn(
 			except Exception as exc:
 				frappe.log_error(title="AI retrieval failed", message=str(exc))
 
+	# Attached files must still reach the prompt when retrieval found nothing
+	# (no keyword overlap, embeddings below threshold, or a swallowed error).
+	if documents and not (context or "").strip():
+		from ai_fr_hg.ai.ingestion import excerpts_for_documents
+
+		context = excerpts_for_documents(documents)
+
 	# 2. Assemble the message list.
 	override = conversation_doc.system_prompt_override if conversation_doc else None
 

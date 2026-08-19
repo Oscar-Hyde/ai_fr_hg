@@ -536,11 +536,24 @@ def retrieve(
 		keyword = keyword_search(query, targets, documents=documents)
 
 	fused = _fuse(semantic, keyword, search_type)
+	if not fused and documents:
+		# The user attached these files. A question like "what language is this?"
+		# may share no keywords with the body; still return the first chunks.
+		rows = frappe.get_all(
+			"AI Document Chunk",
+			filters={"document": ["in", documents], "knowledge_base": ["in", targets]},
+			fields=["name"],
+			order_by="chunk_index asc",
+			limit_page_length=top_k,
+		)
+		fused = {row.name: 1.0 for row in rows}
 	if not fused:
 		return []
 
 	ordered = sorted(fused.items(), key=lambda row: row[1], reverse=True)
-	if search_type != "Keyword":
+	# Attached files are the source of truth: do not drop them because a local
+	# embedding scored below the site-wide similarity threshold.
+	if search_type != "Keyword" and not documents:
 		ordered = [(name, score) for name, score in ordered if semantic.get(name, 1.0) >= threshold]
 	ordered = ordered[:top_k]
 

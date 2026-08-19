@@ -1059,6 +1059,24 @@ def prepare_documents_for_turn(document_names: list[str]) -> tuple[list[str], st
 	return indexed, "\n\n".join(excerpts)
 
 
+def excerpts_for_documents(document_names: list[str]) -> str:
+	"""Unconditional readable text from attached documents the caller may read.
+
+	Used when retrieval returns nothing (no keyword overlap, embeddings below
+	threshold, or no chunks yet) so attach→ask still sees the file.
+	"""
+	parts: list[str] = []
+	for name in dict.fromkeys(n for n in (document_names or []) if n):
+		if not frappe.db.exists("AI Document", name):
+			continue
+		if not frappe.has_permission("AI Document", "read", doc=name):
+			continue
+		row = frappe.db.get_value("AI Document", name, ["title", "content", "language"], as_dict=True)
+		if row and (row.content or "").strip():
+			parts.append(_document_excerpt(name, row.title or name, row.content, row.language))
+	return "\n\n".join(parts)
+
+
 def _document_excerpt(name: str, title: str, content: str, language: str | None) -> str:
 	code = resolve_document_language(language, content)
 	if code and parse_language_codes(code) != parse_language_codes(language):

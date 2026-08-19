@@ -236,6 +236,34 @@ class TestAgentRuntime(AIPlatformTestCase):
 
 		self.assertIn("Refunds", captured["system"])
 
+	def test_attached_document_text_is_used_when_retrieval_is_empty(self):
+		"""A language question may share no keywords with the file; still inject it."""
+		from ai_fr_hg.ai.agent import run_agent_turn
+
+		document = self.make_document(
+			"Language Sample",
+			"Refunds are allowed within thirty days of purchase with the original receipt. " * 8,
+		)
+		captured = {}
+
+		def capture(messages, **kwargs):
+			captured["system"] = messages[0].content
+			return CompletionResult(content="ok", total_tokens=5)
+
+		with (
+			patch("ai_fr_hg.ai.agent.retrieve", return_value=[]),
+			patch("ai_fr_hg.ai.agent.run_chat", side_effect=capture),
+		):
+			run_agent_turn(
+				"What language is this file written in?",
+				agent="Test Agent",
+				save_messages=False,
+				documents=[document.name],
+			)
+
+		self.assertIn("Refunds", captured["system"])
+		self.assertIn("language=", captured["system"])
+
 
 class TestAgentAPI(AIPlatformTestCase):
 	def test_get_chat_context(self):
