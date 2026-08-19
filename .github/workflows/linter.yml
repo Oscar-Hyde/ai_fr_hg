@@ -1,60 +1,61 @@
-name: Linters
-
+name: Quality
 on:
+  push:
   pull_request:
   workflow_dispatch:
-
 permissions:
   contents: read
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
 jobs:
   linter:
-    name: 'Frappe Linter'
+    name: Linter
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
-          python-version: '3.14'
+          python-version: "3.14"
           cache: pip
-      - uses: pre-commit/action@v3.0.0
-
-      - name: Download Semgrep rules
-        run: git clone --depth 1 https://github.com/frappe/semgrep-rules.git frappe-semgrep-rules
-
-      - name: Run Semgrep rules
+      - uses: pre-commit/action@v3.0.1
+      - name: Run Frappe Semgrep rules
         run: |
-          pip install semgrep
-          semgrep ci --config ./frappe-semgrep-rules/rules --config r/python.lang.correctness
-
-  deps-vulnerable-check:
-    name: 'Vulnerable Dependency Check'
+          git clone --depth 1 https://github.com/frappe/semgrep-rules.git "$RUNNER_TEMP/frappe-semgrep-rules"
+          python -m pip install semgrep
+          semgrep ci \
+            --config "$RUNNER_TEMP/frappe-semgrep-rules/rules" \
+            --config r/python.lang.correctness
+  frontend-static:
+    name: Frontend static
     runs-on: ubuntu-latest
-
+    timeout-minutes: 10
     steps:
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          python-version: '3.14'
-
-      - uses: actions/checkout@v6
-
-      - name: Cache pip
-        uses: actions/cache@v5
+          node-version: 24
+      - uses: actions/setup-python@v7
         with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/*requirements.txt', '**/pyproject.toml', '**/setup.py') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-            ${{ runner.os }}-
-
-      - name: Install and run pip-audit
+          python-version: "3.14"
+      - name: Parse production JavaScript
+        run: find ai_fr_hg -type f -name '*.js' -print0 | xargs -0 -n1 node --check
+      - name: Validate JSON and Phase 0 product contracts
         run: |
-          pip install pip-audit
-          cd ${GITHUB_WORKSPACE}
+          python -m json.tool ai_fr_hg/ai_core/doctype/ai_platform_settings/ai_platform_settings.json >/dev/null
+          python -m unittest discover -s ai_fr_hg/tests -p 'test_phase_0_contracts.py' -v
+  deps-vulnerable-check:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          cache: pip
+      - name: Audit Python dependencies
+        run: |
+          python -m pip install pip-audit
           pip-audit --desc on .
