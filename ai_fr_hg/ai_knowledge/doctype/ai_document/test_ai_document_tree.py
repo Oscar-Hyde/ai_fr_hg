@@ -502,7 +502,9 @@ class TestAIDocumentTree(AIPlatformTestCase):
 	def test_fail_closed_audit_rolls_back_mutation(self):
 		destination = create_folder("Audit Destination", self.root)["name"]
 		document = self.make_tree_document("Audited.txt", self.root)
-		with patch("ai_fr_hg.ai.document_tree.write_audit_log", side_effect=RuntimeError("audit unavailable")):
+		with patch(
+			"ai_fr_hg.ai.document_tree.write_audit_log", side_effect=RuntimeError("audit unavailable")
+		):
 			with self.assertRaisesRegex(RuntimeError, "audit unavailable"):
 				move_document(document.name, destination)
 		self.assertEqual(frappe.db.get_value("AI Document", document.name, "folder"), self.root)

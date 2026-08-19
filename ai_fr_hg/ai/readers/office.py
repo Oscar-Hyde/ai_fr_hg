@@ -56,7 +56,9 @@ class PDFReader(BaseReader):
 			pass
 
 		if not text.strip():
-			warnings.append("No text layer found. This is likely a scanned PDF; enable OCR to index it.")
+			warnings.append(
+				"No text layer found. Scanned-PDF OCR is not supported; OCR the PDF before uploading it."
+			)
 
 		return ReadResult(
 			text=text,
@@ -202,7 +204,9 @@ class OdtReader(BaseReader):
 		odf_text = self.require("odf.text", "odfpy")
 		document = opendocument.load(io.BytesIO(content))
 		parts: list[str] = []
-		for node in list(document.getElementsByType(odf_text.H)) + list(document.getElementsByType(odf_text.P)):
+		for node in list(document.getElementsByType(odf_text.H)) + list(
+			document.getElementsByType(odf_text.P)
+		):
 			text = _odf_plain_text(node).strip()
 			if text:
 				parts.append(text)

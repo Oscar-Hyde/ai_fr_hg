@@ -1,15 +1,15 @@
 # File → AI → Attachment: the end-to-end document lifecycle
 
-This document walks the **complete** path a document takes through the
-platform — from the moment a user attaches a file in the AI Assistant, through
-automatic ingestion, indexing, retrieval and grounded answering, to citing and
-linking the source and its chunks. It also records the development and
-production processes for this flow and the specific changes made on this
-branch.
+This document walks the current main path from a file attached in the AI
+Assistant through ingestion, indexing, retrieval, grounded answering, and
+citations. It is not a production-completeness claim: stable attachment
+identity, cancellation/reconnect, retrieval scale, complete trace links,
+browser E2E, and worker-failure recovery remain in the controlled gap register.
 
-The whole loop is local-first: no prompt, document or embedding ever leaves the
-network, and every step is recorded in the platform's audit, execution and
-search logs.
+The path is designed for local providers. SEC-04 connection hardening remains
+open, so host firewall/egress controls are required for a local-only guarantee.
+Audit, execution, and search records exist, but OPS-05 and SEC-07 track missing
+links and redaction parity.
 
 ---
 

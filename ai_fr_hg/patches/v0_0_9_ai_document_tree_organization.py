@@ -119,7 +119,10 @@ def _resolve_batch_names(
 		origin = (folder, organization_name_key(base))
 		name = base
 		number = hints.get(origin, 1)
-		while (folder, organization_name_key(name)) in occupied or (folder, organization_name_key(name)) in reserved:
+		while (folder, organization_name_key(name)) in occupied or (
+			folder,
+			organization_name_key(name),
+		) in reserved:
 			name = _candidate(base, number)
 			number += 1
 		_remember_hint(hints, origin, number)
@@ -144,7 +147,10 @@ def _resolve_batch_names(
 			while True:
 				name = _candidate(base, number)
 				number += 1
-				if (folder, organization_name_key(name)) not in occupied and (folder, organization_name_key(name)) not in reserved:
+				if (folder, organization_name_key(name)) not in occupied and (
+					folder,
+					organization_name_key(name),
+				) not in reserved:
 					break
 			item[4] = name
 			item[5] = number
@@ -182,9 +188,7 @@ def execute() -> None:
 		# Prefer the oldest File attached to this exact document, then the
 		# oldest File for its URL. Separate fixed-size streams keep pathological
 		# duplicate URLs bounded without issuing a query per document.
-		file_documents = {
-			row.name: row for row in rows if row.source_type == "File" and row.source_file
-		}
+		file_documents = {row.name: row for row in rows if row.source_type == "File" and row.source_file}
 		urls = sorted({row.source_file for row in file_documents.values()})
 		exact_files = {}
 		if urls:
@@ -201,11 +205,7 @@ def execute() -> None:
 					exact_files.setdefault(document.name, item)
 
 		fallback_urls = sorted(
-			{
-				document.source_file
-				for document in file_documents.values()
-				if document.name not in exact_files
-			}
+			{document.source_file for document in file_documents.values() if document.name not in exact_files}
 		)
 		fallback_files = {}
 		for url_batch in _chunks(fallback_urls, _BATCH_SIZE):
@@ -221,7 +221,9 @@ def execute() -> None:
 			)
 			resolved.append((row, file_row))
 
-		requested_folders = sorted({(file_row and file_row.folder) or row.folder or "Home" for row, file_row in resolved})
+		requested_folders = sorted(
+			{(file_row and file_row.folder) or row.folder or "Home" for row, file_row in resolved}
+		)
 		existing_folders = set(
 			frappe.get_all(
 				"File",

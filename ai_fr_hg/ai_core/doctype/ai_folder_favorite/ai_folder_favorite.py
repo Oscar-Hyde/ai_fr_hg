@@ -29,7 +29,9 @@ class AIFolderFavorite(Document):
 			frappe.throw(_("'{0}' is not a folder.").format(self.folder))
 		# Prevent duplicates per user
 		existing = frappe.db.get_value(
-			"AI Folder Favorite", {"user": self.user, "folder": self.folder, "name": ["!=", self.name or ""]}, "name"
+			"AI Folder Favorite",
+			{"user": self.user, "folder": self.folder, "name": ["!=", self.name or ""]},
+			"name",
 		)
 		if existing:
 			frappe.throw(_("Folder '{0}' is already in your favorites.").format(self.folder))

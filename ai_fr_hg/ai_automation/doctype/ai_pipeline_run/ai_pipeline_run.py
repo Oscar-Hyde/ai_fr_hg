@@ -42,7 +42,9 @@ class AIPipelineRun(Document):
 		if user == "Administrator" or roles.intersection({"AI Manager", "System Manager"}):
 			return
 		if self.triggered_by != user:
-			frappe.throw(_("Only the run owner or an AI Manager can perform this action."), frappe.PermissionError)
+			frappe.throw(
+				_("Only the run owner or an AI Manager can perform this action."), frappe.PermissionError
+			)
 
 	@frappe.whitelist()
 	def retry(self) -> dict:

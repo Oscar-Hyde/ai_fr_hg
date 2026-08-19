@@ -123,7 +123,10 @@ def _pull_model_job(provider: str, model_name: str, user: str) -> None:
 	from ai_fr_hg.ai.providers import get_provider
 
 	if frappe.session.user != user:
-		frappe.throw(_("The model pull worker requester does not match its execution authority."), frappe.PermissionError)
+		frappe.throw(
+			_("The model pull worker requester does not match its execution authority."),
+			frappe.PermissionError,
+		)
 	_require_manager()
 	check_capability("model_management", user=user)
 	provider, model_name = _validate_pull_parameters(provider, model_name, require_provider=False)
@@ -184,7 +187,9 @@ def _pull_model_job(provider: str, model_name: str, user: str) -> None:
 				user=user,
 			)
 		except Exception:
-			frappe.log_error(title="AI model pull failure notification failed", message=frappe.get_traceback())
+			frappe.log_error(
+				title="AI model pull failure notification failed", message=frappe.get_traceback()
+			)
 		raise
 
 	try:

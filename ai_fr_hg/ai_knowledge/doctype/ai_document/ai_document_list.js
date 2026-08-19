@@ -16,7 +16,14 @@ async function prompt_for_folder(options) {
 }
 
 frappe.listview_settings["AI Document"] = {
-	add_fields: ["status", "chunk_count", "embedded_chunk_count", "knowledge_base", "folder", "source_folder"],
+	add_fields: [
+		"status",
+		"chunk_count",
+		"embedded_chunk_count",
+		"knowledge_base",
+		"folder",
+		"source_folder",
+	],
 
 	get_indicator(doc) {
 		return [__(doc.status), frappe.ai.status_color(doc.status), "status,=," + doc.status];
@@ -26,7 +33,9 @@ frappe.listview_settings["AI Document"] = {
 		listview.page.add_inner_button(__("Knowledge Explorer"), () =>
 			frappe.set_route("knowledge-explorer")
 		);
-		listview.page.add_inner_button(__("Document Tree"), () => frappe.set_route("Tree", "AI Document"));
+		listview.page.add_inner_button(__("Document Tree"), () =>
+			frappe.set_route("Tree", "AI Document")
+		);
 
 		listview.page.add_actions_menu_item(__("Re-process"), () => {
 			const selected = listview.get_checked_items(true);

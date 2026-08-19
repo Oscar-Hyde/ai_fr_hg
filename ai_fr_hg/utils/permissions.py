@@ -64,22 +64,28 @@ def _owned_condition(doctype: str, field: str, user: str, *, auditors: bool = Fa
 		return ""
 	return f"`tab{doctype}`.`{field}` = {_escape(user)}"
 
+
 def _safe_condition(fn):
 	"""Wrap permission queries so Desk never 500s on return."""
+
 	def wrapper(user: str) -> str:
 		try:
 			return fn(user)
 		except Exception:
 			try:
-				frappe.log_error(title=f"AI permission query failed: {fn.__name__}", message=frappe.get_traceback())
+				frappe.log_error(
+					title=f"AI permission query failed: {fn.__name__}", message=frappe.get_traceback()
+				)
 			except Exception:
 				pass
 			return "1=0"
+
 	return wrapper
 
 
 def _safe_doc_permission(fn):
 	"""Wrap document permission check so Desk never 500s."""
+
 	def wrapper(doc, ptype=None, user=None, permission_type=None):
 		try:
 			return fn(doc, ptype=ptype, user=user, permission_type=permission_type)
@@ -89,6 +95,7 @@ def _safe_doc_permission(fn):
 			except Exception:
 				pass
 			return False
+
 	return wrapper
 
 
@@ -268,7 +275,6 @@ def folder_favorite_query(user: str) -> str:
 	return _owned_condition("AI Folder Favorite", "user", user)
 
 
-
 # Wrap all list-query conditions so Desk return never throws 500
 conversation_query = _safe_condition(conversation_query)
 message_query = _safe_condition(message_query)
@@ -337,11 +343,7 @@ def _knowledge_base_access(knowledge_base: str | None, user: str, *, write: bool
 			fields=["role", "can_write"],
 		)
 		matching = [grant for grant in grants if grant.role in roles]
-		result = (
-			any(bool(grant.can_write) for grant in matching)
-			if write
-			else bool(kb.is_public or matching)
-		)
+		result = any(bool(grant.can_write) for grant in matching) if write else bool(kb.is_public or matching)
 	if cache is not None:
 		cache[cache_key] = result
 	return result

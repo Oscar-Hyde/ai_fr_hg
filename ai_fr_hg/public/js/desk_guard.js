@@ -95,7 +95,9 @@
 			if (result && typeof result.fail === "function") {
 				result.fail((xhr, _textStatus, _err) => {
 					if (xhr && xhr.status === 404) {
-						console.warn("Desk guard: build_events bundle 404, Desk will remain usable");
+						console.warn(
+							"Desk guard: build_events bundle 404, Desk will remain usable"
+						);
 						// Resolve the callback with a no-op to keep the caller happy.
 						if (typeof callback === "function") {
 							try {
@@ -162,8 +164,14 @@
 							// when the socket server is still starting.
 							const suppress = (err) => {
 								const msg = String(err && err.message ? err.message : err);
-								if (msg.includes("xhr poll error") || msg.includes("websocket error")) {
-									console.warn("Desk guard: suppressed socket.io poll error, will retry", msg);
+								if (
+									msg.includes("xhr poll error") ||
+									msg.includes("websocket error")
+								) {
+									console.warn(
+										"Desk guard: suppressed socket.io poll error, will retry",
+										msg
+									);
 									return;
 								}
 								console.warn("Desk guard: socket.io error", err);
@@ -174,10 +182,18 @@
 								// Reconnect with back-off instead of spamming the server.
 								let reconnectAttempts = 0;
 								sock.on("disconnect", (reason) => {
-									if (reason === "io server disconnect" || reason === "transport close") {
+									if (
+										reason === "io server disconnect" ||
+										reason === "transport close"
+									) {
 										reconnectAttempts += 1;
-										const delay = Math.min(1000 * Math.pow(1.5, reconnectAttempts), 15000);
-										console.warn(`Desk guard: socket disconnected (${reason}), reconnecting in ${delay}ms`);
+										const delay = Math.min(
+											1000 * Math.pow(1.5, reconnectAttempts),
+											15000
+										);
+										console.warn(
+											`Desk guard: socket disconnected (${reason}), reconnecting in ${delay}ms`
+										);
 										setTimeout(() => {
 											try {
 												if (sock.disconnected) sock.connect();
@@ -196,7 +212,10 @@
 						}
 						return result;
 					} catch (error) {
-						console.warn("Desk guard: socketio.init failed, Desk will stay usable", error);
+						console.warn(
+							"Desk guard: socketio.init failed, Desk will stay usable",
+							error
+						);
 						// Do not re-throw — Desk must remain interactive even without realtime.
 						return null;
 					}

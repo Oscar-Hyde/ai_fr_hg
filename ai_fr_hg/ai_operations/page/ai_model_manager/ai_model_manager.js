@@ -22,8 +22,16 @@ frappe.pages["ai-model-manager"].on_page_show = function (wrapper) {
 const SUGGESTED_MODELS = [
 	{ name: "qwen2.5:0.5b", type: "Chat", note: __("Fits machines with ~10 GB RAM, ~400 MB") },
 	{ name: "phi3:mini", type: "Chat", note: __("Small and capable, ~2.3 GB") },
-	{ name: "qwen2.5:7b", type: "Chat", note: __("Needs ~11 GB free RAM — skip if Test says out of memory") },
-	{ name: "llama3.1:8b", type: "Chat", note: __("Needs ~11 GB free RAM — too large for a 10 GB machine") },
+	{
+		name: "qwen2.5:7b",
+		type: "Chat",
+		note: __("Needs ~11 GB free RAM — skip if Test says out of memory"),
+	},
+	{
+		name: "llama3.1:8b",
+		type: "Chat",
+		note: __("Needs ~11 GB free RAM — too large for a 10 GB machine"),
+	},
 	{ name: "mistral:7b", type: "Chat", note: __("Needs ~10 GB free RAM") },
 	{ name: "nomic-embed-text", type: "Embedding", note: __("Recommended embeddings, ~274 MB") },
 	{
@@ -237,18 +245,20 @@ class AIModelManager {
 					title: __("Model Test: {0}", [model.model_label]),
 					indicator: failed ? "orange" : "green",
 					message: failed
-						? `<p>${frappe.utils.escape_html(
-								result.response ||
-									result.error ||
-									__("The model could not start. Try qwen2.5:0.5b.")
-						  ).replace(/\n/g, "<br>")}</p>`
+						? `<p>${frappe.utils
+								.escape_html(
+									result.response ||
+										result.error ||
+										__("The model could not start. Try qwen2.5:0.5b.")
+								)
+								.replace(/\n/g, "<br>")}</p>`
 						: result.response
-							? `<p><b>${__("Response")}:</b> ${frappe.utils.escape_html(
-									result.response
-							  )}</p>
+						? `<p><b>${__("Response")}:</b> ${frappe.utils.escape_html(
+								result.response
+						  )}</p>
 						   <p class="text-muted">${result.duration_ms} ms · ${result.total_tokens} ${__("tokens")} ·
 						   ${result.tokens_per_second} ${__("tok/s")}</p>`
-							: __("Embeddings returned {0} dimensions.", [result.dimensions]),
+						: __("Embeddings returned {0} dimensions.", [result.dimensions]),
 				});
 			} catch (error) {
 				frappe.msgprint({
@@ -415,7 +425,10 @@ class AIModelManager {
 					frappe.msgprint({
 						title: __("Install Failed"),
 						indicator: "red",
-						message: rpc_error_message(error, __("Could not queue model installation.")),
+						message: rpc_error_message(
+							error,
+							__("Could not queue model installation.")
+						),
 					});
 				}
 			},

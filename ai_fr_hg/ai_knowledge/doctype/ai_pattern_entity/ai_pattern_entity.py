@@ -27,7 +27,9 @@ class AIPatternEntity(Document):
 
 		context_quote: DF.SmallText | None
 		document: DF.Link
-		entity_type: DF.Literal["email", "url", "phone", "ip", "hash", "date", "identifier", "money", "custom"]
+		entity_type: DF.Literal[
+			"email", "url", "phone", "ip", "hash", "date", "identifier", "money", "custom"
+		]
 		first_offset: DF.Int
 		knowledge_base: DF.Link
 		normalized_value: DF.Data | None

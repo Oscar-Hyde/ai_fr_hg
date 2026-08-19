@@ -1,12 +1,14 @@
 # AI Fr HG — audited project status
 
 **Status date:** 2026-08-19
-**Current main revision:** `0d8848eb5178afeee2dd64b15c30c54dea6b899d`
-**Latest merged change:** PR #27, integration compatibility fixes
 **App version:** `0.0.1`
-**Target declared by the project:** Frappe v17, Python 3.14+
+**Framework baseline:** pinned Frappe `17.0.0-dev`, Python `>=3.14,<3.15`, Node 24, MariaDB 11.8
+**Release qualification:** not production-ready; upstream stable Frappe v17 does not yet exist
 
-This document is the current, branch-neutral status summary. The detailed findings, unfinished-function inventory, frontend/backend plan, sequencing, acceptance criteria, and release roadmap are in [`DEVELOPMENT_PLAN.md`](DEVELOPMENT_PLAN.md).
+This branch-neutral summary is controlled by the detailed
+[`DEVELOPMENT_PLAN.md`](DEVELOPMENT_PLAN.md),
+[`GAP_REGISTER.md`](GAP_REGISTER.md), and
+[`ARCHITECTURE_DECISIONS.md`](ARCHITECTURE_DECISIONS.md).
 
 ---
 
@@ -31,8 +33,8 @@ The previous version of this document described nearly every module as READY or 
 | Custom Desk pages | 4 |
 | Workspaces | 5 |
 | Reports | 3 |
-| Python test methods | 392 |
-| Latest real-bench result | 392 passed, 1 skipped |
+| Audited pre-Phase-0 Python test methods | 392 |
+| Latest verified real-bench baseline | 392 passed, 1 skipped (before current Phase 0 changes) |
 | Production JavaScript files | 52 |
 | JavaScript/browser tests | 0 |
 
@@ -64,14 +66,14 @@ Green tests prove the covered paths. They do not cover browser behavior, real ru
 | --- | --- | --- |
 | Provider adapters | **PARTIAL / HARDENING REQUIRED** | Ollama and OpenAI-compatible paths work. Provider/model concurrency, provider rate limits, capability enforcement, equivalent-model failover, versions, and full model lifecycle remain. |
 | Network guard | **PARTIAL / HARDENING REQUIRED** | Local/private validation exists. Connection-level DNS/proxy/redirect hardening is still required before using absolute “never leaves” claims. |
-| Ingestion | **PARTIAL** | File, text, URL, and DocType-record main paths exist. Folder source is unsupported, scanned-PDF OCR is absent, `.msg` support is incomplete, and job progress/cancel need work. |
-| Readers | **PARTIAL** | 37 extensions are registered, with optional dependency degradation. Registered extension does not always mean production-grade format support. |
+| Ingestion | **PARTIAL** | File, text, URL, and DocType-record main paths exist. Unsupported Folder source and `.msg` exposure were removed; scanned-PDF OCR is explicitly unsupported; warnings/progress/cancel remain. |
+| Readers | **PARTIAL** | 36 extensions are registered with optional dependency degradation. PDF means text-layer extraction; OCR applies to image files, not scanned PDFs. |
 | Document tree | **READY / HARDENING REQUIRED** | Strong identity, locking, permissions, bulk operations, concurrency checks, and tests. Deep/large tree browser and load validation remain. |
 | File/folder organization | **PARTIAL / HARDENING REQUIRED** | Rich canonical service exists. Global Desk patches, native move fallback, stable File identity, default-folder semantics, and deep folder picker need revision. |
 | Chunking/vector math | **READY** | Pure logic is well tested. |
 | Retrieval | **PARTIAL — production blocker** | Hybrid flow works on small corpora. Semantic/keyword candidates are bounded before ranking, mixed KB embedding models are not reconciled, and KB-specific retrieval settings/weights are not fully applied. |
 | Knowledge Explorer | **PARTIAL** | Search/ask/upload/overview work. Pagination, folder/entity facets, diagnostics, and robust upload progress remain. |
-| Intelligence | **PARTIAL** | Summary/classify/extract/compare main paths exist. Target DocType mapping is unused; whole-document strategies and strict local schema validation remain. |
+| Intelligence | **PARTIAL** | Summary/classify/extract/compare main paths exist. Extraction is explicitly JSON-only and the dormant target DocType field is hidden; whole-document strategies and strict local schema validation remain. |
 | Pattern extraction | **PARTIAL** | Strong deterministic extraction and tests. Durable zero-result scan state, correct tail offsets, semantic value validation, and aggregate explorer remain. |
 | Translation | **PARTIAL — isolation fix required** | Strong segmentation, masking, quality checks, repair, review, memory, and indexing core. Unscoped inline memory, policy-aware memory identity, progress/cancel, default index setting, and format output remain. |
 | Assistant/agents | **PARTIAL** | Chat, retrieval, citations, tools, streaming, and friendly runtime failures work. Latest-history selection, route state, cancellation, focused document, fallback answer, KB weights, and conversation UX remain. |
@@ -83,8 +85,8 @@ Green tests prove the covered paths. They do not cover browser behavior, real ru
 | Learning | **PARTIAL** | Candidate validation/promotion/recall/feedback core is strong. Learning dashboard, report wiring, semantic recall, skill relevance, and lifecycle maintenance remain. |
 | Operations | **PARTIAL** | Readiness, health, usage snapshot, failures, approvals, and queues are visible. SLOs, charts, job detail, stale-state reconciliation, and timer lifecycle remain. |
 | Backup/import/export | **PARTIAL — restore work required** | Text JSON round-trip exists. Exported embeddings are ignored by import; component completeness, streaming, format version, retention, and restore drills remain. |
-| Encryption | **DECLARED ONLY** | The visible setting does not encrypt stored document/chunk/translation text. It must be implemented or removed/hidden. |
-| CI/release | **BLOCKED** | Local/bench tests pass, but GitHub Actions jobs do not start because of an account billing/spending-limit error. Versioning/release qualification also remains. |
+| Encryption | **INTENTIONALLY UNSUPPORTED** | The dormant compatibility field is hidden/read-only, reset to 0, and rejected server-side. Use deployment-layer encrypted storage/database/backups. |
+| CI/release | **BLOCKED** | Workflows now define pinned-v17 Server/Linter/Frontend static/Dependency audit checks, but hosted jobs still require account billing/spending remediation and `main` is unprotected. |
 | Frontend validation | **PARTIAL** | JavaScript parses and pages are implemented, but there are no JS unit, browser E2E, accessibility, or responsive tests. |
 
 ---
@@ -100,15 +102,14 @@ Green tests prove the covered paths. They do not cover browser behavior, real ru
 5. Harden provider networking at connection time against proxy/DNS/redirect weaknesses.
 6. Remove the native File mutation fallback that can bypass canonical AI-document provenance updates.
 7. Require stable File identities in upload/folder APIs.
-8. Implement or hide the document-encryption setting.
-9. Restore GitHub Actions execution and require checks before merge.
+8. Restore GitHub Actions execution and require checks before merge.
 
 ### P1 — complete existing product promises
 
 1. Enforce resource/provider/model concurrency and provider rate limits.
 2. Fix latest conversation history and atomic message sequencing.
 3. Complete conversation route state, cancel/retry, pin/rename/archive/restore, and feedback correction UX.
-4. Implement/remove Folder source, scanned-PDF OCR, `.msg`, reranker, model versions, and extraction target mapping.
+4. Keep removed Folder/`.msg`/reranker/target-mapping controls absent; implement translation/ingestion progress, parser hardening, and provider model lifecycle. Scanned-PDF OCR and original-format reconstruction remain intentionally unsupported unless a future decision supersedes Phase 0.
 5. Add pipeline API/document-ingest triggers, atomic schedule claims, waiting-approval resume, and a typed builder.
 6. Complete AI Task types, state transitions, scheduling, audit links, and UI.
 7. Add translation/pattern/ingestion progress and cancellation.
@@ -122,10 +123,9 @@ Green tests prove the covered paths. They do not cover browser behavior, real ru
 
 The complete analysis is in the development plan. The most important current examples are:
 
-- `AI Platform Settings.encrypt_documents` — unused.
 - `AI Resource Policy.max_concurrent_requests` — unused.
 - `AI Provider.max_concurrent_requests` and `rate_limit_per_minute` — unused.
-- `AI Model.max_concurrent_requests`, `supports_json_mode`, and `versions` — not effectively connected.
+- `AI Model.max_concurrent_requests` and `supports_json_mode` — not effectively connected; the unimplemented Versions table is retained but hidden/read-only.
 - `AI Provider.model_prefix` — unused.
 - `AI Agent.fallback_answer` — unused.
 - `AI Agent Knowledge Base.weight` — unused.
@@ -134,13 +134,14 @@ The complete analysis is in the development plan. The most important current exa
 - `AI Execution Log.queue_time_ms` — not populated.
 - `AI Folder Settings.knowledge_tag` and `is_archived` — unused.
 - `AI Prompt Variable.variable_type` — unused.
-- `AI Extraction Schema.target_doctype` — unused.
+- `AI Extraction Schema.target_doctype` — retained for compatibility but hidden/read-only; extraction is JSON-only.
 - `AI Usage Snapshot.document_count` — unused.
-- `AI Document` source type `Folder` — offered but rejected by ingestion.
-- `Reranker` model type — no reranking execution path.
+- Folder source, `.msg`, and Reranker choices — removed from supported metadata/registration; legacy database rows are preserved where applicable.
 - Platform translation index-output default — loaded but not applied when new translations are created.
 
-Each requires an implement/repurpose/hide/remove decision.
+Remaining visible controls require implementation, repurposing, or removal in
+their owning phase. Phase 0 decisions are recorded in
+[`ARCHITECTURE_DECISIONS.md`](ARCHITECTURE_DECISIONS.md).
 
 ---
 
@@ -148,7 +149,7 @@ Each requires an implement/repurpose/hide/remove decision.
 
 ### Passing
 
-- Real-bench Python test suite: 392 passed, 1 skipped.
+- Last audited pre-Phase-0 real-bench suite: 392 passed, 1 skipped.
 - Python compile check.
 - JSON parsing.
 - JavaScript syntax check.
@@ -170,41 +171,37 @@ Each requires an implement/repurpose/hide/remove decision.
 
 ### GitHub Actions
 
-Recent CI/Linter jobs have zero steps and fail immediately. GitHub’s check annotation says:
+The Phase 0 workflow definitions now pin Frappe v17 development and define
+Server, Linter, Frontend static, and Dependency audit statuses. Recent hosted
+jobs still have zero steps and fail immediately. GitHub’s check annotation says:
 
 > The job was not started because recent account payments have failed or your spending limit needs to be increased.
 
-This is an account/repository operations issue, not a passing or failing code test. It must be fixed before CI can be treated as a merge gate.
+This is an account/repository operations issue, not a passing or failing code
+test. In addition, GitHub reports `main` as unprotected and the current private
+repository plan rejects rulesets. The repository owner must remediate the
+account/plan and require all four checks before Phase 0 can pass.
 
 ---
 
 ## Documentation status
 
-The repository has strong explanatory documents, but several claims need revision until their implementation work is complete:
+Phase 0 removed or narrowed claims for encryption, Folder ingestion, `.msg`,
+reranking, target-DocType extraction, model versions, scanned-PDF OCR, and
+original-format translation. Documentation now identifies local-network,
+retrieval-scale, failover, governance, backup/restore, workflow, and test gaps.
+Claim regressions remain part of the quality gate.
 
-- “complete” platform;
-- absolute local-only/no-egress guarantees;
-- scanned-PDF OCR;
-- `.msg` support;
-- full knowledge backup/restore with embeddings;
-- all settings being effective;
-- all pipeline trigger types being active;
-- all AI Task types being implemented;
-- retrieval behavior at enterprise corpus sizes.
-
-The active revision plan is [`DEVELOPMENT_PLAN.md`](DEVELOPMENT_PLAN.md). README and feature guides should be updated alongside the corresponding implementation phases.
+The active revision plan is [`DEVELOPMENT_PLAN.md`](DEVELOPMENT_PLAN.md); every
+future implementation phase must update its owning guide with evidence.
 
 ---
 
 ## Recommended immediate sequence
 
-1. Repair GitHub Actions billing/spending limits and rerun all checks.
-2. Fix translation-memory scope with multi-KB regression tests.
-3. Fix generic tool row/field permissions.
-4. Remove unsafe File fallback and require stable File identity.
-5. Add shared public API bounds/validation.
-6. Hide the unimplemented encryption field unless a real design is approved.
-7. Rebuild retrieval for full-corpus correctness and mixed embedding models.
-8. Only then proceed to Assistant UX, ingestion/translation progress, and automation/task completion.
+1. Repair GitHub Actions billing/spending/plan limits, run all four checks, and protect `main`.
+2. Stop; do not begin Phase 1 until the Phase 0 report can truthfully pass.
+3. Then fix translation-memory scope, generic tool permissions, provider transport, File ownership, and shared API bounds in the registered Phase 1 order.
+4. Rebuild retrieval only after the Phase 1 review passes.
 
 See the roadmap for phased effort, frontend/backend deliverables, migration strategy, and exit criteria.

@@ -39,6 +39,20 @@ class TestModelDocType(AIPlatformTestCase):
 		with self.assertRaises(frappe.ValidationError):
 			doc.insert(ignore_permissions=True)
 
+	def test_reranker_model_type_is_rejected_server_side(self):
+		doc = frappe.get_doc(
+			{
+				"doctype": "AI Model",
+				"model_label": "Unsupported Reranker",
+				"provider": self.provider.name,
+				"model_name": "rerank-test",
+				"model_type": "Reranker",
+			}
+		)
+
+		with self.assertRaises(frappe.ValidationError):
+			doc.validate_supported_type()
+
 	def test_duplicate_discovery_preserves_models_created_earlier_in_batch(self):
 		from types import SimpleNamespace
 
@@ -85,8 +99,35 @@ class TestModelDocType(AIPlatformTestCase):
 
 		self.assertIn(first_name, result["created"])
 		self.assertNotIn(duplicate_name, result["created"])
-		self.assertTrue(
-			frappe.db.exists("AI Model", {"provider": provider.name, "model_name": first_name})
+		self.assertTrue(frappe.db.exists("AI Model", {"provider": provider.name, "model_name": first_name}))
+
+	def test_discovery_does_not_create_reranker_without_execution_path(self):
+		from types import SimpleNamespace
+
+		from ai_fr_hg.ai.monitoring import sync_provider_models
+
+		model_name = "phase-zero-reranker"
+		adapter = SimpleNamespace(
+			list_models=lambda: [
+				SimpleNamespace(
+					name=model_name,
+					digest="reranker-digest",
+					size=100,
+					family="reranker",
+					parameter_size="1B",
+					quantization="Q4",
+					context_window=4096,
+				)
+			]
+		)
+
+		with patch("ai_fr_hg.ai.providers.get_provider", return_value=adapter):
+			result = sync_provider_models(self.provider.name)
+
+		self.assertIn(model_name, result["unsupported"])
+		self.assertNotIn(model_name, result["created"])
+		self.assertFalse(
+			frappe.db.exists("AI Model", {"provider": self.provider.name, "model_name": model_name})
 		)
 
 	def test_probe_returns_friendly_oom_instead_of_raising(self):
@@ -134,6 +175,12 @@ class TestModelDocType(AIPlatformTestCase):
 
 
 class TestModelTypeInference(AIPlatformTestCase):
+	def test_reranker_models_are_reported_as_unsupported(self):
+		from ai_fr_hg.ai.monitoring import _guess_model_type
+
+		for name in ("bge-reranker-v2", "enterprise-rerank"):
+			self.assertIsNone(_guess_model_type(name), name)
+
 	def test_embedding_models_detected(self):
 		from ai_fr_hg.ai.monitoring import _guess_model_type
 

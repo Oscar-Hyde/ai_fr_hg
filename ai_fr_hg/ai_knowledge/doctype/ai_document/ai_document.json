@@ -114,7 +114,7 @@
    "fieldname": "source_type",
    "fieldtype": "Select",
    "label": "Source Type",
-   "options": "File\nText\nURL\nDocType Record\nFolder"
+   "options": "File\nText\nURL\nDocType Record"
   },
   {
    "depends_on": "eval:doc.source_type=='File'",

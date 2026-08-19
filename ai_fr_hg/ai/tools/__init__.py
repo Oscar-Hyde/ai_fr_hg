@@ -251,8 +251,7 @@ def _execute_invocation(
 def _needs_approval(tool_doc) -> bool:
 	settings = frappe.get_cached_doc("AI Platform Settings")
 	return bool(
-		tool_doc.requires_approval
-		or (settings.require_tool_approval and not tool_doc.is_readonly_tool)
+		tool_doc.requires_approval or (settings.require_tool_approval and not tool_doc.is_readonly_tool)
 	)
 
 
@@ -275,7 +274,9 @@ def _check_execution_context(tool_doc, *, conversation: str | None, agent: str |
 			frappe.throw(_("You cannot use a tool in this conversation."), frappe.PermissionError)
 		conversation_agent = frappe.db.get_value("AI Conversation", conversation, "agent")
 		if agent and conversation_agent and conversation_agent != agent:
-			frappe.throw(_("The invocation agent does not match the conversation agent."), frappe.PermissionError)
+			frappe.throw(
+				_("The invocation agent does not match the conversation agent."), frappe.PermissionError
+			)
 
 	if not agent:
 		return
@@ -319,7 +320,9 @@ def _validate_arguments(tool_doc, arguments: dict) -> None:
 			raise ToolExecutionError(
 				_("Argument {0} for tool {1} must be {2}.").format(name, tool_doc.name, row.parameter_type)
 			)
-		allowed = [item.strip() for item in (row.enum_values or "").replace(",", "\n").splitlines() if item.strip()]
+		allowed = [
+			item.strip() for item in (row.enum_values or "").replace(",", "\n").splitlines() if item.strip()
+		]
 		if allowed and value not in allowed:
 			raise ToolExecutionError(
 				_("Argument {0} for tool {1} is not an allowed value.").format(name, tool_doc.name)

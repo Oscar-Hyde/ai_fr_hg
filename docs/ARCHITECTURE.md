@@ -2,19 +2,19 @@
 
 ## Principles
 
-1. **Frappe-native throughout.** Every entity is a DocType, every query goes
-   through the Frappe ORM, every permission check goes through Frappe's role
-   and row-level permission system. There is no parallel data layer, no
-   separate service to deploy, no external database.
-2. **Local by default.** A network guard validates every outbound URL against
-   loopback and RFC 1918 ranges before a request is made. Turning that off is
-   a deliberate, logged configuration change.
-3. **Autonomous operation.** Ingestion, chunking, embedding, indexing, model
-   discovery, health monitoring, usage rollups and log retention all run
-   unattended on background workers and the scheduler.
-4. **Everything is traceable.** Each model call produces an `AI Execution Log`;
-   each privileged action produces an `AI Audit Log`; each tool call produces
-   an `AI Tool Invocation`; each answer carries the chunks that grounded it.
+1. **Frappe-native ownership.** Entities are DocTypes; controllers, ORM/query
+   builder, permission hooks, File, background jobs, scheduler, realtime and
+   Desk are the default authorities. Legacy raw SQL remains and MariaDB is the
+   only qualified database; portability work must move toward Frappe APIs.
+2. **Local intent, layered enforcement.** A URL/address guard restricts configured
+   endpoints, but SEC-04 connection hardening remains open. Host firewall and
+   egress controls are required as the actual network boundary.
+3. **Supervised background operation.** Supported ingestion, indexing, model
+   discovery, health, usage and retention paths use Frappe workers/scheduler.
+   Durable cancellation/recovery and several state machines remain open.
+4. **Traceability is the target.** Model/tool/audit records exist, but message/task
+   links, queue timing, stale-run reconciliation and telemetry redaction remain
+   tracked gaps; current records are not described as a complete trace.
 5. **Extension over modification.** Providers, readers and tools are registries
    merged from hooks, so other apps extend the platform without forking it.
 
@@ -174,6 +174,10 @@ the full lifecycle.
 
 ## Design decisions
 
+The controlled support-boundary decisions (database, encryption, Folder source,
+reranker, model versions, translation output, and the v17 revision pin) live in
+[`ARCHITECTURE_DECISIONS.md`](ARCHITECTURE_DECISIONS.md).
+
 ### Embeddings in DocTypes, not a vector database
 
 Vectors are stored as base64-encoded float32 in a Long Text field on
@@ -181,20 +185,20 @@ Vectors are stored as base64-encoded float32 in a Long Text field on
 therefore a plain dot product, and ranking is one NumPy matrix multiply when
 NumPy is importable, with a pure-Python fallback when it is not.
 
-This costs some throughput at very large scale but buys properties that matter
-more for enterprise deployment: nothing extra to install, backup and restore
-work through standard `bench` commands, permissions are enforced by the same
-engine as everything else, and the app installs on an air-gapped workstation
-with no infrastructure beyond Frappe itself.
+This costs throughput at larger scale but avoids a second vector service and
+keeps rows under Frappe permissions. Standard Frappe site backups include the
+DocType data; the application-level knowledge export is not yet a complete
+selective restore path (OPS-04). Retrieval completeness and scale remain Phase
+2 qualification work.
 
 Vectors are stored normalised so retrieval never pays for a square root.
 
 ### Hybrid retrieval with reciprocal rank fusion
 
-Pure vector search is weak on the content enterprises actually store — part
-numbers, invoice IDs, proper nouns, acronyms — because those tokens carry
-little semantic signal. Pure keyword search misses paraphrase. The platform
-runs both and fuses the ranked lists:
+Pure vector search can be weak on part numbers, IDs, proper nouns and acronyms;
+pure keyword search misses paraphrase. The current small-corpus path runs both
+and fuses ranked lists, but RET-01 through RET-04 remain correctness blockers
+for candidate completeness, mixed models, and per-KB policy:
 
 ```
 score(chunk) = Σ 1 / (K + rank_in_list)      K = 60
@@ -207,24 +211,23 @@ frequency.
 ### Map-reduce for long documents
 
 Summarisation over content larger than the context window splits into windows,
-summarises each, then summarises the summaries. The budget is derived from the
-model's declared context window rather than hard-coded, so a 128k model does
-the whole document in one call and an 8k model degrades gracefully.
+summarises each, then reduces summaries. The budget uses the declared context
+window. INT-03 remains open because final reduction can lose facts; whole-
+document coverage must be measured before this is production-qualified.
 
 ### Tools run as the calling user
 
-A tool never executes with elevated privileges. `frappe.has_permission` and
-`doc.check_permission` are called with the session user, so the AI can only
-ever see and change what that person could have seen and changed by hand.
-Write-capable tools additionally pass through an approval gate that can be
-required globally or per tool.
+Tools are intended to execute as the calling user and write tools have an
+approval gate. SEC-02 and SEC-03 remain open because generic count and field
+selection do not yet have complete row/field parity. Until those close, this is
+an architectural invariant under remediation rather than a proven guarantee.
 
 ### Redaction happens before storage
 
-`AI Platform Settings` holds a list of regular expressions. Prompts and
-responses are redacted before they are written to `AI Execution Log`, so
-sensitive values never land in the log table even though the model saw them.
-Compiled patterns are cached and invalidated on settings save.
+`AI Platform Settings` holds regular expressions applied before prompts and
+responses are written to `AI Execution Log`. This reduces exposure but is not a
+universal storage guarantee: SEC-07 tracks search telemetry that does not yet
+use the same path, and the model/provider still receives original request text.
 
 ### Automation cannot recurse
 
@@ -236,14 +239,12 @@ the common case — no rule for this DocType — is a single cache read.
 
 ### The Learning Loop: knowledge is approved, then additive
 
-Learned knowledge flows through an explicit, auditable pipeline rather than
-mutating the model or the agent silently. Teaching creates a candidate; the
-candidate is validated for provenance, tested for duplicates/overlaps against
-the existing store, and — by default — held for AI Manager approval. Only then
-is it promoted to an `AI Memory` or `AI Skill`, which is injected additively
-into future turns (never overriding the persona) and recalled by relevance and
-scope. Recall and feedback are best-effort: a failure in the memory layer must
-not break an otherwise healthy chat turn. See
+Learned knowledge flows through candidates and approval rather than mutating a
+model silently. Approved candidates can be promoted to `AI Memory` or
+`AI Skill` and injected additively. LEARN-03 through LEARN-05 remain open:
+semantic memory recall, skill relevance ranking, and lifecycle maintenance are
+not yet complete. Recall/feedback failures are best-effort and should not break
+an otherwise healthy chat turn. See
 [`docs/LEARNING.md`](LEARNING.md).
 
 ### Mixed AI Document tree is not NestedSet
@@ -255,12 +256,11 @@ own that projection. File stays the NestedSet authority for physical folders;
 
 ### Graceful degradation
 
-The platform stays useful when parts are missing. No NumPy: pure-Python vector
-maths. No `pypdf`: PDFs report a clear install command instead of crashing the
-pipeline. Runtime offline: failover to the next provider by priority, and the
-readiness checklist explains exactly what to fix. No `croniter`: scheduled
-pipelines are skipped rather than raising. Embedding failures leave chunks
-unembedded and a scheduled job backfills them later.
+Several paths degrade explicitly when dependencies are absent: no NumPy uses
+pure-Python vector math; no `pypdf` reports the parser dependency; no `croniter`
+skips scheduled pipelines; embedding failures can leave chunks for backfill.
+Equivalent-model provider failover is not complete (PROV-01), so runtime outage
+must not be represented as automatic high availability.
 
 ---
 

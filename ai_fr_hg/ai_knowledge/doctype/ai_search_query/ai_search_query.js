@@ -7,9 +7,10 @@ frappe.ui.form.on("AI Search Query", {
 
 		if (frm.doc.results_count !== undefined) {
 			frm.dashboard.set_headline(
-				__("{0} result(s) found in {1} ms",
-					[frm.doc.results_count || 0, frm.doc.duration_ms || 0]
-				)
+				__("{0} result(s) found in {1} ms", [
+					frm.doc.results_count || 0,
+					frm.doc.duration_ms || 0,
+				])
 			);
 		}
 

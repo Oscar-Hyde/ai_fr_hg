@@ -302,7 +302,7 @@
   },
   {
    "default": "0",
-   "description": "Requires Tesseract and the optional ocr extra. Off by default so a fresh install does not assume those packages.",
+   "description": "Image-file OCR fallback only. Requires Tesseract and the optional ocr extra; scanned-PDF OCR is not supported.",
    "fieldname": "ocr_enabled",
    "fieldtype": "Check",
    "label": "Enable OCR Fallback"
@@ -394,7 +394,7 @@
    "fieldname": "translation_memory_enabled",
    "fieldtype": "Check",
    "label": "Use Translation Memory",
-   "description": "Reuse previously translated identical segments from the same knowledge base."
+   "description": "Technical beta only. Disable until SEC-01/TRN-01 enforce authorized KB scope and policy-safe identity on every translation path."
   },
   {
    "default": "0",
@@ -422,9 +422,13 @@
    "label": "Storage Folder"
   },
   {
+   "default": "0",
+   "description": "Reserved for schema compatibility. Application-level document encryption is not supported; use encrypted storage and database controls.",
    "fieldname": "encrypt_documents",
    "fieldtype": "Check",
-   "label": "Encrypt Stored Document Text"
+   "hidden": 1,
+   "label": "Application-Level Document Encryption (Unsupported)",
+   "read_only": 1
   },
   {
    "fieldname": "auto_backup_enabled",

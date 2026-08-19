@@ -2,14 +2,7 @@
 // For license information, please see license.txt
 
 frappe.listview_settings["AI Conversation"] = {
-	add_fields: [
-		"title",
-		"agent",
-		"status",
-		"user",
-		"message_count",
-		"creation",
-	],
+	add_fields: ["title", "agent", "status", "user", "message_count", "creation"],
 	filters: [["status", "=", "Active"]],
 	get_indicator(doc) {
 		const colors = {

@@ -53,7 +53,10 @@ class TestPatternEntityScan(AIPlatformTestCase):
 		self.assertIn(("date", "2024-12-25"), rows)
 		for row in _rows(document.name):
 			self.assertEqual(row.source_checksum, "deadbeef")
-			self.assertEqual(row.knowledge_base or frappe.db.get_value("AI Pattern Entity", row.name, "knowledge_base"), self.knowledge_base.name)
+			self.assertEqual(
+				row.knowledge_base or frappe.db.get_value("AI Pattern Entity", row.name, "knowledge_base"),
+				self.knowledge_base.name,
+			)
 
 	def test_rescan_is_idempotent_and_updates_in_place(self):
 		from ai_fr_hg.ai.patterns import scan_document
@@ -80,7 +83,9 @@ class TestPatternEntityScan(AIPlatformTestCase):
 
 		# Content changes only through the document's own write path; the
 		# pattern layer just observes the new state.
-		frappe.db.set_value("AI Document", document.name, "content", "Nothing but plain words.", update_modified=False)
+		frappe.db.set_value(
+			"AI Document", document.name, "content", "Nothing but plain words.", update_modified=False
+		)
 		result = scan_document(document.name)
 
 		self.assertEqual(result["total"], 0)

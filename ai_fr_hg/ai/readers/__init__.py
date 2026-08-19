@@ -59,7 +59,6 @@ BUILTIN_READERS: dict[str, type[BaseReader]] = {
 	"html": HTMLReader,
 	"htm": HTMLReader,
 	"eml": EmailReader,
-	"msg": EmailReader,
 	# office family
 	"pdf": PDFReader,
 	"docx": DocxReader,

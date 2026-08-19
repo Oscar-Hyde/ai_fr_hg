@@ -14,14 +14,18 @@ from unittest.mock import MagicMock, patch
 
 # Provide a minimal frappe mock so unit tests run without bench
 if "frappe" not in sys.modules:
-    mock_frappe = MagicMock()
-    mock_frappe.ValidationError = type("ValidationError", (Exception,), {})
-    mock_frappe._ = lambda x: x
-    mock_frappe.throw = lambda msg, exc=None: (_ for _ in ()).throw((exc or Exception)(msg)) if exc else (_ for _ in ()).throw(Exception(msg))
-    sys.modules["frappe"] = mock_frappe
-    sys.modules["frappe.utils"] = MagicMock()
-    sys.modules["frappe.model"] = MagicMock()
-    sys.modules["frappe.model.document"] = MagicMock()
+	mock_frappe = MagicMock()
+	mock_frappe.ValidationError = type("ValidationError", (Exception,), {})
+	mock_frappe._ = lambda x: x
+	mock_frappe.throw = (
+		lambda msg, exc=None: (_ for _ in ()).throw((exc or Exception)(msg))
+		if exc
+		else (_ for _ in ()).throw(Exception(msg))
+	)
+	sys.modules["frappe"] = mock_frappe
+	sys.modules["frappe.utils"] = MagicMock()
+	sys.modules["frappe.model"] = MagicMock()
+	sys.modules["frappe.model.document"] = MagicMock()
 
 try:
 	from frappe.tests import UnitTestCase
@@ -125,6 +129,7 @@ class TestFolderUniquenessAndDepth(UnitTestCase):
 		# Make throw actually raise the typed error
 		def fake_throw(msg, exc=None):
 			import frappe as _f
+
 			# Fallback to real throw behavior: raise exc
 			if exc:
 				raise exc(msg)
@@ -142,7 +147,7 @@ class TestFolderUniquenessAndDepth(UnitTestCase):
 
 	@patch("ai_fr_hg.ai.folders.frappe")
 	def test_depth_limit(self, frappe_mock):
-		from ai_fr_hg.ai.folders import _depth, _MAX_FOLDER_DEPTH
+		from ai_fr_hg.ai.folders import _MAX_FOLDER_DEPTH, _depth
 
 		self.assertGreaterEqual(_MAX_FOLDER_DEPTH, 10)
 		# Depth helper works for nested paths
@@ -200,9 +205,10 @@ class TestPermissionAwareFolderReads(UnitTestCase):
 			attached_to_name=None,
 		)
 		visible_document = _Row(name="DOC-2", status="Completed", knowledge_base="KB-1")
-		with patch.object(folders.frappe, "get_list", return_value=[visible_document]) as get_list, patch.object(
-			folders.frappe, "get_all"
-		) as get_all:
+		with (
+			patch.object(folders.frappe, "get_list", return_value=[visible_document]) as get_list,
+			patch.object(folders.frappe, "get_all") as get_all,
+		):
 			result = folders._visible_ai_document_for_file(file_row)
 
 		self.assertIs(result, visible_document)
@@ -218,11 +224,14 @@ class TestPermissionAwareFolderReads(UnitTestCase):
 			attached_to_doctype=None,
 			attached_to_name=None,
 		)
-		with patch.object(folders.frappe, "get_list", return_value=[]) as get_list, patch.object(
-			folders.frappe,
-			"get_all",
-			return_value=["FILE-1", "FILE-2"],
-		) as get_all:
+		with (
+			patch.object(folders.frappe, "get_list", return_value=[]) as get_list,
+			patch.object(
+				folders.frappe,
+				"get_all",
+				return_value=["FILE-1", "FILE-2"],
+			) as get_all,
+		):
 			result = folders._visible_ai_document_for_file(file_row)
 
 		self.assertIsNone(result)
@@ -239,11 +248,14 @@ class TestPermissionAwareFolderReads(UnitTestCase):
 			attached_to_name="DOC-2",
 		)
 		visible_document = _Row(name="DOC-2", status="Completed", knowledge_base="KB-1")
-		with patch.object(
-			folders.frappe,
-			"get_list",
-			side_effect=[[], [visible_document]],
-		) as get_list, patch.object(folders.frappe, "get_all") as get_all:
+		with (
+			patch.object(
+				folders.frappe,
+				"get_list",
+				side_effect=[[], [visible_document]],
+			) as get_list,
+			patch.object(folders.frappe, "get_all") as get_all,
+		):
 			result = folders._visible_ai_document_for_file(file_row)
 
 		self.assertIs(result, visible_document)
@@ -274,13 +286,15 @@ class TestPermissionAwareFolderReads(UnitTestCase):
 			return [file_row]
 
 		folder_doc = SimpleNamespace(name="Home/Visible", doctype="File", is_folder=1)
-		with patch.object(folders, "cint", side_effect=lambda value: int(value or 0)), patch.object(
-			folders, "_assert_folder_exists"
-		), patch.object(folders, "_get_folder_doc", return_value=folder_doc), patch.object(
-			folders, "_check_permission"
-		), patch.object(folders, "get_folder_path", return_value=[]), patch.object(
-			folders.frappe, "get_list", side_effect=get_list
-		) as get_list_mock, patch.object(folders.frappe, "get_doc") as get_doc:
+		with (
+			patch.object(folders, "cint", side_effect=lambda value: int(value or 0)),
+			patch.object(folders, "_assert_folder_exists"),
+			patch.object(folders, "_get_folder_doc", return_value=folder_doc),
+			patch.object(folders, "_check_permission"),
+			patch.object(folders, "get_folder_path", return_value=[]),
+			patch.object(folders.frappe, "get_list", side_effect=get_list) as get_list_mock,
+			patch.object(folders.frappe, "get_doc") as get_doc,
+		):
 			result = folders.list_folder_contents("Home/Visible", limit=999, offset=-5)
 
 		self.assertEqual(result["total"], 1)
@@ -308,13 +322,16 @@ class TestPermissionAwareFolderReads(UnitTestCase):
 			creation="2026-01-01",
 			modified="2026-01-02",
 		)
-		with patch.object(folders, "_get_folder_doc", return_value=folder_doc), patch.object(
-			folders, "_check_permission"
-		), patch.object(folders, "get_folder_path", return_value=[]), patch.object(
-			folders, "_permission_aware_count", side_effect=[2, 3, 5]
-		) as count, patch.object(folders, "_permission_aware_file_size", return_value=77) as size, patch.object(
-			folders.frappe.db, "exists", return_value=False
-		), patch.object(folders.frappe.db, "count") as db_count, patch.object(folders.frappe.db, "sql") as db_sql:
+		with (
+			patch.object(folders, "_get_folder_doc", return_value=folder_doc),
+			patch.object(folders, "_check_permission"),
+			patch.object(folders, "get_folder_path", return_value=[]),
+			patch.object(folders, "_permission_aware_count", side_effect=[2, 3, 5]) as count,
+			patch.object(folders, "_permission_aware_file_size", return_value=77) as size,
+			patch.object(folders.frappe.db, "exists", return_value=False),
+			patch.object(folders.frappe.db, "count") as db_count,
+			patch.object(folders.frappe.db, "sql") as db_sql,
+		):
 			result = folders.get_folder_info("Home/Reports_100%")
 
 		self.assertEqual(

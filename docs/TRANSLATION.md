@@ -1,12 +1,15 @@
 # Translation
 
-Arabic ⇄ English ⇄ Hebrew translation of anything the platform can extract —
-offline, on your own models, with a reviewable audit trail.
+Arabic ⇄ English ⇄ Hebrew translation of extracted text through configured
+providers, with segment review and execution records. This technical-beta path
+is not production-safe until translation-memory isolation (SEC-01/TRN-01),
+glossary permission parity, worker identity restoration, and cancellation pass.
 
 Translation is not a prompt wrapped around a document. It is a pipeline that
 segments the source, protects everything a model must not touch, translates in
 context-sized batches, scores every segment locally, repairs what fails and
-reassembles the document with its structure intact.
+reassembles extracted text with its block/spacing structure intact. It does not
+reconstruct the original PDF, Office, email, or image binary.
 
 ---
 
@@ -34,16 +37,16 @@ reassembles the document with its structure intact.
 | Capability | Detail |
 | --- | --- |
 | **Languages** | Arabic (`ar`), English (`en`), Hebrew (`he`) — all six directions, translated directly without pivoting through a third language. |
-| **Sources** | Any of the 37 ingestible formats: PDF, Word, Excel, PowerPoint, OpenDocument, HTML, email, plain text, images via OCR. If the platform can extract it, it can translate it. |
-| **Structure preserving** | Headings, paragraphs, list markers, table rows, indentation, blank lines and `[Page N]` markers come out in the same shape they went in. |
-| **Never corrupted** | Numbers, dates, currency figures, URLs, e-mail addresses, file paths, identifiers such as `INV-2026-00042`, code spans, template placeholders and HTML tags are masked before the model sees them and restored afterwards. |
+| **Sources** | Extracted text from 36 registered extensions, subject to optional parser availability. Text-layer PDFs and `.eml` are supported; scanned-PDF OCR and Outlook `.msg` are not. |
+| **Extracted-text structure** | Text headings, paragraphs, list markers, table rows, indentation, blank lines and `[Page N]` markers are reassembled. Original binary formatting is not reconstructed. |
+| **Protected spans** | Numbers, dates, currency figures, URLs, e-mail addresses, file paths, identifiers, code spans, template placeholders and HTML tags are masked and checked after restoration; failed integrity checks flag the segment rather than proving corruption is impossible. |
 | **RTL aware** | Arabic and Hebrew presentation forms from PDF extraction are folded to base letters, bidi control characters are stripped, and the output is rendered with the correct direction in Desk. |
 | **Terminology control** | A trilingual glossary can force a rendering for a term, or protect a name so it is never translated at all. |
 | **Quality scored** | Every segment gets a 0–100 score from local checks: placeholder integrity, target-script purity, residual source text, length ratio, glossary compliance, refusals, and degenerate repetition. |
 | **Self-repairing** | A segment that fails review is retried once with a stricter prompt that names the defect, and the retry is kept only when it scores better. |
-| **Translation memory** | An identical source segment already translated in the same knowledge base is reused: faster, cheaper, and consistent across a corpus. |
-| **Verifiable** | Optionally back-translates a sample and compares it to the source with the local embedding model. |
-| **Fully local** | Same engine, same providers, same governance and audit trail as the rest of the platform. Nothing leaves the machine. |
+| **Translation memory** | Implemented but **not production-safe yet**: SEC-01/TRN-01 track mandatory authorized KB scope and policy identity on every path. Disable it until Phase 1 closes. |
+| **Quality signal** | Optional back-translation compares a sample with an embedding model; it is a heuristic, not formal verification. |
+| **Network scope** | Calls use configured providers. Strict-local connection hardening remains open under SEC-04, so firewall/egress policy is required for a local-only guarantee. |
 
 ---
 
@@ -81,16 +84,16 @@ extracted text
    ↓ normalise      fold Arabic/Hebrew presentation forms, strip bidi controls,
    ↓                canonicalise line endings and spacing
    ↓ detect         dominant script + function words decide the source language
-   ↓ segment        structure-aware blocks that reassemble byte-for-byte
-   ↓ memory         identical segments reused from previous translations
+   ↓ segment        structure-aware extracted-text blocks and separators
+   ↓ memory         optional reuse; disable until SEC-01/TRN-01 close
    ↓ protect        numbers, URLs, IDs, code, page markers, protected terms → [[T0]]
    ↓ translate      batched calls at temperature 0, per-segment fallback
    ↓ restore        placeholders put back, model chatter stripped
    ↓ score          eight local checks per segment
    ↓ repair         one stricter retry for anything flagged, kept only if better
    ↓ verify         optional back-translation similarity via local embeddings
-   ↓ reassemble     original spacing and structure restored
-AI Translation
+   ↓ reassemble     extracted-text spacing and block structure restored
+AI Translation text (not a reconstructed source binary)
 ```
 
 **Segmentation** splits on blank lines and recognises headings, list blocks,
@@ -177,20 +180,18 @@ Attach a glossary per translation, or set a **Default Glossary** in
 
 ## Translation memory
 
-Every stored segment carries a fingerprint: a hash of its normalised source
-text plus the language pair. Before translating, the platform looks up
-fingerprints from completed translations **in the same knowledge base** and
-reuses the approved text.
+Every stored segment currently carries a fingerprint based on normalised source
+text and the language pair. Memory reuse is **disabled operational guidance for
+production** until Phase 1 closes SEC-01 and TRN-01:
 
-- Repeated boilerplate — clause headers, signature blocks, standard warnings —
-  is translated once and reused everywhere.
-- Terminology stays identical across a corpus, which no amount of prompting
-  achieves reliably.
-- Reuse is scoped to one knowledge base so it can never surface text from a
-  corpus the requesting user cannot read.
+- no scope must perform no memory lookup;
+- every document, inline, and tool path must pass an authorized knowledge base;
+- the fingerprint/identity must include the effective translation policy;
+- cross-user and cross-KB isolation tests must pass.
 
-Reused segments are marked **Reused** and counted as **Memory Reuse** on the
-record. Disable with **Use Translation Memory**.
+The current main paths can mark reused segments as **Reused** and count **Memory
+Reuse**, but those indicators do not prove isolation. Turn off **Use Translation
+Memory** until the controlled gap register marks both findings closed.
 
 ---
 
@@ -309,7 +310,7 @@ Translate an extracted `AI Document` into a stored `AI Translation`.
 | `document` | string | Required. |
 | `target_language` | string | Required. |
 | `source_language`, `model`, `glossary`, `tone`, `domain` | string | Optional. |
-| `preserve_formatting` | bool | Default true. |
+| `preserve_formatting` | bool | Preserve extracted-text blocks/separators. Does not reconstruct the source file. |
 | `index_output` | bool | Also store the result as a searchable document. |
 | `background` | bool | Default true. Set false to translate in the request. |
 
@@ -339,7 +340,7 @@ Translate an extracted `AI Document` into a stored `AI Translation`.
 | Segments per Model Call | 6 | Batch size. Lower it for small context windows. |
 | Run Quality Checks | on | Score and flag every segment. |
 | Repair Flagged Segments | on | One stricter retry per flagged segment. |
-| Use Translation Memory | on | Reuse identical segments within a knowledge base. |
+| Use Translation Memory | on | Disable for production until SEC-01/TRN-01 isolation and policy identity close. |
 | Back-Translation Samples | 0 | Segments verified by back-translation. 0 disables it. |
 | Index Translations as Documents | off | Default for new translations. |
 
@@ -370,8 +371,9 @@ what makes a model paraphrase a clause it should have translated.
 ## Troubleshooting
 
 **"Could not detect the source language."**
-The extracted text has too little signal — usually a scanned PDF with no OCR.
-Enable OCR, or set the source language explicitly on the translation.
+The extracted text has too little signal. Scanned-PDF OCR is not supported;
+OCR the PDF before upload. For extractable text, set the source language
+explicitly if automatic detection is uncertain.
 
 **"The text is already in Arabic."**
 The detector found the target language as the dominant script. For a mixed

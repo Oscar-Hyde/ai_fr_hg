@@ -1,6 +1,9 @@
 # Copyright (c) 2026, Ai Fr Hg and contributors
 # For license information, please see license.txt
 
+# Multilingual fixtures intentionally contain non-Latin confusable characters.
+# ruff: noqa: RUF001
+
 """Pure unit tests for the AI platform's algorithms.
 
 These exercise chunking, vector maths, redaction, ranking and JSON parsing
@@ -324,6 +327,13 @@ class TestReaderRegistry(UnitTestCase):
 		self.assertIsNone(get_reader("mystery.zzz"))
 		self.assertIsNone(get_reader("no_extension"))
 
+	def test_outlook_msg_is_not_misrepresented_as_rfc_email(self):
+		from ai_fr_hg.ai.readers import get_reader, supported_extensions
+
+		self.assertNotIn("msg", supported_extensions())
+		self.assertIsNone(get_reader("mail.msg"))
+		self.assertIsNotNone(get_reader("mail.eml"))
+
 	def test_plain_text_reader_round_trip(self):
 		from ai_fr_hg.ai.readers import get_reader
 
@@ -440,7 +450,7 @@ class TestToolCallWireFormats(UnitTestCase):
 
 
 class TestSimilarityThreshold(UnitTestCase):
-	"""Desk users type 25 meaning 25%; the store keeps a 0–1 cosine score."""
+	"""Desk users type 25 meaning 25%; the store keeps a 0-1 cosine score."""
 
 	def test_fraction_is_unchanged(self):
 		from ai_fr_hg.ai.settings import normalize_similarity_threshold
@@ -657,7 +667,7 @@ class TestLanguageDetection(UnitTestCase):
 		"""PDF extractors often emit presentation-form Arabic, not the standard block."""
 		from ai_fr_hg.ai.language import detect_language
 
-		# Isolated / initial / medial / final forms in FB50–FDFF and FE70–FEFF.
+		# Isolated / initial / medial / final forms in FB50-FDFF and FE70-FEFF.
 		text = "ﺍﻟﻌﻘﺪ ﺍﻟﺮﺳﻤﻲ ﻟﻠﻤﺸﺮﻭﻉ ﻭﻫﻮ ﻣﻜﺘﻮﺏ ﺑﺎﻟﻠﻐﺔ ﺍﻟﻌﺮﺑﻴﺔ ﺑﺸﻜﻞ ﻭﺍﺿﺢ"
 		self.assertEqual(detect_language(text), "ar")
 
@@ -802,7 +812,9 @@ class TestStreamingDecision(UnitTestCase):
 		from ai_fr_hg.ai.settings import should_stream_completion
 
 		self.assertTrue(should_stream_completion(requested=True, enabled=True, offer_tools=None))
-		self.assertFalse(should_stream_completion(requested=True, enabled=True, offer_tools=[{"name": "search"}]))
+		self.assertFalse(
+			should_stream_completion(requested=True, enabled=True, offer_tools=[{"name": "search"}])
+		)
 		self.assertFalse(should_stream_completion(requested=True, enabled=False, offer_tools=None))
 		self.assertFalse(should_stream_completion(requested=False, enabled=True, offer_tools=None))
 

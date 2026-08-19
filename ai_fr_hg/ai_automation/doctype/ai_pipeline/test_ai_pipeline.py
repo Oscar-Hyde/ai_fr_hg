@@ -42,9 +42,7 @@ class TestPipeline(AIPlatformTestCase):
 		dotted_path = "external_enterprise_app.ai.steps.enrich_record"
 		with (
 			patch("ai_fr_hg.ai.pipeline.frappe.get_hooks", return_value={"enrich": dotted_path}) as hooks,
-			patch(
-				"ai_fr_hg.ai.pipeline.frappe.get_attr", return_value=unmarked_pipeline_method
-			) as get_attr,
+			patch("ai_fr_hg.ai.pipeline.frappe.get_attr", return_value=unmarked_pipeline_method) as get_attr,
 		):
 			resolved = resolve_pipeline_step_method(dotted_path)
 

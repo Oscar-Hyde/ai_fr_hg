@@ -17,11 +17,7 @@ frappe.ui.form.on("AI Audit Log", {
 
 		frm.add_custom_button(__("View Related"), () => {
 			if (frm.doc.reference_doctype && frm.doc.reference_name) {
-				frappe.set_route(
-					"Form",
-					frm.doc.reference_doctype,
-					frm.doc.reference_name
-				);
+				frappe.set_route("Form", frm.doc.reference_doctype, frm.doc.reference_name);
 			}
 		});
 

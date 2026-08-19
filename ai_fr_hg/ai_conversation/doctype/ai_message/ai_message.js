@@ -11,10 +11,7 @@ frappe.ui.form.on("AI Message", {
 			System: "grey",
 			Tool: "orange",
 		};
-		frm.page.set_indicator(
-			__(frm.doc.role),
-			role_colors[frm.doc.role] || "grey"
-		);
+		frm.page.set_indicator(__(frm.doc.role), role_colors[frm.doc.role] || "grey");
 
 		if (frm.doc.conversation) {
 			frm.add_custom_button(__("View Conversation"), () =>

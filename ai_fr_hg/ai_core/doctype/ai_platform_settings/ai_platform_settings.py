@@ -82,9 +82,20 @@ class AIPlatformSettings(Document):
 	# end: auto-generated types
 
 	def validate(self):
+		self.validate_unsupported_settings()
 		self.validate_intervals()
 		self.validate_model_types()
 		self.validate_redaction_patterns()
+
+	def validate_unsupported_settings(self):
+		"""Reject dormant controls that could otherwise imply a security boundary."""
+		if cint(self.encrypt_documents):
+			frappe.throw(
+				_(
+					"Application-level document encryption is not supported. "
+					"Use encrypted storage and database controls at the deployment layer."
+				)
+			)
 
 	def validate_intervals(self):
 		from ai_fr_hg.ai.settings import normalize_similarity_threshold

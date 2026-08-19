@@ -2,14 +2,7 @@
 // For license information, please see license.txt
 
 frappe.listview_settings["AI Skill"] = {
-	add_fields: [
-		"skill_name",
-		"skill_type",
-		"scope",
-		"enabled",
-		"usage_count",
-		"version",
-	],
+	add_fields: ["skill_name", "skill_type", "scope", "enabled", "usage_count", "version"],
 	filters: [["enabled", "=", 1]],
 	get_indicator(doc) {
 		if (doc.enabled) {

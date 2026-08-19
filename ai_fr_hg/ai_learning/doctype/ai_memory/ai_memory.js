@@ -5,10 +5,7 @@ frappe.ui.form.on("AI Memory", {
 	refresh(frm) {
 		if (frm.is_new()) return;
 
-		frm.page.set_indicator(
-			frm.doc.status,
-			frm.doc.status === "Active" ? "green" : "grey"
-		);
+		frm.page.set_indicator(frm.doc.status, frm.doc.status === "Active" ? "green" : "grey");
 
 		if (frm.doc.status === "Active") {
 			frm.add_custom_button(__("Archive"), () => {

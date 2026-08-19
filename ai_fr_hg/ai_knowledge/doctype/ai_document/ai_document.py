@@ -12,7 +12,6 @@ from frappe.utils import cint
 from ai_fr_hg.ai.ingestion import enqueue_processing, validate_source_access
 from ai_fr_hg.ai.organization import organization_name_key
 
-
 _COPY_PROVENANCE_ALLOWED = ContextVar("ai_document_copy_provenance_allowed", default=False)
 _DEFER_FILE_SOURCE_SYNC = ContextVar("ai_document_defer_file_source_sync", default=False)
 
@@ -87,7 +86,7 @@ class AIDocument(Document):
 		source_file: DF.Attach | None
 		source_folder: DF.Data | None
 		source_name: DF.DynamicLink | None
-		source_type: DF.Literal["File", "Text", "URL", "DocType Record", "Folder"]
+		source_type: DF.Literal["File", "Text", "URL", "DocType Record"]
 		source_url: DF.Data | None
 		status: DF.Literal[
 			"Draft", "Queued", "Extracting", "Chunking", "Embedding", "Indexed", "Failed", "Archived"
@@ -151,8 +150,6 @@ class AIDocument(Document):
 				self.source_file_record = file_name
 				self.folder = file_row.folder or self.folder or "Home"
 				self.source_folder = self.folder
-		elif self.source_type == "Folder" and self.source_file and not self.source_folder:
-			self.source_folder = self.source_file
 
 	def _default_organization_name(self) -> str:
 		if self.source_file_record:
@@ -190,7 +187,10 @@ class AIDocument(Document):
 			or row.file_url != self.source_file
 			or (row.folder or "Home") != (self.folder or "Home")
 		):
-			frappe.throw(_("The source File changed while this document was being saved. Refresh and try again."), frappe.TimestampMismatchError)
+			frappe.throw(
+				_("The source File changed while this document was being saved. Refresh and try again."),
+				frappe.TimestampMismatchError,
+			)
 
 	def validate_copy_provenance(self) -> None:
 		"""Keep copy lineage immutable and writable only by the canonical service."""
@@ -203,9 +203,13 @@ class AIDocument(Document):
 		if not (self.copied_from or self.copied_on):
 			return
 		if not (self.copied_from and self.copied_on):
-			frappe.throw(_("Copy provenance requires both a source identity and timestamp."), frappe.ValidationError)
+			frappe.throw(
+				_("Copy provenance requires both a source identity and timestamp."), frappe.ValidationError
+			)
 		if not _COPY_PROVENANCE_ALLOWED.get():
-			frappe.throw(_("Copy provenance can only be set by the document copy service."), frappe.PermissionError)
+			frappe.throw(
+				_("Copy provenance can only be set by the document copy service."), frappe.PermissionError
+			)
 		if not frappe.db.exists(self.doctype, self.copied_from):
 			frappe.throw(_("The source document for this copy no longer exists."), frappe.DoesNotExistError)
 
@@ -229,7 +233,12 @@ class AIDocument(Document):
 
 	def validate_organization(self) -> None:
 		"""Enforce the canonical parent relation and location-local identity."""
-		from ai_fr_hg.ai.folders import _assert_folder_exists, _check_write_access, _clean_name, _lock_folder_rows
+		from ai_fr_hg.ai.folders import (
+			_assert_folder_exists,
+			_check_write_access,
+			_clean_name,
+			_lock_folder_rows,
+		)
 
 		self.folder = _assert_folder_exists(self.folder or "Home")
 		self.source_folder = self.folder
@@ -254,6 +263,14 @@ class AIDocument(Document):
 			)
 
 	def validate_source(self):
+		supported = {"File", "Text", "URL", "DocType Record"}
+		if self.source_type not in supported:
+			frappe.throw(
+				_("Source Type {0} is not supported. Upload individual files instead.").format(
+					self.source_type or _("(empty)")
+				),
+				frappe.ValidationError,
+			)
 		if self.source_type == "File" and not self.source_file:
 			frappe.throw(_("A source file is required when Source Type is File."))
 		if self.source_type == "Text" and not self.content:
@@ -319,7 +336,10 @@ class AIDocument(Document):
 			or current.source_file_record != self.source_file_record
 			or current.source_file != self.source_file
 		):
-			frappe.throw(_("The document changed while it was being deleted. Refresh and try again."), frappe.TimestampMismatchError)
+			frappe.throw(
+				_("The document changed while it was being deleted. Refresh and try again."),
+				frappe.TimestampMismatchError,
+			)
 		frappe.db.delete("AI Document Chunk", {"document": self.name})
 		self._detach_translations()
 
@@ -331,9 +351,7 @@ class AIDocument(Document):
 		silently destroy the reviewed output, so the reference is cleared and
 		the provenance is preserved in the title.
 		"""
-		translations = frappe.get_all(
-			"AI Translation", filters={"source_document": self.name}, pluck="name"
-		)
+		translations = frappe.get_all("AI Translation", filters={"source_document": self.name}, pluck="name")
 		for name in translations:
 			frappe.db.set_value(
 				"AI Translation",

@@ -305,9 +305,7 @@ def get_chat_context() -> dict:
 			"streaming_enabled": frappe.db.get_single_value("AI Platform Settings", "streaming_enabled"),
 			"platform_enabled": frappe.db.get_single_value("AI Platform Settings", "platform_enabled"),
 			"default_chat_model": frappe.db.get_single_value("AI Platform Settings", "default_chat_model"),
-			"max_turn_seconds": cint(
-				frappe.db.get_single_value("AI Platform Settings", "max_turn_seconds")
-			),
+			"max_turn_seconds": cint(frappe.db.get_single_value("AI Platform Settings", "max_turn_seconds")),
 		},
 		"user": frappe.session.user,
 	}

@@ -66,9 +66,9 @@ class AIKnowledgeCandidate(Document):
 		# with deterministic server attribution below.
 		if not self.provenance_context and self.provenance:
 			self.provenance_context = self.provenance
-		self.approval_required = 1 if cint(
-			frappe.db.get_single_value("AI Platform Settings", "require_memory_approval")
-		) else 0
+		self.approval_required = (
+			1 if cint(frappe.db.get_single_value("AI Platform Settings", "require_memory_approval")) else 0
+		)
 		if self.status != "Draft":
 			frappe.throw(_("A new knowledge candidate must start in Draft status."))
 		self._set_authoritative_provenance(actor)
@@ -111,15 +111,11 @@ class AIKnowledgeCandidate(Document):
 		]
 		if self.source_reference_doctype and self.source_reference_name:
 			parts.append(
-				_("Source Record: {0} {1}").format(
-					self.source_reference_doctype, self.source_reference_name
-				)
+				_("Source Record: {0} {1}").format(self.source_reference_doctype, self.source_reference_name)
 			)
 		if (self.provenance_context or "").strip():
 			parts.append(
-				_("User-Provided Context (Unverified): {0}").format(
-					(self.provenance_context or "").strip()
-				)
+				_("User-Provided Context (Unverified): {0}").format((self.provenance_context or "").strip())
 			)
 		self.provenance = "; ".join(parts)[:2000]
 

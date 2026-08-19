@@ -20,7 +20,6 @@ from frappe.utils import cint
 
 from ai_fr_hg.ai.organization import organization_name_key
 
-
 _AI_DOCUMENT_INGESTION_SUPPRESSED = ContextVar("ai_document_file_ingestion_suppressed", default=False)
 
 
@@ -136,7 +135,9 @@ def on_file_upload(doc, method: str | None = None) -> None:
 		doc=permission_doc,
 		user=frappe.session.user,
 	):
-		frappe.throw(_("You do not have permission to attach a source to this AI Document."), frappe.PermissionError)
+		frappe.throw(
+			_("You do not have permission to attach a source to this AI Document."), frappe.PermissionError
+		)
 	# ``assign_file_to_folder`` already acquired parent-folder and File locks.
 	# Lock the owning AI Document only afterwards so uploads serialize with
 	# document save/delete without reversing the canonical lock order.
@@ -148,7 +149,9 @@ def on_file_upload(doc, method: str | None = None) -> None:
 		for_update=True,
 	)
 	if not current:
-		frappe.throw(_("The AI Document was deleted while its attachment was being saved."), frappe.DoesNotExistError)
+		frappe.throw(
+			_("The AI Document was deleted while its attachment was being saved."), frappe.DoesNotExistError
+		)
 	# Other attachments must not replace an established canonical source, even
 	# when Frappe deduplicates their bytes to the same URL.
 	if current.source_file_record and current.source_file_record != doc.name:

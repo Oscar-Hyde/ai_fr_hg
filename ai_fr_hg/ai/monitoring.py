@@ -154,10 +154,14 @@ def sync_provider_models(provider: str, create_missing: bool = True) -> dict:
 		for row in frappe.get_all("AI Model", filters={"provider": provider}, fields=["name", "model_name"])
 	}
 
-	created, updated, missing = [], [], []
+	created, updated, missing, unsupported = [], [], [], []
 	default_chat = frappe.db.get_single_value("AI Platform Settings", "default_chat_model")
 
 	for model in discovered:
+		model_type = _guess_model_type(model.name)
+		if model_type is None and model.name not in registered:
+			unsupported.append(model.name)
+			continue
 		if model.name in registered:
 			safe_set_value(
 				"AI Model",
@@ -193,7 +197,7 @@ def sync_provider_models(provider: str, create_missing: bool = True) -> dict:
 					"model_label": label,
 					"provider": provider,
 					"model_name": model.name,
-					"model_type": _guess_model_type(model.name),
+					"model_type": model_type,
 					"family": model.family,
 					"parameter_size": model.parameter_size,
 					"quantization": model.quantization,
@@ -264,17 +268,18 @@ def sync_provider_models(provider: str, create_missing: bool = True) -> dict:
 		"created": created,
 		"updated": updated,
 		"missing": missing,
+		"unsupported": unsupported,
 	}
 
 
-def _guess_model_type(model_name: str) -> str:
-	"""Infer a model's role from its name, so discovery needs no manual step."""
+def _guess_model_type(model_name: str) -> str | None:
+	"""Infer an executable model role, or return None for known unsupported roles."""
 	lowered = (model_name or "").lower()
 
 	if any(token in lowered for token in ("embed", "bge", "gte", "e5-", "minilm", "nomic")):
 		return "Embedding"
 	if any(token in lowered for token in ("rerank", "reranker")):
-		return "Reranker"
+		return None
 	if any(token in lowered for token in ("llava", "vision", "-vl", "bakllava", "moondream", "minicpm-v")):
 		return "Vision"
 	return "Chat"

@@ -14,9 +14,7 @@ def execute(filters: dict | None = None) -> tuple[list, list]:
 	if filters.get("status"):
 		conditions.append(f"c.status = {frappe.db.escape(filters['status'])}")
 	if filters.get("candidate_type"):
-		conditions.append(
-			f"c.candidate_type = {frappe.db.escape(filters['candidate_type'])}"
-		)
+		conditions.append(f"c.candidate_type = {frappe.db.escape(filters['candidate_type'])}")
 	if filters.get("from_date"):
 		conditions.append(f"c.creation >= {frappe.db.escape(filters['from_date'])}")
 	if filters.get("to_date"):
@@ -55,7 +53,13 @@ def execute(filters: dict | None = None) -> tuple[list, list]:
 		{"fieldname": "Title", "fieldtype": "Data", "label": "Title", "width": 200},
 		{"fieldname": "Type", "fieldtype": "Data", "label": "Type", "width": 100},
 		{"fieldname": "Source", "fieldtype": "Data", "label": "Source", "width": 120},
-		{"fieldname": "Teaching User", "fieldtype": "Link", "options": "User", "label": "Teaching User", "width": 120},
+		{
+			"fieldname": "Teaching User",
+			"fieldtype": "Link",
+			"options": "User",
+			"label": "Teaching User",
+			"width": 120,
+		},
 		{"fieldname": "Status", "fieldtype": "Data", "label": "Status", "width": 90},
 		{"fieldname": "Testing Status", "fieldtype": "Data", "label": "Testing Status", "width": 100},
 		{"fieldname": "Confidence", "fieldtype": "Percent", "label": "Confidence", "width": 70},
@@ -64,7 +68,13 @@ def execute(filters: dict | None = None) -> tuple[list, list]:
 		{"fieldname": "Scope Value", "fieldtype": "Data", "label": "Scope Value", "width": 120},
 		{"fieldname": "Created", "fieldtype": "Datetime", "label": "Created", "width": 150},
 		{"fieldname": "Approved On", "fieldtype": "Datetime", "label": "Approved On", "width": 150},
-		{"fieldname": "Approved By", "fieldtype": "Link", "options": "User", "label": "Approved By", "width": 120},
+		{
+			"fieldname": "Approved By",
+			"fieldtype": "Link",
+			"options": "User",
+			"label": "Approved By",
+			"width": 120,
+		},
 	]
 
 	return columns, data

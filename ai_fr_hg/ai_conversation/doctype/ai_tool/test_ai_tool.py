@@ -108,9 +108,7 @@ class TestCanonicalToolExecution(AIPlatformTestCase):
 		dispatch.assert_not_called()
 		self.assertEqual(outcome["status"], "Failed")
 		self.assertIn("unsupported arguments", outcome["error"])
-		self.assertEqual(
-			frappe.db.get_value("AI Tool Invocation", outcome["invocation"], "status"), "Failed"
-		)
+		self.assertEqual(frappe.db.get_value("AI Tool Invocation", outcome["invocation"], "status"), "Failed")
 
 	def test_invalid_pipeline_context_is_refused_without_an_invocation(self):
 		from ai_fr_hg.ai.tools import execute_tool

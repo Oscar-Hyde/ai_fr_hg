@@ -2,10 +2,11 @@
 
 A feature-rich, local-first enterprise AI platform, built as a native Frappe app.
 
-> **Project status:** technical beta. The main Python suite currently passes 392 tests,
-> but production hardening and several partially connected functions remain. See the
-> [audited project status](docs/PROJECT_STATUS.md) and
-> [completion roadmap](docs/DEVELOPMENT_PLAN.md) before production deployment.
+> **Project status:** technical beta, not production-ready. The last audited real-bench
+> baseline passed 392 tests before the Phase 0 quality-gate changes, but security,
+> retrieval, workflow, browser, load, upgrade, and restore qualification remains. See
+> the [audited project status](docs/PROJECT_STATUS.md), [controlled gap register](docs/GAP_REGISTER.md),
+> and [completion roadmap](docs/DEVELOPMENT_PLAN.md) before any deployment.
 
 Models are designed to run on your own hardware. The platform ships with a
 strict local-only guard that refuses provider URLs outside private networks
@@ -14,10 +15,10 @@ hardening is still tracked in the completion roadmap, so deploy with normal
 host firewall and egress controls rather than treating the application guard
 as the only network boundary.
 
-The design goal is autonomy: **everything is driven by AI with no human
-intervention except configuration.** Documents ingest, chunk, embed and index
-themselves; models are discovered and classified automatically; pipelines and
-event rules run unattended on background workers.
+The design goal is supervised automation. Supported document, model-discovery,
+pipeline, and event-rule paths can run on Frappe background workers, while
+write tools, reviews, approvals, failures, and unsupported inputs remain
+explicit human or operator concerns.
 
 ---
 
@@ -25,22 +26,27 @@ event rules run unattended on background workers.
 
 | Capability | Summary |
 | --- | --- |
-| **Local AI engine** | Ollama first-class, plus llama.cpp, vLLM, LM Studio, Text Generation WebUI and any OpenAI-compatible runtime. Automatic model discovery, health monitoring, failover and performance tracking. |
-| **Document intelligence** | 37 registered file extensions through one pipeline: extract → chunk → embed → index. Text, office (including OpenDocument), and images. Summarisation, classification, structured extraction, document comparison, and high-precision pattern extraction (emails, URLs, phones, IPs, hashes, dates, identifiers, money) into `AI Pattern Entity` rows — an opt-in layer that reads only already-extracted content. |
-| **Translation** | Arabic ⇄ English ⇄ Hebrew, offline. Structure-preserving segmentation, protected numbers and identifiers, trilingual glossaries, translation memory, a local quality gate with self-repair, and a bilingual review UI. |
-| **Knowledge & search** | Hybrid retrieval (dense vectors + keyword, fused with RRF) computed entirely in Python. Embeddings live in DocTypes — no external vector database. |
-| **Conversational AI** | Multi-session chat with retrieval grounding, inline citations, tool calling and a full audit trail of every invocation. |
-| **Automation** | Declarative pipelines and event-driven rules that bind any Frappe document event to an AI action. |
-| **Governance** | Per-role and per-user quotas, capability gates, prompt redaction, approval gates for write actions, and a complete audit log. |
+| **Local AI engine** | Ollama first-class, plus configured OpenAI-compatible local runtimes. Model discovery, health records, retry/failover scaffolding, and performance records exist; capability, rate, concurrency, and equivalent-model failover hardening remains. |
+| **Document intelligence** | 36 registered extensions through one pipeline: extract → chunk → embed → index. Text-layer PDFs, Office/OpenDocument files, RFC `.eml`, text/code, and images (vision or optional image OCR). Scanned-PDF OCR and Outlook `.msg` are not supported. Extraction returns JSON; it does not create target DocType records. |
+| **Translation** | Arabic ⇄ English ⇄ Hebrew text translation. Segmentation preserves extracted-text structure, not the original PDF/Office/image binary. Translation-memory isolation hardening remains open, so do not treat it as production-safe yet. |
+| **Knowledge & search** | Small-corpus hybrid retrieval (dense vectors + keyword, fused with RRF) computed in Python. Correct full-corpus selection, mixed embedding models, and KB policy enforcement remain production blockers. |
+| **Conversational AI** | Multi-session chat with retrieval grounding, inline citations and tool calling. Turn cancellation, concurrent ordering, reconnect, latest-history, and trace-link completion remain open. |
+| **Automation** | Main-path declarative pipelines and event rules on Frappe workers. Delete snapshots, atomic schedule claims, resumable approvals, and several task/trigger contracts remain open. |
+| **Governance** | Quota checks, capability gates, prompt redaction, write-tool approvals, and audit records exist. Distributed concurrency/rate enforcement, quota reservations, and complete trace linkage remain open. |
 | **Extensibility** | Three hooks — `ai_providers`, `ai_document_readers`, `ai_tools` — let any app add runtimes, formats and tools without touching this one. |
 
 ---
 
 ### Requirements
 
-- Frappe Framework v17
-- Python 3.14+ (matching Frappe v17 and `pyproject.toml`)
+- Frappe Framework `17.0.0-dev` at the revision recorded in
+  [`ARCHITECTURE_DECISIONS.md`](docs/ARCHITECTURE_DECISIONS.md). Upstream has not
+  published stable v17 yet; this is a pre-release development target.
+- Python `>=3.14,<3.15`, Node 24, and MariaDB 11.8
 - A local AI runtime. [Ollama](https://ollama.com) is recommended.
+
+PostgreSQL is not currently supported by this application. Stable Frappe v17
+support must be requalified when upstream publishes a stable branch/tag.
 
 ---
 
@@ -112,17 +118,17 @@ bench restart
 ### Using it
 
 **Chat** — `/app/ai-assistant`
-Three-panel interface: conversations, messages, and a context inspector showing
-the exact passages behind each answer. Attach a document mid-conversation and
-it is indexed and searchable within seconds.
+Three-panel technical-beta interface for conversations, messages, and cited
+context. Attached files are submitted to Frappe ingestion workers; durable
+progress/cancel/reconnect and attachment-identity hardening remain open.
 
 **Search** — `/app/knowledge-explorer`
-Hybrid, semantic or keyword search across your documents, with an
-"Answer with AI" toggle for grounded question answering.
+Hybrid, semantic or keyword small-corpus search with an "Answer with AI"
+toggle. Full-corpus correctness and diagnostics are Phase 2 work.
 
 **Operate** — `/app/ai-operations`
-Live provider health, token usage, latency, failed executions, queue depth and
-pending tool approvals.
+Current provider, usage, latency, failure, queue, and approval summaries. SLO
+charts, job drill-down, stale reconciliation, and timer cleanup remain open.
 
 **Manage models** — `/app/ai-model-manager`
 Install, test, enable and set defaults per provider, with curated suggestions
@@ -134,25 +140,28 @@ for a fresh install.
 
 | Document | Contents |
 | --- | --- |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Module layout, data model, request lifecycle, design decisions |
-| [`docs/FILE_TO_ANSWER.md`](docs/FILE_TO_ANSWER.md) | The complete attach → ingest → index → retrieve → cite lifecycle, dev & production process |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Module layout, data model, request lifecycle, design boundaries |
+| [`docs/ARCHITECTURE_DECISIONS.md`](docs/ARCHITECTURE_DECISIONS.md) | Supported database/runtime and implement-or-remove decisions |
+| [`docs/FILE_TO_ANSWER.md`](docs/FILE_TO_ANSWER.md) | Current attach → ingest → index → retrieve → cite main path and limitations |
 | [`docs/TRANSLATION.md`](docs/TRANSLATION.md) | Arabic / English / Hebrew translation: pipeline, quality gate, glossaries, memory, review |
 | [`docs/LEARNING.md`](docs/LEARNING.md) | The Learning Loop: teach → validate → approve → memory/skill → recall → observe |
 | [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) | Every setting, quotas, redaction, retention, deployment topologies |
 | [`docs/EXTENDING.md`](docs/EXTENDING.md) | Writing custom providers, readers, tools and pipeline steps |
 | [`docs/API.md`](docs/API.md) | Whitelisted REST endpoints with request and response shapes |
 | [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) | Current audited implementation status and known blockers |
+| [`docs/GAP_REGISTER.md`](docs/GAP_REGISTER.md) | Controlled owner/phase/status register for all 79 audit findings |
 | [`docs/DEVELOPMENT_PLAN.md`](docs/DEVELOPMENT_PLAN.md) | Full frontend/backend completion plan, priorities, phases and acceptance criteria |
 
 ---
 
 ### Air-gapped deployment
 
-The platform is built for isolated networks. Set **Strict Local Only** in
-AI Platform Settings (on by default) and every outbound URL is validated
-against loopback and RFC 1918 ranges before a request is made. Model files can
-be transferred offline with `ollama save` / `ollama load`, and knowledge bases
-export and import as self-contained JSON.
+The platform is intended for isolated networks. **Strict Local Only** performs
+application-level URL/address validation, but connection-level proxy, DNS
+rebinding, redirect, and socket hardening is still tracked as SEC-04. Use host
+firewall/egress controls as the actual network boundary. Model files can be
+transferred through runtime-supported offline procedures. Current knowledge
+JSON export/import is not a complete backup/restore mechanism (OPS-04).
 
 ---
 

@@ -65,9 +65,7 @@ class TestIndexing(AIPlatformTestCase):
 			embed_chunks(chunks, model=self.embedding_model.name)
 
 		self.assertEqual(
-			frappe.db.count(
-				"AI Document Chunk", {"name": ["in", chunks], "embedding": ["!=", ""]}
-			),
+			frappe.db.count("AI Document Chunk", {"name": ["in", chunks], "embedding": ["!=", ""]}),
 			0,
 		)
 
@@ -192,7 +190,7 @@ class TestIngestionWait(AIPlatformTestCase):
 		english.db_set("status", "Draft", update_modified=False)
 		bulgarian = self.make_document(
 			"Bulgarian Draft",
-			"Това е документ за България и за обработката на файловете, които са качени към базата.",
+			"Това е документ за България и за обработката на файловете, които са качени към базата.",  # noqa: RUF001 - Bulgarian fixture
 		)
 		bulgarian.db_set("status", "Draft", update_modified=False)
 
@@ -212,4 +210,19 @@ class TestDocumentAPI(AIPlatformTestCase):
 
 		formats = get_supported_formats()
 		self.assertIn("pdf", formats["extensions"])
+		self.assertIn("eml", formats["extensions"])
+		self.assertNotIn("msg", formats["extensions"])
 		self.assertTrue(formats["by_reader"])
+
+	def test_folder_source_is_rejected_server_side(self):
+		document = frappe.get_doc(
+			{
+				"doctype": "AI Document",
+				"title": "Unsupported Folder Source",
+				"knowledge_base": self.knowledge_base.name,
+				"source_type": "Folder",
+			}
+		)
+
+		with self.assertRaises(frappe.ValidationError):
+			document.validate_source()

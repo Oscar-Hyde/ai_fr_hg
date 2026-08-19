@@ -35,7 +35,7 @@ def normalize_similarity_threshold(value, *, fieldname: str = "Similarity Thresh
 		score = round(score / 100.0, 6)
 	if not 0 <= score <= 1:
 		frappe.throw(
-			_("{0} must be between 0 and 1 (or 1–100 as a percentage). {1} is not valid.").format(
+			_("{0} must be between 0 and 1 (or 1-100 as a percentage). {1} is not valid.").format(
 				_(fieldname), value
 			)
 		)

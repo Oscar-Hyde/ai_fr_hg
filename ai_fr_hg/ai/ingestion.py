@@ -25,8 +25,6 @@ import frappe
 from frappe import _
 from frappe.utils import cint, now_datetime
 
-from ai_fr_hg.ai.language import detect_language, language_name, parse_language_codes, resolve_document_language
-from ai_fr_hg.ai.logging import write_audit_log
 from ai_fr_hg.ai.exceptions import (
 	CorruptDocumentError,
 	DocumentFetchError,
@@ -35,6 +33,13 @@ from ai_fr_hg.ai.exceptions import (
 	DocumentSourcePermissionError,
 	UnsupportedDocumentError,
 )
+from ai_fr_hg.ai.language import (
+	detect_language,
+	language_name,
+	parse_language_codes,
+	resolve_document_language,
+)
+from ai_fr_hg.ai.logging import write_audit_log
 from ai_fr_hg.ai.readers import get_reader, supported_extensions
 from ai_fr_hg.ai.readers.base import MissingDependency
 from ai_fr_hg.utils.network import enforce_local_only, get_allowed_hosts
@@ -189,9 +194,7 @@ def validate_source_access(document, user: str | None = None) -> None:
 	if source_type == "File":
 		if not document.source_file:
 			raise DocumentFetchError(_("No source file is attached."))
-		file_doc = _file_doc(
-			document.source_file, document.get("source_file_record"), document.name
-		)
+		file_doc = _file_doc(document.source_file, document.get("source_file_record"), document.name)
 		if not frappe.has_permission("File", "read", doc=file_doc, user=user):
 			raise DocumentSourcePermissionError(
 				_("User {0} cannot read source File {1}.").format(user, file_doc.name)
@@ -251,7 +254,11 @@ def enqueue_processing(
 			validate_source_access(document, requested_by)
 
 			if document.status in {"Extracting", "Chunking", "Embedding"}:
-				return {"document": document_name, "status": document.status, "job_id": document.processing_job_id}
+				return {
+					"document": document_name,
+					"status": document.status,
+					"job_id": document.processing_job_id,
+				}
 			if document.status == "Queued" and document.processing_job_id:
 				try:
 					from frappe.utils.background_jobs import is_job_enqueued
@@ -266,7 +273,11 @@ def enqueue_processing(
 					)
 					job_is_active = True
 				if job_is_active:
-					return {"document": document_name, "status": "Queued", "job_id": document.processing_job_id}
+					return {
+						"document": document_name,
+						"status": "Queued",
+						"job_id": document.processing_job_id,
+					}
 			if document.status in {"Indexed", "Archived"}:
 				frappe.throw(
 					_("Document {0} must be explicitly reprocessed before it can be queued again.").format(
@@ -359,7 +370,9 @@ def process_document(
 			and persisted_authority
 			and requested_by != persisted_authority
 		):
-			raise DocumentSourcePermissionError(_("The processing authority does not match the queued request."))
+			raise DocumentSourcePermissionError(
+				_("The processing authority does not match the queued request.")
+			)
 
 		lock_key = f"{frappe.local.site}:ai_fr_hg:document-process:{document_name}"
 		processing_lock = frappe.cache.lock(
@@ -394,7 +407,9 @@ def process_document(
 
 				if not frappe.has_permission("AI Document", "write", doc=document, user=authority):
 					raise DocumentSourcePermissionError(
-						_("User {0} no longer has permission to process {1}.").format(authority, document_name)
+						_("User {0} no longer has permission to process {1}.").format(
+							authority, document_name
+						)
 					)
 				validate_source_access(document, authority)
 				document.db_set("status", "Extracting", update_modified=False)
@@ -498,7 +513,9 @@ def process_document(
 			try:
 				processing_lock.release()
 			except Exception:
-				frappe.log_error(title="AI document processing lock release failed", message=frappe.get_traceback())
+				frappe.log_error(
+					title="AI document processing lock release failed", message=frappe.get_traceback()
+				)
 	except Exception as exc:
 		error_type = exc.__class__.__name__
 		duration = int((time.monotonic() - started) * 1000)
@@ -564,15 +581,14 @@ def _extract_source(document, authority: str):
 		raise DocumentResourceLimitError(_("Extracted text exceeds the processing character limit."))
 	return result, reader, content, filename, mime_type
 
+
 def get_source_content(document, user: str | None = None) -> tuple[bytes, str, str | None]:
 	"""Load source bytes only after explicit source permission validation."""
 	user = _assert_valid_authority(user or frappe.session.user)
 	validate_source_access(document, user)
 
 	if document.source_type == "File":
-		file_doc = _file_doc(
-			document.source_file, document.get("source_file_record"), document.name
-		)
+		file_doc = _file_doc(document.source_file, document.get("source_file_record"), document.name)
 		content = file_doc.get_content()
 		if isinstance(content, str):
 			content = content.encode("utf-8")
@@ -669,9 +685,7 @@ def _content_type(response) -> str:
 def _validate_response_headers(response, max_bytes: int) -> str:
 	content_type = _content_type(response)
 	if content_type and not (content_type.startswith("text/") or content_type in ALLOWED_CONTENT_TYPES):
-		raise UnsupportedDocumentError(
-			_("URL returned unsupported Content-Type {0}.").format(content_type)
-		)
+		raise UnsupportedDocumentError(_("URL returned unsupported Content-Type {0}.").format(content_type))
 	content_length = response.headers.get("Content-Length")
 	if content_length:
 		try:
@@ -701,7 +715,9 @@ def fetch_url_content(
 
 	user = _assert_valid_authority(user or frappe.session.user)
 	max_bytes = _max_document_bytes()
-	timeout = min(120, max(5, cint(frappe.db.get_single_value("AI Platform Settings", "request_timeout")) or 30))
+	timeout = min(
+		120, max(5, cint(frappe.db.get_single_value("AI Platform Settings", "request_timeout")) or 30)
+	)
 	current_url = url
 	session = requests.Session()
 	session.trust_env = False
@@ -754,7 +770,9 @@ def fetch_url_content(
 								_("URL response exceeded the configured {0} byte limit.").format(max_bytes)
 							)
 				except requests.RequestException as exc:
-					raise DocumentFetchError(_("URL response could not be read: {0}").format(str(exc))) from exc
+					raise DocumentFetchError(
+						_("URL response could not be read: {0}").format(str(exc))
+					) from exc
 				if not buffer:
 					raise CorruptDocumentError(_("URL returned an empty document."))
 				return bytes(buffer), _url_filename(current_url, content_type), content_type or None
@@ -929,6 +947,7 @@ def ingest_file(
 		assign_file_to_folder,
 		get_default_folder,
 	)
+
 	if folder:
 		resolved_folder = _assert_folder_exists(_normalize_folder_path(folder))
 	elif file_doc.folder and frappe.db.exists("File", file_doc.folder):
@@ -1122,18 +1141,11 @@ def wait_for_indexed(document_names: list[str], timeout: float | None = None) ->
 
 	if timeout is None:
 		remaining = remaining_seconds()
-		timeout = (
-			DEFAULT_WAIT_SECONDS
-			if remaining is None
-			else max(remaining - DEFAULT_RESERVE_SECONDS, 0.5)
-		)
+		timeout = DEFAULT_WAIT_SECONDS if remaining is None else max(remaining - DEFAULT_RESERVE_SECONDS, 0.5)
 	hard_deadline = time.monotonic() + max(float(timeout), 0.0)
 	statuses: dict[str, str] = {}
 	while True:
-		statuses = {
-			name: frappe.db.get_value("AI Document", name, "status") or "Unknown"
-			for name in names
-		}
+		statuses = {name: frappe.db.get_value("AI Document", name, "status") or "Unknown" for name in names}
 		if all(status in {"Indexed", "Failed"} for status in statuses.values()):
 			return statuses
 		if time.monotonic() >= hard_deadline:

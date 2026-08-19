@@ -52,7 +52,13 @@ def execute(filters: dict | None = None) -> tuple[list, list]:
 		{"fieldname": "Enabled", "fieldtype": "Check", "label": "Enabled", "width": 60},
 		{"fieldname": "Version", "fieldtype": "Int", "label": "Version", "width": 60},
 		{"fieldname": "Used", "fieldtype": "Int", "label": "Used", "width": 60},
-		{"fieldname": "Source User", "fieldtype": "Link", "options": "User", "label": "Source User", "width": 120},
+		{
+			"fieldname": "Source User",
+			"fieldtype": "Link",
+			"options": "User",
+			"label": "Source User",
+			"width": 120,
+		},
 		{"fieldname": "Description", "fieldtype": "Small Text", "label": "Description", "width": 250},
 		{"fieldname": "Created", "fieldtype": "Datetime", "label": "Created", "width": 150},
 	]

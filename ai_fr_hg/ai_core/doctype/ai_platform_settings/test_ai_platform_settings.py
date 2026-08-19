@@ -49,3 +49,36 @@ class TestPlatformSettingsAPI(AIPlatformTestCase):
 		self.assertIn("providers", metrics)
 		self.assertIn("knowledge", metrics)
 		self.assertIn("activity_24h", metrics)
+
+	def test_application_level_encryption_cannot_be_enabled(self):
+		settings = frappe.get_single("AI Platform Settings")
+		settings.encrypt_documents = 1
+
+		with self.assertRaises(frappe.ValidationError):
+			settings.validate_unsupported_settings()
+
+	def test_unsupported_control_patch_is_idempotent_and_preserves_legacy_model(self):
+		from ai_fr_hg.patches.v0_0_14_disable_unsupported_controls import execute
+
+		frappe.db.set_single_value("AI Platform Settings", "encrypt_documents", 1)
+		frappe.db.set_value(
+			"AI Model",
+			self.chat_model.name,
+			{"model_type": "Reranker", "enabled": 1, "is_default": 1},
+			update_modified=False,
+		)
+
+		execute()
+		execute()
+
+		self.assertEqual(frappe.db.get_single_value("AI Platform Settings", "encrypt_documents"), 0)
+		legacy = frappe.db.get_value(
+			"AI Model",
+			self.chat_model.name,
+			["model_type", "enabled", "is_default", "last_error"],
+			as_dict=True,
+		)
+		self.assertEqual(legacy.model_type, "Reranker")
+		self.assertEqual(legacy.enabled, 0)
+		self.assertEqual(legacy.is_default, 0)
+		self.assertIn("no supported execution path", legacy.last_error)

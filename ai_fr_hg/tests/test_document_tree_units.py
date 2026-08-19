@@ -239,6 +239,7 @@ class TestDocumentTreeIdentity(UnitTestCase):
 			attached_to_doctype="AI Document",
 			attached_to_name=document.name,
 		)
+
 		def get_all(_doctype, *, limit_start=0, **_kwargs):
 			return [] if limit_start else [oldest, attached]
 
@@ -352,7 +353,10 @@ class TestLifecycleLockingAndPermissions(UnitTestCase):
 			patch("ai_fr_hg.ai.document_tree._document", side_effect=[snapshot, current]),
 			patch("ai_fr_hg.ai.ingestion._file_doc", return_value=source),
 			patch("ai_fr_hg.ai.document_tree._lock_names", side_effect=lock_names),
-			patch("ai_fr_hg.ai.document_tree._lock", side_effect=lambda doctype, name, *_: events.append(("lock", doctype, name))),
+			patch(
+				"ai_fr_hg.ai.document_tree._lock",
+				side_effect=lambda doctype, name, *_: events.append(("lock", doctype, name)),
+			),
 			patch("ai_fr_hg.ai.document_tree._folder"),
 			patch("ai_fr_hg.ai.document_tree._document_collision", return_value=False),
 			patch("ai_fr_hg.ai.document_tree._audit"),
@@ -388,7 +392,10 @@ class TestLifecycleLockingAndPermissions(UnitTestCase):
 			patch.object(frappe.db, "exists", side_effect=[True, False]),
 			patch.object(frappe.db, "get_value", return_value="Home/Documents"),
 			patch("ai_fr_hg.ai.document_tree._lock_names", side_effect=lock_names),
-			patch("ai_fr_hg.ai.document_tree._lock", side_effect=lambda doctype, name, *_: events.append(("lock", doctype, name))),
+			patch(
+				"ai_fr_hg.ai.document_tree._lock",
+				side_effect=lambda doctype, name, *_: events.append(("lock", doctype, name)),
+			),
 			patch("ai_fr_hg.ai.document_tree._folder"),
 			patch.object(frappe, "delete_doc", side_effect=lambda *_args, **_kwargs: events.append("delete")),
 			patch("ai_fr_hg.ai.document_tree._audit"),

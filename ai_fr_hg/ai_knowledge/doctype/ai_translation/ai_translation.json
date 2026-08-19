@@ -157,9 +157,10 @@
   },
   {
    "default": "1",
+   "description": "Preserve extracted-text blocks, spacing, and separators. This does not reconstruct the original PDF, Office, or image file.",
    "fieldname": "preserve_formatting",
    "fieldtype": "Check",
-   "label": "Preserve Formatting"
+   "label": "Preserve Extracted-Text Structure"
   },
   {
    "default": "0",

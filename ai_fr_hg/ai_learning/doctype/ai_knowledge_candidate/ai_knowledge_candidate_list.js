@@ -11,9 +11,7 @@ frappe.listview_settings["AI Knowledge Candidate"] = {
 		"conflict_count",
 		"target_scope",
 	],
-	filters: [
-		["status", "in", ["Draft", "Validated", "Conflict"]],
-	],
+	filters: [["status", "in", ["Draft", "Validated", "Conflict"]]],
 	get_indicator(doc) {
 		const colors = {
 			Draft: "grey",
@@ -49,10 +47,9 @@ frappe.listview_settings["AI Knowledge Candidate"] = {
 					reqd: 1,
 				},
 				async (values) => {
-					const result = await frappe.xcall(
-						"ai_fr_hg.api.learning.teach",
-						{ content: values.content }
-					);
+					const result = await frappe.xcall("ai_fr_hg.api.learning.teach", {
+						content: values.content,
+					});
 					frappe.show_alert({
 						message: __("Candidate created: {0}", [result.candidate]),
 						indicator: "green",

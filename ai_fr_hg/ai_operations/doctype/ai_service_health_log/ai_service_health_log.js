@@ -10,14 +10,13 @@ frappe.ui.form.on("AI Service Health Log", {
 			Degraded: "orange",
 			Unhealthy: "red",
 		};
-		frm.page.set_indicator(
-			__(frm.doc.status),
-			colors[frm.doc.status] || "grey"
-		);
+		frm.page.set_indicator(__(frm.doc.status), colors[frm.doc.status] || "grey");
 
 		if (frm.doc.error_message) {
 			frm.dashboard.add_section(
-				`<div class="alert alert-danger small">${frappe.utils.escape_html(frm.doc.error_message)}</div>`
+				`<div class="alert alert-danger small">${frappe.utils.escape_html(
+					frm.doc.error_message
+				)}</div>`
 			);
 		}
 
