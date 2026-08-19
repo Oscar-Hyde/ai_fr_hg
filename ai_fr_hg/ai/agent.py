@@ -21,6 +21,7 @@ from ai_fr_hg.ai.deadline import expired as budget_expired
 from ai_fr_hg.ai.engine import resolve_model, run_chat
 from ai_fr_hg.ai.exceptions import (
 	DeadlineExceededError,
+	ProviderError,
 	ProviderOfflineError,
 	ProviderTimeoutError,
 )
@@ -78,6 +79,27 @@ PROVIDER_OFFLINE_ANSWER = (
 	"Check that the model server is running and that the provider's **Base URL** in "
 	"AI Providers is correct, then try again."
 )
+
+PROVIDER_OOM_ANSWER = (
+	"The local model could not start because this machine does not have enough memory.\n\n"
+	"Ollama asked for more RAM than is free. In the Assistant model selector pick a "
+	"smaller model (phi3:mini or qwen2.5:0.5b), or run `ollama stop` on the large model "
+	"and try again."
+)
+
+PROVIDER_ERROR_ANSWER = (
+	"The local model could not complete that request.\n\n"
+	"Check that Ollama is running (`ollama list`) and that the selected model is installed. "
+	"If the model is too large for this machine, switch to a smaller one."
+)
+
+
+def answer_for_provider_error(exc: Exception) -> str:
+	"""Pick a saved explanation for a provider failure that is not a timeout."""
+	text = str(exc).lower()
+	if any(token in text for token in ("system memory", "not enough memory", "out of memory")):
+		return PROVIDER_OOM_ANSWER
+	return PROVIDER_ERROR_ANSWER
 
 
 def get_agent(agent: str | None = None):
@@ -298,6 +320,7 @@ def run_agent_turn(
 	result = None
 	timed_out = False
 	timeout_kind = "budget"
+	provider_answer = ""
 
 	for iteration in range(max_iterations + 1):
 		# Offering tools invites another round trip to interpret their output.
@@ -339,6 +362,13 @@ def run_agent_turn(
 		except ProviderOfflineError:
 			timed_out = True
 			timeout_kind = "offline"
+			break
+		except ProviderError as exc:
+			# HTTP 500 from the runtime (model too large, weights missing, …)
+			# must become a saved answer, not a bare 417 in the browser.
+			timed_out = True
+			timeout_kind = "provider"
+			provider_answer = answer_for_provider_error(exc)
 			break
 
 		if not result.tool_calls:
@@ -411,6 +441,7 @@ def run_agent_turn(
 			"budget": TIMED_OUT_ANSWER,
 			"timeout": PROVIDER_TIMEOUT_ANSWER,
 			"offline": PROVIDER_OFFLINE_ANSWER,
+			"provider": provider_answer or PROVIDER_ERROR_ANSWER,
 		}[timeout_kind]
 
 	# 5. Persist the assistant's reply.
@@ -433,7 +464,14 @@ def run_agent_turn(
 			total_tokens=result.total_tokens if result else 0,
 			duration_ms=result.duration_ms if result else 0,
 			status="Failed" if timed_out else "Completed",
-			error_message="Turn exceeded its time budget." if timed_out else None,
+			error_message={
+				"budget": "Turn exceeded its time budget.",
+				"timeout": "The model did not respond in time.",
+				"offline": "The AI runtime is unreachable.",
+				"provider": "The model runtime rejected the request.",
+			}.get(timeout_kind)
+			if timed_out
+			else None,
 		)
 		update_conversation_stats(conversation, result)
 

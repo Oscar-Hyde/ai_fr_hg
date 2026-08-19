@@ -116,6 +116,29 @@ class TestAgentRuntime(AIPlatformTestCase):
 		)
 		self.assertEqual(saved[0].status, "Failed")
 
+	def test_provider_oom_saves_friendly_answer(self):
+		"""An Ollama memory error must not surface as HTTP 417."""
+		from ai_fr_hg.ai.agent import PROVIDER_OOM_ANSWER, create_conversation, run_agent_turn
+		from ai_fr_hg.ai.exceptions import ProviderError
+
+		conversation = create_conversation(agent="Test Agent")
+		exc = ProviderError(
+			'Provider Local Ollama returned HTTP 500: {"error":"model requires more system memory (10.8 GiB) than is available (9.8 GiB)"}'
+		)
+		with patch("ai_fr_hg.ai.agent.run_chat", side_effect=exc):
+			response = run_agent_turn("Question?", agent="Test Agent", conversation=conversation.name)
+
+		self.assertTrue(response["timed_out"])
+		self.assertEqual(response["answer"], PROVIDER_OOM_ANSWER)
+		saved = frappe.get_all(
+			"AI Message",
+			filters={"conversation": conversation.name, "role": "Assistant"},
+			fields=["status"],
+			order_by="sequence desc",
+			limit=1,
+		)
+		self.assertEqual(saved[0].status, "Failed")
+
 	def test_tools_are_withheld_when_the_budget_cannot_fund_a_follow_up(self):
 		"""Near the deadline, ask for prose rather than another tool round trip."""
 		from ai_fr_hg.ai.agent import run_agent_turn
