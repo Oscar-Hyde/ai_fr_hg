@@ -332,12 +332,20 @@ def get_document_text(
 			"content": "",
 			"error": _document_text_unavailable_reason(doc),
 		}
+
+	from ai_fr_hg.ai.language import language_name, resolve_document_language
+
+	code = resolve_document_language(doc.language, content)
+	if code and code != (doc.language or "").strip():
+		frappe.db.set_value("AI Document", doc.name, "language", code, update_modified=False)
 	truncated = len(content) > (cint(max_chars) or 8000)
 
 	return {
 		"document": doc.name,
 		"title": doc.title,
 		"status": doc.status,
+		"language": code or None,
+		"language_name": language_name(code) if code else None,
 		"summary": doc.summary,
 		"content": content[: cint(max_chars) or 8000],
 		"truncated": truncated,

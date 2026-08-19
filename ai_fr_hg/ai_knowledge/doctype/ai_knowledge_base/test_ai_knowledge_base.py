@@ -141,6 +141,29 @@ class TestRetrieval(AIPlatformTestCase):
 		self.assertTrue(results)
 		self.assertTrue(all(result.document == alpha.name for result in results))
 
+	def test_scoped_retrieval_ignores_similarity_threshold(self):
+		"""Attach→ask must not drop the uploaded file because cosine is low."""
+		from ai_fr_hg.ai.knowledge import index_document, retrieve
+
+		document = self.make_document(
+			"Threshold Policy",
+			"Refunds are allowed within thirty days of purchase with the original receipt. " * 12,
+		)
+		with stub_embeddings():
+			index_document(document.name)
+
+		results = retrieve(
+			"What is the refund policy?",
+			knowledge_bases=[self.knowledge_base.name],
+			search_type="Hybrid",
+			top_k=5,
+			similarity_threshold=0.99,
+			documents=[document.name],
+		)
+		self.assertTrue(results)
+		self.assertTrue(all(result.document == document.name for result in results))
+		self.assertTrue(any("Refunds" in result.content for result in results))
+
 
 class TestKnowledgeBaseAPI(AIPlatformTestCase):
 	def test_malformed_knowledge_import_fails_before_mutation_or_queueing(self):

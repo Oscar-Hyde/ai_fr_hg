@@ -18,7 +18,7 @@ event rules run unattended on background workers.
 | Capability | Summary |
 | --- | --- |
 | **Local AI engine** | Ollama first-class, plus llama.cpp, vLLM, LM Studio, Text Generation WebUI and any OpenAI-compatible runtime. Automatic model discovery, health monitoring, failover and performance tracking. |
-| **Document intelligence** | 30+ file formats through one pipeline: extract → chunk → embed → index. Summarisation, classification, structured extraction and document comparison. |
+| **Document intelligence** | 37 registered file extensions through one pipeline: extract → chunk → embed → index. Text, office (including OpenDocument), and images. Summarisation, classification, structured extraction and document comparison. |
 | **Knowledge & search** | Hybrid retrieval (dense vectors + keyword, fused with RRF) computed entirely in Python. Embeddings live in DocTypes — no external vector database. |
 | **Conversational AI** | Multi-session chat with retrieval grounding, inline citations, tool calling and a full audit trail of every invocation. |
 | **Automation** | Declarative pipelines and event-driven rules that bind any Frappe document event to an AI action. |

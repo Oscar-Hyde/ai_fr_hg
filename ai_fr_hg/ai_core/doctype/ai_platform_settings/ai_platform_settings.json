@@ -109,8 +109,8 @@
    "label": "Request Timeout (s)"
   },
   {
-   "default": "90",
-   "description": "Overall budget for one interactive chat turn, including retries, failover and tool calls. Keep it below your reverse proxy's timeout so users get a real answer instead of a 504. Set 0 to disable.",
+   "default": "0",
+   "description": "Optional budget for one interactive chat turn, including retries, failover and tool calls. 0 (the default) waits for the model with no extra cutoff. Set a value only when a reverse proxy would otherwise return 504, and keep it below that proxy timeout.",
    "fieldname": "max_turn_seconds",
    "fieldtype": "Int",
    "label": "Max Turn Duration (s)"
@@ -134,12 +134,14 @@
    "label": "Platform Defaults"
   },
   {
+   "description": "Must be a Chat or Vision model (for example qwen2.5:0.5b). Embedding models such as all-minilm belong in Default Embedding Model.",
    "fieldname": "default_chat_model",
    "fieldtype": "Link",
    "label": "Default Chat Model",
    "options": "AI Model"
   },
   {
+   "description": "Must be an Embedding model (nomic-embed-text or all-minilm). Do not put a chat model here.",
    "fieldname": "default_embedding_model",
    "fieldtype": "Link",
    "label": "Default Embedding Model",
@@ -150,6 +152,7 @@
    "fieldtype": "Column Break"
   },
   {
+   "description": "Must be a Vision model (for example llava:7b). Leave empty if you have none that fit this machine.",
    "fieldname": "default_vision_model",
    "fieldtype": "Link",
    "label": "Default Vision Model",
@@ -237,6 +240,7 @@
   },
   {
    "default": "0.25",
+   "description": "Minimum cosine score from 0 to 1. Values such as 25 are treated as 25%.",
    "fieldname": "similarity_threshold",
    "fieldtype": "Float",
    "label": "Similarity Threshold",
@@ -282,7 +286,8 @@
    "label": "Max Document Size (MB)"
   },
   {
-   "default": "1",
+   "default": "0",
+   "description": "Requires Tesseract and the optional ocr extra. Off by default so a fresh install does not assume those packages.",
    "fieldname": "ocr_enabled",
    "fieldtype": "Check",
    "label": "Enable OCR Fallback"

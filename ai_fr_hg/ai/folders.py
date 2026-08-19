@@ -334,6 +334,21 @@ def get_breadcrumbs(file_or_folder: str) -> list[dict]:
 	return crumbs
 
 
+# Frappe v17 rejects SQL-function strings in get_list fields. Use the native
+# dict aggregate syntax so permission-aware counts stay on the list path.
+_COUNT_FIELD = {"COUNT": "*", "as": "total"}
+_SUM_SIZE_FIELD = {"SUM": "file_size", "as": "total"}
+
+
+def _aggregate_total(rows) -> int:
+	if not rows:
+		return 0
+	row = rows[0]
+	if hasattr(row, "get"):
+		return cint(row.get("total") or row.get("count") or row.get("sum") or 0)
+	return cint(getattr(row, "total", getattr(row, "count", 0)))
+
+
 def _permission_aware_count(
 	doctype: str,
 	filters: dict,
@@ -341,32 +356,28 @@ def _permission_aware_count(
 	or_filters: list | None = None,
 ) -> int:
 	"""Count only rows exposed by Frappe's list permission query."""
-	rows = frappe.get_list(
-		doctype,
-		filters=filters,
-		or_filters=or_filters,
-		fields=["count(name) as total"],
-		limit_page_length=1,
+	return _aggregate_total(
+		frappe.get_list(
+			doctype,
+			filters=filters,
+			or_filters=or_filters,
+			fields=[_COUNT_FIELD],
+			limit_page_length=1,
+		)
 	)
-	if not rows:
-		return 0
-	row = rows[0]
-	return cint(row.get("total") if hasattr(row, "get") else row.total)
 
 
 def _permission_aware_file_size(filters: dict, *, or_filters: list | None = None) -> int:
 	"""Sum visible File sizes without bypassing Frappe query permissions."""
-	rows = frappe.get_list(
-		"File",
-		filters=filters,
-		or_filters=or_filters,
-		fields=["sum(file_size) as total"],
-		limit_page_length=1,
+	return _aggregate_total(
+		frappe.get_list(
+			"File",
+			filters=filters,
+			or_filters=or_filters,
+			fields=[_SUM_SIZE_FIELD],
+			limit_page_length=1,
+		)
 	)
-	if not rows:
-		return 0
-	row = rows[0]
-	return cint(row.get("total") if hasattr(row, "get") else row.total)
 
 
 def _visible_ai_document_for_file(file_row, user: str | None = None):

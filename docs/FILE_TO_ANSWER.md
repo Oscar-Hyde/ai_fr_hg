@@ -30,7 +30,7 @@ POST /api/method/ai_fr_hg.api.knowledge.upload_document
 Background worker: process_document()
    ├─ 1. read      extract_source_text()  → reader dispatcher
    │                 (PDF/DOCX/XLSX/PPTX/TXT/MD/CSV/JSON/HTML/…)  → bytes → text
-   ├─ 2. extract   store content, counts, checksum, metadata on AI Document
+   ├─ 2. extract   store content, language, counts, checksum, metadata on AI Document
    ├─ 3. chunk     chunk_text()            structure-aware, heading-aware windows
    ├─ 4. embed     index_document()        embed_chunks() in batches of 16
    ├─ 5. index     write AI Document Chunk rows (base64 float32 vectors)
@@ -39,9 +39,10 @@ Background worker: process_document()
    ▼
 User asks about the file       (chat composer → send_message)
    │  documents=[<uploaded doc>]          ← the new wiring
-   ├─ wait_for_indexed(documents)          ← bounded by turn budget; no more race
-   ├─ run_agent_turn(..., documents=…)
-   │     ├─ retrieve(..., documents=…)     ← retrieval scoped to the upload
+   ├─ prepare_documents_for_turn()         ← extract inline if needed; no 45s poll
+   ├─ run_agent_turn(..., documents=…, extra_context=…)
+   │     ├─ retrieve(..., documents=…)     ← retrieval scoped to indexed uploads
+   │     ├─ extra_context                  ← extracted text when not yet embedded
    │     ├─ build_system_prompt(context)   ← numbered, cited context block
    │     └─ run_chat()  → tool loop → final answer
    ▼
@@ -59,10 +60,11 @@ in the background and returned immediately, but the chat composer pre-filled
 worker hadn't finished embedding, retrieval found no chunks and the model
 answered *"I don't have that information"* — the exact opposite of the feature.
 
-Now `send_message` accepts the just-uploaded `documents`, waits for them to
-reach `Indexed` (bounded by the turn's time budget), and scopes retrieval to
-those records, so the answer is grounded in the new upload even on the very
-first question.
+Now `send_message` accepts the just-uploaded `documents`, prepares them for
+the turn (inline extraction if the worker has not finished, a short wait only
+when nothing readable exists), and scopes retrieval to those records. Extracted
+but not-yet-embedded text is injected as extra context, so the answer is
+grounded in the new upload even on the very first question.
 
 ---
 
@@ -87,7 +89,7 @@ first question.
 
 - `chunk_size >= 100`
 - `0 <= chunk_overlap < chunk_size`
-- `0 <= similarity_threshold <= 1`
+- `0 <= similarity_threshold <= 1` (values such as `25` are stored as `0.25`)
 
 On this branch these are now **enforced before the server is reached**:
 
@@ -121,10 +123,11 @@ reaches the server the Python message names the offending value.
 
 ### Chat timeouts
 
-An interactive turn runs under a shared **deadline** (`ai_fr_hg.ai.deadline`).
-Every provider HTTP call is clamped to the remaining budget, so a slow local
-model can never hold the connection past what the reverse proxy allows. Two
-failure shapes are handled:
+An interactive turn *may* run under a shared **deadline** (`ai_fr_hg.ai.deadline`).
+The default **Max Turn Duration** is `0` (unlimited) so a local model is not
+cut off on its first, slowest run. When a positive budget is configured, every
+provider HTTP call is clamped to the remaining time so a reverse proxy cannot
+return a bare 504. Two failure shapes are handled:
 
 | Situation | Before | Now |
 | --- | --- | --- |
@@ -190,10 +193,10 @@ stub the chat and embedding engines so CI needs no GPU or Ollama.
 2. **Background workers + scheduler** — ingestion, indexing, health checks and
    usage rollups run on workers and the scheduler:
    `bench --site your-site.local enable-scheduler` and run `bench worker`.
-3. **Tuning** — if chats time out, raise **Request Timeout** / **Max Turn
-   Seconds** in AI Platform Settings or switch to a smaller model. If retrieval
-   misses relevant passages, lower the similarity threshold / raise top_k; if
-   it returns noise, raise the threshold.
+3. **Tuning** — if chats time out, raise **Request Timeout** on the provider,
+   leave **Max Turn Duration** at `0` on a local bench, or switch to a smaller
+   model. If retrieval misses relevant passages, lower the similarity threshold
+   / raise top_k; if it returns noise, raise the threshold.
 4. **Monitoring** — `/app/ai-operations` shows provider health, latency, token
    usage and failed executions. `AI Execution Log`, `AI Search Query` and
    `AI Audit Log` are retained per `hooks.py` and pruned by the weekly cleanup.
@@ -208,9 +211,10 @@ stub the chat and embedding engines so CI needs no GPU or Ollama.
 
 | Area | Change |
 | --- | --- |
-| `ai/ingestion.py` | Added `wait_for_indexed()` so interactive chat can await a background index within the turn budget. |
-| `api/chat.py` | `send_message` accepts `documents`, checks read permission, waits for indexing, and passes them to the agent. |
-| `ai/agent.py` | `run_agent_turn` accepts `documents` and scopes retrieval; catches `ProviderTimeoutError`/`ProviderOfflineError` gracefully with friendly saved answers. |
+| `ai/ingestion.py` | `prepare_documents_for_turn()` extracts unread uploads inline and only polls briefly when nothing readable exists. |
+| `api/chat.py` | `send_message` accepts `documents`, checks read permission, prepares them, and passes indexed names plus extracted text to the agent. |
+| `ai/agent.py` | `run_agent_turn` accepts `documents` and scopes retrieval even when `use_knowledge` is off; language instructions when context is labelled; catches provider OOM/timeout/offline as saved answers. |
+| `ai/language.py` | Detects written language (BG first-class) and labels excerpts / retrieved chunks. |
 | `ai/knowledge.py` | `retrieve`, `semantic_search`, `keyword_search` accept a `documents` filter and scope targets to the uploaded files' knowledge bases. |
 | `api/knowledge.py` | One-shot `ask` accepts `documents`, waits for indexing, and grounds the answer on the chosen records. |
 | `public/js/ai_helpers.js` | `frappe.ai.ask` forwards `documents` so the AI Document "Ask About This" button answers from that record. |

@@ -44,6 +44,7 @@ ai_fr_hg/
 │   ├── knowledge.py         Indexing and hybrid retrieval
 │   ├── intelligence.py      Summarise, classify, extract, compare
 │   ├── ingestion.py         Unified document pipeline
+│   ├── settings.py          Shared settings helpers (threshold normalisation)
 │   ├── agent.py             Agent runtime: prompt → retrieve → tools → answer
 │   ├── pipeline.py          Pipeline execution engine
 │   ├── automation.py        Event-driven rules
@@ -67,7 +68,7 @@ ai_fr_hg/
 ├── ai_learning/             Module: knowledge candidates, memories, skills
 │
 ├── utils/                   network guard, permissions, jinja, file hooks
-├── public/                  Desk assets (SCSS bundles, form scripts)
+├── public/                  Desk SCSS bundles and File DocType extensions
 ├── tests/                   Unit and integration suites
 ├── install.py               Roles, defaults, seed records
 ├── tasks.py                 Scheduled jobs
@@ -129,7 +130,10 @@ User message
    │                             ├─ resolve_model()
    │                             ├─ check_quota()          governance
    │                             ├─ start_execution_log()  redacted
-   │                             ├─ provider.chat()        HTTP to runtime
+   │                             ├─ provider.stream_chat() when Desk asked and
+   │                             │   this is the final, tool-free completion
+   │                             │   (tokens via frappe.publish_realtime)
+   │                             ├─ else provider.chat()   HTTP to runtime
    │                             ├─ retry / failover on transient failure
    │                             ├─ finish_execution_log()
    │                             └─ update_model_metrics()
@@ -148,12 +152,13 @@ User message
 
 A file attached in chat is ingested on a background worker, so a question
 asked in the same breath would race the index. `send_message` accepts the
-just-uploaded `documents`, waits for them to reach `Indexed` within the turn
-budget (`ai.ingestion.wait_for_indexed`), and passes them to
-`run_agent_turn`. `retrieve(..., documents=…)` then scopes retrieval to those
-records, so "summarise the file I just uploaded" is grounded in the upload
-itself rather than the whole knowledge base. See
-[`docs/FILE_TO_ANSWER.md`](FILE_TO_ANSWER.md) for the full lifecycle.
+just-uploaded `documents` and `prepare_documents_for_turn` makes them usable
+immediately: already-indexed records stay in the retrieval scope, extracted
+text is injected as extra context, and a short wait is used only when nothing
+readable exists. Interactive turns default to an unbounded budget so a local
+model is not cut off; a positive **Max Turn Duration** remains available
+behind a reverse proxy. See [`docs/FILE_TO_ANSWER.md`](FILE_TO_ANSWER.md) for
+the full lifecycle.
 
 ---
 
@@ -230,6 +235,13 @@ into future turns (never overriding the persona) and recalled by relevance and
 scope. Recall and feedback are best-effort: a failure in the memory layer must
 not break an otherwise healthy chat turn. See
 [`docs/LEARNING.md`](LEARNING.md).
+
+### Mixed AI Document tree is not NestedSet
+
+Frappe NestedSet / `is_tree` assumes one homogeneous DocType. The AI Document
+tree mixes native `File` folders with `AI Document` nodes, so NestedSet cannot
+own that projection. File stays the NestedSet authority for physical folders;
+`ai/document_tree.py` is the mixed-type facade used by Desk Tree View.
 
 ### Graceful degradation
 

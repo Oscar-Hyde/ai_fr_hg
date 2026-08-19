@@ -137,12 +137,13 @@ def ask(
 	"""One-shot grounded question answering, without creating a conversation.
 
 	`documents` scopes the answer to specific `AI Document` records (e.g. the
-	"Ask About This" button), waiting for indexing if they were just uploaded.
-	`folder` scopes retrieval to a folder subtree (folder-scoped retrieval).
+	"Ask About This" button). Fresh uploads are extracted inline so the answer
+	does not wait for background embedding. `folder` scopes retrieval to a
+	folder subtree.
 	"""
 	from ai_fr_hg.ai.agent import run_agent_turn
 	from ai_fr_hg.ai.deadline import turn_budget
-	from ai_fr_hg.ai.ingestion import wait_for_indexed
+	from ai_fr_hg.ai.ingestion import prepare_documents_for_turn
 	from ai_fr_hg.api.chat import _coerce_documents, _get_turn_budget
 
 	if isinstance(knowledge_bases, str):
@@ -168,10 +169,11 @@ def ask(
 		except Exception:
 			pass
 
-	# Interactive, so it carries the same proxy deadline as chat.
+	# Interactive, so it honours the same optional turn budget as chat.
 	with turn_budget(_get_turn_budget()):
+		extra_context = None
 		if documents:
-			wait_for_indexed(documents)
+			documents, extra_context = prepare_documents_for_turn(documents)
 		return run_agent_turn(
 			question,
 			agent=agent,
@@ -179,7 +181,8 @@ def ask(
 			model=model,
 			include_history=False,
 			save_messages=False,
-			documents=documents,
+			documents=documents or None,
+			extra_context=extra_context or None,
 		)
 
 

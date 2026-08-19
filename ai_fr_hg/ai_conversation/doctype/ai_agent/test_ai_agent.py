@@ -116,6 +116,29 @@ class TestAgentRuntime(AIPlatformTestCase):
 		)
 		self.assertEqual(saved[0].status, "Failed")
 
+	def test_provider_oom_saves_friendly_answer(self):
+		"""An Ollama memory error must not surface as HTTP 417."""
+		from ai_fr_hg.ai.agent import PROVIDER_OOM_ANSWER, create_conversation, run_agent_turn
+		from ai_fr_hg.ai.exceptions import ProviderError
+
+		conversation = create_conversation(agent="Test Agent")
+		exc = ProviderError(
+			'Provider Local Ollama returned HTTP 500: {"error":"model requires more system memory (10.8 GiB) than is available (9.8 GiB)"}'
+		)
+		with patch("ai_fr_hg.ai.agent.run_chat", side_effect=exc):
+			response = run_agent_turn("Question?", agent="Test Agent", conversation=conversation.name)
+
+		self.assertTrue(response["timed_out"])
+		self.assertEqual(response["answer"], PROVIDER_OOM_ANSWER)
+		saved = frappe.get_all(
+			"AI Message",
+			filters={"conversation": conversation.name, "role": "Assistant"},
+			fields=["status"],
+			order_by="sequence desc",
+			limit=1,
+		)
+		self.assertEqual(saved[0].status, "Failed")
+
 	def test_tools_are_withheld_when_the_budget_cannot_fund_a_follow_up(self):
 		"""Near the deadline, ask for prose rather than another tool round trip."""
 		from ai_fr_hg.ai.agent import run_agent_turn
@@ -161,12 +184,13 @@ class TestAgentRuntime(AIPlatformTestCase):
 		self.assertIsNotNone(captured["tools"])
 
 	def test_system_prompt_includes_context(self):
-		from ai_fr_hg.ai.agent import build_system_prompt
+		from ai_fr_hg.ai.agent import USER_LANGUAGE_INSTRUCTIONS, build_system_prompt
 
 		agent = frappe.get_doc("AI Agent", "Test Agent")
 		prompt = build_system_prompt(agent, context="[1] Some retrieved fact.")
 		self.assertIn("CONTEXT", prompt)
 		self.assertIn("Some retrieved fact", prompt)
+		self.assertIn(USER_LANGUAGE_INSTRUCTIONS, prompt)
 
 	def test_strict_grounding_adds_instruction(self):
 		from ai_fr_hg.ai.agent import GROUNDING_INSTRUCTIONS, build_system_prompt
@@ -175,6 +199,70 @@ class TestAgentRuntime(AIPlatformTestCase):
 		agent.strict_grounding = 1
 		prompt = build_system_prompt(agent, context="[1] Fact.")
 		self.assertIn(GROUNDING_INSTRUCTIONS, prompt)
+
+	def test_system_prompt_includes_document_language_instructions(self):
+		from ai_fr_hg.ai.agent import LANGUAGE_INSTRUCTIONS, build_system_prompt
+
+		agent = frappe.get_doc("AI Agent", "Test Agent")
+		prompt = build_system_prompt(agent, context="[Contract | language=Bulgarian]\nТекст")
+		self.assertIn(LANGUAGE_INSTRUCTIONS, prompt)
+
+	def test_attached_documents_are_retrieved_when_agent_skips_knowledge(self):
+		"""Attach→ask must ground on the file even if use_knowledge is off."""
+		from ai_fr_hg.ai.agent import run_agent_turn
+		from ai_fr_hg.ai.knowledge import index_document
+		from ai_fr_hg.tests.integration_test_case import stub_embeddings
+
+		document = self.make_document(
+			"Attached Refund Policy",
+			"Refunds are allowed within thirty days of purchase with the original receipt. " * 12,
+		)
+		with stub_embeddings():
+			index_document(document.name)
+
+		captured = {}
+
+		def capture(messages, **kwargs):
+			captured["system"] = messages[0].content
+			return CompletionResult(content="ok", total_tokens=5)
+
+		with patch("ai_fr_hg.ai.agent.run_chat", side_effect=capture):
+			run_agent_turn(
+				"What is the refund policy?",
+				agent="Test Agent",
+				save_messages=False,
+				documents=[document.name],
+			)
+
+		self.assertIn("Refunds", captured["system"])
+
+	def test_attached_document_text_is_used_when_retrieval_is_empty(self):
+		"""A language question may share no keywords with the file; still inject it."""
+		from ai_fr_hg.ai.agent import run_agent_turn
+
+		document = self.make_document(
+			"Language Sample",
+			"Refunds are allowed within thirty days of purchase with the original receipt. " * 8,
+		)
+		captured = {}
+
+		def capture(messages, **kwargs):
+			captured["system"] = messages[0].content
+			return CompletionResult(content="ok", total_tokens=5)
+
+		with (
+			patch("ai_fr_hg.ai.agent.retrieve", return_value=[]),
+			patch("ai_fr_hg.ai.agent.run_chat", side_effect=capture),
+		):
+			run_agent_turn(
+				"What language is this file written in?",
+				agent="Test Agent",
+				save_messages=False,
+				documents=[document.name],
+			)
+
+		self.assertIn("Refunds", captured["system"])
+		self.assertIn("language=", captured["system"])
 
 
 class TestAgentAPI(AIPlatformTestCase):

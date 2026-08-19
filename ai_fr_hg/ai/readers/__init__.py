@@ -21,6 +21,8 @@ from ai_fr_hg.ai.readers.base import BaseReader, ReadResult
 from ai_fr_hg.ai.readers.office import (
 	CSVReader,
 	DocxReader,
+	OdsReader,
+	OdtReader,
 	PDFReader,
 	PptxReader,
 	XlsxReader,
@@ -64,6 +66,8 @@ BUILTIN_READERS: dict[str, type[BaseReader]] = {
 	"xlsx": XlsxReader,
 	"xlsm": XlsxReader,
 	"pptx": PptxReader,
+	"odt": OdtReader,
+	"ods": OdsReader,
 	"csv": CSVReader,
 	"tsv": CSVReader,
 	# images (OCR / vision)

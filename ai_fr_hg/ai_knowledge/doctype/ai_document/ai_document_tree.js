@@ -1,4 +1,15 @@
-/* Copyright (c) 2026, Ai Fr Hg and contributors */
+// Copyright (c) 2026, Ai Fr Hg and contributors
+// For license information, please see license.txt
+
+/**
+ * AI Document Tree View — owned by the AI Document DocType.
+ *
+ * Frappe v17 Tree View (`frappe.treeview_settings`) renders and expands
+ * nodes. Mutations, permission checks, locking, and audit stay in
+ * `ai_fr_hg.ai.document_tree` and are reached only through the thin
+ * `ai_fr_hg.api.document_tree` facade. This file does not invent a second
+ * tree store or permission model.
+ */
 
 frappe.provide("frappe.treeview_settings");
 
@@ -10,6 +21,10 @@ frappe.provide("frappe.treeview_settings");
 	let location_wrapper;
 	let root_capabilities = {};
 
+	// ------------------------------------------------------------------
+	// Node payload (server-authored; Tree View only keeps `value` on root)
+	// ------------------------------------------------------------------
+
 	const data = (node) => (node.is_root ? { ...(node.data || {}), ...root_capabilities } : node.data || {});
 	const node_type = (node) => (node.is_root ? "root" : data(node).node_type);
 	const folder_for = (node) => {
@@ -18,29 +33,9 @@ frappe.provide("frappe.treeview_settings");
 	};
 	const parent_for = (node) => data(node).folder || "Home";
 
-	function escape(value) {
-		return frappe.utils.escape_html(String(value || ""));
-	}
-
-	function notify_result(result) {
-		if (result?.status === "Queued") {
-			frappe.show_alert({ message: __("Operation queued: {0}", [result.job_id]), indicator: "blue" }, 8);
-		} else {
-			frappe.show_alert({ message: __("Tree updated"), indicator: "green" });
-		}
-	}
-
-	async function call(method, args = {}) {
-		const response = await frappe.call({ method: `${METHOD}.${method}`, args, freeze: true });
-		return response.message;
-	}
-
-	function refresh_tree(result) {
-		notify_result(result);
-		selected.clear();
-		view.make_tree();
-		update_bulk_actions();
-	}
+	// ------------------------------------------------------------------
+	// Native Desk dialogs
+	// ------------------------------------------------------------------
 
 	function prompt_name(title, label, value = "") {
 		return new Promise((resolve) => {
@@ -78,11 +73,46 @@ frappe.provide("frappe.treeview_settings");
 		});
 	}
 
+	function confirm_action(message) {
+		return new Promise((resolve) => frappe.confirm(message, () => resolve(true), () => resolve(false)));
+	}
+
+	// ------------------------------------------------------------------
+	// Thin RPC — business logic stays on the document_tree service
+	// ------------------------------------------------------------------
+
+	function call(method, args = {}) {
+		return frappe.xcall(`${METHOD}.${method}`, args);
+	}
+
+	function notify_result(result) {
+		if (result?.status === "Queued") {
+			frappe.show_alert({ message: __("Operation queued: {0}", [result.job_id]), indicator: "blue" }, 8);
+		} else {
+			frappe.show_alert({ message: __("Tree updated"), indicator: "green" });
+		}
+	}
+
+	function refresh_tree(result) {
+		notify_result(result);
+		selected.clear();
+		view.make_tree();
+		update_bulk_actions();
+	}
+
+	// ------------------------------------------------------------------
+	// Actions (Desk orchestration only)
+	// ------------------------------------------------------------------
+
 	function open_node(node) {
 		if (node_type(node) === "document") {
 			frappe.set_route("Form", "AI Document", data(node).document);
-		} else if (node_type(node) === "folder") {
-			frappe.set_route("Form", "File", data(node).value);
+			return;
+		}
+		if (node_type(node) === "folder") {
+			// FileView owns folder browsing. Form/File preview crashes when
+			// file_type is missing on folders and new drafts.
+			frappe.set_route("List", "File", folder_for(node));
 		}
 	}
 
@@ -115,65 +145,69 @@ frappe.provide("frappe.treeview_settings");
 			return;
 		}
 		const name = await prompt_name(__("New Folder"), __("Folder Name"));
-		const result = await call("create_folder", {
-			folder_name: name,
-			parent: folder,
-			expected_parent_modified: data(node).modified,
-		});
-		refresh_tree(result);
+		refresh_tree(
+			await call("create_folder", {
+				folder_name: name,
+				parent: folder,
+				expected_parent_modified: data(node).modified,
+			})
+		);
 	}
 
 	async function rename(node) {
 		const current = data(node).title || node.title || node.label;
 		const name = await prompt_name(__("Rename"), __("New Name"), current);
-		const result = await call("rename_node", {
-			node: data(node).value,
-			new_name: name,
-			expected_modified: data(node).modified,
-		});
-		refresh_tree(result);
+		refresh_tree(
+			await call("rename_node", {
+				node: data(node).value,
+				new_name: name,
+				expected_modified: data(node).modified,
+			})
+		);
 	}
 
 	async function move(node) {
 		const values = await prompt_destination(__("Move"), parent_for(node));
-		const result = await call("move_node", {
-			node: data(node).value,
-			target_folder: values.target_folder,
-			expected_modified: data(node).modified,
-		});
-		refresh_tree(result);
+		refresh_tree(
+			await call("move_node", {
+				node: data(node).value,
+				target_folder: values.target_folder,
+				expected_modified: data(node).modified,
+			})
+		);
 	}
 
 	async function copy(node) {
 		const values = await prompt_destination(__("Copy"), parent_for(node), true);
-		const result = await call("copy_node", {
-			node: data(node).value,
-			target_folder: values.target_folder,
-			new_name: values.new_name || null,
-			expected_modified: data(node).modified,
-		});
-		refresh_tree(result);
+		refresh_tree(
+			await call("copy_node", {
+				node: data(node).value,
+				target_folder: values.target_folder,
+				new_name: values.new_name || null,
+				expected_modified: data(node).modified,
+			})
+		);
 	}
 
 	async function remove(node) {
 		const is_folder = node_type(node) === "folder";
 		const message = is_folder
-			? __("Delete this folder? Non-empty folders require an explicit recursive deletion and every descendant will be permission checked.")
+			? __(
+					"Delete this folder? Non-empty folders require an explicit recursive deletion and every descendant will be permission checked."
+			  )
 			: __("Delete this AI Document? Native Frappe attachment and retention policy will be applied.");
-		const confirmed = await new Promise((resolve) => frappe.confirm(message, () => resolve(true), () => resolve(false)));
-		if (!confirmed) return;
+		if (!(await confirm_action(message))) return;
 		let recursive = false;
 		if (is_folder) {
-			recursive = await new Promise((resolve) =>
-				frappe.confirm(__("Also delete all folders and AI Documents in this subtree?"), () => resolve(true), () => resolve(false))
-			);
+			recursive = await confirm_action(__("Also delete all folders and AI Documents in this subtree?"));
 		}
-		const result = await call("delete_node", {
-			node: data(node).value,
-			recursive: recursive ? 1 : 0,
-			expected_modified: data(node).modified,
-		});
-		refresh_tree(result);
+		refresh_tree(
+			await call("delete_node", {
+				node: data(node).value,
+				recursive: recursive ? 1 : 0,
+				expected_modified: data(node).modified,
+			})
+		);
 	}
 
 	function actions_for(node) {
@@ -196,7 +230,7 @@ frappe.provide("frappe.treeview_settings");
 		const actions = actions_for(node);
 		if (!actions.length) return;
 		const dialog = new frappe.ui.Dialog({
-			title: escape(data(node).title || node.title || node.label),
+			title: frappe.utils.escape_html(String(data(node).title || node.title || node.label || "")),
 			fields: [
 				{
 					fieldtype: "Select",
@@ -222,7 +256,7 @@ frappe.provide("frappe.treeview_settings");
 		location_wrapper.empty().append(`<span class="text-muted">${__("Location")}: </span>`);
 		paths.forEach((path, index) => {
 			const label = index === 0 ? __("Home") : path.split("/").pop();
-			const link = $(`<a href="#">${escape(label)}</a>`);
+			const link = $(`<a href="#">${frappe.utils.escape_html(String(label || ""))}</a>`);
 			link.on("click", (event) => {
 				event.preventDefault();
 				const target = path === "Home" ? view.tree.root_node : view.tree.nodes[path];
@@ -245,11 +279,12 @@ frappe.provide("frappe.treeview_settings");
 			return frappe.msgprint(__("Your selection contains an item you cannot move."));
 		}
 		const values = await prompt_destination(__("Move Selected Items"), "Home");
-		const result = await call("bulk_move_nodes", {
-			nodes: JSON.stringify([...selected.keys()]),
-			target_folder: values.target_folder,
-		});
-		refresh_tree(result);
+		refresh_tree(
+			await call("bulk_move_nodes", {
+				nodes: JSON.stringify([...selected.keys()]),
+				target_folder: values.target_folder,
+			})
+		);
 	}
 
 	async function bulk_delete() {
@@ -257,15 +292,15 @@ frappe.provide("frappe.treeview_settings");
 		if ([...selected.values()].some((item) => !item.can_delete)) {
 			return frappe.msgprint(__("Your selection contains an item you cannot delete."));
 		}
-		const confirmed = await new Promise((resolve) =>
-			frappe.confirm(__("Delete all selected items atomically? Folder descendants will be included."), () => resolve(true), () => resolve(false))
+		if (!(await confirm_action(__("Delete all selected items atomically? Folder descendants will be included.")))) {
+			return;
+		}
+		refresh_tree(
+			await call("bulk_delete_nodes", {
+				nodes: JSON.stringify([...selected.keys()]),
+				recursive: 1,
+			})
 		);
-		if (!confirmed) return;
-		const result = await call("bulk_delete_nodes", {
-			nodes: JSON.stringify([...selected.keys()]),
-			recursive: 1,
-		});
-		refresh_tree(result);
 	}
 
 	function collapse_loaded() {
@@ -276,18 +311,20 @@ frappe.provide("frappe.treeview_settings");
 
 	function expand_loaded() {
 		Object.values(view.tree.nodes).forEach((node) => {
-			// Never invoke deep retrieval. Only reveal branches already fetched by
-			// the user, which keeps this safe for repositories of arbitrary size.
+			// Never invoke deep retrieval. Only reveal branches already fetched.
 			if (node.expandable && node.loaded && !node.expanded) view.tree.expand_node(node, false);
 		});
 	}
+
+	// ------------------------------------------------------------------
+	// Frappe v17 Tree View contract
+	// ------------------------------------------------------------------
 
 	frappe.treeview_settings["AI Document"] = {
 		breadcrumb: "AI Knowledge",
 		title: __("AI Documents"),
 		root_label: ROOT,
-		// Initialize the root explicitly in onload. Native root discovery keeps
-		// only `value`, which would discard server-derived root capabilities.
+		// Native root discovery keeps only `value`. Load capabilities in onload.
 		get_tree_root: false,
 		get_tree_nodes: `${METHOD}.get_children`,
 		show_expand_all: false,
@@ -307,11 +344,13 @@ frappe.provide("frappe.treeview_settings");
 			},
 		],
 		get_label(node) {
-			if (node.is_root) return `<strong>${escape(__("AI Documents"))}</strong>`;
+			if (node.is_root) return `<strong>${frappe.utils.escape_html(__("AI Documents"))}</strong>`;
 			const d = data(node);
-			const title = escape(d.title || node.title || node.label);
+			const title = frappe.utils.escape_html(String(d.title || node.title || node.label || ""));
 			if (d.node_type === "document") {
-				const status = d.status ? ` <span class="indicator-pill gray">${escape(__(d.status))}</span>` : "";
+				const status = d.status
+					? ` <span class="indicator-pill gray">${frappe.utils.escape_html(__(d.status))}</span>`
+					: "";
 				return `<span class="ai-document-tree-document">${title}${status}</span>`;
 			}
 			return title;
@@ -374,10 +413,8 @@ frappe.provide("frappe.treeview_settings");
 		],
 		onload(treeview) {
 			view = treeview;
-			// Frappe's native root discovery keeps only `value`. Perform that one
-			// request here instead, then construct the tree exactly once with the
-			// complete server-derived root capability payload. Queue framework
-			// refresh/filter requests until that authority response is available.
+			// Frappe's native root discovery keeps only `value`. Request the
+			// complete capability payload once, then construct the tree.
 			let root_ready = false;
 			let pending_make_tree = null;
 			const native_make_tree = treeview.make_tree.bind(treeview);
@@ -401,8 +438,6 @@ frappe.provide("frappe.treeview_settings");
 					native_make_tree(...pending_args);
 				},
 				error: () => {
-					// Restore native refresh behavior even when capability discovery
-					// fails; server-side child retrieval still enforces authority.
 					root_ready = true;
 					const pending_args = pending_make_tree || [];
 					pending_make_tree = null;

@@ -2,6 +2,8 @@
 // For license information, please see license.txt
 
 /**
+ * AI Document list. Tree View is `ai_document_tree.js` on this DocType.
+ *
  * App bundles can be refreshed independently from a DocType script.  Do not
  * let that normal asset-loading window turn a native form/list action into an
  * uncaught JavaScript error.

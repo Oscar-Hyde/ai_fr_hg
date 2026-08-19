@@ -7,6 +7,15 @@
  * Three-panel layout: conversation list, message thread, context inspector.
  */
 
+function relative_time(value) {
+	if (!value) return "";
+	try {
+		return frappe.datetime.comment_when(value);
+	} catch (error) {
+		return "";
+	}
+}
+
 frappe.pages["ai-assistant"].on_page_load = function (wrapper) {
 	const page = frappe.ui.make_app_page({
 		parent: wrapper,
@@ -76,7 +85,7 @@ class AIAssistant {
 						<div class="ai-empty-state">
 							<div class="ai-empty-icon">${frappe.utils.icon("message", "lg")}</div>
 							<h4>${__("Local AI Assistant")}</h4>
-							<p class="text-muted">${__("Everything runs on this machine. Nothing leaves your network.")}</p>
+							<p class="text-muted">${__("Everything runs on this machine. Select a knowledge base below or attach a file when you want grounded answers — general chat stays fast.")}</p>
 							<div class="ai-suggestions"></div>
 						</div>
 					</div>
@@ -199,6 +208,41 @@ class AIAssistant {
 				indicator: "green",
 			});
 		});
+		frappe.realtime.on("ai_fr_hg:chat_token", (data) => this.on_chat_token(data));
+	}
+
+	on_chat_token(data) {
+		if (!data || data.turn_id !== this.stream_turn_id) return;
+		if (this.conversation && data.conversation && data.conversation !== this.conversation) return;
+		this.append_stream_delta(data.delta || "");
+	}
+
+	append_stream_delta(delta) {
+		if (!this.sending || !delta) return;
+		if (!this.$stream_wrap) {
+			this.$messages.find(".ai-thinking").remove();
+			this.stream_text = "";
+			this.$stream_wrap = $(`
+				<div class="ai-message ai-message-assistant ai-message-streaming">
+					<div class="ai-avatar">AI</div>
+					<div class="ai-body">
+						<div class="ai-bubble ai-bubble-streaming"></div>
+					</div>
+				</div>
+			`);
+			this.$messages.append(this.$stream_wrap);
+		}
+		this.stream_text = (this.stream_text || "") + delta;
+		this.$stream_wrap.find(".ai-bubble").text(this.stream_text);
+		this.scroll_to_bottom();
+	}
+
+	clear_stream_bubble() {
+		if (this.$stream_wrap) {
+			this.$stream_wrap.remove();
+			this.$stream_wrap = null;
+		}
+		this.stream_text = "";
 	}
 
 	async load_context() {
@@ -338,9 +382,7 @@ class AIAssistant {
 			list
 				.map((conv) => {
 					const active = conv.name === this.conversation ? " active" : "";
-					const when = conv.last_message_on
-						? frappe.datetime.comment_when(conv.last_message_on)
-						: "";
+					const when = relative_time(conv.last_message_on);
 					return `
 						<div class="ai-conversation-item${active}" data-name="${conv.name}">
 							<div class="ai-conv-title">
@@ -374,7 +416,7 @@ class AIAssistant {
 			<div class="ai-empty-state">
 				<div class="ai-empty-icon">${frappe.utils.icon("message", "lg")}</div>
 				<h4>${__("Local AI Assistant")}</h4>
-				<p class="text-muted">${__("Everything runs on this machine.")}</p>
+				<p class="text-muted">${__("Select a knowledge base below or attach a file when you want grounded answers — general chat stays fast.")}</p>
 				<div class="ai-suggestions"></div>
 			</div>
 		`);
@@ -547,6 +589,8 @@ class AIAssistant {
 		if (!message || this.sending) return;
 
 		this.sending = true;
+		this.stream_turn_id = frappe.utils.get_random(12);
+		this.clear_stream_bubble();
 		this.$send.prop("disabled", true);
 		this.$input.val("").css("height", "auto");
 
@@ -559,6 +603,7 @@ class AIAssistant {
 				<div class="ai-body">
 					<div class="ai-bubble">
 						<span class="ai-dot"></span><span class="ai-dot"></span><span class="ai-dot"></span>
+						<span class="ai-thinking-label text-muted small">${__("Waiting for the local model…")}</span>
 					</div>
 				</div>
 			</div>
@@ -569,16 +614,19 @@ class AIAssistant {
 		try {
 			const uploaded = this.pending_documents.length ? this.pending_documents : null;
 			this.pending_documents = [];
-			const response = await frappe.xcall("ai_fr_hg.api.chat.send_message", {
+			const response = await this.call_send_message({
 				message,
 				conversation: this.conversation,
 				agent: this.selected_agent,
 				model: this.selected_model || null,
 				knowledge_bases: this.selected_kbs.length ? this.selected_kbs : null,
 				documents: uploaded,
+				stream: this.context?.settings?.streaming_enabled ? 1 : 0,
+				turn_id: this.stream_turn_id,
 			});
 
 			$thinking.remove();
+			this.clear_stream_bubble();
 
 			const isNew = !this.conversation;
 			this.conversation = response.conversation;
@@ -604,6 +652,7 @@ class AIAssistant {
 			if (isNew) this.refresh_conversations();
 		} catch (error) {
 			$thinking.remove();
+			this.clear_stream_bubble();
 			this.$messages.append(`
 				<div class="ai-message ai-message-error">
 					<div class="ai-avatar">!</div>
@@ -620,6 +669,29 @@ class AIAssistant {
 			this.scroll_to_bottom();
 			this.$input.focus();
 		}
+	}
+
+	call_send_message(args) {
+		// Do not impose a browser timeout on unbounded local turns. A
+		// configured Max Turn Duration still gets a small client cushion so a
+		// dead socket is noticed after the server has already saved an answer.
+		const budget = Number(this.context?.settings?.max_turn_seconds || 0);
+		const options = {
+			method: "ai_fr_hg.api.chat.send_message",
+			args,
+		};
+		if (budget > 0) {
+			options.timeout = (budget + 30) * 1000;
+		}
+		return new Promise((resolve, reject) => {
+			frappe.call({
+				...options,
+				callback(response) {
+					resolve(response.message);
+				},
+				error: reject,
+			});
+		});
 	}
 
 	async send_feedback(message, value, $button) {
@@ -683,10 +755,10 @@ class AIAssistant {
 							result.document,
 						]);
 						frappe.show_alert({
-							message: __(
-								"Processing {0}. It will be indexed before your next question.",
-								[values.title]
-							),
+						message: __(
+							"Processing {0}. Your next question will use this file even if indexing is still running.",
+							[values.title]
+						),
 							indicator: "blue",
 						});
 						me.$input

@@ -262,11 +262,14 @@ class TestPermissionAwareFolderReads(UnitTestCase):
 		)
 		visible_document = _Row(name="DOC-2", status="Completed", knowledge_base="KB-1")
 
+		def _is_count_fields(fields):
+			return bool(fields and isinstance(fields[0], dict) and "COUNT" in fields[0])
+
 		def get_list(doctype, **kwargs):
 			if doctype == "AI Document":
 				self.assertEqual(kwargs["filters"], {"source_file_record": "FILE-2"})
 				return [visible_document]
-			if kwargs["fields"] == ["count(name) as total"]:
+			if _is_count_fields(kwargs.get("fields")):
 				return [_Row(total=1)]
 			return [file_row]
 
@@ -277,14 +280,18 @@ class TestPermissionAwareFolderReads(UnitTestCase):
 			folders, "_check_permission"
 		), patch.object(folders, "get_folder_path", return_value=[]), patch.object(
 			folders.frappe, "get_list", side_effect=get_list
-		), patch.object(folders.frappe, "get_doc") as get_doc:
+		) as get_list_mock, patch.object(folders.frappe, "get_doc") as get_doc:
 			result = folders.list_folder_contents("Home/Visible", limit=999, offset=-5)
 
 		self.assertEqual(result["total"], 1)
 		self.assertEqual([row.name for row in result["items"]], ["FILE-2"])
 		self.assertEqual(result["items"][0]["ai_document"], "DOC-2")
 		get_doc.assert_not_called()
-		file_page_call = next(call for call in folders.frappe.get_list.call_args_list if call.args[0] == "File" and call.kwargs["fields"] != ["count(name) as total"])
+		file_page_call = next(
+			call
+			for call in get_list_mock.call_args_list
+			if call.args[0] == "File" and not _is_count_fields(call.kwargs.get("fields"))
+		)
 		self.assertEqual(file_page_call.kwargs["limit_page_length"], 200)
 		self.assertEqual(file_page_call.kwargs["limit_start"], 0)
 
@@ -307,9 +314,7 @@ class TestPermissionAwareFolderReads(UnitTestCase):
 			folders, "_permission_aware_count", side_effect=[2, 3, 5]
 		) as count, patch.object(folders, "_permission_aware_file_size", return_value=77) as size, patch.object(
 			folders.frappe.db, "exists", return_value=False
-		):
-			folders.frappe.db.count.reset_mock()
-			folders.frappe.db.sql.reset_mock()
+		), patch.object(folders.frappe.db, "count") as db_count, patch.object(folders.frappe.db, "sql") as db_sql:
 			result = folders.get_folder_info("Home/Reports_100%")
 
 		self.assertEqual(
@@ -320,5 +325,5 @@ class TestPermissionAwareFolderReads(UnitTestCase):
 		descendant_call = count.call_args_list[2]
 		self.assertEqual(descendant_call.kwargs["or_filters"][1][2], r"Home/Reports\_100\%/%")
 		size.assert_called_once_with({"folder": "Home/Reports_100%", "is_folder": 0})
-		folders.frappe.db.count.assert_not_called()
-		folders.frappe.db.sql.assert_not_called()
+		db_count.assert_not_called()
+		db_sql.assert_not_called()

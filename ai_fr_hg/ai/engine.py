@@ -11,6 +11,7 @@ roll-up and failover all live here rather than being scattered across callers.
 
 import math
 import time
+from collections.abc import Callable
 from numbers import Real
 from typing import Any
 
@@ -27,6 +28,21 @@ from ai_fr_hg.utils.db import safe_set_value
 #: Smallest window worth starting another provider attempt in. Below this the
 #: call would be clamped to a timeout too short for any real model to answer.
 MIN_ATTEMPT_SECONDS = 5.0
+
+#: Native Frappe realtime event that carries one token delta to the Desk chat.
+CHAT_TOKEN_EVENT = "ai_fr_hg:chat_token"
+
+
+def publish_chat_token(conversation: str | None, turn_id: str, delta: str, user: str | None = None) -> None:
+	"""Push one streamed fragment on Frappe's existing socket channel."""
+	if not delta or not turn_id:
+		return
+	frappe.publish_realtime(
+		CHAT_TOKEN_EVENT,
+		{"conversation": conversation, "turn_id": turn_id, "delta": delta},
+		user=user or getattr(getattr(frappe, "session", None), "user", None),
+		after_commit=False,
+	)
 
 
 def get_settings():
@@ -159,6 +175,7 @@ def run_chat(
 	conversation: str | None = None,
 	pipeline_run: str | None = None,
 	allow_failover: bool = True,
+	on_token: Callable[[str], None] | None = None,
 ) -> CompletionResult:
 	"""Execute a chat completion with full logging, quota checks and failover."""
 	from ai_fr_hg.ai.governance import check_quota, record_usage
@@ -203,12 +220,14 @@ def run_chat(
 		for retry in range(max_retries + 1):
 			try:
 				provider = get_provider(provider_name)
-				result = provider.chat(
+				result = _complete_chat(
+					provider,
 					chat_messages,
 					model=model_doc.model_name,
 					options=merged_options,
 					tools=tools,
 					json_schema=json_schema,
+					on_token=on_token,
 				)
 				finish_execution_log(log, result, provider=provider_name, retry_count=retry)
 				update_model_metrics(model_doc.name, result)
@@ -235,6 +254,58 @@ def run_chat(
 
 	finish_execution_log(log, None, error=last_error)
 	raise last_error or ProviderError(_("Chat completion failed."))
+
+
+def _complete_chat(
+	provider,
+	messages,
+	*,
+	model: str,
+	options: dict,
+	tools: list[dict] | None,
+	json_schema: dict | None,
+	on_token: Callable[[str], None] | None,
+) -> CompletionResult:
+	"""Use the provider stream when requested; fall back to blocking chat."""
+	if on_token and getattr(provider, "supports_streaming", False) and not json_schema:
+		streamed: list[str] = []
+
+		def emit(delta: str) -> None:
+			if not delta:
+				return
+			streamed.append(delta)
+			on_token(delta)
+
+		try:
+			result = _complete_via_stream(provider, messages, model=model, options=options, tools=tools, on_token=emit)
+			if streamed:
+				result.raw["streamed"] = True
+				return result
+		except Exception:
+			if streamed:
+				raise
+	return provider.chat(messages, model=model, options=options, tools=tools, json_schema=json_schema)
+
+
+def _complete_via_stream(provider, messages, *, model: str, options: dict, tools: list[dict] | None, on_token) -> CompletionResult:
+	started = time.monotonic()
+	parts: list[str] = []
+	for fragment in provider.stream_chat(messages, model=model, options=options, tools=tools):
+		if not fragment:
+			continue
+		parts.append(fragment)
+		on_token(fragment)
+	content = "".join(parts)
+	duration_ms = int((time.monotonic() - started) * 1000)
+	approx_tokens = max(1, len(content) // 4) if content else 0
+	return CompletionResult(
+		content=content,
+		duration_ms=duration_ms,
+		model=model,
+		completion_tokens=approx_tokens,
+		total_tokens=approx_tokens,
+		raw={"streamed": True},
+	)
 
 
 def _is_retryable(exc: Exception) -> bool:

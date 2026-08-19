@@ -25,6 +25,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, now_datetime
 
+from ai_fr_hg.ai.language import detect_language, language_name, parse_language_codes, resolve_document_language
 from ai_fr_hg.ai.logging import write_audit_log
 from ai_fr_hg.ai.exceptions import (
 	CorruptDocumentError,
@@ -402,6 +403,7 @@ def process_document(
 				document.db_set(
 					{
 						"content": result.text,
+						"language": detect_language(result.text) or document.language,
 						"reader_used": reader.label,
 						"mime_type": mime_type or mimetypes.guess_type(filename)[0],
 						"file_size": len(content),
@@ -993,8 +995,96 @@ def ingest_text(
 	return document.name
 
 
-DEFAULT_WAIT_SECONDS = 45.0
+DEFAULT_WAIT_SECONDS = 8.0
 POLL_INTERVAL = 0.4
+MAX_INLINE_CONTEXT_CHARS = 8000
+
+
+def prepare_documents_for_turn(document_names: list[str]) -> tuple[list[str], str]:
+	"""Make uploaded documents usable this turn without a long poll.
+
+	Indexed records stay in the retrieval scope. Documents that already have
+	extracted text — or that can be extracted inline — become extra prompt
+	context so the model can answer immediately instead of waiting for
+	embeddings. A short wait is used only when nothing readable is available.
+	"""
+	names = list(dict.fromkeys(name for name in (document_names or []) if name))
+	if not names:
+		return [], ""
+
+	indexed: list[str] = []
+	excerpts: list[str] = []
+	pending: list[str] = []
+
+	for name in names:
+		doc = frappe.get_doc("AI Document", name)
+		if not frappe.has_permission("AI Document", "read", doc=doc, user=frappe.session.user):
+			raise DocumentSourcePermissionError(
+				_("User {0} cannot read AI Document {1}.").format(frappe.session.user, name)
+			)
+		status = doc.status
+		content = (doc.content or "").strip()
+		title = doc.title or name
+		if status == "Indexed":
+			indexed.append(name)
+			continue
+		if not content and status in {"Draft", "Failed", "Queued"}:
+			try:
+				process_document(name, index=False)
+				content = (frappe.db.get_value("AI Document", name, "content") or "").strip()
+				title = frappe.db.get_value("AI Document", name, "title") or title
+			except Exception:
+				frappe.log_error(
+					title=_("Inline extraction for chat failed: {0}").format(name),
+					message=frappe.get_traceback(),
+				)
+		if content:
+			excerpts.append(_document_excerpt(name, title, content, doc.language))
+		else:
+			pending.append(name)
+
+	if pending:
+		wait_for_indexed(pending, timeout=DEFAULT_WAIT_SECONDS)
+		for name in pending:
+			status = frappe.db.get_value("AI Document", name, "status") or "Unknown"
+			if status == "Indexed":
+				indexed.append(name)
+				continue
+			content = (frappe.db.get_value("AI Document", name, "content") or "").strip()
+			title = frappe.db.get_value("AI Document", name, "title") or name
+			language = frappe.db.get_value("AI Document", name, "language")
+			if content:
+				excerpts.append(_document_excerpt(name, title, content, language))
+
+	return indexed, "\n\n".join(excerpts)
+
+
+def excerpts_for_documents(document_names: list[str]) -> str:
+	"""Unconditional readable text from attached documents the caller may read.
+
+	Used when retrieval returns nothing (no keyword overlap, embeddings below
+	threshold, or no chunks yet) so attach→ask still sees the file.
+	"""
+	parts: list[str] = []
+	for name in dict.fromkeys(n for n in (document_names or []) if n):
+		if not frappe.db.exists("AI Document", name):
+			continue
+		if not frappe.has_permission("AI Document", "read", doc=name):
+			continue
+		row = frappe.db.get_value("AI Document", name, ["title", "content", "language"], as_dict=True)
+		if row and (row.content or "").strip():
+			parts.append(_document_excerpt(name, row.title or name, row.content, row.language))
+	return "\n\n".join(parts)
+
+
+def _document_excerpt(name: str, title: str, content: str, language: str | None) -> str:
+	code = resolve_document_language(language, content)
+	if code and parse_language_codes(code) != parse_language_codes(language):
+		frappe.db.set_value("AI Document", name, "language", code, update_modified=False)
+	if not code:
+		return f"[{title}]\n{content[:MAX_INLINE_CONTEXT_CHARS]}"
+	names = language_name(code)
+	return f"[{title} | language={names}]\nLanguages in this file: {names}.\n{content[:MAX_INLINE_CONTEXT_CHARS]}"
 
 
 def wait_for_indexed(document_names: list[str], timeout: float | None = None) -> dict[str, str]:

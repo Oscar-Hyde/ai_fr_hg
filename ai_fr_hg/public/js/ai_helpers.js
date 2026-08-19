@@ -37,6 +37,29 @@ Object.assign(frappe.ai, {
 		);
 	},
 
+	/**
+	 * Accept a 0–1 cosine score or a 1–100 percentage. Returns null when the
+	 * value cannot be interpreted, so callers can throw a field-level error.
+	 */
+	normalize_similarity_threshold(value) {
+		if (value === "" || value == null) return null;
+		const score = Number(value);
+		if (!Number.isFinite(score)) return null;
+		if (score > 1 && score <= 100) return Number((score / 100).toFixed(6));
+		if (score < 0 || score > 1) return null;
+		return score;
+	},
+
+	/** Relative time that never feeds moment an empty/invalid date. */
+	relative_time(value) {
+		if (!value) return "";
+		try {
+			return frappe.datetime.comment_when(value);
+		} catch (error) {
+			return "";
+		}
+	},
+
 	/** Compact number formatting, e.g. 12400 -> 12.4K */
 	compact(value) {
 		const number = Number(value || 0);
@@ -48,13 +71,22 @@ Object.assign(frappe.ai, {
 
 	/** Ask the platform a one-off question and show the answer in a dialog. */
 	async ask(question, options = {}) {
-		frappe.show_alert({ message: __("Thinking..."), indicator: "blue" });
+		frappe.show_alert({ message: __("Waiting for the local model…"), indicator: "blue" });
 		try {
-			const response = await frappe.xcall("ai_fr_hg.api.knowledge.ask", {
-				question,
-				knowledge_bases: options.knowledge_bases || null,
-				agent: options.agent || null,
-				documents: options.documents || null,
+			const response = await new Promise((resolve, reject) => {
+				frappe.call({
+					method: "ai_fr_hg.api.knowledge.ask",
+					args: {
+						question,
+						knowledge_bases: options.knowledge_bases || null,
+						agent: options.agent || null,
+						documents: options.documents || null,
+					},
+					callback(result) {
+						resolve(result.message);
+					},
+					error: reject,
+				});
 			});
 
 			const citations = (response.citations || [])

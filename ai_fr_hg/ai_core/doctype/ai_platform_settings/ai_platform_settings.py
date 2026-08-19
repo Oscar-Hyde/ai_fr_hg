@@ -4,7 +4,7 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import cint, flt
+from frappe.utils import cint
 
 
 class AIPlatformSettings(Document):
@@ -43,21 +43,25 @@ class AIPlatformSettings(Document):
 		health_check_enabled: DF.Check
 		health_check_interval_minutes: DF.Int
 		health_log_retention_days: DF.Int
+		learning_enabled: DF.Check
 		log_prompts: DF.Check
 		log_responses: DF.Check
 		allow_user_url_ingestion: DF.Check
 		max_context_characters: DF.Int
 		max_document_size_mb: DF.Int
+		max_memory_characters: DF.Int
 		max_requests_per_user_per_hour: DF.Int
 		max_retries: DF.Int
 		max_turn_seconds: DF.Int
 		max_tokens_per_user_per_day: DF.Int
+		memory_top_k: DF.Int
 		ocr_enabled: DF.Check
 		offline_mode: DF.Check
 		platform_enabled: DF.Check
 		processing_queue: DF.Literal["default", "short", "long"]
 		redact_patterns: DF.SmallText | None
 		request_timeout: DF.Int
+		require_memory_approval: DF.Check
 		require_tool_approval: DF.Check
 		similarity_threshold: DF.Float
 		storage_folder: DF.Data | None
@@ -70,14 +74,15 @@ class AIPlatformSettings(Document):
 		self.validate_redaction_patterns()
 
 	def validate_intervals(self):
+		from ai_fr_hg.ai.settings import normalize_similarity_threshold
+
 		if cint(self.request_timeout) < 5:
 			frappe.throw(_("Request Timeout must be at least 5 seconds."))
 		if cint(self.max_turn_seconds) and cint(self.max_turn_seconds) < 10:
 			frappe.throw(_("Max Turn Duration must be at least 10 seconds, or 0 to disable it."))
 		if cint(self.default_chunk_overlap) >= cint(self.default_chunk_size):
 			frappe.throw(_("Chunk Overlap must be smaller than Chunk Size."))
-		if not 0 <= flt(self.similarity_threshold) <= 1:
-			frappe.throw(_("Similarity Threshold must be between 0 and 1."))
+		self.similarity_threshold = normalize_similarity_threshold(self.similarity_threshold)
 		if cint(self.health_check_interval_minutes) < 1:
 			self.health_check_interval_minutes = 15
 
@@ -93,12 +98,18 @@ class AIPlatformSettings(Document):
 				continue
 			model_type = frappe.db.get_value("AI Model", self.get(fieldname), "model_type")
 			if model_type not in allowed:
+				hint = {
+					"default_chat_model": _("Pick a Chat model such as qwen2.5:0.5b."),
+					"default_embedding_model": _("Pick an Embedding model such as nomic-embed-text."),
+					"default_vision_model": _("Pick a Vision model, or leave this empty."),
+				}.get(fieldname, "")
 				frappe.throw(
-					_("{0} must be a {1} model, but {2} is a {3} model.").format(
+					_("{0} must be a {1} model, but {2} is a {3} model. {4}").format(
 						_(self.meta.get_label(fieldname)),
 						" or ".join(allowed),
 						self.get(fieldname),
 						model_type,
+						hint,
 					)
 				)
 

@@ -1,7 +1,31 @@
 // Copyright (c) 2026, Ai Fr Hg and contributors
 // For license information, please see license.txt
 
+function normalize_similarity_threshold(value) {
+	if (typeof frappe.ai?.normalize_similarity_threshold === "function") {
+		return frappe.ai.normalize_similarity_threshold(value);
+	}
+	if (value === "" || value == null) return null;
+	const score = Number(value);
+	if (!Number.isFinite(score)) return null;
+	if (score > 1 && score <= 100) return Number((score / 100).toFixed(6));
+	if (score < 0 || score > 1) return null;
+	return score;
+}
+
 frappe.ui.form.on("AI Platform Settings", {
+	setup(frm) {
+		frm.set_query("default_chat_model", () => ({
+			filters: { enabled: 1, model_type: ["in", ["Chat", "Vision"]] },
+		}));
+		frm.set_query("default_embedding_model", () => ({
+			filters: { enabled: 1, model_type: "Embedding" },
+		}));
+		frm.set_query("default_vision_model", () => ({
+			filters: { enabled: 1, model_type: "Vision" },
+		}));
+	},
+
 	refresh(frm) {
 		frm.add_custom_button(__("Test All Providers"), async () => {
 			frappe.dom.freeze(__("Testing providers..."));
@@ -68,6 +92,29 @@ frappe.ui.form.on("AI Platform Settings", {
 					"Provider endpoints outside the local network will now be allowed. Prompts and document contents could leave this machine."
 				),
 			});
+		}
+	},
+
+	similarity_threshold(frm) {
+		const next = normalize_similarity_threshold(frm.doc.similarity_threshold);
+		if (next !== null && next !== parseFloat(frm.doc.similarity_threshold)) {
+			frm.set_value("similarity_threshold", next);
+		}
+	},
+
+	validate(frm) {
+		const threshold = normalize_similarity_threshold(frm.doc.similarity_threshold);
+		if (
+			frm.doc.similarity_threshold !== "" &&
+			frm.doc.similarity_threshold != null &&
+			threshold === null
+		) {
+			frappe.throw(
+				__("Similarity Threshold must be between 0 and 1, or 1–100 as a percentage.")
+			);
+		}
+		if (threshold !== null) {
+			frm.doc.similarity_threshold = threshold;
 		}
 	},
 });
