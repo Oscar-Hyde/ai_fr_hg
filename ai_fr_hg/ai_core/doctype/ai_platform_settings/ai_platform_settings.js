@@ -1,6 +1,18 @@
 // Copyright (c) 2026, Ai Fr Hg and contributors
 // For license information, please see license.txt
 
+function normalize_similarity_threshold(value) {
+	if (typeof frappe.ai?.normalize_similarity_threshold === "function") {
+		return frappe.ai.normalize_similarity_threshold(value);
+	}
+	if (value === "" || value == null) return null;
+	const score = Number(value);
+	if (!Number.isFinite(score)) return null;
+	if (score > 1 && score <= 100) return Number((score / 100).toFixed(6));
+	if (score < 0 || score > 1) return null;
+	return score;
+}
+
 frappe.ui.form.on("AI Platform Settings", {
 	refresh(frm) {
 		frm.add_custom_button(__("Test All Providers"), async () => {
@@ -72,14 +84,14 @@ frappe.ui.form.on("AI Platform Settings", {
 	},
 
 	similarity_threshold(frm) {
-		const next = frappe.ai.normalize_similarity_threshold(frm.doc.similarity_threshold);
+		const next = normalize_similarity_threshold(frm.doc.similarity_threshold);
 		if (next !== null && next !== parseFloat(frm.doc.similarity_threshold)) {
 			frm.set_value("similarity_threshold", next);
 		}
 	},
 
 	validate(frm) {
-		const threshold = frappe.ai.normalize_similarity_threshold(frm.doc.similarity_threshold);
+		const threshold = normalize_similarity_threshold(frm.doc.similarity_threshold);
 		if (
 			frm.doc.similarity_threshold !== "" &&
 			frm.doc.similarity_threshold != null &&

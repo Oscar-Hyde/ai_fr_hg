@@ -5,6 +5,15 @@
  * Knowledge Explorer - search, inspect and manage indexed documents.
  */
 
+function relative_time(value) {
+	if (!value) return "";
+	try {
+		return frappe.datetime.comment_when(value);
+	} catch (error) {
+		return "";
+	}
+}
+
 frappe.pages["knowledge-explorer"].on_page_load = function (wrapper) {
 	const page = frappe.ui.make_app_page({
 		parent: wrapper,
@@ -227,7 +236,7 @@ class KnowledgeExplorer {
 					<div class="text-muted small">
 						${frappe.utils.escape_html(doc.knowledge_base)} ·
 						${doc.chunk_count || 0} ${__("chunks")} ·
-						${frappe.ai.relative_time(doc.modified)}
+						${relative_time(doc.modified)}
 					</div>
 				</div>`
 				)

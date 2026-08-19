@@ -7,6 +7,15 @@
  * Three-panel layout: conversation list, message thread, context inspector.
  */
 
+function relative_time(value) {
+	if (!value) return "";
+	try {
+		return frappe.datetime.comment_when(value);
+	} catch (error) {
+		return "";
+	}
+}
+
 frappe.pages["ai-assistant"].on_page_load = function (wrapper) {
 	const page = frappe.ui.make_app_page({
 		parent: wrapper,
@@ -338,7 +347,7 @@ class AIAssistant {
 			list
 				.map((conv) => {
 					const active = conv.name === this.conversation ? " active" : "";
-					const when = frappe.ai.relative_time(conv.last_message_on);
+					const when = relative_time(conv.last_message_on);
 					return `
 						<div class="ai-conversation-item${active}" data-name="${conv.name}">
 							<div class="ai-conv-title">

@@ -5,6 +5,15 @@
  * AI Operations - real-time platform health, usage and readiness.
  */
 
+function relative_time(value) {
+	if (!value) return "";
+	try {
+		return frappe.datetime.comment_when(value);
+	} catch (error) {
+		return "";
+	}
+}
+
 frappe.pages["ai-operations"].on_page_load = function (wrapper) {
 	const page = frappe.ui.make_app_page({
 		parent: wrapper,
@@ -299,7 +308,7 @@ class AIOperations {
 						<code>${frappe.utils.escape_html(approval.tool)}</code>
 						<div class="text-muted small">
 							${frappe.utils.escape_html(approval.user)} ·
-							${frappe.ai.relative_time(approval.creation)}
+							${relative_time(approval.creation)}
 						</div>
 						<div class="ai-approval-args small">${frappe.utils.escape_html(
 							(approval.arguments || "").slice(0, 200)
@@ -343,7 +352,7 @@ class AIOperations {
 			<div class="ai-error-row">
 				<div>
 					<a href="/app/ai-execution-log/${error.name}">${error.operation}</a>
-					<span class="text-muted small">${frappe.datetime.comment_when(error.creation)}</span>
+					<span class="text-muted small">${relative_time(error.creation)}</span>
 				</div>
 				<div class="text-muted small ai-error-message">
 					${frappe.utils.escape_html((error.error_message || "").slice(0, 160))}
