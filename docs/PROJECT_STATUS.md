@@ -436,7 +436,7 @@ Default log retention (also in `hooks.default_log_clearing_doctypes`): Execution
 
 | Suite | Methods | Needs Frappe DB? |
 | --- | --- | --- |
-| `tests/test_units.py` | 74 | No — chunking, vectors, JSON, network, readers, tools, threshold, deadline, wait default |
+| `tests/test_units.py` | 80 | No — chunking, vectors, JSON, network, readers, tools, threshold, deadline, wait default, streaming decision |
 | `tests/test_learning_utils.py` | 19 | No |
 | `tests/test_folder_units.py` | 16 | No |
 | `tests/test_document_tree_units.py` | 20 | No |
