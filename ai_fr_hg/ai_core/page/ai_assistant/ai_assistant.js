@@ -85,7 +85,7 @@ class AIAssistant {
 						<div class="ai-empty-state">
 							<div class="ai-empty-icon">${frappe.utils.icon("message", "lg")}</div>
 							<h4>${__("Local AI Assistant")}</h4>
-							<p class="text-muted">${__("Everything runs on this machine. Nothing leaves your network.")}</p>
+							<p class="text-muted">${__("Everything runs on this machine. Select a knowledge base below or attach a file when you want grounded answers — general chat stays fast.")}</p>
 							<div class="ai-suggestions"></div>
 						</div>
 					</div>
@@ -208,6 +208,41 @@ class AIAssistant {
 				indicator: "green",
 			});
 		});
+		frappe.realtime.on("ai_fr_hg:chat_token", (data) => this.on_chat_token(data));
+	}
+
+	on_chat_token(data) {
+		if (!data || data.turn_id !== this.stream_turn_id) return;
+		if (this.conversation && data.conversation && data.conversation !== this.conversation) return;
+		this.append_stream_delta(data.delta || "");
+	}
+
+	append_stream_delta(delta) {
+		if (!this.sending || !delta) return;
+		if (!this.$stream_wrap) {
+			this.$messages.find(".ai-thinking").remove();
+			this.stream_text = "";
+			this.$stream_wrap = $(`
+				<div class="ai-message ai-message-assistant ai-message-streaming">
+					<div class="ai-avatar">AI</div>
+					<div class="ai-body">
+						<div class="ai-bubble ai-bubble-streaming"></div>
+					</div>
+				</div>
+			`);
+			this.$messages.append(this.$stream_wrap);
+		}
+		this.stream_text = (this.stream_text || "") + delta;
+		this.$stream_wrap.find(".ai-bubble").text(this.stream_text);
+		this.scroll_to_bottom();
+	}
+
+	clear_stream_bubble() {
+		if (this.$stream_wrap) {
+			this.$stream_wrap.remove();
+			this.$stream_wrap = null;
+		}
+		this.stream_text = "";
 	}
 
 	async load_context() {
@@ -381,7 +416,7 @@ class AIAssistant {
 			<div class="ai-empty-state">
 				<div class="ai-empty-icon">${frappe.utils.icon("message", "lg")}</div>
 				<h4>${__("Local AI Assistant")}</h4>
-				<p class="text-muted">${__("Everything runs on this machine.")}</p>
+				<p class="text-muted">${__("Select a knowledge base below or attach a file when you want grounded answers — general chat stays fast.")}</p>
 				<div class="ai-suggestions"></div>
 			</div>
 		`);
@@ -554,6 +589,8 @@ class AIAssistant {
 		if (!message || this.sending) return;
 
 		this.sending = true;
+		this.stream_turn_id = frappe.utils.get_random(12);
+		this.clear_stream_bubble();
 		this.$send.prop("disabled", true);
 		this.$input.val("").css("height", "auto");
 
@@ -584,9 +621,12 @@ class AIAssistant {
 				model: this.selected_model || null,
 				knowledge_bases: this.selected_kbs.length ? this.selected_kbs : null,
 				documents: uploaded,
+				stream: this.context?.settings?.streaming_enabled ? 1 : 0,
+				turn_id: this.stream_turn_id,
 			});
 
 			$thinking.remove();
+			this.clear_stream_bubble();
 
 			const isNew = !this.conversation;
 			this.conversation = response.conversation;
@@ -612,6 +652,7 @@ class AIAssistant {
 			if (isNew) this.refresh_conversations();
 		} catch (error) {
 			$thinking.remove();
+			this.clear_stream_bubble();
 			this.$messages.append(`
 				<div class="ai-message ai-message-error">
 					<div class="ai-avatar">!</div>

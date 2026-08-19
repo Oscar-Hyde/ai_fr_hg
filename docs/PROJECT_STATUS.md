@@ -8,7 +8,7 @@ a how-to. For how things work see the other docs listed at the end.
 | --- | --- |
 | App version | `0.0.1` (`ai_fr_hg/__init__.py`) |
 | Target | Frappe v17, Python 3.14+ |
-| Branch | `arena/01a01846-ai-fr-hg` @ `885e58e` |
+| Branch | `arena/01a01846-ai-fr-hg` (remediation pass after `7316b4c`) |
 | Base | `main` @ `e960ed2` (PR #22 merged) |
 | Pull request | [#23](https://github.com/Oscar-Hyde/ai_fr_hg/pull/23) — **open, mergeable** |
 | Site (local) | `site1.local` (Sofia) |
@@ -21,7 +21,7 @@ a how-to. For how things work see the other docs listed at the end.
 2. `1d4ad5f` — local `relative_time` so Knowledge Explorer does not crash on a stale `frappe.ai`
 3. `885e58e` — AI Document Tree View JS owned by the DocType (`doctype_tree_js`)
 
-**CI on #23 (last run after `885e58e`):** Linter **fail**, Server **fail**, Vulnerable Dependency Check **pass**. Failures have not been diagnosed in this sandbox (no Frappe install here).
+**CI on #23 (diagnosed from check annotations):** Server failed on Frappe v17 `get_list` COUNT syntax, folder-unit mocks against a real `frappe`, and a nested-pipeline assertion string. Those are fixed in this pass. Confirm green checks after push.
 
 ---
 
@@ -57,8 +57,8 @@ a how-to. For how things work see the other docs listed at the end.
 | Governance / quotas | **IMPLEMENTED** | Per-user / per-role `AI Resource Policy`. |
 | Strict local-only network | **IMPLEMENTED** | Default **on**. Resolves DNS then checks loopback / RFC 1918. |
 | Knowledge export / import | **IMPLEMENTED** | Manager-only JSON, embeddings optional. |
-| Token streaming in Desk | **PARTIAL** | Providers implement `stream_chat`. Settings flag exists. **AI Assistant does not stream tokens** — chat is a blocking `send_message`. |
-| OpenDocument (.odt/.ods) | **not implemented** | Architecture text mentions OpenDocument; readers are PDF/DOCX/XLSX/PPTX/CSV only. |
+| Token streaming in Desk | **READY / STALE-SITE** | `send_message(stream=1)` streams the final, tool-free completion over `frappe.publish_realtime` (`ai_fr_hg:chat_token`). Falls back to blocking `provider.chat` when streaming is off, unsupported, or fails before the first token. |
+| OpenDocument (.odt/.ods) | **IMPLEMENTED** | `OdtReader` / `OdsReader` in the existing registry; optional `odfpy`. |
 | Moment.js RFC2822 warning | **UPSTREAM** | Frappe `refresh_when` with `_i: undefined`. Our `comment_when` calls are guarded. |
 
 If Desk still shows `frappe.ai.relative_time is not a function`, the old tree path, a 90s cutoff, or a 45s attach wait, the site is **not** on `885e58e` with a **full** `bench build`. `bench build --app ai_fr_hg` alone can finish in ~100 ms and skip `desk.bundle`.
@@ -166,7 +166,7 @@ Caps: 50 MB default, archive member limits, zip-bomb checks, File identity disam
 | `OpenAICompatibleProvider` | vLLM, LM Studio, Text Generation WebUI |
 | `LlamaCppProvider` | OpenAI at server root |
 | `get_provider` / `get_provider_classes` / `get_failover_providers` | Registry + `ai_providers` hook |
-| `stream_chat` on adapters | **Implemented on providers; unused by Desk chat** |
+| `stream_chat` on adapters | Used by `run_chat(..., on_token=)` for the final tool-free completion |
 
 ### 2.11 Readers — `ai/readers/` — **IMPLEMENTED** (optional deps degrade)
 
@@ -182,6 +182,8 @@ Caps: 50 MB default, archive member limits, zip-bomb checks, File identity disam
 | docx | `DocxReader` | python-docx |
 | xlsx, xlsm | `XlsxReader` | openpyxl |
 | pptx | `PptxReader` | python-pptx |
+| odt | `OdtReader` | odfpy |
+| ods | `OdsReader` | odfpy |
 | csv, tsv | `CSVReader` | — |
 | png, jpg, jpeg, webp, gif, bmp, tiff | `ImageReader` | vision model, OCR fallback (Pillow + pytesseract) |
 
@@ -355,7 +357,7 @@ AI Knowledge Candidate, AI Memory, AI Skill. **IMPLEMENTED**.
 
 | Route | File | Lines | Status |
 | --- | --- | --- | --- |
-| `/app/ai-assistant` | `ai_core/page/ai_assistant/ai_assistant.js` | 790 | **READY / STALE-SITE** — local `relative_time`; tracks just-uploaded docs. **No token streaming.** |
+| `/app/ai-assistant` | `ai_core/page/ai_assistant/ai_assistant.js` | ~850 | **READY / STALE-SITE** — local `relative_time`; tracks uploads; streams tokens on `ai_fr_hg:chat_token`. |
 | `/app/knowledge-explorer` | `ai_knowledge/page/knowledge_explorer/knowledge_explorer.js` | 432 | **READY / STALE-SITE** — local `relative_time` (was crashing) |
 | `/app/ai-operations` | `ai_operations/page/ai_operations/ai_operations.js` | 491 | **IMPLEMENTED** — local `relative_time` |
 | `/app/ai-model-manager` | `ai_operations/page/ai_model_manager/ai_model_manager.js` | 416 | **IMPLEMENTED** |
@@ -430,7 +432,7 @@ Default log retention (also in `hooks.default_log_clearing_doctypes`): Execution
 
 ## 8. Tests
 
-19 test modules, **53 classes, 268 methods**.
+19 test modules, **55 classes, 274 methods**.
 
 | Suite | Methods | Needs Frappe DB? |
 | --- | --- | --- |

@@ -18,7 +18,7 @@ needs to intervene — everything else is automatic.
 | Max Turn Duration | **0** (unlimited) | Optional budget for one interactive chat turn, across retries, failover and tool calls. Leave at 0 on a local bench so a slow first token is not cut off. Set a positive value only when a reverse proxy would otherwise return 504. |
 | Max Retries | 2 | Retry attempts for transient failures before failover. |
 | Enable Failover | on | Try the next provider by priority when one is unreachable. |
-| Streaming Enabled | on | Allow token streaming where the runtime supports it. |
+| Streaming Enabled | on | Desk chat streams tokens over Frappe realtime when the provider supports it. Off, or a non-streaming runtime, uses the same blocking `send_message` path as before. |
 
 ### On Max Turn Duration
 
@@ -88,12 +88,25 @@ search again.
 | Auto Process Documents | on | Ingest and index on upload with no further action. |
 | Auto Embed on Ingest | on | Embed immediately rather than waiting for the hourly backfill. |
 | Max Document Size (MB) | 50 | Rejected above this, before any parsing work. |
-| OCR Enabled | off | Requires `pytesseract` and the Tesseract binary. |
+| OCR Enabled | **off** | Requires `pytesseract` and the Tesseract binary. Off on a fresh install so missing OCR packages do not surprise the pipeline. |
 | Processing Queue | long | Which Frappe queue handles ingestion. |
 
 Knowledge bases override chunk size, overlap, top K, threshold and embedding
 model individually, so a base of short policy notes and a base of long
 contracts can each be tuned appropriately.
+
+### Default agent retrieval
+
+The seeded **General Assistant** has **Use Knowledge** off. Small talk therefore
+does not pay an embedding round-trip on a site that may have no documents yet.
+Grounded answers still happen when:
+
+- the user selects one or more knowledge chips in the Assistant,
+- a file is attached (the next send is scoped to that upload),
+- the agent calls the `search_knowledge_base` tool,
+- or an administrator turns **Use Knowledge** on for that agent.
+
+This is intentional, not a missing retrieval path.
 
 ### Tuning guidance
 

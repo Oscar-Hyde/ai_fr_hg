@@ -34,6 +34,9 @@ supplied.
 | `agent` | string | Defaults to the configured default agent. |
 | `knowledge_bases` | list | Overrides the agent's knowledge bases. |
 | `model` | string | Overrides the agent's model. |
+| `documents` | list | Just-uploaded `AI Document` names to ground this turn. |
+| `stream` | bool | When true and **Enable Streaming** is on, tokens are pushed on the native `ai_fr_hg:chat_token` realtime event. The HTTP response still returns the finished answer. Off, or a non-streaming provider, uses the same blocking path. |
+| `turn_id` | string | Client-generated id so the Desk can match realtime fragments to this send. Generated server-side when omitted. |
 
 ```json
 {
@@ -57,6 +60,8 @@ supplied.
   ],
   "tool_invocations": [],
   "timed_out": false,
+  "streamed": true,
+  "turn_id": "a1b2c3d4e5f6",
   "message": "AIMSG-000123",
   "prompt_tokens": 842,
   "completion_tokens": 47,

@@ -8,6 +8,21 @@ from frappe import _
 from frappe.utils import flt
 
 
+def coerce_turn_budget(configured) -> int:
+	"""Return seconds for one interactive turn. ``None`` and ``0`` mean unlimited."""
+	if configured is None:
+		return 0
+	try:
+		return max(0, int(configured))
+	except (TypeError, ValueError):
+		return 0
+
+
+def should_stream_completion(*, requested: bool, enabled: bool, offer_tools) -> bool:
+	"""Stream only the final, tool-free completion of an interactive turn."""
+	return bool(requested and enabled and not offer_tools)
+
+
 def normalize_similarity_threshold(value, *, fieldname: str = "Similarity Threshold") -> float:
 	"""Return a cosine threshold in ``[0, 1]``.
 

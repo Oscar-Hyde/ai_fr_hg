@@ -130,7 +130,10 @@ User message
    │                             ├─ resolve_model()
    │                             ├─ check_quota()          governance
    │                             ├─ start_execution_log()  redacted
-   │                             ├─ provider.chat()        HTTP to runtime
+   │                             ├─ provider.stream_chat() when Desk asked and
+   │                             │   this is the final, tool-free completion
+   │                             │   (tokens via frappe.publish_realtime)
+   │                             ├─ else provider.chat()   HTTP to runtime
    │                             ├─ retry / failover on transient failure
    │                             ├─ finish_execution_log()
    │                             └─ update_model_metrics()
@@ -232,6 +235,13 @@ into future turns (never overriding the persona) and recalled by relevance and
 scope. Recall and feedback are best-effort: a failure in the memory layer must
 not break an otherwise healthy chat turn. See
 [`docs/LEARNING.md`](LEARNING.md).
+
+### Mixed AI Document tree is not NestedSet
+
+Frappe NestedSet / `is_tree` assumes one homogeneous DocType. The AI Document
+tree mixes native `File` folders with `AI Document` nodes, so NestedSet cannot
+own that projection. File stays the NestedSet authority for physical folders;
+`ai/document_tree.py` is the mixed-type facade used by Desk Tree View.
 
 ### Graceful degradation
 

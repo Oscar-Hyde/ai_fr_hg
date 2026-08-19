@@ -19,6 +19,7 @@ from frappe.utils import cint, flt, now_datetime
 from ai_fr_hg.ai.deadline import allows as budget_allows
 from ai_fr_hg.ai.deadline import expired as budget_expired
 from ai_fr_hg.ai.engine import resolve_model, run_chat
+from ai_fr_hg.ai.settings import should_stream_completion
 from ai_fr_hg.ai.exceptions import (
 	DeadlineExceededError,
 	ProviderOfflineError,
@@ -209,6 +210,7 @@ def run_agent_turn(
 	save_messages: bool = True,
 	extra_context: str | None = None,
 	documents: list[str] | None = None,
+	on_token=None,
 ) -> dict:
 	"""Execute one full agent turn and return the answer with its provenance.
 
@@ -445,6 +447,7 @@ def run_agent_turn(
 		"completion_tokens": result.completion_tokens if result else 0,
 		"total_tokens": result.total_tokens if result else 0,
 		"duration_ms": int((time.monotonic() - started) * 1000),
+		"_streamed": bool(result and getattr(result, "raw", None) and result.raw.get("streamed")),
 	}
 
 

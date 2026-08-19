@@ -18,6 +18,8 @@ def send_message(
 	knowledge_bases: str | list | None = None,
 	model: str | None = None,
 	documents: str | list | None = None,
+	stream: bool | int | str = False,
+	turn_id: str | None = None,
 ) -> dict:
 	"""Send a message and return the assistant's reply with its citations.
 
@@ -28,7 +30,9 @@ def send_message(
 	"""
 	from ai_fr_hg.ai.agent import create_conversation, run_agent_turn
 	from ai_fr_hg.ai.deadline import turn_budget
+	from ai_fr_hg.ai.engine import publish_chat_token
 	from ai_fr_hg.ai.ingestion import prepare_documents_for_turn
+	from ai_fr_hg.ai.settings import should_stream_completion
 
 	if not (message or "").strip():
 		frappe.throw(_("Message cannot be empty."))
@@ -50,11 +54,21 @@ def send_message(
 	# A budget of 0 (the default) waits for the local model. A positive value
 	# is only for sites sitting behind a reverse proxy that would otherwise
 	# return a bare 504.
+	turn_id = (turn_id or "").strip() or frappe.generate_hash(length=12)
+	want_stream = should_stream_completion(
+		requested=bool(cint(stream)),
+		enabled=bool(cint(frappe.db.get_single_value("AI Platform Settings", "streaming_enabled"))),
+		offer_tools=None,
+	)
+
+	def on_token(delta: str) -> None:
+		publish_chat_token(conversation, turn_id, delta)
+
 	with turn_budget(_get_turn_budget()):
 		extra_context = None
 		if documents:
 			documents, extra_context = prepare_documents_for_turn(documents)
-		return run_agent_turn(
+		result = run_agent_turn(
 			message,
 			agent=agent,
 			conversation=conversation,
@@ -62,7 +76,11 @@ def send_message(
 			model=model,
 			documents=documents or None,
 			extra_context=extra_context or None,
+			on_token=on_token if want_stream else None,
 		)
+	result["turn_id"] = turn_id
+	result["streamed"] = bool(result.pop("_streamed", False))
+	return result
 
 
 def _coerce_documents(documents) -> list[str]:
@@ -83,10 +101,12 @@ def _coerce_documents(documents) -> list[str]:
 
 def _get_turn_budget() -> int:
 	"""Seconds one interactive turn may take. 0 disables the budget."""
+	from ai_fr_hg.ai.settings import coerce_turn_budget
+
 	configured = frappe.db.get_single_value("AI Platform Settings", "max_turn_seconds")
 	# `None` means the column predates this setting (site not yet migrated).
 	# Local-first default is unbounded so a slow first token is not cut off.
-	return 0 if configured is None else cint(configured)
+	return coerce_turn_budget(configured)
 
 
 @frappe.whitelist()

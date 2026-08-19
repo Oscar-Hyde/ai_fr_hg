@@ -212,7 +212,7 @@ class TestPipeline(AIPlatformTestCase):
 		parent_run.reload()
 		self.assertEqual(child_run.status, "Failed")
 		self.assertEqual(parent_run.status, "Failed")
-		self.assertIn("Intentional pipeline failure", child_run.error_message)
+		self.assertIn("This step always fails, by design.", child_run.error_message)
 		self.assertIn(child.name, parent_run.error_message)
 		for run in (parent_run, child_run):
 			self.assertTrue(

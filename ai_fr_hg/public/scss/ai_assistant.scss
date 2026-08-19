@@ -452,6 +452,18 @@
 
 /* ------------------------------------------------------------ typing */
 
+.ai-bubble-streaming::after {
+	content: "▍";
+	margin-left: 2px;
+	animation: ai-caret 1s step-end infinite;
+}
+
+@keyframes ai-caret {
+	50% {
+		opacity: 0;
+	}
+}
+
 .ai-thinking-label {
 	margin-left: 6px;
 }

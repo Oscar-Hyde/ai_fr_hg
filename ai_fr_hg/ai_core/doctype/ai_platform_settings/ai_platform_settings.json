@@ -283,7 +283,8 @@
    "label": "Max Document Size (MB)"
   },
   {
-   "default": "1",
+   "default": "0",
+   "description": "Requires Tesseract and the optional ocr extra. Off by default so a fresh install does not assume those packages.",
    "fieldname": "ocr_enabled",
    "fieldtype": "Check",
    "label": "Enable OCR Fallback"
