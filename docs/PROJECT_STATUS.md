@@ -1,541 +1,210 @@
-# AI Fr HG — complete project status
+# AI Fr HG — audited project status
 
-Snapshot of **every** module, service, RPC, DocType, page, job and known
-gap as of **2026-08-19**. This is an inventory of implementation status, not
-a how-to. For how things work see the other docs listed at the end.
+**Status date:** 2026-08-19
+**Current main revision:** `0d8848eb5178afeee2dd64b15c30c54dea6b899d`
+**Latest merged change:** PR #27, integration compatibility fixes
+**App version:** `0.0.1`
+**Target declared by the project:** Frappe v17, Python 3.14+
 
-| Field | Value |
-| --- | --- |
-| App version | `0.0.1` (`ai_fr_hg/__init__.py`) |
-| Target | Frappe v17, Python 3.14+ |
-| Branch | `arena/01a0196a-ai-fr-hg` (pattern extraction layer) |
-| Base | `main` @ `77df474` (PR #25 translation merged) |
-| Pull request | [#26](https://github.com/Oscar-Hyde/ai_fr_hg/pull/26) — **open, mergeable** (conflicts with PR #25 resolved) |
-| Site (local) | `site1.local` (Sofia) |
-| Default runtime | Ollama at `http://127.0.0.1:11434` / `http://localhost:11434` |
-| Working tree | AI Pattern Entity: high-precision pattern extraction |
+This document is the current, branch-neutral status summary. The detailed findings, unfinished-function inventory, frontend/backend plan, sequencing, acceptance criteria, and release roadmap are in [`DEVELOPMENT_PLAN.md`](DEVELOPMENT_PLAN.md).
 
-**PR #26 commits (this session's work):**
+---
 
-1. `b0ae3fe` — `AI Pattern Entity` DocType + `ai/patterns.py`: verbatim port of the File Analysis reference tokenizer (email, url, phone, ip, hash, date, identifier, money), per-type canonical identity, provenance quotes, idempotent `(document, entity_type, normalized_value)` sync, trash cascade, opt-in hourly backfill, API endpoints, Desk buttons, settings. Also repairs the latent import-time `NameError` in `utils/permissions.py` (wrapper assigned before the function it wraps).
-2. `f15c87e` — merge of PR #25 (offline ar/en/he translation): both button sets on AI Document, both settings groups, both permission entries; restored the `AI Document` `on_trash` cascade the auto-merge dropped.
+## Executive status
 
-**Note:** main fixed the same `has_document_permission` wrapper ordering independently in PR #25; the merge keeps one copy. Verified after merge: compile, JSON, `node --check`, 14/14 pattern unit tests, stub imports, ruff identical to the main baseline.
+AI Fr HG is a **feature-rich technical beta**. It has a broad and coherent tested core, but it is not yet production-complete.
+
+The previous version of this document described nearly every module as READY or IMPLEMENTED and contained stale branch/PR/site instructions. That classification was too optimistic. A repository-wide audit found a mixture of:
+
+- complete and well-tested main paths;
+- small-corpus or expected-input implementations;
+- backend building blocks without complete UI workflows;
+- visible settings/fields that do not currently affect behavior;
+- security, isolation, scale, concurrency, and operational work required before production release.
+
+### Current baseline
+
+| Measure | Value |
+| --- | ---: |
+| DocTypes | 47 |
+| Whitelisted methods | 117 |
+| Custom Desk pages | 4 |
+| Workspaces | 5 |
+| Reports | 3 |
+| Python test methods | 392 |
+| Latest real-bench result | 392 passed, 1 skipped |
+| Production JavaScript files | 52 |
+| JavaScript/browser tests | 0 |
+
+The supplied `site1.local` run passed:
+
+- 194 unit tests;
+- 179 integration tests (1 skipped);
+- 19 other-category tests.
+
+Green tests prove the covered paths. They do not cover browser behavior, real runtimes, optional parsers/OCR, large-corpus retrieval, concurrency/load, hostile network inputs, or release upgrades.
 
 ---
 
 ## Status legend
 
-| Tag | Meaning |
+| Label | Meaning |
 | --- | --- |
-| **READY** | Implemented, wired, and covered by tests or recent Desk fixes |
-| **IMPLEMENTED** | Complete in code; not re-verified on `site1.local` this session |
-| **PARTIAL** | Works for the main path; a documented gap remains |
-| **SEEDED** | Created at install; needs a running runtime / models to be useful |
-| **STALE-SITE** | Fixed in git; the live bench may still be on an older commit or old assets |
-| **UPSTREAM** | Frappe core behaviour, not this app |
+| **READY** | Main path, permission path, failure path, UI path, and meaningful automated coverage exist. |
+| **PARTIAL** | Main path exists, but a material scale, failure, UX, or integration path remains. |
+| **DISCONNECTED** | Schema/backend/API building block exists but is not connected to its intended workflow. |
+| **DECLARED ONLY** | Visible field/setting/option has no effective implementation. |
+| **HARDENING REQUIRED** | Functional, but not safe/reliable enough for production use. |
 
 ---
 
-## 1. Product capabilities
+## Capability status
 
-| Capability | Status | Notes |
+| Area | Current status | Summary |
 | --- | --- | --- |
-| Local chat (AI Assistant) | **READY / STALE-SITE** | `send_message` → `run_agent_turn`. Default **Max Turn Duration = 0**. Patch `v0_0_10` only resets a leftover **90**. |
-| Attach file then ask | **READY / STALE-SITE** | `prepare_documents_for_turn` extracts inline; wait default **8s** (was 45s). Indexed attachments are retrieved even when `use_knowledge` is off. |
-| Document language | **READY** | `AI Document.language` is written on extract, backfilled by `v0_0_11`, and labelled in chat context. |
-| Hybrid retrieval + citations | **IMPLEMENTED** | Dense + keyword, RRF fusion, numbered citations on the answer. |
-| One-shot ask / search | **IMPLEMENTED** | Knowledge Explorer + `api.knowledge.ask` / `search`. |
-| Document intelligence | **IMPLEMENTED** | Summarise, classify, extract, compare. Map-reduce for long text. |
-| Pattern extraction | **IMPLEMENTED** | `ai/patterns.py` + `AI Pattern Entity`. High-precision regexes ported verbatim from the File Analysis reference (email, url, phone, ip, hash, date, identifier, money + `custom` bucket). Reads only already-extracted `AI Document.content`; idempotent rescans; provenance quotes; needle-guards keep scans linear on giant base64/hex dumps. Manual **Extract Patterns** button + opt-in hourly backfill. |
-| Translation (ar/en/he) | **IMPLEMENTED** | `ai/translation.py` + pure `ai/translation_utils.py`. Structure-preserving segments, protected placeholders, glossary, translation memory, local quality gate with one repair pass, bilingual review UI, `Translate` pipeline step, `translate_content` tool. Patch `v0_0_13`. |
-| Model discovery & health | **IMPLEMENTED** | Operations + Model Manager pages. Scheduler probes every 5 min. |
-| Tool calling | **IMPLEMENTED** | Approval gate for writes. Tools run as the session user. |
-| Learning Loop | **IMPLEMENTED** | Teach → validate → approve → memory/skill → recall. Best-effort; cannot break a chat turn. |
-| Pipelines | **IMPLEMENTED** | Ordered steps, nested runs with cycle guards, cancel/retry. |
-| Event automation | **IMPLEMENTED** | `*` doc_events hook; skips `AI *` DocTypes; cached rule index. |
-| Folder / File organization | **IMPLEMENTED** | Native Frappe `File` tree. No parallel FS. |
-| AI Document tree | **READY / STALE-SITE** | Tree JS on the DocType. Mutations in `ai.document_tree`. **Not** NestedSet (`is_tree` is off). |
-| Governance / quotas | **IMPLEMENTED** | Per-user / per-role `AI Resource Policy`. |
-| Strict local-only network | **IMPLEMENTED** | Default **on**. Resolves DNS then checks loopback / RFC 1918. |
-| Knowledge export / import | **IMPLEMENTED** | Manager-only JSON, embeddings optional. |
-| Token streaming in Desk | **READY / STALE-SITE** | `send_message(stream=1)` streams the final, tool-free completion over `frappe.publish_realtime` (`ai_fr_hg:chat_token`). Falls back to blocking `provider.chat` when streaming is off, unsupported, or fails before the first token. |
-| OpenDocument (.odt/.ods) | **IMPLEMENTED** | `OdtReader` / `OdsReader` in the existing registry; optional `odfpy`. |
-| Moment.js RFC2822 warning | **UPSTREAM** | Frappe `refresh_when` with `_i: undefined`. Our `comment_when` calls are guarded. |
-
-If Desk still shows `frappe.ai.relative_time is not a function`, the old tree path, a 90s cutoff, or a 45s attach wait, the site is **not** on `885e58e` with a **full** `bench build`. `bench build --app ai_fr_hg` alone can finish in ~100 ms and skip `desk.bundle`.
-
----
-
-## 2. Service layer (`ai_fr_hg/ai/`)
-
-Business logic lives here. Nothing in `ai/` imports `api/`. DocType controllers and RPCs only delegate.
-
-### 2.1 Engine — `ai/engine.py` — **IMPLEMENTED**
-
-| Function | Role |
-| --- | --- |
-| `get_settings()` | Cached AI Platform Settings single |
-| `resolve_model(model, model_type)` | Named model, configured default, or best candidate |
-| `build_options(model_doc, overrides)` | Platform → model → per-call merge |
-| `normalise_messages(messages)` | dict / `ChatMessage` → `ChatMessage` |
-| `run_chat(...)` | Quota, log, provider call, retry, failover, metrics |
-| `run_embedding(texts, model, ...)` | Batch embed + contract validation |
-| `update_model_metrics(model, result)` | Rolling latency / token stats |
-
-### 2.2 Agent runtime — `ai/agent.py` — **READY**
-
-| Function | Role |
-| --- | --- |
-| `get_agent(agent)` | Named or default agent |
-| `check_agent_access(agent_doc)` | Role gate |
-| `build_system_prompt(...)` | Persona + user-language + grounding + document-language + memory/skills + numbered context |
-| `get_agent_knowledge_bases(...)` | Conversation overrides agent |
-| `get_conversation_history(...)` | Recent turns as chat messages |
-| `run_agent_turn(...)` | Full turn: retrieve → prompt → tools → persist. Accepts `documents` + `extra_context`. Retrieves attached files even when `use_knowledge` is off. Catches deadline / provider timeout / offline / OOM and **saves a friendly answer** instead of HTTP 417. |
-| `save_message` / `update_conversation_stats` / `update_agent_stats` | Persistence |
-| `create_conversation(...)` | New thread |
-
-### 2.3 Deadline — `ai/deadline.py` — **READY**
-
-| Function / type | Role |
-| --- | --- |
-| `Deadline` | Monotonic budget |
-| `turn_budget(seconds)` | Context manager. **`0` / `None` = unlimited** |
-| `get_deadline` / `remaining_seconds` / `expired` / `allows` / `clamp_timeout` | Read by engine, tools, ingestion wait |
-
-Interactive default is unlimited. Background jobs never install a budget.
-
-### 2.4 Settings helpers — `ai/settings.py` — **READY**
-
-| Function | Role |
-| --- | --- |
-| `normalize_similarity_threshold(value)` | `0–1` stays; `1 < n ≤ 100` → `n/100`; `1` stays `1`. Used by settings + knowledge base (client and server). |
-
-### 2.5 Knowledge / retrieval — `ai/knowledge.py` — **IMPLEMENTED**
-
-| Function | Role |
-| --- | --- |
-| `index_document(document, force, embed)` | Chunk + optional embed |
-| `embed_chunks(chunk_names, model)` | Batch 16; typed errors |
-| `update_knowledge_base_stats(...)` | Denormalised counters |
-| `get_accessible_knowledge_bases(user)` | Role-filtered |
-| `keyword_search` / `semantic_search` | Ranked lists; optional `documents` filter |
-| `retrieve(...)` | Hybrid / semantic / keyword + RRF (`K=60`) + optional folder scope |
-| `build_context(results, max_characters)` | Numbered citation block, with `[language=…]` when known |
-
-Vectors live on `AI Document Chunk` as base64 float32, pre-normalised. NumPy if present, pure Python otherwise.
-
-### 2.6 Ingestion — `ai/ingestion.py` — **READY**
-
-| Function | Role |
-| --- | --- |
-| `validate_source_access` / `get_source_content` / `get_file_content` / `get_doctype_content` | Permission-first reads |
-| `fetch_url_content(url, user)` | Manual redirect validation, size caps, local-only |
-| `ingest_file` / `ingest_text` | Create `AI Document` + enqueue |
-| `enqueue_processing` / `process_document` / `process_document_now` | Canonical extract → index |
-| **`prepare_documents_for_turn(names)`** | Inline extract; inject unread text labelled with language; short wait only if nothing readable |
-| `wait_for_indexed(names, timeout)` | `DEFAULT_WAIT_SECONDS = 8.0` |
-| `process_pending_documents()` | Hourly backfill / retry |
-
-Caps: 50 MB default, archive member limits, zip-bomb checks, File identity disambiguation for duplicate URLs.
-
-### 2.7 Intelligence — `ai/intelligence.py` — **IMPLEMENTED**
-
-| Function | Role |
-| --- | --- |
-| `parse_json_response(text)` | Fenced / prose-wrapped JSON |
-| `summarize(...)` | Map-reduce when over context |
-| `classify(text, categories, ...)` | Constrained labels; invented labels mapped or `null` |
-| `build_json_schema` / `extract_data` | `AI Extraction Schema` |
-| `compare_documents(a, b, ...)` | Diff two `AI Document`s |
-| `render_prompt_template` / `run_prompt_template` | Jinja templates |
-
-### 2.7a Translation — `ai/translation.py` + `ai/translation_utils.py` — **IMPLEMENTED** (unit-tested)
-
-| Function | Role |
-| --- | --- |
-| `translate_text(...)` | Segment → memory → protect → batch → score → repair → reassemble |
-| `create_translation` / `enqueue_translation` / `run_translation` | Stored `AI Translation` lifecycle |
-| `retranslate_segment(...)` | One segment, optionally with a reviewer instruction |
-| `index_translation(...)` | Store the result as its own searchable `AI Document` |
-| `verify_by_back_translation(...)` | Optional embedding-based sampling check |
-| `translation_utils.segment_text` / `reassemble` | Lossless structure-preserving split and rejoin |
-| `translation_utils.protect_placeholders` / `restore_placeholders` | Numbers, URLs, IDs, code, page markers, protected terms |
-| `translation_utils.assess_translation` | Eight local checks → 0-100 score and issue codes |
-
-`Translate` is a first-class `operation` on `AI Execution Log`, so every
-translation call carries the same audit trail as chat.
-
-### 2.7b Patterns — `ai/patterns.py` — **IMPLEMENTED** (unit-tested)
-
-High-precision pattern extraction as a pure enhancement layer over the
-existing pipeline: the only input is `AI Document` content that the platform
-has already extracted and stored. Ported from the File Analysis reference
-(`core/shared/tokenizer.py` + `semantic_candidates.py` canonicalization).
-
-| Function | Role |
-| --- | --- |
-| `PATTERN_SPECS` / `PATTERN_ENTITY_TYPES` | Verbatim regex registry (email, url, phone, ip, hash, date, identifier, money) + `custom` safety bucket |
-| `extract_pattern_entities(text, max_entities)` | Bounded scan (head+tail 1 MB sampling), canonical identity merge, occurrences, `first_offset` + 220-char `context_quote` |
-| `canonicalize_pattern_value(type, value)` | ISO dates (D/M vs M/D heuristic, 2-digit year), identifier dash collapse, money noise strip, casefold |
-| `persistable_pattern_type(type)` | Unknown types land in `custom`; nothing extracted is dropped |
-| `scan_document(document)` | Idempotent upsert by `(document, entity_type, normalized_value)` + prune of stale rows + checksum stamping; never writes the document |
-| `handle_document_trashed(doc)` | `AI Document` `on_trash` cascade (runs before link validation) |
-| `scan_pending_documents(limit)` | Scheduler backfill (25/run) for Indexed documents whose stored content was not scanned at the current checksum |
-| `_guard_passes(...)` | Necessary-literal needle-guards: a regex is skipped at native string speed when its required literal is absent — provably identical results, no quadratic freeze on base64/hex dumps |
-
-### 2.8 Chunking — `ai/chunking.py` — **READY** (unit-tested)
-
-`chunk_text`, `estimate_tokens`, `split_sentences`, `Chunk` dataclass. Heading-aware, overlapping windows.
-
-### 2.9 Vectors — `ai/vector.py` — **READY** (unit-tested)
-
-`encode_vector` / `decode_vector` / `norm` / `normalize` / `dot` / `cosine_similarity` / `rank`.
-
-### 2.10 Providers — `ai/providers/` — **IMPLEMENTED**
-
-| Piece | Status |
-| --- | --- |
-| `BaseProvider` + `ChatMessage`, `CompletionResult`, `ModelInfo`, `HealthStatus` | Contract |
-| `OllamaProvider` | Native `/api/chat`, `/api/embed`, pull/delete/show |
-| `OpenAICompatibleProvider` | vLLM, LM Studio, Text Generation WebUI |
-| `LlamaCppProvider` | OpenAI at server root |
-| `get_provider` / `get_provider_classes` / `get_failover_providers` | Registry + `ai_providers` hook |
-| `stream_chat` on adapters | Used by `run_chat(..., on_token=)` for the final tool-free completion |
-
-### 2.11 Readers — `ai/readers/` — **IMPLEMENTED** (optional deps degrade)
-
-| Extension | Reader | Extra package |
-| --- | --- | --- |
-| txt, log, rst, py, js, ts, sql, sh, yaml, yml, ini, cfg, toml | `TextReader` | — |
-| md, markdown | `MarkdownReader` | — |
-| json | `JSONReader` | — |
-| xml | `XMLReader` | — |
-| html, htm | `HTMLReader` | beautifulsoup4 / lxml |
-| eml, msg | `EmailReader` | — |
-| pdf | `PDFReader` | pypdf |
-| docx | `DocxReader` | python-docx |
-| xlsx, xlsm | `XlsxReader` | openpyxl |
-| pptx | `PptxReader` | python-pptx |
-| odt | `OdtReader` | odfpy |
-| ods | `OdsReader` | odfpy |
-| csv, tsv | `CSVReader` | — |
-| png, jpg, jpeg, webp, gif, bmp, tiff | `ImageReader` | vision model, OCR fallback (Pillow + pytesseract) |
-
-Hook: `ai_document_readers`. Missing library → `MissingDependency` with install command, not a crash.
-
-### 2.12 Tools — `ai/tools/` — **IMPLEMENTED**
-
-| Function | Role |
-| --- | --- |
-| `build_tool_schema` / `get_agent_tool_schemas` | JSON Schema for the model |
-| `execute_tool(...)` | Validate, permission, approval, dispatch, persist `AI Tool Invocation` |
-| `approve_invocation` / `reject_invocation` | Whitelisted manager actions |
-| Builtin handlers | `search_knowledge_base`, `get_document_text`, `get_document`, `list_documents`, `count_documents`, `run_report`, `current_datetime` |
-
-Install seeds six tools. Default agent **General Assistant** is bound to only three: `search_knowledge_base`, `get_document_text`, `current_datetime`. `use_knowledge` on that agent is **off** so empty-site small talk does not pay an embedding round-trip.
-
-### 2.13 Pipeline — `ai/pipeline.py` — **IMPLEMENTED**
-
-`validate_pipeline_dependencies`, `pipeline_step_method`, `resolve_pipeline_step_method`, `run_pipeline`, `execute_run`, `execute_step`. Nested depth / cycle / cancellation / checkpointing. Custom methods must be marked trusted (`ai_pipeline_methods` hook).
-
-### 2.14 Automation — `ai/automation.py` — **IMPLEMENTED**
-
-`get_rule_index` (cached), `handle_document_event` (`*` hook), `trigger_rule`, `evaluate_condition`, `execute_rule`. Ignores `AI *` DocTypes and install/migrate/patch.
-
-### 2.15 Monitoring — `ai/monitoring.py` — **IMPLEMENTED**
-
-`check_provider_health`, `check_all_providers`, `sync_provider_models`, `sync_all_models`, `get_platform_metrics`. Name-based model-type guess on discover.
-
-### 2.16 Governance — `ai/governance.py` — **IMPLEMENTED**
-
-`get_effective_policy`, `check_quota`, `check_capability`, `check_document_quota`, `record_usage`. User policy > role policy > global. System Manager bypasses.
-
-### 2.17 Logging — `ai/logging.py` — **IMPLEMENTED**
-
-`redact`, `start_execution_log`, `finish_execution_log`, `write_audit_log`. Patterns compiled and cached; cleared on settings save.
-
-### 2.18 Learning — `ai/learning.py` + `ai/learning_utils.py` — **IMPLEMENTED**
-
-| Function | Role |
-| --- | --- |
-| `create_candidate` / `validate_candidate` / `check_conflicts` | Stages 1–4 |
-| `approve_candidate` / `reject_candidate` / `process_candidate` / `teach` | Gate + promotion |
-| `recall` / `prepare_memory_context` / `build_memory_context` | Additive prompt injection |
-| `observe_feedback` / `record_feedback` | Helpful / not-helpful; negative without correction is a failure example, never truth |
-| Utils | tokenize, score, rank, dedupe, classify, prompt blocks (no Frappe) |
-
-### 2.19 Folders — `ai/folders.py` — **IMPLEMENTED**
-
-Native Frappe `File` mutations: create/rename/move/copy/delete, bulk move, list/tree/search, favorites, recents, tabs, default folder, ingest-with-folder, document-scoped folders. Permission-aware counts. Circular-move and uniqueness checks.
-
-### 2.20 Document tree — `ai/document_tree.py` — **READY**
-
-Mixed **folder + AI Document** tree for Desk Tree View. Not NestedSet.
-
-Public: `get_children`, `create_folder`, `rename_document` / `rename_folder` / `rename_node`, `move_*`, `copy_*`, `delete_*`, `bulk_move_nodes`, `bulk_delete_nodes`, `resolve_document_name`, `split_node_value`. Large folder jobs enqueue with subtree fingerprints and optimistic concurrency (`expected_modified`).
-
-### 2.21 Language — `ai/language.py` — **READY**
-
-`detect_language`, `detect_languages`, `language_name`, `resolve_document_language`. Script counts plus function-word hints. No extra packages. English, Arabic and Hebrew are first-class, including mixed `en,ar,he` files and PDF presentation-form glyphs. Also BG/RU/UK/DE/FR/ES/IT and script gates for EL/ZH/JA/KO.
-
-### 2.22 Organization — `ai/organization.py` — **IMPLEMENTED**
-
-`organization_name_key(value)` — collation-independent, case-insensitive location key for AI Document names.
-
-### 2.23 Exceptions — `ai/exceptions.py` — **IMPLEMENTED**
-
-`AIError` hierarchy: provider (offline / timeout / deadline), model, local-only, quota, tool, document (source permission / unsupported / corrupt / resource / fetch), pipeline (recorded / approval), folder (not found / exists / circular / permission / not empty / file / invalid name).
+| Provider adapters | **PARTIAL / HARDENING REQUIRED** | Ollama and OpenAI-compatible paths work. Provider/model concurrency, provider rate limits, capability enforcement, equivalent-model failover, versions, and full model lifecycle remain. |
+| Network guard | **PARTIAL / HARDENING REQUIRED** | Local/private validation exists. Connection-level DNS/proxy/redirect hardening is still required before using absolute “never leaves” claims. |
+| Ingestion | **PARTIAL** | File, text, URL, and DocType-record main paths exist. Folder source is unsupported, scanned-PDF OCR is absent, `.msg` support is incomplete, and job progress/cancel need work. |
+| Readers | **PARTIAL** | 37 extensions are registered, with optional dependency degradation. Registered extension does not always mean production-grade format support. |
+| Document tree | **READY / HARDENING REQUIRED** | Strong identity, locking, permissions, bulk operations, concurrency checks, and tests. Deep/large tree browser and load validation remain. |
+| File/folder organization | **PARTIAL / HARDENING REQUIRED** | Rich canonical service exists. Global Desk patches, native move fallback, stable File identity, default-folder semantics, and deep folder picker need revision. |
+| Chunking/vector math | **READY** | Pure logic is well tested. |
+| Retrieval | **PARTIAL — production blocker** | Hybrid flow works on small corpora. Semantic/keyword candidates are bounded before ranking, mixed KB embedding models are not reconciled, and KB-specific retrieval settings/weights are not fully applied. |
+| Knowledge Explorer | **PARTIAL** | Search/ask/upload/overview work. Pagination, folder/entity facets, diagnostics, and robust upload progress remain. |
+| Intelligence | **PARTIAL** | Summary/classify/extract/compare main paths exist. Target DocType mapping is unused; whole-document strategies and strict local schema validation remain. |
+| Pattern extraction | **PARTIAL** | Strong deterministic extraction and tests. Durable zero-result scan state, correct tail offsets, semantic value validation, and aggregate explorer remain. |
+| Translation | **PARTIAL — isolation fix required** | Strong segmentation, masking, quality checks, repair, review, memory, and indexing core. Unscoped inline memory, policy-aware memory identity, progress/cancel, default index setting, and format output remain. |
+| Assistant/agents | **PARTIAL** | Chat, retrieval, citations, tools, streaming, and friendly runtime failures work. Latest-history selection, route state, cancellation, focused document, fallback answer, KB weights, and conversation UX remain. |
+| Tools/approvals | **PARTIAL / HARDENING REQUIRED** | Approval, audit, argument validation, permissions, and runtime limit exist. Generic count/field isolation, defaults, expiry, async approval execution, and pipeline resume remain. |
+| Pipelines | **PARTIAL** | Ordered/nested execution, cycle guards, step logs, retries, cancel, and provenance exist. Trigger wiring, schedule claiming, resumable approval, and visual builder remain. |
+| Automation | **PARTIAL** | Cached event dispatch and main actions exist. Delete-event snapshots, source validation, atomic counters, revision-aware dedupe, and execution coverage remain. |
+| AI Tasks | **PARTIAL / DECLARED ONLY** | Several paths execute, but Compare/Custom, due date, priority, execution log, secure approval transitions, and matching UI are unfinished. |
+| Governance | **PARTIAL — enforcement work required** | Request/token/document limits and capabilities exist. User/provider/model concurrency, rate limiting, and atomic quota reservations are not implemented. |
+| Learning | **PARTIAL** | Candidate validation/promotion/recall/feedback core is strong. Learning dashboard, report wiring, semantic recall, skill relevance, and lifecycle maintenance remain. |
+| Operations | **PARTIAL** | Readiness, health, usage snapshot, failures, approvals, and queues are visible. SLOs, charts, job detail, stale-state reconciliation, and timer lifecycle remain. |
+| Backup/import/export | **PARTIAL — restore work required** | Text JSON round-trip exists. Exported embeddings are ignored by import; component completeness, streaming, format version, retention, and restore drills remain. |
+| Encryption | **DECLARED ONLY** | The visible setting does not encrypt stored document/chunk/translation text. It must be implemented or removed/hidden. |
+| CI/release | **BLOCKED** | Local/bench tests pass, but GitHub Actions jobs do not start because of an account billing/spending-limit error. Versioning/release qualification also remains. |
+| Frontend validation | **PARTIAL** | JavaScript parses and pages are implemented, but there are no JS unit, browser E2E, accessibility, or responsive tests. |
 
 ---
 
-## 3. Whitelisted API (`ai_fr_hg/api/`)
+## Highest-priority open work
 
-Thin wrappers. `use_json_request_body = True`. Bulk tree still accepts JSON-stringified `nodes`.
+### P0 — fix before production use
 
-### 3.1 Chat — `api/chat.py` — **READY**
+1. Scope translation memory on inline and tool paths; no scope must never mean all knowledge bases.
+2. Make retrieval correct beyond the first bounded chunk candidates and support multiple embedding models across KBs.
+3. Make generic tool counts and field output permission-aware.
+4. Enforce API input caps and pagination for messages, conversations, chunks, entities, translations, and searches.
+5. Harden provider networking at connection time against proxy/DNS/redirect weaknesses.
+6. Remove the native File mutation fallback that can bypass canonical AI-document provenance updates.
+7. Require stable File identities in upload/folder APIs.
+8. Implement or hide the document-encryption setting.
+9. Restore GitHub Actions execution and require checks before merge.
 
-| Method | Purpose |
-| --- | --- |
-| `send_message(message, conversation, agent, knowledge_bases, model, documents)` | Grounded reply. Prepares uploads. `timed_out` flag. |
-| `start_conversation` / `get_conversation` / `list_conversations` | Sessions |
-| `delete_conversation` / `archive_conversation` / `rename_conversation` | Lifecycle |
-| `submit_feedback` | Learning Loop observation |
-| `summarize_conversation` | Stored summary |
-| `get_chat_context` | Bootstrap: agents, models, KBs, settings |
+### P1 — complete existing product promises
 
-`_get_turn_budget()`: `None` or `0` → unlimited.
-
-### 3.2 Knowledge — `api/knowledge.py` — **IMPLEMENTED**
-
-`upload_document`, `add_text`, `reprocess_document`, `reindex_knowledge_base`, `search`, `ask`, `summarize_document`, `classify_document`, `extract_document_data`, `compare`, `get_document_chunks`, `get_knowledge_overview`, `get_supported_formats`.
-
-### 3.3 Admin — `api/admin.py` — **IMPLEMENTED** (AI Manager / System Manager)
-
-`test_provider`, `test_all_providers`, `discover_models`, `pull_model`, `test_model`, `get_dashboard`, `get_usage_report`, `export_knowledge_base`, `import_knowledge_base`, `purge_logs`, `get_system_status`.
-
-### 3.4 Document tree — `api/document_tree.py` — **READY**
-
-`get_children`, `create_folder`, `rename_node`, `move_node`, `copy_node`, `delete_node`, `bulk_move_nodes`, `bulk_delete_nodes`. Optimistic concurrency via `expected_modified`.
-
-### 3.5 Folders — `api/folders.py` — **IMPLEMENTED**
-
-Create/rename/move/delete/copy file and folder, `set_file_folder`, `bulk_move`, list/tree/breadcrumbs/info/search, favorites, recents, tabs, `get_default_folder`, `upload_file_with_folder`.
-
-### 3.6 Learning — `api/learning.py` — **IMPLEMENTED**
-
-`teach`, `approve_candidate`, `reject_candidate`, `list_candidates`, `list_memories`, `list_skills`, `overview`.
-
-### 3.7 Extra whitelist on DocType controllers
-
-Form buttons call these; they delegate into `ai/`:
-
-- Document: `process`, `reprocess`, `generate_summary`, `run_extraction`
-- Knowledge Base: `reindex`, `refresh_stats`
-- Provider: `test_connection`, `discover_models`
-- Model: `test_model`, `refresh_metadata`
-- Agent: `start_conversation`, `test_agent`
-- Conversation: `send`, `generate_summary`
-- Pipeline / Run / Task / Rule: `run_now`, `retry`, `cancel_run`, `test_rule`
-- Candidate / Memory / Skill: `validate_and_test`, `approve`, `reject`, `archive`, `enable` / `disable`
-- Prompt template: `preview`
-- Extraction schema: `test_extraction`
-- Tools: `approve_invocation`, `reject_invocation`
-- Learning: `record_feedback`
-
-~102 `@frappe.whitelist` methods in the app.
+1. Enforce resource/provider/model concurrency and provider rate limits.
+2. Fix latest conversation history and atomic message sequencing.
+3. Complete conversation route state, cancel/retry, pin/rename/archive/restore, and feedback correction UX.
+4. Implement/remove Folder source, scanned-PDF OCR, `.msg`, reranker, model versions, and extraction target mapping.
+5. Add pipeline API/document-ingest triggers, atomic schedule claims, waiting-approval resume, and a typed builder.
+6. Complete AI Task types, state transitions, scheduling, audit links, and UI.
+7. Add translation/pattern/ingestion progress and cancellation.
+8. Build Learning and Pattern Explorer dashboards and fix reports.
+9. Make export/import a versioned, tested restore path.
+10. Add browser, real-runtime, optional dependency, load, concurrency, security, and migration tests.
 
 ---
 
-## 4. Data model (47 DocTypes)
+## Confirmed disconnected or inert controls
 
-### AI Core (9)
+The complete analysis is in the development plan. The most important current examples are:
 
-| DocType | Kind | Status |
-| --- | --- | --- |
-| AI Platform Settings | Single, 66 fields, 7 tabs | **READY** — `max_turn_seconds` default 0; threshold accepts % |
-| AI Provider | 27 fields | **IMPLEMENTED** |
-| AI Model | 50 fields + Parameter / Version children | **IMPLEMENTED** |
-| AI Prompt Template + Variable | — | **IMPLEMENTED** |
-| AI Execution Log | 31 fields | **IMPLEMENTED** |
-| AI Folder Settings | 14 fields | **IMPLEMENTED** |
-| AI Folder Favorite | 2 fields | **IMPLEMENTED** |
+- `AI Platform Settings.encrypt_documents` — unused.
+- `AI Resource Policy.max_concurrent_requests` — unused.
+- `AI Provider.max_concurrent_requests` and `rate_limit_per_minute` — unused.
+- `AI Model.max_concurrent_requests`, `supports_json_mode`, and `versions` — not effectively connected.
+- `AI Provider.model_prefix` — unused.
+- `AI Agent.fallback_answer` — unused.
+- `AI Agent Knowledge Base.weight` — unused.
+- `AI Conversation.context_document` — unused.
+- `AI Message.execution_log` and `AI Task.execution_log` — not populated.
+- `AI Execution Log.queue_time_ms` — not populated.
+- `AI Folder Settings.knowledge_tag` and `is_archived` — unused.
+- `AI Prompt Variable.variable_type` — unused.
+- `AI Extraction Schema.target_doctype` — unused.
+- `AI Usage Snapshot.document_count` — unused.
+- `AI Document` source type `Folder` — offered but rejected by ingestion.
+- `Reranker` model type — no reranking execution path.
+- Platform translation index-output default — loaded but not applied when new translations are created.
 
-### AI Knowledge (9)
-
-| DocType | Kind | Status |
-| --- | --- | --- |
-| AI Knowledge Base + Role | 20 fields | **IMPLEMENTED** — client + server threshold / chunk validation |
-| AI Document | 55 fields, **not** NestedSet | **READY** — tree JS on DocType |
-| AI Document Chunk | 19 fields (embedding Long Text) | **IMPLEMENTED** |
-| AI Pattern Entity | 12 fields, hash names | **IMPLEMENTED** — machine-written, denormalized `knowledge_base`, chunk-mirroring permissions |
-| AI Document Tag | child | **IMPLEMENTED** |
-| AI Extraction Schema + Field | — | **SEEDED** Invoice Data, Contract Summary |
-| AI Search Query | telemetry | **IMPLEMENTED** |
-
-### AI Conversation (10)
-
-AI Agent (+ Knowledge Base / Role / Tool children), AI Conversation, AI Message, AI Tool (+ Parameter / Role), AI Tool Invocation. **IMPLEMENTED**. Seeded agent: **General Assistant**.
-
-### AI Automation (6)
-
-AI Pipeline + Step, AI Pipeline Run + Run Step, AI Automation Rule, AI Task. **IMPLEMENTED**.
-
-### AI Operations (5)
-
-AI Service Health Log, AI Audit Log, AI Resource Policy + Policy Model, AI Usage Snapshot. **IMPLEMENTED**. Seeded policy: **Standard AI User**.
-
-### AI Learning (3)
-
-AI Knowledge Candidate, AI Memory, AI Skill. **IMPLEMENTED**.
+Each requires an implement/repurpose/hide/remove decision.
 
 ---
 
-## 5. Desk UI
+## Quality and CI status
 
-### Pages
+### Passing
 
-| Route | File | Lines | Status |
-| --- | --- | --- | --- |
-| `/app/ai-assistant` | `ai_core/page/ai_assistant/ai_assistant.js` | ~850 | **READY / STALE-SITE** — local `relative_time`; tracks uploads; streams tokens on `ai_fr_hg:chat_token`. |
-| `/app/knowledge-explorer` | `ai_knowledge/page/knowledge_explorer/knowledge_explorer.js` | 432 | **READY / STALE-SITE** — local `relative_time` (was crashing) |
-| `/app/ai-operations` | `ai_operations/page/ai_operations/ai_operations.js` | 491 | **IMPLEMENTED** — local `relative_time` |
-| `/app/ai-model-manager` | `ai_operations/page/ai_model_manager/ai_model_manager.js` | 416 | **IMPLEMENTED** |
+- Real-bench Python test suite: 392 passed, 1 skipped.
+- Python compile check.
+- JSON parsing.
+- JavaScript syntax check.
+- Current document-tree, folder, translation, pattern, learning, pipeline, tools, model, provider, and permission regression tests shown in the supplied run.
 
-Page JS compiles into **desk.bundle**, independently of `ai_fr_hg.bundle.js`. That is why helpers were duplicated locally.
+### Not yet covered adequately
 
-### Workspaces
+- Browser/Desk end-to-end flows.
+- JavaScript unit tests.
+- Accessibility and mobile behavior.
+- Real Ollama/OpenAI-compatible runtime behavior.
+- PDF/Office/OCR optional dependencies as a matrix.
+- Large-corpus retrieval correctness/performance.
+- Multi-request concurrency and quota races.
+- DNS/proxy/redirect hostile networking.
+- Backup restore completeness.
+- Upgrade from prior public data snapshots.
+- Worker death, Redis outage, and stale-running reconciliation.
 
-AI Control Center (apps-screen home), AI Workspace, AI Knowledge, AI Automation, AI Learning.
+### GitHub Actions
 
-### Reports (AI Learning)
+Recent CI/Linter jobs have zero steps and fail immediately. GitHub’s check annotation says:
 
-Learning Activity, Memory Usage, Skill Summary.
+> The job was not started because recent account payments have failed or your spending limit needs to be increased.
 
-### Client helpers
-
-| Asset | Status |
-| --- | --- |
-| `public/js/ai_helpers.js` → `frappe.ai` | status_color, normalize_similarity_threshold, relative_time, compact, ask, add_form_button |
-| `public/js/file.js` | File form guard — no `file_type.toLowerCase` crash on folders |
-| `public/js/file_list.js` / `file_folder.js` | Native File list / folder picker |
-| `ai_document_tree.js` on the DocType | Tree View only; mutations stay in Python |
-| `public/js/ai_document_tree.js` | **deleted** in `885e58e` |
-| SCSS | `ai_assistant`, `ai_dashboard`, `ai_document_tree` via `ai_fr_hg.bundle.scss` |
-
-### Hooks that matter
-
-- `doctype_js = {File: public/js/file.js}`
-- `doctype_list_js = {File: public/js/file_list.js}`
-- `doctype_tree_js = {AI Document: ai_knowledge/doctype/ai_document/ai_document_tree.js}`
-- Row-level `permission_query_conditions` + `has_permission` for 18 DocTypes (PR #26 added `AI Pattern Entity`; PR #25 added `AI Translation`)
-- `doc_events` on `AI Document` (`on_trash` → pattern row cascade, runs before link validation)
-- `doc_events` on `*` (automation) and `File` (ingest + folder lock)
-- Roles fixture: AI Manager, AI User, AI Auditor
-- Extension hooks (empty by default): `ai_providers`, `ai_document_readers`, `ai_tools`, `ai_pipeline_methods`
+This is an account/repository operations issue, not a passing or failing code test. It must be fixed before CI can be treated as a merge gate.
 
 ---
 
-## 6. Background jobs (`tasks.py`)
+## Documentation status
 
-| Job | Schedule | Status |
-| --- | --- | --- |
-| `health_check` | cron `*/5` (throttled to settings interval, default 15 min) | **IMPLEMENTED** |
-| `run_scheduled_pipelines` | cron `*/10` | **IMPLEMENTED** (needs optional `croniter`) |
-| `process_pending_documents` | hourly_long | **IMPLEMENTED** |
-| `scan_pending_pattern_entities` | hourly_long | **IMPLEMENTED** — opt-in (`Auto Pattern Scan`, off by default) |
-| `sync_models` | daily_long | **IMPLEMENTED** |
-| `rollup_usage` | daily_long | **IMPLEMENTED** |
-| `backup_knowledge` | daily_long | **IMPLEMENTED** (off until enabled) |
-| `cleanup_logs` | weekly_long | **IMPLEMENTED** |
+The repository has strong explanatory documents, but several claims need revision until their implementation work is complete:
 
-Default log retention (also in `hooks.default_log_clearing_doctypes`): Execution 90d, Health 30d, Audit 365d, Search Query 30d.
+- “complete” platform;
+- absolute local-only/no-egress guarantees;
+- scanned-PDF OCR;
+- `.msg` support;
+- full knowledge backup/restore with embeddings;
+- all settings being effective;
+- all pipeline trigger types being active;
+- all AI Task types being implemented;
+- retrieval behavior at enterprise corpus sizes.
 
----
-
-## 7. Install, patches, seed
-
-`after_install` is idempotent: roles, settings, **Local Ollama** (`http://localhost:11434`), six tools, two extraction schemas, two prompt templates, **General Knowledge**, **General Assistant**, **Standard AI User** policy, default folders under `Home/AI Platform`.
-
-| Patch | Purpose |
-| --- | --- |
-| v0_0_1 | Fast defaults + code fields |
-| v0_0_2 | Introduced turn time budget (historical 90s) |
-| v0_0_3 | Learning DocType modules |
-| v0_0_4 | Folder organization |
-| v0_0_5 | Legacy Long Int (pre_model_sync) |
-| v0_0_6 | Folder audit category |
-| v0_0_7 | Site file directories |
-| v0_0_8 | Learning audit category |
-| v0_0_9 | AI Document tree organization |
-| **v0_0_10** | **90 → 0** for `max_turn_seconds` only if still the shipped 90 |
-| **v0_0_11** | Detect `AI Document.language` for already extracted documents |
-| **v0_0_12** | Re-detect mixed English / Arabic / Hebrew labels |
+The active revision plan is [`DEVELOPMENT_PLAN.md`](DEVELOPMENT_PLAN.md). README and feature guides should be updated alongside the corresponding implementation phases.
 
 ---
 
-## 8. Tests
+## Recommended immediate sequence
 
-23 test modules, **75 classes, 392 methods**.
+1. Repair GitHub Actions billing/spending limits and rerun all checks.
+2. Fix translation-memory scope with multi-KB regression tests.
+3. Fix generic tool row/field permissions.
+4. Remove unsafe File fallback and require stable File identity.
+5. Add shared public API bounds/validation.
+6. Hide the unimplemented encryption field unless a real design is approved.
+7. Rebuild retrieval for full-corpus correctness and mixed embedding models.
+8. Only then proceed to Assistant UX, ingestion/translation progress, and automation/task completion.
 
-| Suite | Methods | Needs Frappe DB? |
-| --- | --- | --- |
-| `tests/test_units.py` | 97 | No — chunking, vectors, JSON, network, readers, tools, threshold, deadline, wait default, language detection (EN/AR/HE mixed), streaming decision |
-| `tests/test_translation_utils.py` | 47 | No |
-| `tests/test_pattern_units.py` | 14 | No — regexes per type, canonicalization matrix, merge under identity, caps, head/tail sampling, provenance, linearity on pathological dumps |
-| `tests/test_learning_utils.py` | 19 | No |
-| `tests/test_folder_units.py` | 16 | No |
-| `tests/test_document_tree_units.py` | 20 | No |
-| Colocated DocType integration | 179 | Yes — runtime stubbed, no GPU (incl. 8 pattern-entity: scan, idempotency, prune, cascade, permissions, API, scheduler opt-in, canonical identity) |
-
-This sandbox has **no Frappe**, so `python -m unittest` fails with `ModuleNotFoundError: frappe`. `compileall` succeeds. Full suite: `bench --site site1.local run-tests --app ai_fr_hg`.
-
----
-
-## 9. Documentation
-
-| File | Role |
-| --- | --- |
-| `README.md` | Install, Ollama, first-run |
-| `docs/ARCHITECTURE.md` | Layout, data model, lifecycle, design |
-| `docs/FILE_TO_ANSWER.md` | Attach → index → cite |
-| `docs/LEARNING.md` | Learning Loop |
-| `docs/CONFIGURATION.md` | Every setting + topologies |
-| `docs/EXTENDING.md` | Providers / readers / tools / pipeline methods |
-| `docs/API.md` | REST shapes |
-| `docs/PROJECT_STATUS.md` | This inventory |
-
-Small doc drift: CONFIGURATION says OCR default **off**; the DocType default is **on** (`ocr_enabled = 1`). README says 30+ formats; the registry is the table in §2.11.
-
----
-
-## 10. What is not done / watch-outs
-
-1. **Live site may lag git.** Pull `885e58e`, then **full** `bench build` (not `--app` only), `clear-cache`, supervisor restart, hard refresh.
-2. **Chat cutoff after migrate.** Confirm `AI Platform Settings.max_turn_seconds` is `0`. The patch does not overwrite a custom non-90 value.
-3. **Desk chat is not streamed.** First token on a cold 7B/8B can look “stuck” even with an unlimited budget.
-4. **CI on PR #26** must confirm green (this sandbox has no Frappe DB; pattern units pass standalone, ruff is at the main baseline).
-5. **Default agent** does not auto-retrieve the whole KB (`use_knowledge = 0`); attached files, knowledge chips, or the `search_knowledge_base` tool still ground the turn.
-6. **Streaming, OpenDocument, richer default-agent tools** (`list_documents`, `get_document`, `run_report`) are code-complete as building blocks but not first-class in the default UX.
-7. **Upstream moment warning** remains in Frappe core.
-8. Optional extras: `bench pip install --editable "./apps/ai_fr_hg[documents]"` (and `[ocr]`, `[performance]`, `[scheduling]`).
-
----
-
-## 11. Apply this branch on `site1.local`
-
-```bash
-cd ~/frappe-bench/apps/ai_fr_hg
-git fetch origin
-git checkout arena/01a0196a-ai-fr-hg
-git pull
-
-cd ~/frappe-bench
-bench --site site1.local migrate
-bench --site site1.local clear-cache
-bench build                    # full build — required for desk.bundle
-sudo supervisorctl restart all
-```
-
-Then hard-refresh Desk (Ctrl+Shift+R). Confirm **Max Turn Duration** is 0 and Ollama is up (`ollama list` should show at least a chat model and `nomic-embed-text`).
+See the roadmap for phased effort, frontend/backend deliverables, migration strategy, and exit criteria.

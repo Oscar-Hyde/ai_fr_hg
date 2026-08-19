@@ -1,10 +1,18 @@
 ## AI Fr HG
 
-A complete, fully local enterprise AI platform, built as a native Frappe app.
+A feature-rich, local-first enterprise AI platform, built as a native Frappe app.
 
-Every model runs on your own hardware. No prompt, document or embedding ever
-leaves your network — the platform ships with a strict local-only guard that
-refuses to talk to non-private addresses unless you explicitly disable it.
+> **Project status:** technical beta. The main Python suite currently passes 392 tests,
+> but production hardening and several partially connected functions remain. See the
+> [audited project status](docs/PROJECT_STATUS.md) and
+> [completion roadmap](docs/DEVELOPMENT_PLAN.md) before production deployment.
+
+Models are designed to run on your own hardware. The platform ships with a
+strict local-only guard that refuses provider URLs outside private networks
+unless an administrator explicitly allows them. Connection-level network
+hardening is still tracked in the completion roadmap, so deploy with normal
+host firewall and egress controls rather than treating the application guard
+as the only network boundary.
 
 The design goal is autonomy: **everything is driven by AI with no human
 intervention except configuration.** Documents ingest, chunk, embed and index
@@ -133,6 +141,8 @@ for a fresh install.
 | [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) | Every setting, quotas, redaction, retention, deployment topologies |
 | [`docs/EXTENDING.md`](docs/EXTENDING.md) | Writing custom providers, readers, tools and pipeline steps |
 | [`docs/API.md`](docs/API.md) | Whitelisted REST endpoints with request and response shapes |
+| [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) | Current audited implementation status and known blockers |
+| [`docs/DEVELOPMENT_PLAN.md`](docs/DEVELOPMENT_PLAN.md) | Full frontend/backend completion plan, priorities, phases and acceptance criteria |
 
 ---
 
