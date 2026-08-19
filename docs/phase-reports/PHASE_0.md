@@ -33,7 +33,7 @@ Observed external state on 2026-08-19:
 | ID | Finding | Current State | Required State | Files | Tests | Migration | Frontend | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | P0-01 / OPS-01 | CI execution | Server is not pinned to v17 and hosted jobs stop before steps; lint has inconsistent event/job conditions. | Pin the audited Frappe v17 revision; run Server, Linter, frontend static, and dependency checks on PR/push/manual events; obtain green hosted runs. | `.github/workflows/*.yml` | Workflow contract checks plus hosted runs | None | Static JavaScript parse gate | BLOCKED — final CI fixes cannot be pushed by GitHub App |
-| P0-02 / OPS-01 | Branch protection | `main` is unprotected. | Require all Phase 0 checks and pull requests before merge. | GitHub repository settings; documented policy | GitHub API verification | None | N/A | BLOCKED — repository owner/plan |
+| P0-02 / OPS-01 | Branch protection | `main` is unprotected. | Require all Phase 0 checks and pull requests before merge. | GitHub repository settings; documented policy | GitHub API verification | None | N/A | BLOCKED — GitHub App lacks administration permission |
 | P0-03 / SEC-05 | Encryption claim | A visible setting implies stored-text encryption although no encryption exists. | Preserve schema compatibility but disable and hide the setting; state plainly that application-level document encryption is unsupported. | Platform Settings schema/controller, docs | Metadata and controller regression | Idempotently normalize dormant setting to `0` | Setting absent from Desk | COMPLETE — local evidence |
 | P0-04 / ING-01 | Folder ingestion claim | `Folder` is selectable but ingestion rejects it. | Remove it from selectable source types and reject new Folder-source records clearly; retain native Frappe File folders as the only folder authority. | AI Document schema/controller, docs | Metadata and validation regression | Preserve legacy rows without destructive conversion | Option absent from form | COMPLETE — local evidence |
 | P0-05 / RET-05 | Reranker claim | `Reranker` is selectable/discovered but has no execution path. | Remove it from selectable/discoverable model types; preserve and disable legacy rows. | AI Model schema/controller, monitoring, docs | Metadata, model validation, and inference regression | Idempotently disable legacy rows | Option absent from form | COMPLETE — local evidence |
@@ -334,11 +334,9 @@ Additional checks attempted:
 
 - Pull request [#30](https://github.com/Oscar-Hyde/ai_fr_hg/pull/30) is open from the session branch.
 - The earlier zero-step billing failures are retained as historical evidence, but billing is now operational: push runs CI `32285843903` and Quality `32285843900` executed real steps at `cfb9a90aa3a1d9f3fe42d759bcf6d3978d2ff0b1`.
-- `Frontend static` — **PASS** in 7 seconds, including JavaScript parsing and 13 Phase 0 contracts.
-- `Dependency audit` — **PASS** in 20 seconds for the then-remote base-project audit.
-- `Linter` — **FAIL** after pre-commit passed; Frappe Semgrep reported 76 blocking findings. Those findings are now locally reduced to zero, but the correcting workflow/code commit has not run remotely.
-- `Server` — **FAIL** during pinned-bench initialization after Python, Node, MariaDB, Redis, and system setup succeeded. Bench names the cloned Frappe remote `upstream`; the workflow incorrectly fetched the immutable SHA from nonexistent remote `origin`. The local correction uses `upstream` and has not run remotely.
-- GitHub still rejects the final commit because `arena-ai-coding-agent[bot]` lacks workflow-file permission.
+- After correcting all 76 Frappe Semgrep findings, PR Quality run `32287915332` at `755131b84260eec96e823a202b60c363b1969f85` passed all three jobs: `Linter` in 1m6s, `Frontend static` in 8s, and `Dependency audit` in 24s.
+- PR Server run `32287915407` still failed during pinned-bench initialization because the remote branch necessarily retains the old workflow. Python, Node, MariaDB, Redis, and system setup succeeded before the immutable-SHA fetch used nonexistent Frappe remote `origin`.
+- The final local workflow uses Bench's canonical `upstream` remote, pins the pre-commit/Semgrep/rules revisions, enables strict Semgrep error handling, and audits all optional dependency extras. GitHub still rejects that commit because `arena-ai-coding-agent[bot]` lacks workflow-file permission.
 
 ### Runtime verification
 
@@ -380,8 +378,8 @@ The hosted runner successfully started MariaDB 11.8/Redis services and configure
 ### Remaining issues
 
 1. The connected `arena-ai-coding-agent[bot]` still lacks workflow-file permission, so the final CI/code corrections cannot be pushed.
-2. The corrected Semgrep and Server jobs have not executed remotely; all four required checks must pass on the final SHA.
-3. `main` is unprotected. The repository owner selected “Keep private and blocked,” so the current plan restriction is intentionally unresolved; the Arena integration also lacks branch-administration permission.
+2. The corrected code passes the remote Quality workflow, but the repaired Server workflow and final strict/pinned quality workflow have not executed; all four required checks must pass on the final SHA.
+3. The repository is now public, removing the prior plan restriction, but `main` remains unprotected. An attempt to require pull requests and all four statuses returned HTTP 403 because the Arena GitHub App lacks branch-administration permission.
 4. No current real-bench install/migrate/test result exists for this patchset.
 5. No real Desk/browser verification exists for the metadata changes.
 6. Upstream stable Frappe v17 does not exist; the reproducible target is an immutable `17.0.0-dev` revision.
