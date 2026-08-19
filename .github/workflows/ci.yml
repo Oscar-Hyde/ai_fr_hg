@@ -1,22 +1,26 @@
 name: CI
-
 on:
   push:
-    branches:
-      - main
   pull_request:
-
+  workflow_dispatch:
+permissions:
+  contents: read
 concurrency:
-  group: main-ai_fr_hg-${{ github.event.number }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
+env:
+  # Upstream identifies develop as 17.0.0-dev. There is no stable version-17
+  # branch yet, so the quality gate uses an immutable audited revision.
+  FRAPPE_BRANCH: develop
+  FRAPPE_SHA: d7000da3d5862087d3df08e009fe76518ea649c4
 jobs:
   tests:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
     name: Server
-
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CI: "Yes"
+      DB_ROOT_PASSWORD: root
     services:
       redis-cache:
         image: redis:alpine
@@ -29,74 +33,58 @@ jobs:
       mariadb:
         image: mariadb:11.8
         env:
-          MYSQL_ROOT_PASSWORD: root
+          MARIADB_ROOT_PASSWORD: ${{ env.DB_ROOT_PASSWORD }}
         ports:
           - 3306:3306
-        options: --health-cmd="mariadb-admin ping" --health-interval=5s --health-timeout=2s --health-retries=3
-
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=2s
+          --health-retries=12
     steps:
-      - name: Clone
-        uses: actions/checkout@v6
-
-      - name: Find tests
-        run: |
-          echo "Finding tests"
-          grep -rn "def test" > /dev/null
-
+      - name: Clone application
+        uses: actions/checkout@v7
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
-          python-version: '3.14'
-
+          python-version: "3.14"
+          cache: pip
       - name: Setup Node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           check-latest: true
-
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/*requirements.txt', '**/pyproject.toml', '**/setup.py', '**/setup.cfg') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-            ${{ runner.os }}-
-
-      - name: Get yarn cache directory path
-        id: yarn-cache-dir-path
-        run: 'echo "dir=$(yarn cache dir)" >> $GITHUB_OUTPUT'
-
-      - uses: actions/cache@v4
-        id: yarn-cache
-        with:
-          path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
-          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-yarn-
-
-      - name: Install MariaDB Client
+      - name: Install system dependencies
         run: |
-          sudo apt update
-          sudo apt-get install mariadb-client
-
-      - name: Setup
+          sudo apt-get update
+          sudo apt-get install --yes mariadb-client
+      - name: Initialize pinned Frappe v17 bench
         run: |
-          pip install frappe-bench
-          bench init --skip-redis-config-generation --skip-assets --python "$(which python)" ~/frappe-bench
-
-      - name: Install
+          python -m pip install --upgrade pip frappe-bench
+          bench init \
+            --skip-redis-config-generation \
+            --skip-assets \
+            --frappe-branch "$FRAPPE_BRANCH" \
+            --python "$(command -v python)" \
+            /home/runner/frappe-bench
+          git -C /home/runner/frappe-bench/apps/frappe fetch --depth 1 origin "$FRAPPE_SHA"
+          git -C /home/runner/frappe-bench/apps/frappe checkout --detach "$FRAPPE_SHA"
+          test "$(git -C /home/runner/frappe-bench/apps/frappe rev-parse HEAD)" = "$FRAPPE_SHA"
+      - name: Install application and migrate
         working-directory: /home/runner/frappe-bench
         run: |
-          bench get-app ai_fr_hg $GITHUB_WORKSPACE
+          bench get-app ai_fr_hg "$GITHUB_WORKSPACE"
           bench setup requirements --dev
-          bench new-site --db-root-password root --admin-password admin test_site
+          bench new-site \
+            --db-type mariadb \
+            --db-root-password "$DB_ROOT_PASSWORD" \
+            --admin-password admin \
+            test_site
           bench --site test_site install-app ai_fr_hg
-          bench build
-        env:
-          CI: 'Yes'
-
-      - name: Run Tests
+          bench --site test_site migrate
+          bench build --app ai_fr_hg
+          env/bin/python -c 'import frappe; assert frappe.__version__ == "17.0.0-dev", frappe.__version__'
+      - name: Run server tests
         working-directory: /home/runner/frappe-bench
         run: |
           bench --site test_site set-config allow_tests true
