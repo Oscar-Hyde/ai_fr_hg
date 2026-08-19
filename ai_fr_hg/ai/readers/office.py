@@ -186,6 +186,59 @@ class PptxReader(BaseReader):
 		)
 
 
+def _odf_plain_text(element) -> str:
+	data = getattr(element, "data", None)
+	if data:
+		return str(data)
+	return "".join(_odf_plain_text(child) for child in getattr(element, "childNodes", []) or [])
+
+
+class OdtReader(BaseReader):
+	label = "OpenDocument Text"
+	requires = "odfpy"
+
+	def read(self, content: bytes, filename: str) -> ReadResult:
+		opendocument = self.require("odf.opendocument", "odfpy")
+		odf_text = self.require("odf.text", "odfpy")
+		document = opendocument.load(io.BytesIO(content))
+		parts: list[str] = []
+		for node in list(document.getElementsByType(odf_text.H)) + list(document.getElementsByType(odf_text.P)):
+			text = _odf_plain_text(node).strip()
+			if text:
+				parts.append(text)
+		return ReadResult(text=self.clean("\n".join(parts)), metadata={"format": "odt"}, page_count=1)
+
+
+class OdsReader(BaseReader):
+	label = "OpenDocument Spreadsheet"
+	requires = "odfpy"
+	MAX_ROWS_PER_SHEET = 5000
+
+	def read(self, content: bytes, filename: str) -> ReadResult:
+		opendocument = self.require("odf.opendocument", "odfpy")
+		odf_table = self.require("odf.table", "odfpy")
+		document = opendocument.load(io.BytesIO(content))
+		parts: list[str] = []
+		warnings: list[str] = []
+		sheets = document.getElementsByType(odf_table.Table)
+		for sheet in sheets:
+			title = sheet.getAttribute("name") or "Sheet"
+			parts.append(f"\n[Sheet: {title}]")
+			for index, row in enumerate(sheet.getElementsByType(odf_table.TableRow)):
+				if index >= self.MAX_ROWS_PER_SHEET:
+					warnings.append(f"Sheet '{title}' truncated at {self.MAX_ROWS_PER_SHEET} rows.")
+					break
+				cells = [_odf_plain_text(cell).strip() for cell in row.getElementsByType(odf_table.TableCell)]
+				if any(cells):
+					parts.append(" | ".join(cells))
+		return ReadResult(
+			text=self.clean("\n".join(parts)),
+			metadata={"format": "ods", "sheets": len(sheets)},
+			page_count=len(sheets),
+			warnings=warnings,
+		)
+
+
 class CSVReader(BaseReader):
 	label = "Delimited Text"
 

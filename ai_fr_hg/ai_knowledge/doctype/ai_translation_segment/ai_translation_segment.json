@@ -1,0 +1,157 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-08-19 09:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "segment_index",
+  "kind",
+  "status",
+  "quality_score",
+  "detail_sec",
+  "heading",
+  "page_number",
+  "detail_cb",
+  "source_characters",
+  "translated_characters",
+  "reused",
+  "reviewed",
+  "text_sec",
+  "source_text",
+  "translated_text",
+  "issues",
+  "internal_sec",
+  "separator",
+  "fingerprint"
+ ],
+ "fields": [
+  {
+   "columns": 1,
+   "fieldname": "segment_index",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "#"
+  },
+  {
+   "default": "paragraph",
+   "fieldname": "kind",
+   "fieldtype": "Select",
+   "label": "Kind",
+   "options": "paragraph\nheading\nlist\ntable\nmarker\ncode\nrule\nblank"
+  },
+  {
+   "columns": 1,
+   "default": "Pending",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Pending\nTranslated\nReused\nCopied\nFlagged\nFailed\nReviewed"
+  },
+  {
+   "columns": 1,
+   "fieldname": "quality_score",
+   "fieldtype": "Percent",
+   "in_list_view": 1,
+   "label": "Score"
+  },
+  {
+   "fieldname": "detail_sec",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "heading",
+   "fieldtype": "Data",
+   "label": "Heading"
+  },
+  {
+   "fieldname": "page_number",
+   "fieldtype": "Int",
+   "label": "Page"
+  },
+  {
+   "fieldname": "detail_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "source_characters",
+   "fieldtype": "Int",
+   "label": "Source Characters"
+  },
+  {
+   "fieldname": "translated_characters",
+   "fieldtype": "Int",
+   "label": "Translated Characters"
+  },
+  {
+   "default": "0",
+   "fieldname": "reused",
+   "fieldtype": "Check",
+   "label": "Reused From Memory"
+  },
+  {
+   "default": "0",
+   "fieldname": "reviewed",
+   "fieldtype": "Check",
+   "label": "Reviewed"
+  },
+  {
+   "fieldname": "text_sec",
+   "fieldtype": "Section Break"
+  },
+  {
+   "columns": 3,
+   "fieldname": "source_text",
+   "fieldtype": "Text",
+   "in_list_view": 1,
+   "label": "Source"
+  },
+  {
+   "columns": 3,
+   "fieldname": "translated_text",
+   "fieldtype": "Text",
+   "in_list_view": 1,
+   "label": "Translation"
+  },
+  {
+   "fieldname": "issues",
+   "fieldtype": "Small Text",
+   "label": "Issues"
+  },
+  {
+   "fieldname": "internal_sec",
+   "fieldtype": "Section Break",
+   "label": "Internal"
+  },
+  {
+   "description": "Whitespace that follows this segment in the source, so the document reassembles exactly.",
+   "fieldname": "separator",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Separator"
+  },
+  {
+   "description": "Translation memory key for this source text and language pair.",
+   "fieldname": "fingerprint",
+   "fieldtype": "Data",
+   "label": "Fingerprint",
+   "read_only": 1,
+   "search_index": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-08-19 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Knowledge",
+ "name": "AI Translation Segment",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "ASC",
+ "states": []
+}

@@ -1,7 +1,7 @@
 {
  "app": "ai_fr_hg",
  "charts": [],
- "content": "[{\"id\":\"h56424103\",\"type\":\"header\",\"data\":{\"text\":\"Document Intelligence\",\"col\":12,\"level\":4}},{\"id\":\"p12370141\",\"type\":\"paragraph\",\"data\":{\"text\":\"Ingest, index and interrogate your documents. Everything stays on this machine.\",\"col\":12}},{\"id\":\"s6397134\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Knowledge Explorer\",\"col\":3}},{\"id\":\"s98977248\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Upload Document\",\"col\":3}},{\"id\":\"s55678518\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Knowledge Bases\",\"col\":3}},{\"id\":\"s42997324\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Extraction Schemas\",\"col\":3}},{\"id\":\"sp7289f1\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"c55678518\",\"type\":\"card\",\"data\":{\"card_name\":\"Knowledge Bases\",\"col\":4}},{\"id\":\"c4642363\",\"type\":\"card\",\"data\":{\"card_name\":\"Documents\",\"col\":4}},{\"id\":\"c29133879\",\"type\":\"card\",\"data\":{\"card_name\":\"Intelligence\",\"col\":4}}]",
+ "content": "[{\"id\":\"h56424103\",\"type\":\"header\",\"data\":{\"text\":\"Document Intelligence\",\"col\":12,\"level\":4}},{\"id\":\"p12370141\",\"type\":\"paragraph\",\"data\":{\"text\":\"Ingest, index and interrogate your documents. Everything stays on this machine.\",\"col\":12}},{\"id\":\"s6397134\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Knowledge Explorer\",\"col\":3}},{\"id\":\"s98977248\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Upload Document\",\"col\":3}},{\"id\":\"s55678518\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Knowledge Bases\",\"col\":3}},{\"id\":\"s42997324\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Extraction Schemas\",\"col\":3}},{\"id\":\"sp7289f1\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"c55678518\",\"type\":\"card\",\"data\":{\"card_name\":\"Knowledge Bases\",\"col\":4}},{\"id\":\"c4642363\",\"type\":\"card\",\"data\":{\"card_name\":\"Documents\",\"col\":4}},{\"id\":\"c29133879\",\"type\":\"card\",\"data\":{\"card_name\":\"Intelligence\",\"col\":4}},{\"id\":\"c81120451\",\"type\":\"card\",\"data\":{\"card_name\":\"Translation\",\"col\":4}}]",
  "creation": "2026-08-16 09:00:00.000000",
  "custom_blocks": [],
  "docstatus": 0,
@@ -78,7 +78,7 @@
    "hidden": 0,
    "is_query_report": 0,
    "label": "Intelligence",
-   "link_count": 2,
+   "link_count": 3,
    "onboard": 0,
    "type": "Card Break"
   },
@@ -97,9 +97,50 @@
    "dependencies": "",
    "hidden": 0,
    "is_query_report": 0,
+   "label": "Pattern Entities",
+   "link_count": 0,
+   "link_to": "AI Pattern Entity",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
    "label": "Prompt Templates",
    "link_count": 0,
    "link_to": "AI Prompt Template",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Translation",
+   "link_count": 2,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Translations",
+   "link_count": 0,
+   "link_to": "AI Translation",
+   "link_type": "DocType",
+   "onboard": 1,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Translation Glossaries",
+   "link_count": 0,
+   "link_to": "AI Translation Glossary",
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link"
@@ -154,6 +195,14 @@
    "color": "Grey",
    "label": "Files",
    "link_to": "File",
+   "type": "DocType"
+  },
+  {
+   "color": "Green",
+   "doc_view": "List",
+   "label": "Translations",
+   "link_to": "AI Translation",
+   "stats_filter": "",
    "type": "DocType"
   }
  ],

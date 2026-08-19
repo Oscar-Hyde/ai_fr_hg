@@ -21,12 +21,14 @@ from ai_fr_hg.ai.deadline import expired as budget_expired
 from ai_fr_hg.ai.engine import resolve_model, run_chat
 from ai_fr_hg.ai.exceptions import (
 	DeadlineExceededError,
+	ProviderError,
 	ProviderOfflineError,
 	ProviderTimeoutError,
 )
 from ai_fr_hg.ai.knowledge import build_context, retrieve
 from ai_fr_hg.ai.logging import write_audit_log
 from ai_fr_hg.ai.providers.base import ChatMessage
+from ai_fr_hg.ai.settings import should_stream_completion
 from ai_fr_hg.utils.db import safe_set_value
 
 DEFAULT_SYSTEM_PROMPT = (
@@ -45,6 +47,18 @@ CITATION_INSTRUCTIONS = (
 	"Place each citation immediately after the statement it supports."
 )
 
+LANGUAGE_INSTRUCTIONS = (
+	"CONTEXT marks each file with language=... A file may mix English, Arabic and Hebrew. "
+	"If asked what language a file is in, list every language in that label. "
+	"Do not drop Arabic or Hebrew just because English is also present. "
+	"Reply in the same language the user wrote in unless they ask otherwise."
+)
+
+USER_LANGUAGE_INSTRUCTIONS = (
+	"Reply in the same language the user wrote in, unless they ask for a different one. "
+	"The user may write in English, Arabic, Hebrew, or a mix of those."
+)
+
 #: Conversation history window sent to the model, in messages.
 HISTORY_LIMIT = 20
 
@@ -60,14 +74,16 @@ TIMED_OUT_ANSWER = (
 	"I ran out of time while answering that. The local model is still loading or is "
 	"responding slowly.\n\n"
 	"This usually settles after the model's first run. If it keeps happening, try a "
-	"smaller model, or raise **Request Timeout** in AI Platform Settings."
+	"smaller model, raise **Request Timeout**, or set **Max Turn Duration** to 0 in "
+	"AI Platform Settings so the turn is not cut off."
 )
 
 PROVIDER_TIMEOUT_ANSWER = (
 	"The AI model did not respond within the allowed time and I could not finish an "
 	"answer.\n\n"
 	"Local models are slowest on their first run, so try again first. If it keeps "
-	"happening, pick a smaller model or raise **Request Timeout** in AI Platform Settings."
+	"happening, pick a smaller model or raise **Request Timeout** on the provider "
+	"and in AI Platform Settings."
 )
 
 PROVIDER_OFFLINE_ANSWER = (
@@ -75,6 +91,27 @@ PROVIDER_OFFLINE_ANSWER = (
 	"Check that the model server is running and that the provider's **Base URL** in "
 	"AI Providers is correct, then try again."
 )
+
+PROVIDER_OOM_ANSWER = (
+	"The local model could not start because this machine does not have enough memory.\n\n"
+	"Ollama asked for more RAM than is free. In the Assistant model selector pick a "
+	"smaller model (phi3:mini or qwen2.5:0.5b), or run `ollama stop` on the large model "
+	"and try again."
+)
+
+PROVIDER_ERROR_ANSWER = (
+	"The local model could not complete that request.\n\n"
+	"Check that Ollama is running (`ollama list`) and that the selected model is installed. "
+	"If the model is too large for this machine, switch to a smaller one."
+)
+
+
+def answer_for_provider_error(exc: Exception) -> str:
+	"""Pick a saved explanation for a provider failure that is not a timeout."""
+	text = str(exc).lower()
+	if any(token in text for token in ("system memory", "not enough memory", "out of memory")):
+		return PROVIDER_OOM_ANSWER
+	return PROVIDER_ERROR_ANSWER
 
 
 def get_agent(agent: str | None = None):
@@ -137,13 +174,15 @@ def build_system_prompt(
 	settings = frappe.get_cached_doc("AI Platform Settings")
 
 	base = override or agent_doc.system_prompt or settings.default_system_prompt or DEFAULT_SYSTEM_PROMPT
-	parts = [base.strip()]
+	parts = [base.strip(), USER_LANGUAGE_INSTRUCTIONS]
 
 	if context:
 		if agent_doc.strict_grounding:
 			parts.append(GROUNDING_INSTRUCTIONS)
 		if agent_doc.citation_mode and agent_doc.citation_mode != "None":
 			parts.append(CITATION_INSTRUCTIONS)
+		if "language=" in context:
+			parts.append(LANGUAGE_INSTRUCTIONS)
 		parts.append(f"CONTEXT:\n{context}")
 	elif agent_doc.strict_grounding and agent_doc.use_knowledge:
 		parts.append("No relevant context was retrieved. Tell the user you do not have that information.")
@@ -207,6 +246,7 @@ def run_agent_turn(
 	save_messages: bool = True,
 	extra_context: str | None = None,
 	documents: list[str] | None = None,
+	on_token=None,
 ) -> dict:
 	"""Execute one full agent turn and return the answer with its provenance.
 
@@ -227,7 +267,10 @@ def run_agent_turn(
 	# 1. Retrieve supporting knowledge.
 	retrieved = []
 	context = extra_context or ""
-	if agent_doc.use_knowledge:
+	# Attached files are this turn's source of truth even when the agent does
+	# not auto-retrieve from its knowledge bases (the seeded General Assistant
+	# keeps use_knowledge off so empty-site small talk stays cheap).
+	if agent_doc.use_knowledge or documents:
 		targets = knowledge_bases or get_agent_knowledge_bases(agent_doc, conversation_doc)
 		# A configured agent with no attached knowledge bases still returns fast
 		# instead of paying an access/query round-trip on every chat.
@@ -246,6 +289,13 @@ def run_agent_turn(
 				context = f"{context}\n\n{retrieved_context}".strip() if context else retrieved_context
 			except Exception as exc:
 				frappe.log_error(title="AI retrieval failed", message=str(exc))
+
+	# Attached files must still reach the prompt when retrieval found nothing
+	# (no keyword overlap, embeddings below threshold, or a swallowed error).
+	if documents and not (context or "").strip():
+		from ai_fr_hg.ai.ingestion import excerpts_for_documents
+
+		context = excerpts_for_documents(documents)
 
 	# 2. Assemble the message list.
 	override = conversation_doc.system_prompt_override if conversation_doc else None
@@ -294,6 +344,7 @@ def run_agent_turn(
 	result = None
 	timed_out = False
 	timeout_kind = "budget"
+	provider_answer = ""
 
 	for iteration in range(max_iterations + 1):
 		# Offering tools invites another round trip to interpret their output.
@@ -312,6 +363,13 @@ def run_agent_turn(
 				tools=offer_tools,
 				operation="Chat",
 				conversation=conversation,
+				on_token=on_token
+				if should_stream_completion(
+					requested=bool(on_token),
+					enabled=True,
+					offer_tools=offer_tools,
+				)
+				else None,
 			)
 		except DeadlineExceededError:
 			# The whole turn ran out of its shared time budget.
@@ -328,6 +386,13 @@ def run_agent_turn(
 		except ProviderOfflineError:
 			timed_out = True
 			timeout_kind = "offline"
+			break
+		except ProviderError as exc:
+			# HTTP 500 from the runtime (model too large, weights missing, …)
+			# must become a saved answer, not a bare 417 in the browser.
+			timed_out = True
+			timeout_kind = "provider"
+			provider_answer = answer_for_provider_error(exc)
 			break
 
 		if not result.tool_calls:
@@ -400,6 +465,7 @@ def run_agent_turn(
 			"budget": TIMED_OUT_ANSWER,
 			"timeout": PROVIDER_TIMEOUT_ANSWER,
 			"offline": PROVIDER_OFFLINE_ANSWER,
+			"provider": provider_answer or PROVIDER_ERROR_ANSWER,
 		}[timeout_kind]
 
 	# 5. Persist the assistant's reply.
@@ -422,7 +488,14 @@ def run_agent_turn(
 			total_tokens=result.total_tokens if result else 0,
 			duration_ms=result.duration_ms if result else 0,
 			status="Failed" if timed_out else "Completed",
-			error_message="Turn exceeded its time budget." if timed_out else None,
+			error_message={
+				"budget": "Turn exceeded its time budget.",
+				"timeout": "The model did not respond in time.",
+				"offline": "The AI runtime is unreachable.",
+				"provider": "The model runtime rejected the request.",
+			}.get(timeout_kind)
+			if timed_out
+			else None,
 		)
 		update_conversation_stats(conversation, result)
 
@@ -443,6 +516,7 @@ def run_agent_turn(
 		"completion_tokens": result.completion_tokens if result else 0,
 		"total_tokens": result.total_tokens if result else 0,
 		"duration_ms": int((time.monotonic() - started) * 1000),
+		"_streamed": bool(result and getattr(result, "raw", None) and result.raw.get("streamed")),
 	}
 
 

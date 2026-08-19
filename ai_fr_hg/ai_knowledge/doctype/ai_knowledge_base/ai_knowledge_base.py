@@ -4,7 +4,7 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import cint, flt
+from frappe.utils import cint
 
 
 class AIKnowledgeBase(Document):
@@ -45,9 +45,10 @@ class AIKnowledgeBase(Document):
 		self.validate_embedding_model()
 
 	def validate_chunking(self):
+		from ai_fr_hg.ai.settings import normalize_similarity_threshold
+
 		chunk_size = cint(self.chunk_size)
 		chunk_overlap = cint(self.chunk_overlap)
-		threshold = flt(self.similarity_threshold)
 
 		if chunk_size < 100:
 			frappe.throw(_("Chunk Size must be at least 100 characters."))
@@ -59,8 +60,7 @@ class AIKnowledgeBase(Document):
 					chunk_overlap, chunk_size
 				)
 			)
-		if not 0 <= threshold <= 1:
-			frappe.throw(_("Similarity Threshold ({0}) must be between 0 and 1.").format(threshold))
+		self.similarity_threshold = normalize_similarity_threshold(self.similarity_threshold)
 
 	def validate_embedding_model(self):
 		if not self.embedding_model:

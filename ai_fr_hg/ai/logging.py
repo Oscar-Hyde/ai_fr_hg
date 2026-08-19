@@ -157,6 +157,8 @@ def write_audit_log(
 	Most observational call sites remain best-effort. Security-sensitive owners
 	can pass ``raise_on_error=True`` so an unaudited state change fails closed.
 	"""
+	savepoint = f"ai_audit_{frappe.generate_hash(length=8)}"
+	frappe.db.savepoint(savepoint)
 	try:
 		doc = frappe.new_doc("AI Audit Log")
 		doc.update(
@@ -177,6 +179,15 @@ def write_audit_log(
 		doc.flags.ignore_permissions = True
 		doc.insert(ignore_permissions=True)
 	except Exception:
-		frappe.log_error(title="AI Audit Log write failed", message=frappe.get_traceback())
+		traceback = frappe.get_traceback()
+		# PostgreSQL aborts the transaction after a database error. Restore the
+		# caller's transaction before either propagating a fail-closed audit or
+		# writing the best-effort Error Log.
+		frappe.db.rollback(save_point=savepoint)
 		if raise_on_error:
 			raise
+		frappe.log_error(title="AI Audit Log write failed", message=traceback)
+	else:
+		release = getattr(frappe.db, "release_savepoint", None)
+		if release:
+			release(savepoint)

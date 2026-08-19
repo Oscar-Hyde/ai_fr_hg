@@ -1,0 +1,393 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "allow_rename": 0,
+ "autoname": "naming_series:",
+ "creation": "2026-08-19 09:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "title",
+  "source_document",
+  "knowledge_base",
+  "status",
+  "language_cb",
+  "source_language",
+  "target_language",
+  "direction",
+  "options_sec",
+  "model",
+  "glossary",
+  "tone",
+  "options_cb",
+  "domain",
+  "preserve_formatting",
+  "index_output",
+  "text_sec",
+  "source_text",
+  "translated_sec",
+  "translated_text",
+  "segments_sec",
+  "segments",
+  "quality_sec",
+  "quality_score",
+  "segment_count",
+  "flagged_segments",
+  "memory_hits",
+  "quality_cb",
+  "character_count",
+  "duration_ms",
+  "total_tokens",
+  "model_used",
+  "issue_summary",
+  "output_sec",
+  "translated_document",
+  "processing_cb",
+  "requested_by",
+  "requested_on",
+  "completed_on",
+  "job_id",
+  "error_message"
+ ],
+ "fields": [
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "AITRN-.YYYY.-",
+   "reqd": 1
+  },
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Title",
+   "reqd": 1
+  },
+  {
+   "fieldname": "source_document",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Source Document",
+   "options": "AI Document"
+  },
+  {
+   "fetch_from": "source_document.knowledge_base",
+   "fetch_if_empty": 1,
+   "fieldname": "knowledge_base",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Knowledge Base",
+   "options": "AI Knowledge Base"
+  },
+  {
+   "default": "Draft",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "no_copy": 1,
+   "options": "Draft\nQueued\nTranslating\nCompleted\nNeeds Review\nFailed",
+   "read_only": 1
+  },
+  {
+   "fieldname": "language_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Leave empty to detect the language of the extracted text automatically.",
+   "fieldname": "source_language",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Source Language",
+   "options": "\nar\nen\nhe"
+  },
+  {
+   "fieldname": "target_language",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Target Language",
+   "options": "ar\nen\nhe",
+   "reqd": 1
+  },
+  {
+   "fieldname": "direction",
+   "fieldtype": "Data",
+   "label": "Text Direction",
+   "read_only": 1
+  },
+  {
+   "fieldname": "options_sec",
+   "fieldtype": "Section Break",
+   "label": "Translation Options"
+  },
+  {
+   "description": "Leave empty to use the platform's default translation or chat model.",
+   "fieldname": "model",
+   "fieldtype": "Link",
+   "label": "Model",
+   "options": "AI Model"
+  },
+  {
+   "fieldname": "glossary",
+   "fieldtype": "Link",
+   "label": "Glossary",
+   "options": "AI Translation Glossary"
+  },
+  {
+   "default": "Neutral",
+   "fieldname": "tone",
+   "fieldtype": "Select",
+   "label": "Register",
+   "options": "Neutral\nFormal\nInformal\nTechnical\nLegal"
+  },
+  {
+   "fieldname": "options_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Subject domain, for example \"construction contracts\" or \"medical records\".",
+   "fieldname": "domain",
+   "fieldtype": "Data",
+   "label": "Domain"
+  },
+  {
+   "default": "1",
+   "fieldname": "preserve_formatting",
+   "fieldtype": "Check",
+   "label": "Preserve Formatting"
+  },
+  {
+   "default": "0",
+   "description": "Index the finished translation as its own searchable AI Document.",
+   "fieldname": "index_output",
+   "fieldtype": "Check",
+   "label": "Index Translation as Document"
+  },
+  {
+   "fieldname": "text_sec",
+   "fieldtype": "Section Break",
+   "label": "Source Text"
+  },
+  {
+   "fieldname": "source_text",
+   "fieldtype": "Long Text",
+   "label": "Source Text"
+  },
+  {
+   "fieldname": "translated_sec",
+   "fieldtype": "Section Break",
+   "label": "Translation"
+  },
+  {
+   "fieldname": "translated_text",
+   "fieldtype": "Long Text",
+   "label": "Translated Text",
+   "no_copy": 1
+  },
+  {
+   "fieldname": "segments_sec",
+   "fieldtype": "Section Break",
+   "label": "Segments"
+  },
+  {
+   "fieldname": "segments",
+   "fieldtype": "Table",
+   "label": "Segments",
+   "no_copy": 1,
+   "options": "AI Translation Segment"
+  },
+  {
+   "fieldname": "quality_sec",
+   "fieldtype": "Section Break",
+   "label": "Quality"
+  },
+  {
+   "fieldname": "quality_score",
+   "fieldtype": "Percent",
+   "in_list_view": 1,
+   "label": "Quality Score",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "segment_count",
+   "fieldtype": "Int",
+   "label": "Segments",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "flagged_segments",
+   "fieldtype": "Int",
+   "label": "Flagged Segments",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "description": "Segments reused from the translation memory.",
+   "fieldname": "memory_hits",
+   "fieldtype": "Int",
+   "label": "Memory Reuse",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "quality_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "character_count",
+   "fieldtype": "Int",
+   "label": "Characters",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "duration_ms",
+   "fieldtype": "Int",
+   "label": "Duration (ms)",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_tokens",
+   "fieldtype": "Int",
+   "label": "Tokens",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "model_used",
+   "fieldtype": "Data",
+   "label": "Model Used",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "issue_summary",
+   "fieldtype": "Code",
+   "label": "Issue Summary",
+   "no_copy": 1,
+   "options": "JSON",
+   "read_only": 1
+  },
+  {
+   "fieldname": "output_sec",
+   "fieldtype": "Section Break",
+   "label": "Output & Processing"
+  },
+  {
+   "fieldname": "translated_document",
+   "fieldtype": "Link",
+   "label": "Translated Document",
+   "no_copy": 1,
+   "options": "AI Document",
+   "read_only": 1
+  },
+  {
+   "fieldname": "processing_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "requested_by",
+   "fieldtype": "Link",
+   "label": "Requested By",
+   "no_copy": 1,
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "requested_on",
+   "fieldtype": "Datetime",
+   "label": "Requested On",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "completed_on",
+   "fieldtype": "Datetime",
+   "label": "Completed On",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "job_id",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Job ID",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "error_message",
+   "fieldtype": "Small Text",
+   "label": "Error Message",
+   "no_copy": 1,
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-19 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Knowledge",
+ "name": "AI Translation",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "AI Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "AI User",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "AI Auditor"
+  }
+ ],
+ "row_format": "Dynamic",
+ "search_fields": "source_document,target_language,status",
+ "show_title_field_in_link": 1,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "title",
+ "track_changes": 1
+}

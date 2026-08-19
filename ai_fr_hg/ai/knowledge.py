@@ -22,6 +22,7 @@ from frappe.utils import cint, flt, now_datetime
 from ai_fr_hg.ai.chunking import chunk_text
 from ai_fr_hg.ai.engine import resolve_model, run_embedding
 from ai_fr_hg.ai.exceptions import DocumentProcessingError
+from ai_fr_hg.ai.language import language_name, resolve_document_language
 from ai_fr_hg.ai.vector import decode_vector, encode_vector, normalize, rank
 from ai_fr_hg.utils.db import safe_set_value
 
@@ -44,6 +45,7 @@ class RetrievedChunk:
 	keyword_score: float = 0.0
 	heading: str | None = None
 	page_number: int = 0
+	language: str | None = None
 
 	def as_dict(self) -> dict:
 		return {
@@ -57,6 +59,7 @@ class RetrievedChunk:
 			"keyword_score": round(self.keyword_score, 4),
 			"heading": self.heading,
 			"page_number": self.page_number,
+			"language": self.language,
 		}
 
 
@@ -533,11 +536,24 @@ def retrieve(
 		keyword = keyword_search(query, targets, documents=documents)
 
 	fused = _fuse(semantic, keyword, search_type)
+	if not fused and documents:
+		# The user attached these files. A question like "what language is this?"
+		# may share no keywords with the body; still return the first chunks.
+		rows = frappe.get_all(
+			"AI Document Chunk",
+			filters={"document": ["in", documents], "knowledge_base": ["in", targets]},
+			fields=["name"],
+			order_by="chunk_index asc",
+			limit_page_length=top_k,
+		)
+		fused = {row.name: 1.0 for row in rows}
 	if not fused:
 		return []
 
 	ordered = sorted(fused.items(), key=lambda row: row[1], reverse=True)
-	if search_type != "Keyword":
+	# Attached files are the source of truth: do not drop them because a local
+	# embedding scored below the site-wide similarity threshold.
+	if search_type != "Keyword" and not documents:
 		ordered = [(name, score) for name, score in ordered if semantic.get(name, 1.0) >= threshold]
 	ordered = ordered[:top_k]
 
@@ -591,11 +607,11 @@ def _hydrate(ordered, semantic, keyword) -> list[RetrievedChunk]:
 		)
 	}
 	titles = {
-		row.name: row.title
+		row.name: row
 		for row in frappe.get_all(
 			"AI Document",
 			filters={"name": ["in", list({r.document for r in rows.values()})]},
-			fields=["name", "title"],
+			fields=["name", "title", "language"],
 		)
 	}
 
@@ -604,11 +620,12 @@ def _hydrate(ordered, semantic, keyword) -> list[RetrievedChunk]:
 		row = rows.get(name)
 		if not row:
 			continue
+		meta = titles.get(row.document)
 		results.append(
 			RetrievedChunk(
 				chunk=name,
 				document=row.document,
-				document_title=titles.get(row.document) or row.document,
+				document_title=(meta.title if meta and meta.title else None) or row.document,
 				knowledge_base=row.knowledge_base,
 				content=row.content,
 				score=score,
@@ -616,6 +633,7 @@ def _hydrate(ordered, semantic, keyword) -> list[RetrievedChunk]:
 				keyword_score=keyword.get(name, 0.0),
 				heading=row.heading,
 				page_number=cint(row.page_number),
+				language=resolve_document_language(meta.language if meta else None, row.content) or None,
 			)
 		)
 	return results
@@ -681,6 +699,9 @@ def build_context(results: list[RetrievedChunk], max_characters: int | None = No
 			header += f" - {result.heading}"
 		if result.page_number:
 			header += f" (page {result.page_number})"
+		code = resolve_document_language(result.language, result.content)
+		if code:
+			header += f" [language={language_name(code)}]"
 
 		block = f"{header}\n{result.content}"
 		if used + len(block) > limit:

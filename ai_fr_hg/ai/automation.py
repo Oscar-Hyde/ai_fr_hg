@@ -38,21 +38,48 @@ def clear_rule_cache() -> None:
 
 
 def handle_document_event(doc, method: str | None = None) -> None:
-	"""Entry point wired to the `*` doc_events hook."""
-	if not method or doc.doctype.startswith("AI "):
-		return  # never let the platform trigger itself recursively
-	if frappe.flags.in_install or frappe.flags.in_migrate or frappe.flags.in_patch:
-		return
+	"""Entry point wired to the `*` doc_events hook.
 
-	rules = get_rule_index().get(doc.doctype, {}).get(method)
-	if not rules:
-		return
-
-	for rule_name in rules:
+	Never throw during a Frappe document lifecycle. Returning to Desk
+	triggers saves for Workspace, Onboarding, User and other core
+	DocTypes; a stray exception here would brick Desk with a 500 and
+	prevent the socket handshake from completing (xhr poll error).
+	"""
+	try:
+		if not method:
+			return
+		doctype = getattr(doc, "doctype", None)
+		if not doctype or doctype.startswith("AI "):
+			return  # never let the platform trigger itself recursively
+		flags = getattr(frappe, "flags", None) or {}
+		# frappe.flags may be a dict-like object; handle both cases.
 		try:
-			trigger_rule(rule_name, doc)
+			in_install = bool(flags.in_install or flags.in_migrate or flags.in_patch)  # type: ignore[attr-defined]
 		except Exception:
-			frappe.log_error(title=f"AI Automation Rule failed: {rule_name}", message=frappe.get_traceback())
+			in_install = False
+		if in_install:
+			return
+
+		try:
+			rules = get_rule_index().get(doctype, {}).get(method)
+		except Exception:
+			# Cache/DB not ready during migrate/restore — fail silently so
+			# Desk boot is never blocked.
+			return
+		if not rules:
+			return
+
+		for rule_name in rules:
+			try:
+				trigger_rule(rule_name, doc)
+			except Exception:
+				frappe.log_error(title=f"AI Automation Rule failed: {rule_name}", message=frappe.get_traceback())
+	except Exception:
+		# Absolute last resort: Desk must never see an exception from this hook.
+		try:
+			frappe.log_error(title="AI Automation hook failed", message=frappe.get_traceback())
+		except Exception:
+			pass
 
 
 def trigger_rule(rule_name: str, doc) -> None:
@@ -160,6 +187,17 @@ def execute_rule(rule_name: str, doctype: str, docname: str) -> dict:
 				reference_doctype=doctype,
 				reference_name=docname,
 			)
+
+		elif rule.action_type == "Translate":
+			from ai_fr_hg.ai.translation import translate_text
+
+			outcome = translate_text(
+				source_text,
+				rule.target_language,
+				reference_doctype=doctype,
+				reference_name=docname,
+			)
+			result = outcome.text
 
 		elif rule.action_type == "Ingest Document":
 			from ai_fr_hg.ai.ingestion import process_document

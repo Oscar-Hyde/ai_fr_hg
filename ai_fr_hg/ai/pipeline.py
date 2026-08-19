@@ -585,6 +585,30 @@ def execute_step(step, context: dict, run_doc):
 			raise PipelineError(_("The Compare step needs two documents in the run context."))
 		return compare_documents(a, b, model=step.model, instructions=config.get("instructions", ""))
 
+	if step_type == "Translate":
+		from ai_fr_hg.ai.translation import translate_text
+
+		target = config.get("target_language")
+		if not target:
+			raise PipelineError(
+				_("The Translate step needs a 'target_language' (ar, en or he) in its configuration.")
+			)
+		outcome = translate_text(
+			_as_text(value),
+			target,
+			config.get("source_language"),
+			model=step.model,
+			glossary=config.get("glossary"),
+			tone=config.get("tone") or "Neutral",
+			domain=config.get("domain") or "",
+			knowledge_base=step.knowledge_base,
+			reference_doctype=run_doc.reference_doctype,
+			reference_name=run_doc.reference_name,
+		)
+		if config.get("return") == "text":
+			return outcome.text
+		return {"text": outcome.text, **outcome.as_dict()}
+
 	if step_type == "Prompt":
 		if step.prompt_template:
 			return run_prompt_template(

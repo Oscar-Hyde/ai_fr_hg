@@ -309,7 +309,7 @@ class TestReaderRegistry(UnitTestCase):
 		from ai_fr_hg.ai.readers import supported_extensions
 
 		extensions = set(supported_extensions())
-		for expected in ("pdf", "docx", "xlsx", "pptx", "txt", "md", "csv", "json", "html"):
+		for expected in ("pdf", "docx", "xlsx", "pptx", "odt", "ods", "txt", "md", "csv", "json", "html"):
 			self.assertIn(expected, extensions)
 
 	def test_reader_lookup_is_case_insensitive(self):
@@ -439,6 +439,36 @@ class TestToolCallWireFormats(UnitTestCase):
 		self.assertEqual(payload["tool_calls"][0]["function"]["arguments"], '{"doctype": "User"}')
 
 
+class TestSimilarityThreshold(UnitTestCase):
+	"""Desk users type 25 meaning 25%; the store keeps a 0–1 cosine score."""
+
+	def test_fraction_is_unchanged(self):
+		from ai_fr_hg.ai.settings import normalize_similarity_threshold
+
+		self.assertEqual(normalize_similarity_threshold(0.25), 0.25)
+		self.assertEqual(normalize_similarity_threshold(0), 0.0)
+		self.assertEqual(normalize_similarity_threshold(1), 1.0)
+
+	def test_percentage_is_converted(self):
+		from ai_fr_hg.ai.settings import normalize_similarity_threshold
+
+		self.assertAlmostEqual(normalize_similarity_threshold(25), 0.25)
+		self.assertAlmostEqual(normalize_similarity_threshold(100), 1.0)
+		self.assertAlmostEqual(normalize_similarity_threshold(1.5), 0.015)
+
+	def test_out_of_range_is_rejected(self):
+		from ai_fr_hg.ai.settings import normalize_similarity_threshold
+
+		class Thrown(Exception):
+			pass
+
+		with patch("ai_fr_hg.ai.settings.frappe.throw", side_effect=Thrown):
+			with self.assertRaises(Thrown):
+				normalize_similarity_threshold(-0.1)
+			with self.assertRaises(Thrown):
+				normalize_similarity_threshold(150)
+
+
 class TestDeadline(UnitTestCase):
 	"""The time budget that keeps a chat turn inside the proxy's patience."""
 
@@ -540,3 +570,309 @@ class TestTurnBudget(UnitTestCase):
 		self.assertTrue(allows(9999))
 		self.assertFalse(expired())
 		self.assertIsNone(remaining_seconds())
+
+
+class TestInteractiveDefaults(UnitTestCase):
+	def test_document_wait_is_short(self):
+		from ai_fr_hg.ai.ingestion import DEFAULT_WAIT_SECONDS
+
+		# Interactive chat must not sit on a 45s poll before the model starts.
+		self.assertLessEqual(DEFAULT_WAIT_SECONDS, 10)
+
+
+class TestTurnBudgetConfig(UnitTestCase):
+	def test_none_and_zero_are_unlimited(self):
+		from ai_fr_hg.ai.settings import coerce_turn_budget
+
+		self.assertEqual(coerce_turn_budget(None), 0)
+		self.assertEqual(coerce_turn_budget(0), 0)
+		self.assertEqual(coerce_turn_budget("0"), 0)
+
+	def test_positive_values_are_kept(self):
+		from ai_fr_hg.ai.settings import coerce_turn_budget
+
+		self.assertEqual(coerce_turn_budget(90), 90)
+		self.assertEqual(coerce_turn_budget("45"), 45)
+
+
+class TestLanguageDetection(UnitTestCase):
+	"""Document language is detected from extracted text, without extra packages."""
+
+	def test_empty_and_short_text_are_unknown(self):
+		from ai_fr_hg.ai.language import detect_language
+
+		self.assertEqual(detect_language(""), "")
+		self.assertEqual(detect_language(None), "")
+		self.assertEqual(detect_language("   \n"), "")
+		self.assertEqual(detect_language("too short"), "")
+
+	def test_bulgarian_is_first_class(self):
+		from ai_fr_hg.ai.language import detect_language, language_name
+
+		text = (
+			"Това е документ за България. В него се описва как да се работи "
+			"с файловете, които са качени към базата знания, и какво трябва "
+			"да се направи за обработката им."
+		)
+		self.assertEqual(detect_language(text), "bg")
+		self.assertEqual(language_name("bg"), "Bulgarian")
+
+	def test_english_is_detected(self):
+		from ai_fr_hg.ai.language import detect_language
+
+		text = (
+			"This is the report for the project and the team. The results are "
+			"from the meeting on Monday with the client and the notes that follow."
+		)
+		self.assertEqual(detect_language(text), "en")
+
+	def test_russian_is_not_bulgarian(self):
+		from ai_fr_hg.ai.language import detect_language
+
+		text = (
+			"Это документ о том, что он и она должны сделать для проекта. "
+			"Они были в офисе и это было важно для его работы."
+		)
+		self.assertEqual(detect_language(text), "ru")
+
+	def test_german_and_french(self):
+		from ai_fr_hg.ai.language import detect_language
+
+		german = "Das ist der Bericht und die Analyse von dem Projekt mit einer neuen Methode."
+		french = "Le rapport et les notes de la réunion sont dans le dossier pour une revue."
+		self.assertEqual(detect_language(german), "de")
+		self.assertEqual(detect_language(french), "fr")
+
+	def test_script_gates(self):
+		from ai_fr_hg.ai.language import detect_language
+
+		self.assertEqual(detect_language("这是一份中文文件内容足够长可以识别语言了"), "zh")
+		self.assertEqual(detect_language("これはひらがなと漢字が混ざった日本語の文書です"), "ja")
+		self.assertEqual(detect_language("이것은 한글로 작성된 문서이며 언어를 식별합니다"), "ko")
+		self.assertEqual(detect_language("هذا مستند مكتوب باللغة العربية وهو طويل بما يكفي"), "ar")
+		self.assertEqual(detect_language("זהו מסמך בעברית והוא ארוך מספיק לזיהוי השפה של המסמך"), "he")
+		self.assertEqual(detect_language("Αυτό είναι ένα ελληνικό κείμενο για αναγνώριση"), "el")
+
+	def test_arabic_presentation_forms_count_as_arabic(self):
+		"""PDF extractors often emit presentation-form Arabic, not the standard block."""
+		from ai_fr_hg.ai.language import detect_language
+
+		# Isolated / initial / medial / final forms in FB50–FDFF and FE70–FEFF.
+		text = "ﺍﻟﻌﻘﺪ ﺍﻟﺮﺳﻤﻲ ﻟﻠﻤﺸﺮﻭﻉ ﻭﻫﻮ ﻣﻜﺘﻮﺏ ﺑﺎﻟﻠﻐﺔ ﺍﻟﻌﺮﺑﻴﺔ ﺑﺸﻜﻞ ﻭﺍﺿﺢ"
+		self.assertEqual(detect_language(text), "ar")
+
+	def test_mixed_english_and_arabic(self):
+		from ai_fr_hg.ai.language import detect_language, detect_languages, language_name
+
+		text = (
+			"This is the official report for the project and the team with the results.\n"
+			"هذا هو التقرير الرسمي للمشروع وهو مكتوب باللغة العربية مع التفاصيل المطلوبة."
+		)
+		codes = detect_languages(text)
+		self.assertIn("en", codes)
+		self.assertIn("ar", codes)
+		self.assertEqual(set(detect_language(text).split(",")), {"en", "ar"})
+		self.assertIn("English", language_name(detect_language(text)))
+		self.assertIn("Arabic", language_name(detect_language(text)))
+
+	def test_mixed_english_and_hebrew(self):
+		from ai_fr_hg.ai.language import detect_languages
+
+		text = (
+			"This is the official report for the project and the team with the results.\n"
+			"זהו הדוח הרשמי של הפרויקט והוא כתוב בעברית עם הפרטים הנדרשים לזיהוי."
+		)
+		self.assertEqual(set(detect_languages(text)), {"en", "he"})
+
+	def test_mixed_arabic_and_hebrew(self):
+		from ai_fr_hg.ai.language import detect_languages
+
+		text = (
+			"هذا مستند مكتوب باللغة العربية وهو يغطي الاتفاق بين الأطراف بالتفصيل.\n"
+			"זהו מסמך בעברית והוא מכסה את ההסכם בין הצדדים לפרטי הפרטים."
+		)
+		self.assertEqual(set(detect_languages(text)), {"ar", "he"})
+
+	def test_mixed_english_arabic_and_hebrew(self):
+		from ai_fr_hg.ai.language import detect_language, detect_languages, language_name
+
+		text = (
+			"This is the official report for the project and the team with the results.\n"
+			"هذا هو التقرير الرسمي للمشروع وهو مكتوب باللغة العربية مع التفاصيل.\n"
+			"זהו הדוח הרשמי של הפרויקט והוא כתוב בעברית עם הפרטים הנדרשים."
+		)
+		self.assertEqual(set(detect_languages(text)), {"en", "ar", "he"})
+		label = language_name(detect_language(text))
+		self.assertIn("English", label)
+		self.assertIn("Arabic", label)
+		self.assertIn("Hebrew", label)
+
+	def test_english_heading_does_not_hide_arabic_body(self):
+		from ai_fr_hg.ai.language import detect_languages
+
+		text = (
+			"Contract\n"
+			"هذا العقد ساري المفعول بين الأطراف ويحدد الالتزامات الخاصة بالمشروع "
+			"وهو مكتوب باللغة العربية بشكل كامل مع كل البنود المطلوبة."
+		)
+		codes = detect_languages(text)
+		self.assertIn("ar", codes)
+		self.assertIn("en", codes)
+
+	def test_language_name_joins_mixed_codes(self):
+		from ai_fr_hg.ai.language import language_name, parse_language_codes
+
+		self.assertEqual(language_name("en,ar,he"), "English + Arabic + Hebrew")
+		self.assertEqual(parse_language_codes("English + Arabic"), ["en", "ar"])
+		self.assertEqual(parse_language_codes("en, he"), ["en", "he"])
+
+	def test_stored_code_wins_over_detection(self):
+		from ai_fr_hg.ai.language import resolve_document_language
+
+		english = "This is the report for the project and the team with the results."
+		self.assertEqual(resolve_document_language("bg", english), "bg")
+		self.assertEqual(resolve_document_language("", english), "en")
+		self.assertEqual(resolve_document_language(None, ""), "")
+
+	def test_build_context_labels_language(self):
+		from ai_fr_hg.ai.knowledge import RetrievedChunk, build_context
+
+		context = build_context(
+			[
+				RetrievedChunk(
+					chunk="c1",
+					document="DOC-1",
+					document_title="Договор",
+					knowledge_base="KB",
+					content="Това е текст на договора за тази услуга и за клиента.",
+					score=0.9,
+					language="bg",
+				)
+			],
+			max_characters=4000,
+		)
+		self.assertIn("language=Bulgarian", context)
+		self.assertIn("Договор", context)
+
+	def test_build_context_detects_language_when_field_is_empty(self):
+		from ai_fr_hg.ai.knowledge import RetrievedChunk, build_context
+
+		context = build_context(
+			[
+				RetrievedChunk(
+					chunk="c1",
+					document="DOC-1",
+					document_title="Notes",
+					knowledge_base="KB",
+					content="This is the report for the project and the team with the results.",
+					score=0.9,
+				)
+			],
+			max_characters=4000,
+		)
+		self.assertIn("language=English", context)
+
+	def test_build_context_labels_mixed_english_arabic_hebrew(self):
+		from ai_fr_hg.ai.knowledge import RetrievedChunk, build_context
+
+		content = (
+			"This is the official report for the project and the team.\n"
+			"هذا هو التقرير الرسمي للمشروع وهو مكتوب باللغة العربية.\n"
+			"זהו הדוח הרשמי של הפרויקט והוא כתוב בעברית."
+		)
+		context = build_context(
+			[
+				RetrievedChunk(
+					chunk="c1",
+					document="DOC-1",
+					document_title="Trilingual contract",
+					knowledge_base="KB",
+					content=content,
+					score=0.9,
+					language="en,ar,he",
+				)
+			],
+			max_characters=4000,
+		)
+		self.assertIn("language=English + Arabic + Hebrew", context)
+
+
+class TestStreamingDecision(UnitTestCase):
+	def test_streams_only_the_final_tool_free_completion(self):
+		from ai_fr_hg.ai.settings import should_stream_completion
+
+		self.assertTrue(should_stream_completion(requested=True, enabled=True, offer_tools=None))
+		self.assertFalse(should_stream_completion(requested=True, enabled=True, offer_tools=[{"name": "search"}]))
+		self.assertFalse(should_stream_completion(requested=True, enabled=False, offer_tools=None))
+		self.assertFalse(should_stream_completion(requested=False, enabled=True, offer_tools=None))
+
+	def test_stream_fallback_uses_blocking_chat_when_no_tokens_arrived(self):
+		from types import SimpleNamespace
+		from unittest.mock import Mock
+
+		from ai_fr_hg.ai.engine import _complete_chat
+		from ai_fr_hg.ai.providers.base import CompletionResult
+
+		provider = SimpleNamespace(supports_streaming=True)
+		provider.stream_chat = Mock(side_effect=RuntimeError("stream dropped before first token"))
+		provider.chat = Mock(return_value=CompletionResult(content="blocking answer"))
+		tokens = []
+		result = _complete_chat(
+			provider,
+			[],
+			model="test",
+			options={},
+			tools=None,
+			json_schema=None,
+			on_token=tokens.append,
+		)
+		self.assertEqual(result.content, "blocking answer")
+		self.assertEqual(tokens, [])
+		provider.chat.assert_called_once()
+
+	def test_stream_success_publishes_every_fragment(self):
+		from types import SimpleNamespace
+
+		from ai_fr_hg.ai.engine import _complete_chat
+
+		provider = SimpleNamespace(supports_streaming=True)
+		provider.stream_chat = lambda *args, **kwargs: iter(["Hel", "lo"])
+		provider.chat = lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("must not fall back"))
+		tokens = []
+		result = _complete_chat(
+			provider,
+			[],
+			model="test",
+			options={},
+			tools=None,
+			json_schema=None,
+			on_token=tokens.append,
+		)
+		self.assertEqual(tokens, ["Hel", "lo"])
+		self.assertEqual(result.content, "Hello")
+		self.assertTrue(result.raw.get("streamed"))
+
+	def test_mid_stream_failure_does_not_start_a_second_completion(self):
+		from types import SimpleNamespace
+		from unittest.mock import Mock
+
+		from ai_fr_hg.ai.engine import _complete_chat
+
+		def broken_stream(*args, **kwargs):
+			yield "Hel"
+			raise RuntimeError("socket dropped")
+
+		provider = SimpleNamespace(supports_streaming=True)
+		provider.stream_chat = broken_stream
+		provider.chat = Mock()
+		with self.assertRaises(RuntimeError):
+			_complete_chat(
+				provider,
+				[],
+				model="test",
+				options={},
+				tools=None,
+				json_schema=None,
+				on_token=lambda delta: None,
+			)
+		provider.chat.assert_not_called()

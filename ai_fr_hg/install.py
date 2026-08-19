@@ -87,6 +87,39 @@ BUILTIN_TOOLS = [
 		],
 	},
 	{
+		"tool_name": "translate_content",
+		"tool_type": "Builtin",
+		"handler": "translate_content",
+		"is_readonly_tool": 1,
+		"description": (
+			"Translate an uploaded document, or a passage of text, between Arabic, English and Hebrew. "
+			"Use this whenever the user asks for content in another one of those languages."
+		),
+		"parameters": [
+			{
+				"parameter": "target_language",
+				"parameter_type": "String",
+				"required": 1,
+				"description": "The language to translate into: 'ar' (Arabic), 'en' (English) or 'he' (Hebrew).",
+			},
+			{
+				"parameter": "document",
+				"parameter_type": "String",
+				"description": "The document ID, title or filename to translate. Omit when passing 'text'.",
+			},
+			{
+				"parameter": "text",
+				"parameter_type": "String",
+				"description": "A passage to translate directly, instead of a stored document.",
+			},
+			{
+				"parameter": "source_language",
+				"parameter_type": "String",
+				"description": "Optional source language ('ar', 'en' or 'he'). Detected automatically when omitted.",
+			},
+		],
+	},
+	{
 		"tool_name": "list_documents",
 		"tool_type": "Builtin",
 		"handler": "list_documents",
@@ -543,6 +576,31 @@ def _enable_github_test_annotations() -> None:
 	unittest.TestResult.addError = add_error
 	unittest.TestResult.addFailure = add_failure
 	unittest.TestResult._ai_fr_hg_annotations = True
+
+
+def after_migrate() -> None:
+	"""Clear Desk and boot caches after every migrate.
+
+	A stale `bootinfo` or `assets.json` hash is the common cause of
+	"Loading failed for .../build_events.bundle.XXX.js" and the subsequent
+	"xhr poll error" when the Desk router retries with a mismatched socket
+	host. Clearing the cache here makes returning to Desk after `bench
+	migrate` or `bench build` never reuse a stale hashed asset.
+	"""
+	try:
+		frappe.clear_cache()
+	except Exception:
+		pass
+	try:
+		ensure_site_file_directories()
+	except Exception:
+		pass
+	try:
+		# Re-ensure the module fix so Desk workspaces that were cached with
+		# the old module name render on the first Desk return after migrate.
+		_fix_learning_doctype_modules()
+	except Exception:
+		pass
 
 
 def before_tests() -> None:

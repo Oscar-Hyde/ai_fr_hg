@@ -12,9 +12,20 @@
 
 (() => {
 	if (typeof frappe === "undefined") return;
+	// Ensure the global listview registry exists even during early Desk boot
+	// or when returning to Desk via SPA navigation and the module is
+	// re-evaluated from cache.
+	if (!frappe.listview_settings) frappe.listview_settings = {};
+	// Prevent double-wrapping when Desk is revisited and Frappe re-executes
+	// this doctype_list_js module from cache.
+	if (frappe.listview_settings["File"] && frappe.listview_settings["File"].__ai_folder_extended) return;
 
 	function selected_names(listview) {
-		return (listview.get_checked_items(true) || []).map(String);
+		try {
+			return (listview.get_checked_items(true) || []).map(String);
+		} catch (_error) {
+			return [];
+		}
 	}
 
 	function selected_or_message(listview, singular = false) {
@@ -75,38 +86,56 @@
 
 	function install_native_paste_override() {
 		const manager = frappe.file_manager;
-		if (!manager || manager.__ai_folder_paste__) return Boolean(manager);
+		if (!manager) return false;
+		if (manager.__ai_folder_paste__) return true;
+		if (typeof manager.cut !== "function" || typeof manager.paste !== "function") return false;
 
 		manager.__ai_folder_paste__ = true;
+		const original_paste = manager.paste.bind(manager);
 		manager.paste = async (target_folder) => {
-			const items = manager.files_to_move || [];
-			if (!items.length || !manager.old_folder) {
+			try {
+				const items = manager.files_to_move || [];
+				if (!items.length || !manager.old_folder) {
+					manager.cut([], null);
+					return;
+				}
+
+				const result = await frappe.xcall("ai_fr_hg.api.folders.bulk_move", {
+					file_names: items.map((item) => item.name),
+					target_folder,
+					enqueue: items.length > 20 ? 1 : 0,
+				});
 				manager.cut([], null);
-				return;
-			}
 
-			const result = await frappe.xcall("ai_fr_hg.api.folders.bulk_move", {
-				file_names: items.map((item) => item.name),
-				target_folder,
-				enqueue: items.length > 20 ? 1 : 0,
-			});
-			manager.cut([], null);
-
-			if (result.status === "Queued") {
-				frappe.show_alert({
-					message: __("Bulk move queued. Progress will be recorded in the audit trail."),
-					indicator: "blue",
-				});
+				if (result.status === "Queued") {
+					frappe.show_alert({
+						message: __("Bulk move queued. Progress will be recorded in the audit trail."),
+						indicator: "blue",
+					});
+					return result;
+				}
+				if (result.errors?.length) {
+					frappe.msgprint({
+						title: __("Move completed with errors"),
+						message: result.errors.map((entry) => `${entry.file}: ${entry.error}`).join("<br>"),
+						indicator: "orange",
+					});
+				}
 				return result;
+			} catch (error) {
+				// Fall back to native paste so a folder-service outage never
+				// bricks the Desk file operation.
+				console.warn("AI folder paste failed, falling back to native", error);
+				try {
+					return await original_paste(target_folder);
+				} catch (_fallback_error) {
+					frappe.msgprint({
+						title: __("Move failed"),
+						message: error.message || __("The folder operation failed."),
+						indicator: "red",
+					});
+				}
 			}
-			if (result.errors?.length) {
-				frappe.msgprint({
-					title: __("Move completed with errors"),
-					message: result.errors.map((entry) => `${entry.file}: ${entry.error}`).join("<br>"),
-					indicator: "orange",
-				});
-			}
-			return result;
 		};
 		return true;
 	}
@@ -114,28 +143,76 @@
 	function install_file_view_menu_override() {
 		const FileView = frappe.views?.FileView;
 		if (!FileView || FileView.prototype.__ai_folder_menu__) return Boolean(FileView);
-
+		// Frappe core may have renamed or removed this method in a patch;
+		// guard so Desk never crashes on return if the prototype changed.
 		const original_file_menu_items = FileView.prototype.file_menu_items;
+		if (typeof original_file_menu_items !== "function") {
+			FileView.prototype.__ai_folder_menu__ = true;
+			return true;
+		}
+
 		FileView.prototype.file_menu_items = function () {
-			const items = original_file_menu_items.call(this).filter((item) => item.label !== __("New Folder"));
-			items.splice(1, 0, {
+			let items;
+			try {
+				items = original_file_menu_items.call(this) || [];
+			} catch (_error) {
+				items = [];
+			}
+			// Defensive: ensure items is an array even if core returns unexpected shape.
+			if (!Array.isArray(items)) items = [];
+			const filtered = items.filter((item) => {
+				try {
+					return item.label !== __("New Folder");
+				} catch (_e) {
+					return true;
+				}
+			});
+			filtered.splice(1, 0, {
 				label: __("New Folder"),
 				action: async () => {
-					if (await create_folder(this.current_folder)) this.refresh();
+					try {
+						if (await create_folder(this.current_folder)) this.refresh();
+					} catch (error) {
+						frappe.msgprint({
+							title: __("Could not create folder"),
+							message: error.message || __("The folder operation failed."),
+							indicator: "red",
+						});
+					}
 				},
 			});
-			return items;
+			return filtered;
 		};
 		FileView.prototype.__ai_folder_menu__ = true;
 		return true;
 	}
 
-	const core_settings = frappe.listview_settings["File"] || {};
-	const core_onload = core_settings.onload;
-	frappe.listview_settings["File"] = {
-		...core_settings,
-		onload(listview) {
-			core_onload?.(listview);
+	function install_listview_override() {
+		if (!frappe.listview_settings) frappe.listview_settings = {};
+		// If already extended in this session, verify the object still is ours.
+		// Frappe may have re-created listview_settings["File"] after Desk boot.
+		const existing = frappe.listview_settings["File"] || {};
+		if (existing.__ai_folder_extended) return true;
+		// Wait until the File listview settings object is defined by Frappe core
+		// or another app – an empty object means we can wrap it, but if core
+		// hasn't set onload yet we still wrap so later core loads are preserved
+		// via core_onload capture.
+		const core_settings = existing;
+		const core_onload = core_settings.onload;
+		frappe.listview_settings["File"] = {
+			...core_settings,
+			__ai_folder_extended: true,
+			onload(listview) {
+				try {
+					core_onload?.(listview);
+				} catch (error) {
+					console.warn("AI folder: core File onload threw", error);
+				}
+				// Prevent duplicate actions when the user visits File list,
+				// goes to Desk, and returns – Frappe reuses the same listview
+				// settings object and would otherwise add the menu items again.
+				if (listview.__ai_folder_menu_added) return;
+				listview.__ai_folder_menu_added = true;
 
 			listview.page.add_actions_menu_item(__("Move to Folder…"), async () => {
 				const names = selected_or_message(listview);
@@ -264,13 +341,16 @@
 				await frappe.xcall("ai_fr_hg.api.folders.remove_favorite", { folder: item.name });
 				frappe.show_alert({ message: __("Folder removed from favorites."), indicator: "green" });
 			});
-		},
-	};
+			},
+		};
+		return true;
+	}
 
 	function install_extensions(remaining_attempts = 20) {
 		const pasted = install_native_paste_override();
 		const menu = install_file_view_menu_override();
-		if ((!pasted || !menu) && remaining_attempts > 0) {
+		const listview = install_listview_override();
+		if ((!pasted || !menu || !listview) && remaining_attempts > 0) {
 			setTimeout(() => install_extensions(remaining_attempts - 1), 250);
 		}
 	}

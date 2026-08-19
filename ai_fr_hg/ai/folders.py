@@ -25,6 +25,7 @@ is the display name within that parent (no slashes).
 from __future__ import annotations
 
 import re
+from contextlib import contextmanager
 from typing import Any
 
 import frappe
@@ -35,7 +36,6 @@ from ai_fr_hg.ai.exceptions import (
 	CircularFolderError,
 	FileNotFoundError,
 	FolderAlreadyExistsError,
-	FolderError,
 	FolderNotEmptyError,
 	FolderNotFoundError,
 	FolderPermissionError,
@@ -56,6 +56,20 @@ _RESERVED_NAMES = {"", ".", ".."}
 
 def _throw(exc_class, message: str) -> None:
 	frappe.throw(_(message), exc=exc_class)
+
+
+@contextmanager
+def _mutation_savepoint(operation: str):
+	"""Make a service mutation rollback-safe even for an in-process caller."""
+	save_point = f"folder_{operation}_{frappe.generate_hash(length=10)}"
+	frappe.db.savepoint(save_point)
+	try:
+		yield
+	except Exception:
+		frappe.db.rollback(save_point=save_point)
+		raise
+	else:
+		frappe.db.release_savepoint(save_point)
 
 
 # ---------------------------------------------------------------------------
@@ -121,7 +135,11 @@ def _depth(path: str) -> int:
 def _ensure_home_exists() -> None:
 	"""Ensure the canonical Home folder exists (idempotent)."""
 	if not frappe.db.exists("File", _HOME):
-		# Try privileged insert; Home may already exist via fixtures but db check is cheap.
+		# Home creation participates in the caller's transaction. A savepoint
+		# makes a concurrent insert race recoverable without committing unrelated
+		# work or leaving PostgreSQL's transaction in an aborted state.
+		save_point = f"ensure_home_{frappe.generate_hash(length=8)}"
+		frappe.db.savepoint(save_point)
 		try:
 			doc = frappe.new_doc("File")
 			doc.update(
@@ -134,10 +152,11 @@ def _ensure_home_exists() -> None:
 			)
 			doc.flags.ignore_permissions = True
 			doc.insert(ignore_permissions=True)
-			frappe.db.commit()
+			frappe.db.release_savepoint(save_point)
 		except Exception:
-			# Home creation races are benign; another worker may have created it.
-			pass
+			frappe.db.rollback(save_point=save_point)
+			if not frappe.db.exists("File", _HOME):
+				raise
 
 
 def _get_file_doc(name: str):
@@ -167,6 +186,21 @@ def _assert_folder_exists(folder_path: str) -> str:
 	if not doc or not cint(doc.is_folder):
 		_throw(FolderNotFoundError, f"'{folder_path}' is not a folder.")
 	return normalized
+
+
+def _lock_folder_rows(*folder_paths: str | None) -> None:
+	"""Serialize child membership changes against recursive tree snapshots."""
+	for folder_path in sorted({_normalize_folder_path(path) for path in folder_paths if path}):
+		locked = frappe.db.get_value("File", folder_path, "name", for_update=True)
+		if not locked:
+			_throw(FolderNotFoundError, f"Folder '{folder_path}' does not exist.")
+
+
+def _lock_file_rows(*file_names: str | None) -> None:
+	"""Lock non-parent File rows after their parent folders are locked."""
+	for file_name in sorted({name for name in file_names if name}):
+		if not frappe.db.get_value("File", file_name, "name", for_update=True):
+			_throw(FileNotFoundError, f"File '{file_name}' does not exist.")
 
 
 def _check_permission(
@@ -245,21 +279,18 @@ def _write_audit(
 	reference_doctype: str = "File",
 	reference_name: str | None = None,
 ) -> None:
-	"""Best-effort audit log for folder operations."""
-	try:
-		from ai_fr_hg.ai.logging import write_audit_log
+	"""Write a fail-closed audit record for a folder mutation."""
+	from ai_fr_hg.ai.logging import write_audit_log
 
-		write_audit_log(
-			action=action,
-			category="Data",
-			message=message,
-			details=details or {},
-			reference_doctype=reference_doctype,
-			reference_name=reference_name,
-			raise_on_error=False,
-		)
-	except Exception:
-		frappe.log_error(title=f"Folder audit failed: {action}", message=frappe.get_traceback())
+	write_audit_log(
+		action=action,
+		category="Data",
+		message=message,
+		details=details or {},
+		reference_doctype=reference_doctype,
+		reference_name=reference_name,
+		raise_on_error=True,
+	)
 
 
 # ---------------------------------------------------------------------------
@@ -303,6 +334,113 @@ def get_breadcrumbs(file_or_folder: str) -> list[dict]:
 	return crumbs
 
 
+# Frappe v17 rejects SQL-function strings in get_list fields. Use the native
+# dict aggregate syntax so permission-aware counts stay on the list path.
+_COUNT_FIELD = {"COUNT": "*", "as": "total"}
+_SUM_SIZE_FIELD = {"SUM": "file_size", "as": "total"}
+
+
+def _aggregate_total(rows) -> int:
+	if not rows:
+		return 0
+	row = rows[0]
+	if hasattr(row, "get"):
+		return cint(row.get("total") or row.get("count") or row.get("sum") or 0)
+	return cint(getattr(row, "total", getattr(row, "count", 0)))
+
+
+def _permission_aware_count(
+	doctype: str,
+	filters: dict,
+	*,
+	or_filters: list | None = None,
+) -> int:
+	"""Count only rows exposed by Frappe's list permission query."""
+	return _aggregate_total(
+		frappe.get_list(
+			doctype,
+			filters=filters,
+			or_filters=or_filters,
+			fields=[_COUNT_FIELD],
+			limit_page_length=1,
+		)
+	)
+
+
+def _permission_aware_file_size(filters: dict, *, or_filters: list | None = None) -> int:
+	"""Sum visible File sizes without bypassing Frappe query permissions."""
+	return _aggregate_total(
+		frappe.get_list(
+			"File",
+			filters=filters,
+			or_filters=or_filters,
+			fields=[_SUM_SIZE_FIELD],
+			limit_page_length=1,
+		)
+	)
+
+
+def _visible_ai_document_for_file(file_row, user: str | None = None):
+	"""Return a permission-filtered canonical AI Document for a File row.
+
+	Stable File identity is authoritative. A legacy URL-only association is
+	accepted only when the File is attached to that exact AI Document or the URL
+	identifies one File and one visible legacy document. Duplicate content never
+	causes an arbitrary document identity to be displayed for another File.
+	"""
+	fields = ["name", "status", "knowledge_base"]
+	rows = frappe.get_list(
+		"AI Document",
+		filters={"source_file_record": file_row.name},
+		fields=fields,
+		order_by="creation asc, name asc",
+		limit_page_length=1,
+	)
+	file_url = file_row.get("file_url")
+	if rows or not file_url:
+		return rows[0] if rows else None
+
+	attached_document = (
+		file_row.get("attached_to_name")
+		if file_row.get("attached_to_doctype") == "AI Document"
+		else None
+	)
+	if attached_document:
+		rows = frappe.get_list(
+			"AI Document",
+			filters={
+				"name": attached_document,
+				"source_file": file_url,
+				"source_file_record": ["is", "not set"],
+			},
+			fields=fields,
+			limit_page_length=1,
+		)
+		if rows:
+			return rows[0]
+
+	matching_files = frappe.get_all(
+		"File",
+		filters={"file_url": file_url, "is_folder": 0},
+		pluck="name",
+		order_by="creation asc, name asc",
+		limit_page_length=2,
+	)
+	if matching_files != [file_row.name]:
+		return None
+	rows = frappe.get_list(
+		"AI Document",
+		filters={
+			"source_file": file_url,
+			"source_file_record": ["is", "not set"],
+		},
+		fields=fields,
+		order_by="creation asc, name asc",
+		limit_page_length=2,
+	)
+	return rows[0] if len(rows) == 1 else None
+
+
 def list_folder_contents(
 	folder: str | None = None,
 	*,
@@ -315,6 +453,21 @@ def list_folder_contents(
 	search_text: str | None = None,
 ) -> dict:
 	"""List immediate children of a folder with permission filtering."""
+	limit = max(1, min(cint(limit) or 50, 200))
+	offset = max(0, cint(offset))
+	allowed_order = {
+		"file_name asc",
+		"file_name desc",
+		"creation asc",
+		"creation desc",
+		"modified asc",
+		"modified desc",
+		"file_size asc",
+		"file_size desc",
+	}
+	order_by = str(order_by or "file_name asc").strip().lower()
+	if order_by not in allowed_order:
+		frappe.throw(_("Unsupported folder sort order."), frappe.ValidationError)
 	folder = _normalize_folder_path(folder or _HOME)
 	_assert_folder_exists(folder)
 	# Permission check: user must have read access to the folder.
@@ -337,9 +490,10 @@ def list_folder_contents(
 		if text:
 			or_filters = [["file_name", "like", f"%{text}%"], ["file_url", "like", f"%{text}%"]]
 
-	# Get total count.
-	# Use get_list with permission already checked; frappe will also enforce permission_query_conditions if any.
-	items = frappe.get_all(
+	# Frappe's native list path applies role, user-permission, and sharing query
+	# conditions before pagination. Per-row checks below remain a fail-closed
+	# defense for File's attachment-aware controller permissions.
+	items = frappe.get_list(
 		"File",
 		filters=base_filters,
 		or_filters=or_filters,
@@ -364,21 +518,19 @@ def list_folder_contents(
 		limit_page_length=limit,
 		limit_start=offset,
 	)
-	# Filter by read permission per item (client convenience; server will also block writes).
-	visible = []
+	# ``get_list`` is Frappe's authoritative permission-aware list path, so its
+	# pagination and aggregate count operate over the same visible row set. Avoid
+	# a second per-row ``get_doc`` permission pass that causes N+1 queries and
+	# sparse pages. Linked AI Document metadata is independently permission-aware.
 	for item in items:
-		doc = frappe.get_doc("File", item.name)
-		if frappe.has_permission("File", "read", doc=doc):
-			# Hydrate AI ingestion status for folder view (§7 visibility)
-			if not item.get("is_folder") and item.get("file_url"):
-				ai_doc = frappe.db.get_value("AI Document", {"source_file": item.file_url}, ["name", "status"], as_dict=True)
-				if ai_doc:
-					item["ai_document"] = ai_doc.name
-					item["ingestion_status"] = ai_doc.status
-			visible.append(item)
+		if not item.get("is_folder"):
+			ai_doc = _visible_ai_document_for_file(item)
+			if ai_doc:
+				item["ai_document"] = ai_doc.name
+				item["ingestion_status"] = ai_doc.status
 
-	total = frappe.db.count("File", base_filters)
-	return {"folder": folder, "items": visible, "total": total, "breadcrumbs": get_folder_path(folder)}
+	total = _permission_aware_count("File", base_filters, or_filters=or_filters)
+	return {"folder": folder, "items": items, "total": total, "breadcrumbs": get_folder_path(folder)}
 
 
 def get_tree(
@@ -461,54 +613,61 @@ def get_default_folder(
 	  4. Home
 	"""
 	user = user or frappe.session.user
-	# Try DocType-specific default from AI Platform Settings? Check if field exists.
-	try:
+	# Try the configured storage folder when the app settings DocType is already
+	# installed. Unexpected database/permission failures propagate rather than
+	# leaving PostgreSQL in an aborted transaction and silently choosing a path.
+	if frappe.db.exists("DocType", "AI Platform Settings"):
 		storage_folder = frappe.db.get_single_value("AI Platform Settings", "storage_folder")
-		if storage_folder and frappe.db.exists("File", storage_folder) and cint(frappe.db.get_value("File", storage_folder, "is_folder")):
+		if (
+			storage_folder
+			and frappe.db.exists("File", storage_folder)
+			and cint(frappe.db.get_value("File", storage_folder, "is_folder"))
+		):
 			return _normalize_folder_path(storage_folder)
-	except Exception:
-		pass
 
-	if doctype and docname:
-		try:
-			if frappe.db.exists(doctype, docname):
-				doc = frappe.get_doc(doctype, docname)
-				# If the record has a File attachment folder via File docs, use it.
-				# Look for any File attached to this record, take its folder.
-				files = frappe.get_all(
-					"File",
-					filters={"attached_to_doctype": doctype, "attached_to_name": docname},
-					fields=["folder"],
-					limit_page_length=1,
-				)
-				if files and files[0].folder and frappe.db.exists("File", files[0].folder):
-					folder_doc = frappe.get_doc("File", files[0].folder)
-					if cint(folder_doc.is_folder):
-						return files[0].folder
-				# Try per-Doctype folder: Home/<DocType>
-				candidate = f"Home/{doctype}"
-				if frappe.db.exists("File", candidate):
+	if doctype and docname and frappe.db.exists(doctype, docname):
+		attached_doc = frappe.get_doc(doctype, docname)
+		if frappe.has_permission(doctype, "read", doc=attached_doc, user=user):
+			# If the record already has an attachment, reuse its canonical parent.
+			files = frappe.get_all(
+				"File",
+				filters={"attached_to_doctype": doctype, "attached_to_name": docname},
+				fields=["folder"],
+				limit_page_length=1,
+			)
+			if files and files[0].folder and frappe.db.exists("File", files[0].folder):
+				folder_doc = frappe.get_doc("File", files[0].folder)
+				if cint(folder_doc.is_folder) and frappe.has_permission(
+					"File", "read", doc=folder_doc, user=user
+				):
+					return files[0].folder
+			# Otherwise prefer an existing conventional per-DocType folder.
+			candidate = f"Home/{doctype}"
+			if frappe.db.exists("File", candidate):
+				candidate_doc = frappe.get_doc("File", candidate)
+				if frappe.has_permission("File", "read", doc=candidate_doc, user=user):
 					return candidate
-		except Exception:
-			pass
 
-	# Per-user My Uploads
-	safe_user = frappe.scrub(user).replace(" ", "_") if user else "guest"
-	candidate_user_folder = f"Home/My Uploads"
-	# We create per-user subfolder under My Uploads if needed.
-	# But for default, return Home/My Uploads if visible.
-	try:
-		_ensure_home_exists()
-		if not frappe.db.exists("File", candidate_user_folder):
-			# Lazy-create shared My Uploads
+	# Shared My Uploads.  Default discovery must not catch-and-commit a partial
+	# folder creation (for example when fail-closed audit persistence raises).
+	# Users without File creation/write authority simply continue to the native
+	# Attachments/Home fallbacks.
+	candidate_user_folder = "Home/My Uploads"
+	_ensure_home_exists()
+	if not frappe.db.exists("File", candidate_user_folder):
+		home_doc = frappe.get_doc("File", _HOME)
+		can_create_default = bool(
+			frappe.has_permission("File", "create", user=user)
+			and frappe.has_permission("File", "write", doc=home_doc, user=user)
+		)
+		if can_create_default:
 			try:
-				create_folder("My Uploads", parent_folder=_HOME, is_private=0)
-			except FolderError:
+				create_folder("My Uploads", parent_folder=_HOME, is_private=0, user=user)
+			except FolderAlreadyExistsError:
+				# A concurrent creator won after our existence check.
 				pass
-		if frappe.db.exists("File", candidate_user_folder):
-			return candidate_user_folder
-	except Exception:
-		pass
+	if frappe.db.exists("File", candidate_user_folder):
+		return candidate_user_folder
 
 	# Fallback to Home/Attachments if exists
 	if frappe.db.exists("File", _ATTACHMENTS):
@@ -536,6 +695,7 @@ def create_folder(
 	parent_folder = _normalize_folder_path(parent_folder or _HOME)
 	_assert_folder_exists(parent_folder)
 	_check_write_access(parent_folder, user=user)
+	_lock_folder_rows(parent_folder)
 
 	cleaned = _clean_name(folder_name)
 	_assert_unique_in_parent(cleaned, parent_folder, is_folder=True)
@@ -543,13 +703,12 @@ def create_folder(
 	if _depth(parent_folder) + 1 > _MAX_FOLDER_DEPTH:
 		_throw(InvalidFolderNameError, "Folder nesting exceeds maximum depth.")
 
-	# Determine is_private from parent if not specified
+	# Determine privacy from the locked canonical parent. Unexpected database or
+	# lifecycle failures must abort creation rather than silently making a child
+	# public.
 	if is_private is None:
-		try:
-			parent_doc = frappe.get_doc("File", parent_folder)
-			is_private = cint(parent_doc.is_private)
-		except Exception:
-			is_private = 0
+		parent_doc = _get_folder_doc(parent_folder)
+		is_private = cint(parent_doc.is_private)
 	else:
 		is_private = cint(is_private)
 
@@ -565,31 +724,32 @@ def create_folder(
 	)
 	# is_home_folder stays 0 for non-root
 	file_doc.flags.ignore_permissions = False
-	# Insert will trigger File autoname to set name = parent/file_name
+	# Insert will trigger File autoname to set name = parent/file_name. Recover
+	# to a savepoint before translating duplicate errors on PostgreSQL.
+	save_point = f"create_folder_{frappe.generate_hash(length=8)}"
+	frappe.db.savepoint(save_point)
 	try:
 		file_doc.insert()
+		frappe.db.release_savepoint(save_point)
 	except Exception as exc:
-		# Translate duplicate name exception to typed error
+		frappe.db.rollback(save_point=save_point)
 		if "already exists" in str(exc).lower() or "duplicate" in str(exc).lower():
 			_throw(FolderAlreadyExistsError, f"An item named '{cleaned}' already exists in '{parent_folder}'.")
 		raise
 
-	# Handle extended metadata if provided
+	# Requested metadata is part of the same transaction; never return a
+	# partially configured folder when settings persistence fails.
 	if description or knowledge_base:
-		try:
-			meta = frappe.new_doc("AI Folder Settings")
-			meta.update(
-				{
-					"folder": file_doc.name,
-					"description": description or "",
-					"knowledge_base": knowledge_base,
-				}
-			)
-			meta.flags.ignore_permissions = True
-			meta.insert(ignore_permissions=True)
-		except Exception:
-			# Metadata failure should not block folder creation; log it.
-			frappe.log_error(title="AI Folder Settings creation failed", message=frappe.get_traceback())
+		meta = frappe.new_doc("AI Folder Settings")
+		meta.update(
+			{
+				"folder": file_doc.name,
+				"description": description or "",
+				"knowledge_base": knowledge_base,
+			}
+		)
+		meta.flags.ignore_permissions = True
+		meta.insert(ignore_permissions=True)
 
 	_write_audit(
 		"Folder Created",
@@ -616,6 +776,10 @@ def rename_folder(folder_name: str, new_name: str, *, user: str | None = None) -
 	_check_permission("File", "write", doc=doc, user=user)
 
 	parent = doc.folder or _HOME
+	_lock_folder_rows(parent, folder_name)
+	doc = _get_folder_doc(folder_name)
+	if (doc.folder or _HOME) != parent:
+		frappe.throw(_("The folder location changed. Refresh and try again."), frappe.TimestampMismatchError)
 	if folder_name.rsplit("/", 1)[-1] == cleaned:
 		# No change
 		return {"name": folder_name, "file_name": cleaned, "folder": parent}
@@ -626,95 +790,145 @@ def rename_folder(folder_name: str, new_name: str, *, user: str | None = None) -
 	if frappe.db.exists("File", new_path):
 		_throw(FolderAlreadyExistsError, f"An item named '{cleaned}' already exists in '{parent}'.")
 
-	# Gather descendants before rename: all Files where name == folder_name or name startswith folder_name+"/" or folder == folder_name etc.
-	# Frappe stores files with folder = parent path. So we need to update both File.name for folders and File.folder for children.
+	# Gather the complete subtree before rename. The exact Python checks are
+	# required because valid folder names may contain SQL LIKE wildcards.
 	old_prefix = folder_name + "/"
-	descendants = frappe.get_all(
-		"File",
-		filters={"name": ["like", f"{old_prefix}%"]},
-		fields=["name", "folder", "is_folder", "file_name"],
-	)
-	# Also files directly in this folder (folder == folder_name)
-	direct_files = frappe.get_all(
-		"File",
-		filters={"folder": folder_name},
-		fields=["name", "folder", "is_folder", "file_name"],
-	)
-	# Merge without duplicates
+	descendants = [
+		row
+		for row in frappe.get_all(
+			"File",
+			filters={"name": ["like", f"{old_prefix}%"]},
+			fields=[
+				"name",
+				"folder",
+				"is_folder",
+				"file_name",
+				"owner",
+				"is_private",
+				"attached_to_doctype",
+				"attached_to_name",
+			],
+			limit_page_length=0,
+		)
+		if row.name.startswith(old_prefix)
+	]
+	files_in_tree = [
+		row
+		for row in frappe.get_all(
+			"File",
+			filters={"folder": ["like", f"{folder_name}%"]},
+			fields=[
+				"name",
+				"folder",
+				"is_folder",
+				"file_name",
+				"owner",
+				"is_private",
+				"attached_to_doctype",
+				"attached_to_name",
+			],
+			limit_page_length=0,
+		)
+		if row.folder == folder_name or row.folder.startswith(old_prefix)
+	]
+	# Merge without duplicates.
 	all_affected = {d.name: d for d in descendants}
-	for d in direct_files:
+	for d in files_in_tree:
 		all_affected[d.name] = d
 	# Also the folder itself
 	all_affected[doc.name] = doc
 
-	# Permission check: ensure user can write to all affected? At least check parent write and source write.
-	for name in all_affected:
-		inner = frappe.get_doc("File", name)
+	_lock_folder_rows(*[row.name for row in all_affected.values() if cint(row.is_folder)])
+	_lock_file_rows(*[row.name for row in all_affected.values() if not cint(row.is_folder)])
+	fresh_names = {
+		row.name
+		for row in frappe.get_all(
+			"File",
+			filters={"name": ["like", f"{old_prefix}%"]},
+			fields=["name"],
+			limit_page_length=0,
+		)
+		if row.name.startswith(old_prefix)
+	}
+	fresh_names.update(
+		row.name
+		for row in frappe.get_all(
+			"File",
+			filters={"folder": ["like", f"{folder_name}%"]},
+			fields=["name", "folder"],
+			limit_page_length=0,
+		)
+		if row.folder == folder_name or row.folder.startswith(old_prefix)
+	)
+	fresh_names.add(folder_name)
+	if fresh_names != set(all_affected):
+		frappe.throw(_("The folder subtree changed. Refresh and try again."), frappe.TimestampMismatchError)
+
+	# Permission-check every affected row without loading the subtree a second
+	# time. This avoids a document-fetch N+1 on large renames.
+	for name, inner in all_affected.items():
 		if not frappe.has_permission("File", "write", doc=inner, user=user):
 			_throw(FolderPermissionError, f"User {user} cannot modify '{name}' during rename.")
 
 	# Perform rename via SQL to avoid Frappe's autoname side-effects, then clear cache.
 	# The canonical way is frappe.rename_doc, but it may not cascade child paths.
 	# We'll do it manually:
-	try:
-		# 1. Update the folder's own File record's file_name and name.
-		# File.name for folders is constructed from parent + file_name. Changing file_name updates name.
-		# Use frappe.rename_doc for the top folder to preserve framework hooks.
-		frappe.rename_doc("File", folder_name, new_path, force=True, show_alert=False)
-		# frappe.rename_doc already updates File.name, but child folder's File.folder still points to old path.
-		# Need to fix child records.
-		new_prefix = new_path + "/"
-		for old_name, details in list(all_affected.items()):
-			if old_name == folder_name:
-				continue
-			# old_name is like Home/Old/Child or Home/Old/Child/Sub or file hash? Files have hash names not path-based.
-			# For folders, name is path-based, so old_name startswith old_prefix.
-			# For files, name is hash, but folder field is old path. So we need to handle both.
-			if old_name.startswith(old_prefix):
-				# This is a descendant folder (path-based name)
-				suffix = old_name[len(old_prefix):]
-				expected_new_name = new_prefix + suffix
-				if frappe.db.exists("File", old_name):
-					frappe.rename_doc("File", old_name, expected_new_name, force=True, show_alert=False)
-			else:
-				# This is a file (hash name) whose folder field points to old location or descendant
-				# Update its folder field if it is inside the renamed subtree.
-				fetched = frappe.db.get_value("File", old_name, ["folder"], as_dict=True)
-				if fetched and fetched.folder and fetched.folder.startswith(folder_name):
-					# Replace prefix
-					old_folder = fetched.folder
-					if old_folder == folder_name:
-						new_folder = new_path
-					elif old_folder.startswith(old_prefix):
-						new_folder = new_prefix + old_folder[len(old_prefix):]
-					else:
-						continue
-					frappe.db.set_value("File", old_name, "folder", new_folder, update_modified=False)
+	# 1. Update the folder's own File record's file_name and name.
+	# File.name for folders is constructed from parent + file_name. Changing file_name updates name.
+	# Use frappe.rename_doc for the top folder to preserve framework hooks.
+	frappe.rename_doc("File", folder_name, new_path, force=True, show_alert=False)
+	# frappe.rename_doc already updates File.name, but child folder's File.folder still points to old path.
+	# Need to fix child records.
+	new_prefix = new_path + "/"
+	for old_name, details in sorted(
+		all_affected.items(), key=lambda item: (item[0].count("/"), item[0])
+	):
+		if old_name == folder_name:
+			continue
+		# old_name is like Home/Old/Child or Home/Old/Child/Sub or file hash? Files have hash names not path-based.
+		# For folders, name is path-based, so old_name startswith old_prefix.
+		# For files, name is hash, but folder field is old path. So we need to handle both.
+		if old_name.startswith(old_prefix):
+			# This is a descendant folder (path-based name)
+			suffix = old_name[len(old_prefix):]
+			expected_new_name = new_prefix + suffix
+			if frappe.db.exists("File", old_name):
+				frappe.rename_doc("File", old_name, expected_new_name, force=True, show_alert=False)
+		else:
+			# This is a file (hash name) whose folder field points to old location or descendant
+			# Update its folder field if it is inside the renamed subtree.
+			fetched = frappe.db.get_value("File", old_name, ["folder"], as_dict=True)
+			if fetched and fetched.folder and fetched.folder.startswith(folder_name):
+				# Replace prefix
+				old_folder = fetched.folder
+				if old_folder == folder_name:
+					new_folder = new_path
+				elif old_folder.startswith(old_prefix):
+					new_folder = new_prefix + old_folder[len(old_prefix):]
+				else:
+					continue
+				frappe.db.set_value("File", old_name, "folder", new_folder, update_modified=False)
 
-		# Also need to update direct files' folder that were not caught via name prefix (their name is hash)
-		# Already handled in loop above if fetched.folder matches.
+	# Also need to update direct files' folder that were not caught via name prefix (their name is hash)
+	# Already handled in loop above if fetched.folder matches.
 
-		# Update AI Folder Settings reference if exists
-		if frappe.db.exists("AI Folder Settings", {"folder": folder_name}):
-			frappe.db.set_value("AI Folder Settings", {"folder": folder_name}, "folder", new_path)
-		# Update descendant AI Folder Settings
-		settings = frappe.get_all(
-			"AI Folder Settings", filters={"folder": ["like", f"{old_prefix}%"]}, fields=["name", "folder"]
-		)
-		for s in settings:
-			if s.folder.startswith(old_prefix):
-				new_sf = new_prefix + s.folder[len(old_prefix):]
-				frappe.db.set_value("AI Folder Settings", s.name, "folder", new_sf, update_modified=False)
+	# Update AI Folder Settings reference if exists
+	if frappe.db.exists("AI Folder Settings", {"folder": folder_name}):
+		frappe.db.set_value("AI Folder Settings", {"folder": folder_name}, "folder", new_path)
+	# Update descendant AI Folder Settings
+	settings = frappe.get_all(
+		"AI Folder Settings",
+		filters={"folder": ["like", f"{old_prefix}%"]},
+		fields=["name", "folder"],
+		limit_page_length=0,
+	)
+	for s in settings:
+		if s.folder.startswith(old_prefix):
+			new_sf = new_prefix + s.folder[len(old_prefix):]
+			frappe.db.set_value("AI Folder Settings", s.name, "folder", new_sf, update_modified=False)
 
-		# Clear caches
-		frappe.clear_document_cache("File", new_path)
-
-	except Exception as exc:
-		frappe.log_error(title="Folder rename failed", message=frappe.get_traceback())
-		# Re-throw as typed if not already
-		if isinstance(exc, FolderError):
-			raise
-		_throw(FolderError, f"Failed to rename folder: {exc}")
+	# Clear caches
+	frappe.clear_document_cache("File", new_path)
 
 	_write_audit(
 		"Folder Renamed",
@@ -736,6 +950,11 @@ def rename_file(file_name: str, new_name: str, *, user: str | None = None) -> di
 	_check_permission("File", "write", doc=doc, user=user)
 	cleaned = _clean_name(new_name)
 	parent = doc.folder or _HOME
+	_lock_folder_rows(parent)
+	_lock_file_rows(file_name)
+	doc = _get_file_doc(file_name)
+	if (doc.folder or _HOME) != parent:
+		frappe.throw(_("The file location changed. Refresh and try again."), frappe.TimestampMismatchError)
 	_assert_unique_in_parent(cleaned, parent, is_folder=False)
 	# file_name is the display name; updating it doesn't change doc.name (which is hash)
 	frappe.db.set_value("File", file_name, "file_name", cleaned, update_modified=False)
@@ -760,12 +979,18 @@ def move_file(file_name: str, target_folder: str, *, user: str | None = None) ->
 	_check_permission("File", "write", doc=doc, user=user)
 	_check_write_access(target_folder, user=user)
 
-	if doc.folder == target_folder:
+	old_folder = doc.folder or _HOME
+	_lock_folder_rows(old_folder, target_folder)
+	_lock_file_rows(file_name)
+	doc = _get_file_doc(file_name)
+	if (doc.folder or _HOME) != old_folder:
+		frappe.throw(_("The file location changed. Refresh and try again."), frappe.TimestampMismatchError)
+	_check_permission("File", "write", doc=doc, user=user)
+	if old_folder == target_folder:
 		return {"name": file_name, "folder": target_folder}
 
 	_assert_unique_in_parent(doc.file_name, target_folder, is_folder=False)
 
-	old_folder = doc.folder
 	frappe.db.set_value("File", file_name, "folder", target_folder, update_modified=False)
 	frappe.db.set_value("File", file_name, "is_private", cint(frappe.db.get_value("File", target_folder, "is_private")), update_modified=False)
 	frappe.clear_document_cache("File", file_name)
@@ -777,11 +1002,8 @@ def move_file(file_name: str, target_folder: str, *, user: str | None = None) ->
 		reference_name=file_name,
 	)
 	track_folder_operation("move_file", file_name, target_folder, user, details={"from": old_folder})
-	# Update folder-specific provenance for AI Document if this File is linked there.
-	try:
-		_update_document_folder_provenance(file_name, target_folder)
-	except Exception:
-		frappe.log_error(title="Document folder provenance update failed", message=frappe.get_traceback())
+	# A physical move and its stable AI Document location are one mutation.
+	_update_document_folder_provenance(file_name, target_folder)
 	return {"name": file_name, "file_name": doc.file_name, "folder": target_folder}
 
 
@@ -801,82 +1023,146 @@ def move_folder(folder_name: str, target_folder: str, *, user: str | None = None
 	_check_permission("File", "write", doc=source_doc, user=user)
 	_check_write_access(target_folder, user=user)
 
-	if source_doc.folder == target_folder:
+	old_parent = source_doc.folder or _HOME
+	_lock_folder_rows(old_parent, folder_name, target_folder)
+	source_doc = _get_folder_doc(folder_name)
+	if (source_doc.folder or _HOME) != old_parent:
+		frappe.throw(_("The folder location changed. Refresh and try again."), frappe.TimestampMismatchError)
+	_check_permission("File", "write", doc=source_doc, user=user)
+	if old_parent == target_folder:
 		return {"name": folder_name, "folder": target_folder}
 
 	_assert_unique_in_parent(source_doc.file_name, target_folder, is_folder=True)
-
-	if _depth(target_folder) + _depth(folder_name.rsplit("/", 1)[-1].count("/") if False else 1) + _depth(folder_name) > _MAX_FOLDER_DEPTH:
-		# Rough depth check: target depth + 1 + descendant depth
-		if _depth(target_folder) + 1 > _MAX_FOLDER_DEPTH:
-			_throw(InvalidFolderNameError, "Folder nesting exceeds maximum depth.")
-
-	old_parent = source_doc.folder
 	old_path = folder_name
 	new_path = f"{target_folder}/{source_doc.file_name}"
 
 	if frappe.db.exists("File", new_path):
 		_throw(FolderAlreadyExistsError, f"An item named '{source_doc.file_name}' already exists in '{target_folder}'.")
 
-	# Collect all descendants before move
+	# Collect the complete subtree before move. Keep exact prefix checks because
+	# valid names may contain SQL LIKE wildcards.
 	old_prefix = old_path + "/"
-	descendants = frappe.get_all(
-		"File",
-		filters={"name": ["like", f"{old_prefix}%"]},
-		fields=["name"],
+	descendants = sorted(
+		(
+			row
+			for row in frappe.get_all(
+				"File",
+				filters={"name": ["like", f"{old_prefix}%"]},
+				fields=[
+					"name",
+					"folder",
+					"is_folder",
+					"file_name",
+					"owner",
+					"is_private",
+					"attached_to_doctype",
+					"attached_to_name",
+				],
+				limit_page_length=0,
+			)
+			if row.name.startswith(old_prefix)
+		),
+		key=lambda row: (row.name.count("/"), row.name),
 	)
-	files_in_tree = frappe.get_all(
-		"File",
-		filters={"folder": ["like", f"{old_path}%"]},
-		fields=["name", "folder"],
+	files_in_tree = [
+		row
+		for row in frappe.get_all(
+			"File",
+			filters={"folder": ["like", f"{old_path}%"]},
+			fields=[
+				"name",
+				"folder",
+				"is_folder",
+				"file_name",
+				"owner",
+				"is_private",
+				"attached_to_doctype",
+				"attached_to_name",
+			],
+			limit_page_length=0,
+		)
+		if row.folder == old_path or row.folder.startswith(old_prefix)
+	]
+	affected = {row.name: row for row in descendants}
+	affected.update({row.name: row for row in files_in_tree})
+	affected[source_doc.name] = source_doc
+	_lock_folder_rows(*[row.name for row in affected.values() if cint(row.is_folder)])
+	_lock_file_rows(*[row.name for row in affected.values() if not cint(row.is_folder)])
+	fresh_names = {
+		row.name
+		for row in frappe.get_all(
+			"File",
+			filters={"name": ["like", f"{old_prefix}%"]},
+			fields=["name"],
+			limit_page_length=0,
+		)
+		if row.name.startswith(old_prefix)
+	}
+	fresh_names.update(
+		row.name
+		for row in frappe.get_all(
+			"File",
+			filters={"folder": ["like", f"{old_path}%"]},
+			fields=["name", "folder"],
+			limit_page_length=0,
+		)
+		if row.folder == old_path or row.folder.startswith(old_prefix)
 	)
+	fresh_names.add(old_path)
+	if fresh_names != set(affected):
+		frappe.throw(_("The folder subtree changed. Refresh and try again."), frappe.TimestampMismatchError)
+	for affected_row in affected.values():
+		_check_permission("File", "write", doc=affected_row, user=user)
+
+	deepest_relative_level = max(
+		(row.name.count("/") - old_path.count("/") for row in descendants),
+		default=0,
+	)
+	if _depth(target_folder) + 1 + deepest_relative_level > _MAX_FOLDER_DEPTH:
+		_throw(InvalidFolderNameError, "Folder nesting exceeds maximum depth.")
 
 	# Do move
-	try:
-		frappe.rename_doc("File", old_path, new_path, force=True, show_alert=False)
-		new_prefix = new_path + "/"
-		# Update descendant folder docs' names (path-based)
-		for row in descendants:
-			old_name = row.name
-			if not old_name.startswith(old_prefix):
-				continue
-			suffix = old_name[len(old_prefix):]
-			expected_new_name = new_prefix + suffix
-			if frappe.db.exists("File", old_name):
-				frappe.rename_doc("File", old_name, expected_new_name, force=True, show_alert=False)
+	frappe.rename_doc("File", old_path, new_path, force=True, show_alert=False)
+	new_prefix = new_path + "/"
+	# Update descendant folder docs' names (path-based)
+	for row in descendants:
+		old_name = row.name
+		if not old_name.startswith(old_prefix):
+			continue
+		suffix = old_name[len(old_prefix):]
+		expected_new_name = new_prefix + suffix
+		if frappe.db.exists("File", old_name):
+			frappe.rename_doc("File", old_name, expected_new_name, force=True, show_alert=False)
 
-		# Update files whose folder is inside moved subtree
-		for frow in files_in_tree:
-			if not frow.folder or not frow.folder.startswith(old_path):
-				continue
-			old_folder = frow.folder
-			if old_folder == old_path:
-				new_folder = new_path
-			elif old_folder.startswith(old_prefix):
-				new_folder = new_prefix + old_folder[len(old_prefix):]
-			else:
-				continue
-			if frappe.db.exists("File", frow.name):
-				frappe.db.set_value("File", frow.name, "folder", new_folder, update_modified=False)
+	# Update files whose folder is inside moved subtree
+	for frow in files_in_tree:
+		if not frow.folder or not frow.folder.startswith(old_path):
+			continue
+		old_folder = frow.folder
+		if old_folder == old_path:
+			new_folder = new_path
+		elif old_folder.startswith(old_prefix):
+			new_folder = new_prefix + old_folder[len(old_prefix):]
+		else:
+			continue
+		if frappe.db.exists("File", frow.name):
+			frappe.db.set_value("File", frow.name, "folder", new_folder, update_modified=False)
 
-		# Update AI Folder Settings linked records
-		if frappe.db.exists("AI Folder Settings", {"folder": old_path}):
-			frappe.db.set_value("AI Folder Settings", {"folder": old_path}, "folder", new_path)
-		settings_rows = frappe.get_all(
-			"AI Folder Settings", filters={"folder": ["like", f"{old_prefix}%"]}, fields=["name", "folder"]
-		)
-		for s in settings_rows:
-			if s.folder.startswith(old_prefix):
-				new_sf = new_prefix + s.folder[len(old_prefix):]
-				frappe.db.set_value("AI Folder Settings", s.name, "folder", new_sf, update_modified=False)
+	# Update AI Folder Settings linked records
+	if frappe.db.exists("AI Folder Settings", {"folder": old_path}):
+		frappe.db.set_value("AI Folder Settings", {"folder": old_path}, "folder", new_path)
+	settings_rows = frappe.get_all(
+		"AI Folder Settings",
+		filters={"folder": ["like", f"{old_prefix}%"]},
+		fields=["name", "folder"],
+		limit_page_length=0,
+	)
+	for s in settings_rows:
+		if s.folder.startswith(old_prefix):
+			new_sf = new_prefix + s.folder[len(old_prefix):]
+			frappe.db.set_value("AI Folder Settings", s.name, "folder", new_sf, update_modified=False)
 
-		frappe.clear_document_cache("File", new_path)
-
-	except Exception as exc:
-		frappe.log_error(title="Folder move failed", message=frappe.get_traceback())
-		if isinstance(exc, FolderError):
-			raise
-		_throw(FolderError, f"Failed to move folder: {exc}")
+	frappe.clear_document_cache("File", new_path)
 
 	_write_audit(
 		"Folder Moved",
@@ -888,81 +1174,128 @@ def move_folder(folder_name: str, target_folder: str, *, user: str | None = None
 	return {"name": new_path, "file_name": source_doc.file_name, "folder": target_folder, "old_name": old_path}
 
 
+def _delete_folder_record(folder_name: str) -> None:
+	"""Delete one empty File folder without bypassing external link checks.
+
+	Folder settings and favorites are app-owned metadata whose Link fields would
+	otherwise stop Frappe before the File ``on_trash`` hook can clean them.  A
+	savepoint restores that metadata if any other authoritative link blocks the
+	folder deletion.
+	"""
+	save_point = f"delete_folder_{frappe.generate_hash(length=10)}"
+	frappe.db.savepoint(save_point)
+	try:
+		frappe.db.delete("AI Folder Settings", {"folder": folder_name})
+		frappe.db.delete("AI Folder Favorite", {"folder": folder_name})
+		frappe.delete_doc("File", folder_name, ignore_permissions=False)
+	except Exception:
+		frappe.db.rollback(save_point=save_point)
+		raise
+	else:
+		frappe.db.release_savepoint(save_point)
+
+
 def delete_folder(
 	folder_name: str,
 	*,
 	recursive: bool = False,
 	user: str | None = None,
 ) -> dict:
-	"""Delete a folder. If non-empty and not recursive, raise FolderNotEmptyError."""
+	"""Delete a folder atomically after locking and authorizing its subtree."""
 	user = user or frappe.session.user
 	folder_name = _normalize_folder_path(folder_name)
 	if folder_name == _HOME:
 		_throw(InvalidFolderNameError, "The Home folder cannot be deleted.")
 	_assert_folder_exists(folder_name)
 	doc = _get_folder_doc(folder_name)
-	_check_permission("File", "delete", doc=doc, user=user)
+	parent = doc.folder or _HOME
+	prefix = folder_name + "/"
 
-	# Check for children
-	child_folders = frappe.db.count("File", {"folder": folder_name, "is_folder": 1})
-	child_files = frappe.db.count("File", {"folder": folder_name, "is_folder": 0})
-	# Also folders/files nested deeper: any File where name like folder_name/% or folder like folder_name%
-	nested = frappe.db.count("File", {"name": ["like", f"{folder_name}/%"]})
-	total_children = child_folders + child_files + nested
+	def affected_rows() -> dict[str, Any]:
+		rows = {
+			row.name: row
+			for row in frappe.get_all(
+				"File",
+				filters={"name": ["like", f"{prefix}%"]},
+				fields=[
+					"name",
+					"folder",
+					"is_folder",
+					"file_name",
+					"owner",
+					"is_private",
+					"attached_to_doctype",
+					"attached_to_name",
+				],
+				limit_page_length=0,
+			)
+			if row.name.startswith(prefix)
+		}
+		for row in frappe.get_all(
+			"File",
+			filters={"folder": ["like", f"{folder_name}%"]},
+			fields=[
+				"name",
+				"folder",
+				"is_folder",
+				"file_name",
+				"owner",
+				"is_private",
+				"attached_to_doctype",
+				"attached_to_name",
+			],
+			limit_page_length=0,
+		):
+			if row.folder == folder_name or row.folder.startswith(prefix):
+				rows[row.name] = row
+		rows[doc.name] = doc
+		return rows
 
-	if total_children and not recursive:
+	affected = affected_rows()
+	if len(affected) > 1 and not recursive:
 		_throw(
 			FolderNotEmptyError,
 			f"Folder '{folder_name}' is not empty. Use recursive delete or empty it first.",
 		)
 
-	if recursive:
-		# Delete all descendants first
-		# Get all files/folders under this tree ordered deepest first
-		all_descendants = frappe.get_all(
-			"File",
-			filters={"name": ["like", f"{folder_name}/%"]},
-			fields=["name"],
-			order_by="name desc",
-		)
-		for row in all_descendants:
-			try:
-				fdoc = frappe.get_doc("File", row.name)
-				if frappe.has_permission("File", "delete", doc=fdoc, user=user):
-					frappe.delete_doc("File", row.name, force=True, ignore_permissions=False)
-			except Exception:
-				frappe.log_error(title=f"Recursive delete failed for {row.name}", message=frappe.get_traceback())
-		# Files directly in folder (hash-named files)
-		direct_files = frappe.get_all(
-			"File",
-			filters={"folder": folder_name, "is_folder": 0},
-			fields=["name"],
-		)
-		for row in direct_files:
-			try:
-				fdoc = frappe.get_doc("File", row.name)
-				if frappe.has_permission("File", "delete", doc=fdoc, user=user):
-					frappe.delete_doc("File", row.name, force=True, ignore_permissions=False)
-			except Exception:
-				frappe.log_error(title=f"Recursive delete file failed {row.name}", message=frappe.get_traceback())
-		# Also remove AI Folder Settings
-		frappe.db.delete("AI Folder Settings", {"folder": folder_name})
-		frappe.db.delete("AI Folder Settings", {"folder": ["like", f"{folder_name}/%"]})
+	_lock_folder_rows(parent, *[row.name for row in affected.values() if cint(row.is_folder)])
+	_lock_file_rows(*[row.name for row in affected.values() if not cint(row.is_folder)])
+	if (frappe.db.get_value("File", folder_name, "folder") or _HOME) != parent:
+		frappe.throw(_("The folder location changed. Refresh and try again."), frappe.TimestampMismatchError)
+	fresh = affected_rows()
+	if set(fresh) != set(affected):
+		frappe.throw(_("The folder subtree changed. Refresh and try again."), frappe.TimestampMismatchError)
+	for affected_row in fresh.values():
+		_check_permission("File", "delete", doc=affected_row, user=user)
 
-	try:
-		frappe.delete_doc("File", folder_name, force=True, ignore_permissions=False)
-	except Exception as exc:
-		if isinstance(exc, FolderError):
-			raise
-		_throw(FolderError, f"Failed to delete folder: {exc}")
-
-	_write_audit(
-		"Folder Deleted",
-		f"Folder '{folder_name}' deleted (recursive={recursive}).",
-		details={"folder": folder_name, "recursive": recursive, "owner": user},
-		reference_name=folder_name,
+	files = sorted(
+		(row for row in fresh.values() if not cint(row.is_folder)),
+		key=lambda row: row.name,
 	)
-	track_folder_operation("delete", folder_name, None, user, details={"recursive": recursive})
+	folders = sorted(
+		(row for row in fresh.values() if cint(row.is_folder)),
+		key=lambda row: (row.name.count("/"), row.name),
+		reverse=True,
+	)
+	# Keep Frappe's linked-document validation authoritative.  In particular,
+	# an AI Document's stable ``source_file_record``/``folder`` links must block
+	# this generic File API instead of being orphaned.  The mixed AI Document
+	# tree service deletes its authorized AI Documents before their Files.
+	with _mutation_savepoint("delete_folder"):
+		for row in files:
+			frappe.delete_doc("File", row.name, ignore_permissions=False)
+		for row in folders:
+			_delete_folder_record(row.name)
+
+		_write_audit(
+			"Folder Deleted",
+			f"Folder '{folder_name}' deleted (recursive={recursive}).",
+			details={"folder": folder_name, "recursive": recursive, "owner": user},
+			# Dynamic Links reject missing targets; the deleted identity remains in
+			# the immutable audit details and message.
+			reference_name=None,
+		)
+		track_folder_operation("delete", folder_name, None, user, details={"recursive": recursive})
 	return {"deleted": folder_name, "recursive": recursive}
 
 
@@ -973,14 +1306,24 @@ def delete_file(file_name: str, *, user: str | None = None) -> dict:
 	if cint(doc.is_folder):
 		_throw(InvalidFolderNameError, "Use delete_folder for folders.")
 	_check_permission("File", "delete", doc=doc, user=user)
-	frappe.delete_doc("File", file_name, force=True, ignore_permissions=False)
-	_write_audit(
-		"File Deleted",
-		f"File '{file_name}' ('{doc.file_name}') deleted.",
-		details={"file": file_name, "folder": doc.folder},
-		reference_name=file_name,
-	)
-	track_folder_operation("delete_file", file_name, doc.folder, user)
+	parent = doc.folder or _HOME
+	_lock_folder_rows(parent)
+	_lock_file_rows(file_name)
+	doc = _get_file_doc(file_name)
+	if (doc.folder or _HOME) != parent:
+		frappe.throw(_("The file location changed. Refresh and try again."), frappe.TimestampMismatchError)
+	_check_permission("File", "delete", doc=doc, user=user)
+	# Do not bypass Frappe's link checks: source Files referenced by authoritative
+	# AI Documents must be removed through the document-tree lifecycle.
+	with _mutation_savepoint("delete_file"):
+		frappe.delete_doc("File", file_name, ignore_permissions=False)
+		_write_audit(
+			"File Deleted",
+			f"File '{file_name}' ('{doc.file_name}') deleted.",
+			details={"file": file_name, "folder": doc.folder},
+			reference_name=file_name,
+		)
+		track_folder_operation("delete_file", file_name, doc.folder, user)
 	return {"deleted": file_name}
 
 
@@ -990,6 +1333,9 @@ def copy_file(
 	new_name: str | None = None,
 	*,
 	user: str | None = None,
+	attached_to_doctype: str | None = None,
+	attached_to_name: str | None = None,
+	attached_to_field: str | None = None,
 ) -> dict:
 	"""Copy a file into another folder."""
 	user = user or frappe.session.user
@@ -1000,6 +1346,10 @@ def copy_file(
 	_assert_folder_exists(target_folder)
 	_check_permission("File", "read", doc=doc, user=user)
 	_check_write_access(target_folder, user=user)
+	_lock_folder_rows(target_folder)
+	_lock_file_rows(file_name)
+	doc = _get_file_doc(file_name)
+	_check_permission("File", "read", doc=doc, user=user)
 
 	copy_name = _clean_name(new_name) if new_name else doc.file_name
 	_assert_unique_in_parent(copy_name, target_folder, is_folder=False)
@@ -1012,9 +1362,9 @@ def copy_file(
 			"folder": target_folder,
 			"is_private": doc.is_private,
 			"file_url": doc.file_url,
-			"attached_to_doctype": doc.attached_to_doctype,
-			"attached_to_name": doc.attached_to_name,
-			"attached_to_field": doc.attached_to_field,
+			"attached_to_doctype": attached_to_doctype or doc.attached_to_doctype,
+			"attached_to_name": attached_to_name or doc.attached_to_name,
+			"attached_to_field": attached_to_field or doc.attached_to_field,
 		}
 	)
 	new_doc.flags.copy_from_existing_file = True
@@ -1047,8 +1397,9 @@ def bulk_move(
 	*,
 	user: str | None = None,
 	enqueue: bool | None = None,
+	_expected_state: dict[str, dict] | None = None,
 ) -> dict:
-	"""Move multiple files/folders to target. Enqueues as background job for large batches."""
+	"""Move files/folders as one authorized, stale-sensitive transaction."""
 	if not file_names:
 		_throw(InvalidFolderNameError, "No files specified for bulk move.")
 	user = user or frappe.session.user
@@ -1056,99 +1407,148 @@ def bulk_move(
 	_assert_folder_exists(target_folder)
 	_check_write_access(target_folder, user=user)
 
-	# Validate all items exist and permissions
 	validated = []
+	seen = set()
 	for name in file_names:
+		if name in seen:
+			continue
+		seen.add(name)
 		if not frappe.db.exists("File", name):
 			_throw(FileNotFoundError, f"File '{name}' does not exist.")
 		doc = frappe.get_doc("File", name)
-		if not frappe.has_permission("File", "write", doc=doc, user=user):
-			_throw(FolderPermissionError, f"User {user} cannot move '{name}'.")
-		# If folder, check circular
+		_check_permission("File", "write", doc=doc, user=user)
 		if cint(doc.is_folder):
-			_assert_no_circular(name, target_folder)
 			if name == _HOME:
 				_throw(InvalidFolderNameError, "Home folder cannot be moved.")
+			_assert_no_circular(name, target_folder)
 		validated.append(doc)
 
-	# Decide enqueue threshold
-	threshold = 20
-	should_enqueue = enqueue if enqueue is not None else len(validated) > threshold
-
-	if should_enqueue:
-		job_id = f"ai-folder-bulk-move::{frappe.generate_hash(length=8)}"
-		frappe.enqueue(
-			"ai_fr_hg.ai.folders._bulk_move_job",
-			queue="long",
-			timeout=3600,
-			job_id=job_id,
-			deduplicate=False,
-			enqueue_after_commit=True,
-			file_names=[d.name for d in validated],
-			target_folder=target_folder,
-			user=user,
+	# Explicit selections are all authorized before nested items are pruned.
+	selected_folders = {doc.name for doc in validated if cint(doc.is_folder)}
+	validated = [
+		doc
+		for doc in validated
+		if not any(
+			(doc.name.startswith(folder + "/") if cint(doc.is_folder) else (doc.folder == folder or doc.folder.startswith(folder + "/")))
+			for folder in selected_folders
+			if folder != doc.name
 		)
+	]
+	selection_state = {
+		doc.name: {"modified": str(doc.modified), "folder": doc.folder or _HOME, "is_folder": cint(doc.is_folder)}
+		for doc in validated
+	}
+	# Folder roots carry a complete affected-state fingerprint, not just the
+	# root's modified timestamp. A descendant inserted while a bulk job waits
+	# must make the queued request stale rather than silently joining it.
+	from ai_fr_hg.ai.document_tree import (
+		_files_in_folders as tree_files_in_folders,
+		_preflight_files as tree_preflight_files,
+		_preflight_subtree as tree_preflight_subtree,
+		_subtree_state as tree_subtree_state,
+	)
+
+	subtree_states = {}
+	work_count = len(validated)
+	for doc in validated:
+		if not cint(doc.is_folder):
+			continue
+		subtree_folders, subtree_documents = tree_preflight_subtree(doc.name, "write")
+		subtree_files = tree_files_in_folders(subtree_folders)
+		tree_preflight_files(subtree_files, "write")
+		subtree_states[doc.name] = tree_subtree_state(
+			subtree_folders, subtree_documents, subtree_files
+		)
+		work_count += len(subtree_folders) + len(subtree_documents) + len(subtree_files) - 1
+	state = {"selection": selection_state, "subtrees": subtree_states}
+	if _expected_state is not None and state != _expected_state:
+		frappe.throw(_("The bulk selection changed. Refresh and try again."), frappe.TimestampMismatchError)
+
+	should_enqueue = work_count > 20 if enqueue is None else bool(enqueue)
+	if should_enqueue:
+		with _mutation_savepoint("queue_bulk_move"):
+			job_id = f"ai-folder-bulk-move::{frappe.generate_hash(length=8)}"
+			_write_audit(
+				"Bulk Move Queued",
+				f"Bulk move of {len(validated)} items to '{target_folder}' queued as {job_id}.",
+				details={"count": len(validated), "target": target_folder, "job_id": job_id},
+				reference_name=target_folder,
+			)
+			frappe.enqueue(
+				"ai_fr_hg.ai.folders._bulk_move_job",
+				queue="long",
+				timeout=3600,
+				job_id=job_id,
+				deduplicate=False,
+				enqueue_after_commit=True,
+				file_names=[doc.name for doc in validated],
+				target_folder=target_folder,
+				expected_state=state,
+				user=user,
+			)
+			return {"status": "Queued", "job_id": job_id, "count": len(validated), "target": target_folder}
+
+	parent_rows = [target_folder]
+	parent_rows.extend(doc.folder or _HOME for doc in validated)
+	parent_rows.extend(doc.name for doc in validated if cint(doc.is_folder))
+	_lock_folder_rows(*parent_rows)
+	_lock_file_rows(*[doc.name for doc in validated if not cint(doc.is_folder)])
+	locked_selection_state = {
+		doc.name: {
+			"modified": str(frappe.db.get_value("File", doc.name, "modified")),
+			"folder": frappe.db.get_value("File", doc.name, "folder") or _HOME,
+			"is_folder": cint(doc.is_folder),
+		}
+		for doc in validated
+	}
+	if locked_selection_state != selection_state:
+		frappe.throw(_("The bulk selection changed. Refresh and try again."), frappe.TimestampMismatchError)
+
+	with _mutation_savepoint("bulk_move"):
+		moved = []
+		for doc in validated:
+			if cint(doc.is_folder):
+				from ai_fr_hg.ai.document_tree import move_folder as move_tree_folder
+
+				moved.append(
+					move_tree_folder(
+						doc.name,
+						target_folder,
+						enqueue=False,
+						_expected_subtree_state=subtree_states[doc.name],
+					)
+				)
+			else:
+				moved.append(move_file(doc.name, target_folder, user=user))
 		_write_audit(
-			"Bulk Move Queued",
-			f"Bulk move of {len(validated)} items to '{target_folder}' queued as {job_id}.",
-			details={"count": len(validated), "target": target_folder, "job_id": job_id},
+			"Bulk Move Completed",
+			f"Bulk move of {len(moved)} items to '{target_folder}' completed.",
+			details={"moved": len(moved), "target": target_folder},
 			reference_name=target_folder,
 		)
-		return {"status": "Queued", "job_id": job_id, "count": len(validated), "target": target_folder}
-
-	# Immediate move
-	moved = []
-	errors = []
-	for doc in validated:
-		try:
-			if cint(doc.is_folder):
-				res = move_folder(doc.name, target_folder, user=user)
-			else:
-				res = move_file(doc.name, target_folder, user=user)
-			moved.append(res)
-		except FolderError as exc:
-			errors.append({"file": doc.name, "error": str(exc)})
-		except Exception as exc:
-			errors.append({"file": doc.name, "error": str(exc)})
-
-	_write_audit(
-		"Bulk Move Completed",
-		f"Bulk move of {len(validated)} items to '{target_folder}' completed: {len(moved)} moved, {len(errors)} errors.",
-		details={"moved": len(moved), "errors": errors, "target": target_folder},
-		reference_name=target_folder,
-	)
-	return {"status": "Completed", "moved": moved, "errors": errors, "target": target_folder}
+	return {"status": "Completed", "moved": moved, "errors": [], "target": target_folder}
 
 
-def _bulk_move_job(file_names: list[str], target_folder: str, user: str) -> dict:
-	"""Worker for bulk move (enqueued)."""
-	# Restore user context
+def _bulk_move_job(
+	file_names: list[str],
+	target_folder: str,
+	expected_state: dict[str, dict],
+	user: str,
+) -> dict:
+	"""Run a queued bulk move atomically under its requesting user."""
 	previous = frappe.session.user
-	changed = False
 	if user and user != previous:
 		frappe.set_user(user)
-		changed = True
 	try:
-		results = []
-		errors = []
-		for name in file_names:
-			try:
-				if not frappe.db.exists("File", name):
-					errors.append({"file": name, "error": "Not found"})
-					continue
-				doc = frappe.get_doc("File", name)
-				if cint(doc.is_folder):
-					res = move_folder(name, target_folder, user=user)
-				else:
-					res = move_file(name, target_folder, user=user)
-				results.append(res)
-			except Exception as exc:
-				errors.append({"file": name, "error": str(exc)})
-				frappe.log_error(title="Bulk move item failed", message=f"{name}: {exc}\n{frappe.get_traceback()}")
-		frappe.db.commit()
-		return {"moved": len(results), "errors": errors}
+		return bulk_move(
+			file_names,
+			target_folder,
+			user=user,
+			enqueue=False,
+			_expected_state=expected_state,
+		)
 	finally:
-		if changed:
+		if user and user != previous:
 			frappe.set_user(previous)
 
 
@@ -1164,12 +1564,16 @@ def search(
 	limit: int = 50,
 	offset: int = 0,
 ) -> dict:
-	"""Search and filter across hierarchy by name, folder path, file type, uploader, date, linked doc, knowledge status."""
+	"""Search and filter across hierarchy without bypassing list permissions."""
+	limit = max(1, min(cint(limit) or 50, 200))
+	offset = max(0, cint(offset))
 	filters: dict = {}
 	if folder:
 		norm = _normalize_folder_path(folder)
-		# Include files directly in folder OR in descendant folders (recursive)
-		# For simplicity, direct folder filter; caller can implement recursive via folder like.
+		_assert_folder_exists(norm)
+		_check_permission("File", "read", doc=_get_folder_doc(norm))
+		# This legacy endpoint intentionally searches immediate children. The AI
+		# Document Tree facade owns recursive, permission-safe mixed-node search.
 		filters["folder"] = norm
 	if file_type:
 		filters["file_type"] = file_type
@@ -1192,27 +1596,22 @@ def search(
 				["attached_to_name", "like", f"%{text}%"],
 			]
 
-	# If knowledge_base filter, we need to join via AI Document? For now, handle via File's attached_to.
-	# AI Document has source_file = File.file_url, and knowledge_base link.
-	# We'll support knowledge_base by filtering Files that are linked to AI Documents in that KB.
-	extra_names = None
+	# Filter through permission-aware AI Document rows and stable File links.
+	# URL/content identity must never authorize or associate a different File.
 	if knowledge_base:
-		docs = frappe.get_all(
-			"AI Document", filters={"knowledge_base": knowledge_base}, fields=["source_file"], limit_page_length=limit
+		docs = frappe.get_list(
+			"AI Document",
+			filters={"knowledge_base": knowledge_base, "source_file_record": ["is", "set"]},
+			fields=["source_file_record"],
+			order_by="modified desc",
+			limit_page_length=max(200, limit * 4),
 		)
-		urls = [d.source_file for d in docs if d.source_file]
-		if urls:
-			# Find Files with those file_urls
-			files = frappe.get_all("File", filters={"file_url": ["in", urls]}, pluck="name")
-			extra_names = files
-			# If no files match, return empty
-			if not extra_names:
-				return {"query": query, "count": 0, "results": [], "filters": filters}
-			filters["name"] = ["in", extra_names]
-		else:
-			return {"query": query, "count": 0, "results": [], "filters": filters}
+		extra_names = [row.source_file_record for row in docs if row.source_file_record]
+		if not extra_names:
+			return {"query": query, "count": 0, "total": 0, "results": [], "filters": filters}
+		filters["name"] = ["in", extra_names]
 
-	results = frappe.get_all(
+	results = frappe.get_list(
 		"File",
 		filters=filters,
 		or_filters=or_filters,
@@ -1235,25 +1634,19 @@ def search(
 		limit_page_length=limit,
 		limit_start=offset,
 	)
-	# Permission filter
-	visible = []
+	# File and AI Document visibility are both enforced by their respective
+	# permission-aware list queries. Keep pagination dense and avoid N+1 File
+	# document loads by trusting the framework list result as the visible set.
 	for row in results:
-		doc = frappe.get_doc("File", row.name)
-		if frappe.has_permission("File", "read", doc=doc):
-			# Hydrate AI Document linkage if any
-			row["ai_document"] = None
-			row["ingestion_status"] = None
-			if row.file_url:
-				ai_doc = frappe.db.get_value(
-					"AI Document", {"source_file": row.file_url}, ["name", "status"], as_dict=True
-				)
-				if ai_doc:
-					row["ai_document"] = ai_doc.name
-					row["ingestion_status"] = ai_doc.status
-			visible.append(row)
+		row["ai_document"] = None
+		row["ingestion_status"] = None
+		ai_doc = _visible_ai_document_for_file(row)
+		if ai_doc:
+			row["ai_document"] = ai_doc.name
+			row["ingestion_status"] = ai_doc.status
 
-	total = frappe.db.count("File", filters)
-	return {"query": query, "count": len(visible), "total": total, "results": visible, "filters": filters}
+	total = _permission_aware_count("File", filters, or_filters=or_filters)
+	return {"query": query, "count": len(results), "total": total, "results": results, "filters": filters}
 
 
 def get_folder_info(folder_name: str, *, user: str | None = None) -> dict:
@@ -1267,13 +1660,23 @@ def get_folder_info(folder_name: str, *, user: str | None = None) -> dict:
 	if frappe.db.exists("AI Folder Settings", {"folder": folder_name}):
 		settings = frappe.get_doc("AI Folder Settings", {"folder": folder_name}).as_dict()
 
+	# Keep folder statistics on the same Frappe permission-aware query path as
+	# listings. Escaping LIKE metacharacters prevents a legal ``%`` or ``_`` in
+	# a folder name from widening the recursive prefix to unrelated paths.
+	escaped_prefix = folder_name.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 	stats = {
-		"folder_count": frappe.db.count("File", {"folder": folder_name, "is_folder": 1}),
-		"file_count": frappe.db.count("File", {"folder": folder_name, "is_folder": 0}),
-		"total_descendants": frappe.db.count("File", {"name": ["like", f"{folder_name}/%"]}) + frappe.db.count("File", {"folder": ["like", f"{folder_name}%"]}),
+		"folder_count": _permission_aware_count("File", {"folder": folder_name, "is_folder": 1}),
+		"file_count": _permission_aware_count("File", {"folder": folder_name, "is_folder": 0}),
+		"total_descendants": _permission_aware_count(
+			"File",
+			{},
+			or_filters=[
+				["folder", "=", folder_name],
+				["folder", "like", f"{escaped_prefix}/%"],
+			],
+		),
 	}
-	# Compute total size
-	size = frappe.db.sql("select coalesce(sum(file_size),0) from `tabFile` where folder=%s", (folder_name,))[0][0] or 0
+	size = _permission_aware_file_size({"folder": folder_name, "is_folder": 0})
 
 	info = {
 		"name": doc.name,
@@ -1311,11 +1714,10 @@ def get_file_info(file_name: str, *, user: str | None = None) -> dict:
 		"modified": doc.modified,
 		"breadcrumbs": get_breadcrumbs(doc.name),
 	}
-	if not data["is_folder"] and doc.file_url:
-		ai_doc = frappe.db.get_value("AI Document", {"source_file": doc.file_url}, ["name", "status", "knowledge_base"], as_dict=True)
+	if not data["is_folder"]:
+		ai_doc = _visible_ai_document_for_file(doc, user=user)
 		if ai_doc:
 			data["ai_document"] = ai_doc
-			# Find folder provenance
 			data["folder_provenance"] = doc.folder
 	return data
 
@@ -1465,7 +1867,13 @@ def assign_file_to_folder(
 	_check_permission("File", "write", doc=doc, user=user)
 	_check_write_access(target, user=user)
 
-	old_folder = doc.folder
+	old_folder = doc.folder or _HOME
+	_lock_folder_rows(old_folder, target)
+	_lock_file_rows(file_name)
+	doc = _get_file_doc(file_name)
+	if (doc.folder or _HOME) != old_folder:
+		frappe.throw(_("The file location changed. Refresh and try again."), frappe.TimestampMismatchError)
+	_check_permission("File", "write", doc=doc, user=user)
 	# A native FileUploader already persists its selected ``folder`` with the
 	# initial File insert.  Treat a confirmation of that same destination as an
 	# idempotent operation: the File itself must not be counted as a collision.
@@ -1507,10 +1915,7 @@ def assign_file_to_folder(
 		reference_name=file_name,
 	)
 	track_folder_operation("assign", file_name, target, user, details={"from": old_folder})
-	try:
-		_update_document_folder_provenance(file_name, target)
-	except Exception:
-		frappe.log_error(title="Folder provenance update failed", message=frappe.get_traceback())
+	_update_document_folder_provenance(file_name, target)
 	return {"name": file_name, "folder": target, "old_folder": old_folder, "unchanged": False}
 
 
@@ -1529,10 +1934,13 @@ def ensure_file_in_folder(
 	if not name:
 		return None
 	target = _normalize_folder_path(folder) if folder else get_default_folder(user=user, doctype=attached_to_doctype, docname=attached_to_name)
-	try:
-		assign_file_to_folder(name, target, attached_to_doctype=attached_to_doctype, attached_to_name=attached_to_name, user=user)
-	except FolderError:
-		frappe.log_error(title="ensure_file_in_folder failed", message=frappe.get_traceback())
+	assign_file_to_folder(
+		name,
+		target,
+		attached_to_doctype=attached_to_doctype,
+		attached_to_name=attached_to_name,
+		user=user,
+	)
 	return name
 
 
@@ -1541,36 +1949,90 @@ def _update_document_folder_provenance(file_name: str, folder: str) -> None:
 	doc = frappe.get_doc("File", file_name)
 	if not doc.file_url:
 		return
-	ai_docs = frappe.get_all("AI Document", filters={"source_file": doc.file_url}, fields=["name"], limit_page_length=10)
-	for row in ai_docs:
-		try:
-			# Store folder as Data or Link? Check if AI Document has folder field; if not, store in metadata JSON or skip.
-			if frappe.get_meta("AI Document").has_field("folder"):
-				frappe.db.set_value("AI Document", row.name, "folder", folder, update_modified=False)
-			elif frappe.get_meta("AI Document").has_field("source_folder"):
-				frappe.db.set_value("AI Document", row.name, "source_folder", folder, update_modified=False)
-			else:
-				# Fallback: store in metadata JSON provenance
-				existing = frappe.db.get_value("AI Document", row.name, "metadata")
-				import json
+	# Stable File identity is authoritative.  URL fallback is restricted to
+	# legacy rows that have not yet been backfilled, since multiple File records
+	# may intentionally reference the same physical content after a copy.
+	provenance_fields = [
+		"name",
+		"folder",
+		"source_folder",
+		"source_file",
+		"source_file_record",
+		"organization_revision",
+	]
+	meta = frappe.get_meta("AI Document")
 
-				try:
-					meta = json.loads(existing) if existing else {}
-				except Exception:
-					meta = {}
-				meta["folder"] = folder
-				meta["folder_updated_on"] = str(now_datetime())
-				frappe.db.set_value("AI Document", row.name, "metadata", frappe.as_json(meta), update_modified=False)
-			# Also update audit
-			_write_audit(
-				"Document Folder Provenance Updated",
-				f"AI Document '{row.name}' folder provenance updated to '{folder}'.",
-				details={"document": row.name, "folder": folder, "file": file_name},
-				reference_doctype="AI Document",
-				reference_name=row.name,
+	def sync_candidates(source_filters: dict) -> None:
+		# Keyset pagination remains correct while legacy rows acquire their stable
+		# source_file_record and leave the filter. Process stable rows first so a
+		# backfilled legacy row cannot be visited twice.
+		cursor = None
+		while True:
+			filters = dict(source_filters)
+			if cursor:
+				filters["name"] = [">", cursor]
+			candidate_names = frappe.get_all(
+				"AI Document",
+				filters=filters,
+				pluck="name",
+				order_by="name asc",
+				limit_page_length=400,
 			)
-		except Exception:
-			frappe.log_error(title="AI Document folder provenance update failed", message=frappe.get_traceback())
+			if not candidate_names:
+				return
+			cursor = candidate_names[-1]
+			placeholders = ", ".join(["%s"] * len(candidate_names))
+			frappe.db.sql(
+				f"select name from `tabAI Document` where name in ({placeholders}) order by name for update",  # nosemgrep
+				tuple(candidate_names),
+			)
+			locked_rows = frappe.get_all(
+				"AI Document",
+				filters={"name": ["in", candidate_names]},
+				fields=provenance_fields,
+				order_by="name asc",
+				limit_page_length=400,
+			)
+			for row in locked_rows:
+				# Recheck after locking: a concurrent document edit may have detached
+				# the source while this File move waited for its row lock.
+				if row.source_file_record != file_name and not (
+					not row.source_file_record and row.source_file == doc.file_url
+				):
+					continue
+				if meta.has_field("folder"):
+					values = {"folder": folder}
+					if meta.has_field("source_folder"):
+						values["source_folder"] = folder
+					if meta.has_field("source_file_record"):
+						values["source_file_record"] = file_name
+					if meta.has_field("organization_revision"):
+						values["organization_revision"] = cint(row.organization_revision) + 1
+					frappe.db.set_value("AI Document", row.name, values, update_modified=True)
+				elif meta.has_field("source_folder"):
+					frappe.db.set_value("AI Document", row.name, "source_folder", folder, update_modified=True)
+				else:
+					# Compatibility fallback for pre-migration sites.
+					import json
+
+					existing = frappe.db.get_value("AI Document", row.name, "metadata")
+					try:
+						metadata = json.loads(existing) if existing else {}
+					except Exception:
+						metadata = {}
+					metadata["folder"] = folder
+					metadata["folder_updated_on"] = str(now_datetime())
+					frappe.db.set_value("AI Document", row.name, "metadata", frappe.as_json(metadata), update_modified=False)
+				_write_audit(
+					"Document Folder Provenance Updated",
+					f"AI Document '{row.name}' folder provenance updated to '{folder}'.",
+					details={"document": row.name, "folder": folder, "file": file_name},
+					reference_doctype="AI Document",
+					reference_name=row.name,
+				)
+
+	sync_candidates({"source_file_record": file_name})
+	sync_candidates({"source_file_record": ["is", "not set"], "source_file": doc.file_url})
 
 
 def track_folder_operation(
@@ -1580,32 +2042,32 @@ def track_folder_operation(
 	user: str,
 	details: dict | None = None,
 ) -> None:
-	"""Write a reconstructable audit record for folder ops (Master §23)."""
-	try:
-		from ai_fr_hg.ai.logging import write_audit_log
+	"""Write a reconstructable, fail-closed audit record for folder operations."""
+	from ai_fr_hg.ai.logging import write_audit_log
 
-		write_audit_log(
-			action=f"Folder {action.title()}",
-			category="Data",
-			message=f"Folder operation '{action}' on '{target}' by '{user}'.",
-			details={"action": action, "target": target, "source": source, "user": user, **(details or {})},
-			reference_doctype="File",
-			reference_name=target,
-			raise_on_error=False,
+	write_audit_log(
+		action=f"Folder {action.title()}",
+		category="Data",
+		message=f"Folder operation '{action}' on '{target}' by '{user}'.",
+		details={"action": action, "target": target, "source": source, "user": user, **(details or {})},
+		reference_doctype="File",
+		# File on_trash hooks run before Frappe's reverse-link validation. Never
+		# create a new Dynamic Link that would make the row block its own delete;
+		# immutable details retain the deleted identity.
+		reference_name=(
+			target
+			if not action.startswith("delete") and frappe.db.exists("File", target)
+			else None
+		),
+		raise_on_error=True,
+	)
+	if frappe.db.exists("AI Folder Settings", {"folder": target}):
+		frappe.db.set_value(
+			"AI Folder Settings",
+			{"folder": target},
+			{"last_operation": action, "last_operation_by": user, "last_operation_on": now_datetime()},
+			update_modified=False,
 		)
-		# Also bump AI Folder Settings last operation if exists
-		if frappe.db.exists("AI Folder Settings", {"folder": target}):
-			try:
-				frappe.db.set_value(
-					"AI Folder Settings",
-					{"folder": target},
-					{"last_operation": action, "last_operation_by": user, "last_operation_on": now_datetime()},
-					update_modified=False,
-				)
-			except Exception:
-				pass
-	except Exception:
-		pass
 
 
 # ---------------------------------------------------------------------------
@@ -1619,6 +2081,7 @@ def ingest_file_with_folder(
 	folder: str | None = None,
 	title: str | None = None,
 	*,
+	file_record: str | None = None,
 	user: str | None = None,
 ) -> str:
 	"""Ingest a file into a knowledge base, preserving its folder provenance.
@@ -1630,26 +2093,18 @@ def ingest_file_with_folder(
 	# Resolve folder before ingestion
 	target_folder = _normalize_folder_path(folder) if folder else get_default_folder(user=user)
 	_assert_folder_exists(target_folder)
-	# Ensure File doc is in target folder
-	ensure_file_in_folder(file_url, target_folder, user=user)
-	# Create AI Document with folder metadata
+	# Ingestion owns deterministic File resolution and moves that exact stable
+	# File identity before creating the AI Document. Do not perform a separate
+	# URL lookup here, since duplicate-content File rows may share a URL.
 	from ai_fr_hg.ai.ingestion import ingest_file
 
-	document_name = ingest_file(
+	return ingest_file(
 		file_url=file_url,
 		knowledge_base=knowledge_base,
 		title=title,
+		folder=target_folder,
+		file_record=file_record,
 	)
-	# Store folder provenance on AI Document
-	try:
-		meta = frappe.get_meta("AI Document")
-		if meta.has_field("folder"):
-			frappe.db.set_value("AI Document", document_name, "folder", target_folder, update_modified=False)
-		elif meta.has_field("source_folder"):
-			frappe.db.set_value("AI Document", document_name, "source_folder", target_folder, update_modified=False)
-	except Exception:
-		frappe.log_error(title="AI Document folder assignment failed", message=frappe.get_traceback())
-	return document_name
 
 
 def validate_parent_folder_exists(folder: str | None) -> str:

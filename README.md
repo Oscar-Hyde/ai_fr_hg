@@ -18,7 +18,8 @@ event rules run unattended on background workers.
 | Capability | Summary |
 | --- | --- |
 | **Local AI engine** | Ollama first-class, plus llama.cpp, vLLM, LM Studio, Text Generation WebUI and any OpenAI-compatible runtime. Automatic model discovery, health monitoring, failover and performance tracking. |
-| **Document intelligence** | 30+ file formats through one pipeline: extract → chunk → embed → index. Summarisation, classification, structured extraction and document comparison. |
+| **Document intelligence** | 37 registered file extensions through one pipeline: extract → chunk → embed → index. Text, office (including OpenDocument), and images. Summarisation, classification, structured extraction, document comparison, and high-precision pattern extraction (emails, URLs, phones, IPs, hashes, dates, identifiers, money) into `AI Pattern Entity` rows — an opt-in layer that reads only already-extracted content. |
+| **Translation** | Arabic ⇄ English ⇄ Hebrew, offline. Structure-preserving segmentation, protected numbers and identifiers, trilingual glossaries, translation memory, a local quality gate with self-repair, and a bilingual review UI. |
 | **Knowledge & search** | Hybrid retrieval (dense vectors + keyword, fused with RRF) computed entirely in Python. Embeddings live in DocTypes — no external vector database. |
 | **Conversational AI** | Multi-session chat with retrieval grounding, inline citations, tool calling and a full audit trail of every invocation. |
 | **Automation** | Declarative pipelines and event-driven rules that bind any Frappe document event to an AI action. |
@@ -127,6 +128,7 @@ for a fresh install.
 | --- | --- |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Module layout, data model, request lifecycle, design decisions |
 | [`docs/FILE_TO_ANSWER.md`](docs/FILE_TO_ANSWER.md) | The complete attach → ingest → index → retrieve → cite lifecycle, dev & production process |
+| [`docs/TRANSLATION.md`](docs/TRANSLATION.md) | Arabic / English / Hebrew translation: pipeline, quality gate, glossaries, memory, review |
 | [`docs/LEARNING.md`](docs/LEARNING.md) | The Learning Loop: teach → validate → approve → memory/skill → recall → observe |
 | [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) | Every setting, quotas, redaction, retention, deployment topologies |
 | [`docs/EXTENDING.md`](docs/EXTENDING.md) | Writing custom providers, readers, tools and pipeline steps |

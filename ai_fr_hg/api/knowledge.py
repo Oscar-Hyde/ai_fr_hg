@@ -18,6 +18,7 @@ def upload_document(
 	extraction_schema: str | None = None,
 	process_now: bool = False,
 	folder: str | None = None,
+	file_record: str | None = None,
 ) -> dict:
 	"""Ingest an uploaded file into a knowledge base (folder-aware)."""
 	from ai_fr_hg.ai.ingestion import ingest_file
@@ -31,6 +32,7 @@ def upload_document(
 		extraction_schema=extraction_schema,
 		enqueue_job=not cint(process_now),
 		folder=folder,
+		file_record=file_record,
 	)
 	return {
 		"document": document,
@@ -135,12 +137,13 @@ def ask(
 	"""One-shot grounded question answering, without creating a conversation.
 
 	`documents` scopes the answer to specific `AI Document` records (e.g. the
-	"Ask About This" button), waiting for indexing if they were just uploaded.
-	`folder` scopes retrieval to a folder subtree (folder-scoped retrieval).
+	"Ask About This" button). Fresh uploads are extracted inline so the answer
+	does not wait for background embedding. `folder` scopes retrieval to a
+	folder subtree.
 	"""
 	from ai_fr_hg.ai.agent import run_agent_turn
 	from ai_fr_hg.ai.deadline import turn_budget
-	from ai_fr_hg.ai.ingestion import wait_for_indexed
+	from ai_fr_hg.ai.ingestion import prepare_documents_for_turn
 	from ai_fr_hg.api.chat import _coerce_documents, _get_turn_budget
 
 	if isinstance(knowledge_bases, str):
@@ -166,10 +169,11 @@ def ask(
 		except Exception:
 			pass
 
-	# Interactive, so it carries the same proxy deadline as chat.
+	# Interactive, so it honours the same optional turn budget as chat.
 	with turn_budget(_get_turn_budget()):
+		extra_context = None
 		if documents:
-			wait_for_indexed(documents)
+			documents, extra_context = prepare_documents_for_turn(documents)
 		return run_agent_turn(
 			question,
 			agent=agent,
@@ -177,7 +181,8 @@ def ask(
 			model=model,
 			include_history=False,
 			save_messages=False,
-			documents=documents,
+			documents=documents or None,
+			extra_context=extra_context or None,
 		)
 
 
@@ -290,6 +295,67 @@ def get_document_chunks(document: str, limit: int = 100) -> list:
 		order_by="chunk_index asc",
 		limit_page_length=cint(limit) or 100,
 	)
+
+
+@frappe.whitelist()
+def scan_pattern_entities(document: str) -> dict:
+	"""Extract high-precision pattern entities from a document's stored content.
+
+	An enhancement layer over the existing pipeline: it only reads the
+	document's already-extracted ``content`` and writes its own
+	``AI Pattern Entity`` rows. Like the other document intelligence actions,
+	it requires write access to the document.
+	"""
+	from ai_fr_hg.ai.patterns import scan_document
+
+	doc = frappe.get_doc("AI Document", document)
+	doc.check_permission("read")
+	doc.check_permission("write")
+
+	if not (doc.content or "").strip():
+		frappe.throw(_("Document {0} has no extracted content to scan.").format(document))
+
+	return scan_document(document)
+
+
+@frappe.whitelist()
+def get_pattern_entities(document: str, entity_type: str | None = None, limit: int = 200) -> dict:
+	"""List a document's pattern entities, grouped and counted by type."""
+	frappe.has_permission("AI Document", "read", doc=document, throw=True)
+
+	filters = {"document": document}
+	if entity_type:
+		filters["entity_type"] = entity_type
+
+	entities = frappe.get_all(
+		"AI Pattern Entity",
+		filters=filters,
+		fields=[
+			"name",
+			"entity_type",
+			"value",
+			"normalized_value",
+			"occurrences",
+			"first_offset",
+			"context_quote",
+		],
+		order_by="occurrences desc, entity_type asc",
+		limit_page_length=max(1, cint(limit) or 200),
+	)
+
+	counts = frappe.get_all(
+		"AI Pattern Entity",
+		filters={"document": document},
+		fields=["entity_type", "count(name) as total"],
+		group_by="entity_type",
+		order_by="total desc",
+	)
+
+	return {
+		"document": document,
+		"entities": entities,
+		"entity_counts": {row.entity_type: cint(row.total) for row in counts},
+	}
 
 
 @frappe.whitelist()

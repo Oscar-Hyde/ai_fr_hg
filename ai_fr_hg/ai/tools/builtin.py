@@ -332,12 +332,20 @@ def get_document_text(
 			"content": "",
 			"error": _document_text_unavailable_reason(doc),
 		}
+
+	from ai_fr_hg.ai.language import language_name, resolve_document_language
+
+	code = resolve_document_language(doc.language, content)
+	if code and code != (doc.language or "").strip():
+		frappe.db.set_value("AI Document", doc.name, "language", code, update_modified=False)
 	truncated = len(content) > (cint(max_chars) or 8000)
 
 	return {
 		"document": doc.name,
 		"title": doc.title,
 		"status": doc.status,
+		"language": code or None,
+		"language_name": language_name(code) if code else None,
 		"summary": doc.summary,
 		"content": content[: cint(max_chars) or 8000],
 		"truncated": truncated,
@@ -371,6 +379,80 @@ def _document_text_unavailable_reason(doc) -> str:
 		f"Document '{doc.title}' contains no extractable text. It may be a scanned "
 		"image needing OCR, or an unsupported format."
 	)
+
+
+def translate_content(
+	target_language: str | None = None,
+	document: str | None = None,
+	text: str | None = None,
+	source_language: str | None = None,
+	max_characters: int = 12000,
+	**kwargs,
+) -> dict:
+	"""Translate an uploaded document, or a passage, between Arabic, English and Hebrew.
+
+	The tool is deliberately read-only: it returns the translated text to the
+	conversation without creating an `AI Translation` record, so an agent can
+	answer "what does this contract say in Hebrew?" in one turn. Use the
+	Translate action on the document itself for a stored, reviewable
+	translation.
+	"""
+	from ai_fr_hg.ai.translation import MAX_INLINE_CHARACTERS, translate_text
+	from ai_fr_hg.ai.translation_utils import is_supported, language_label
+
+	target = (
+		target_language
+		or kwargs.get("target")
+		or kwargs.get("language")
+		or kwargs.get("to")
+		or kwargs.get("to_language")
+	)
+	if not is_supported(target):
+		return {
+			"error": "Choose a supported target language: Arabic (ar), English (en) or Hebrew (he).",
+			"translated": False,
+		}
+
+	source_text = text or kwargs.get("content") or kwargs.get("passage")
+	title = None
+	document_name = None
+
+	if not source_text:
+		identifier = document or kwargs.get("document_name") or kwargs.get("title") or kwargs.get("file")
+		extracted = get_document_text(document=identifier, max_characters=cint(max_characters) or 12000)
+		if extracted.get("error") and not extracted.get("content"):
+			return {**extracted, "translated": False}
+		source_text = extracted.get("content") or ""
+		title = extracted.get("title")
+		document_name = extracted.get("document")
+
+	if not (source_text or "").strip():
+		return {"error": "There is no text to translate.", "translated": False}
+
+	limit = min(cint(max_characters) or 12000, MAX_INLINE_CHARACTERS)
+	truncated = len(source_text) > limit
+
+	outcome = translate_text(
+		source_text[:limit],
+		target,
+		source_language,
+		reference_doctype="AI Document" if document_name else None,
+		reference_name=document_name,
+	)
+	return {
+		"translated": True,
+		"document": document_name,
+		"title": title,
+		"source_language": outcome.source_language,
+		"source_language_name": language_label(outcome.source_language),
+		"target_language": outcome.target_language,
+		"target_language_name": language_label(outcome.target_language),
+		"direction": outcome.direction,
+		"quality_score": outcome.quality_score,
+		"flagged_segments": outcome.flagged,
+		"truncated": truncated,
+		"text": outcome.text,
+	}
 
 
 def current_datetime(**kwargs) -> dict:

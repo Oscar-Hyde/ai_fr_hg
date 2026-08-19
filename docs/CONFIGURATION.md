@@ -15,10 +15,10 @@ needs to intervene — everything else is automatic.
 | Additional Allowed Hosts | empty | Hostnames exempt from the local-only guard, one per line. |
 | Default System Prompt | seeded | Used by agents that do not define their own. |
 | Request Timeout | 120 s | Per-request HTTP timeout. Raise it for large models on CPU. |
-| Max Turn Duration | 90 s | Total budget for one interactive chat turn, across retries, failover and tool calls. Set 0 to disable. |
+| Max Turn Duration | **0** (unlimited) | Optional budget for one interactive chat turn, across retries, failover and tool calls. Leave at 0 on a local bench so a slow first token is not cut off. Set a positive value only when a reverse proxy would otherwise return 504. |
 | Max Retries | 2 | Retry attempts for transient failures before failover. |
 | Enable Failover | on | Try the next provider by priority when one is unreachable. |
-| Streaming Enabled | on | Allow token streaming where the runtime supports it. |
+| Streaming Enabled | on | Desk chat streams tokens over Frappe realtime when the provider supports it. Off, or a non-streaming runtime, uses the same blocking `send_message` path as before. |
 
 ### On Max Turn Duration
 
@@ -28,16 +28,19 @@ retry may be tried against every enabled provider. Multiplied out, the worst
 case is far longer than any reverse proxy will hold a connection open, and the
 user sees a bare `504 Gateway Time-out` — no answer, and no error to explain it.
 
-`Max Turn Duration` is the budget for the whole turn. Every layer beneath it
+`Max Turn Duration` is an *optional* budget for the whole turn. The default is
+`0`: the platform waits for the local model and does not invent a second
+deadline on top of **Request Timeout**. Every layer beneath a positive budget
 checks the remaining time before starting more work: socket timeouts are
 clamped to what is left, retries and failover stop when they cannot finish, and
 tool calling gives way to a final answer as the deadline approaches. If the
 budget does run out, the turn still saves a reply explaining what happened.
 
-Keep it comfortably below your proxy's timeout (nginx `proxy_read_timeout`
-defaults to 60 s). Set it to `0` for unbounded turns — appropriate only when
-nothing with a timeout sits in front of the site. Background jobs, pipelines
-and scheduled tasks are never budgeted, since no client is waiting on them.
+On a local bench (`site1.local`, no nginx in front) leave this at `0`. Only set
+a positive value when something with a timeout sits in front of the site, and
+keep it comfortably below that proxy timeout (nginx `proxy_read_timeout`
+defaults to 60 s). Background jobs, pipelines and scheduled tasks are never
+budgeted, since no client is waiting on them.
 
 ### On Strict Local Only
 
@@ -79,18 +82,40 @@ search again.
 | Default Chunk Size | 1200 chars | Larger keeps more context per passage; smaller improves precision. |
 | Default Chunk Overlap | 150 chars | Prevents facts being orphaned at a boundary. Must be smaller than chunk size. |
 | Default Top K | 6 | Passages retrieved per query. |
-| Similarity Threshold | 0.25 | Minimum cosine score. Raise it if answers cite loosely related passages. |
+| Similarity Threshold | 0.25 | Minimum cosine score from 0 to 1. Values such as `25` are stored as `0.25`. Raise it if answers cite loosely related passages. |
 | Enable Hybrid Search | on | Fuse dense and keyword ranking. Recommended. |
 | Max Context Characters | 12000 | Ceiling on retrieved context injected into a prompt. |
 | Auto Process Documents | on | Ingest and index on upload with no further action. |
 | Auto Embed on Ingest | on | Embed immediately rather than waiting for the hourly backfill. |
 | Max Document Size (MB) | 50 | Rejected above this, before any parsing work. |
-| OCR Enabled | off | Requires `pytesseract` and the Tesseract binary. |
+| OCR Enabled | **off** | Requires `pytesseract` and the Tesseract binary. Off on a fresh install so missing OCR packages do not surprise the pipeline. |
 | Processing Queue | long | Which Frappe queue handles ingestion. |
+| Auto Pattern Scan | **off** | Hourly background extraction of high-precision pattern entities (emails, URLs, phones, IPs, hashes, dates, identifiers, money) from indexed documents into `AI Pattern Entity` rows. Reads only already-extracted content; manual **Extract Patterns** on the AI Document form works regardless. |
+| Max Pattern Entities | 500 | Upper bound of distinct entities stored per document. The scan samples at most 1 MB of extracted text (head and tail) with linear-time guards. |
 
 Knowledge bases override chunk size, overlap, top K, threshold and embedding
 model individually, so a base of short policy notes and a base of long
 contracts can each be tuned appropriately.
+
+### Default agent retrieval
+
+The seeded **General Assistant** has **Use Knowledge** off. Small talk therefore
+does not pay an embedding round-trip on a site that may have no documents yet.
+Grounded answers still happen when:
+
+- the user selects one or more knowledge chips in the Assistant,
+- a file is attached (the next send is scoped to that upload, including
+  already-indexed files),
+- the agent calls the `search_knowledge_base` tool,
+- or an administrator turns **Use Knowledge** on for that agent.
+
+This is intentional, not a missing retrieval path.
+
+Extracted text is labelled with its written language (`AI Document.language`,
+ISO 639-1). English, Arabic and Hebrew are first-class, including mixed files
+(`en,ar,he`). The label is written on ingest, refreshed by patch `v0_0_12`,
+and injected into the prompt as `language=English + Arabic` so a small local
+model such as `qwen2.5:0.5b` can name every language in the file.
 
 ### Tuning guidance
 
@@ -101,6 +126,25 @@ contracts can each be tuned appropriately.
 - Retrieval is slow on a very large corpus → lower Top K and install NumPy.
 
 ---
+
+## Translation
+
+Arabic / English / Hebrew translation. Full guide:
+[`TRANSLATION.md`](TRANSLATION.md).
+
+| Setting | Default | Notes |
+| --- | --- | --- |
+| Enable Translation | on | Master switch for translation, its tool and its pipeline step. |
+| Default Target Language | `en` | Used when a caller does not name one. |
+| Default Translation Model | empty | Falls back to the default chat model. Must be a Chat or Vision model. |
+| Default Glossary | empty | Terminology applied when a translation names none. |
+| Segment Size (characters) | 1800 | How much source text is translated as one unit. Minimum 200. Lower it for small context windows. |
+| Segments per Model Call | 6 | Batch size. Larger batches mean fewer round trips but a longer prompt. |
+| Run Quality Checks | on | Score every segment locally: placeholders, script, length, glossary, refusals, repetition. |
+| Repair Flagged Segments | on | One stricter retry per flagged segment, kept only when it scores better. |
+| Use Translation Memory | on | Reuse identical segments already translated in the same knowledge base. |
+| Back-Translation Samples | 0 | Verify this many segments by translating them back and comparing embeddings. Costs extra model calls. |
+| Index Translations as Documents | off | Default for new translations: store the result as its own searchable document. |
 
 ## Governance
 

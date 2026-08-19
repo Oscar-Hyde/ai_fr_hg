@@ -11,6 +11,8 @@ known document name can never bypass the conditions used by ``get_list``.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 import frappe
 
 _MANAGER_ROLES = {"System Manager", "AI Manager"}
@@ -19,11 +21,17 @@ _READ_PERMISSION_TYPES = {"read", "select", "report", "export", "print", "email"
 
 def has_app_permission() -> bool:
 	"""Whether the current user should see AI_FR_HG on Frappe's apps screen."""
-	return bool(_roles(frappe.session.user).intersection(_MANAGER_ROLES | {"AI User", "AI Auditor"}))
+	try:
+		return bool(_roles(frappe.session.user).intersection(_MANAGER_ROLES | {"AI User", "AI Auditor"}))
+	except Exception:
+		return False
 
 
 def _roles(user: str) -> set[str]:
-	return set(frappe.get_roles(user))
+	try:
+		return set(frappe.get_roles(user))
+	except Exception:
+		return set()
 
 
 def _is_manager(user: str) -> bool:
@@ -39,7 +47,11 @@ def _is_read(permission_type: str | None) -> bool:
 
 
 def _escape(value: str) -> str:
-	return frappe.db.escape(value)
+	try:
+		return frappe.db.escape(value)
+	except Exception:
+		escaped = str(value).replace("'", "''")
+		return f"'{escaped}'"
 
 
 def _role_sql(user: str) -> str:
@@ -51,6 +63,33 @@ def _owned_condition(doctype: str, field: str, user: str, *, auditors: bool = Fa
 	if _is_manager(user) or (auditors and _is_auditor(user)):
 		return ""
 	return f"`tab{doctype}`.`{field}` = {_escape(user)}"
+
+def _safe_condition(fn):
+	"""Wrap permission queries so Desk never 500s on return."""
+	def wrapper(user: str) -> str:
+		try:
+			return fn(user)
+		except Exception:
+			try:
+				frappe.log_error(title=f"AI permission query failed: {fn.__name__}", message=frappe.get_traceback())
+			except Exception:
+				pass
+			return "1=0"
+	return wrapper
+
+
+def _safe_doc_permission(fn):
+	"""Wrap document permission check so Desk never 500s."""
+	def wrapper(doc, ptype=None, user=None, permission_type=None):
+		try:
+			return fn(doc, ptype=ptype, user=user, permission_type=permission_type)
+		except Exception:
+			try:
+				frappe.log_error(title="AI document permission failed", message=frappe.get_traceback())
+			except Exception:
+				pass
+			return False
+	return wrapper
 
 
 # ---------------------------------------------------------------------------
@@ -96,11 +135,42 @@ def document_query(user: str) -> str:
 	)
 
 
+def translation_query(user: str) -> str:
+	if _is_manager(user):
+		return ""
+	# A translation is readable by whoever can read the knowledge base it
+	# belongs to, and always by the person who requested it.
+	return (
+		"(`tabAI Translation`.`owner` = {user} or `tabAI Translation`.`requested_by` = {user} "
+		"or `tabAI Translation`.`knowledge_base` in ("
+		"select kb.name from `tabAI Knowledge Base` kb "
+		"where kb.is_public = 1 or exists ("
+		"select 1 from `tabAI Knowledge Base Role` kb_role "
+		"where kb_role.parent = kb.name and kb_role.parenttype = 'AI Knowledge Base' "
+		"and kb_role.role in ({roles}))))"
+	).format(user=_escape(user), roles=_role_sql(user))
+
+
 def chunk_query(user: str) -> str:
 	if _is_manager(user):
 		return ""
 	return (
 		"`tabAI Document Chunk`.`knowledge_base` in ("
+		"select kb.name from `tabAI Knowledge Base` kb "
+		"where kb.is_public = 1 or exists ("
+		"select 1 from `tabAI Knowledge Base Role` kb_role "
+		"where kb_role.parent = kb.name and kb_role.parenttype = 'AI Knowledge Base' "
+		f"and kb_role.role in ({_role_sql(user)})))"
+	)
+
+
+def pattern_entity_query(user: str) -> str:
+	# Pattern entities carry the same denormalized knowledge base as chunks,
+	# so they ride the document's row-level access without a join.
+	if _is_manager(user):
+		return ""
+	return (
+		"`tabAI Pattern Entity`.`knowledge_base` in ("
 		"select kb.name from `tabAI Knowledge Base` kb "
 		"where kb.is_public = 1 or exists ("
 		"select 1 from `tabAI Knowledge Base Role` kb_role "
@@ -128,29 +198,32 @@ def candidate_query(user: str) -> str:
 
 
 def _learning_scope_query(doctype: str, user: str) -> str:
-	if _is_manager(user) or _is_auditor(user):
-		return ""
+	try:
+		if _is_manager(user) or _is_auditor(user):
+			return ""
 
-	table = f"tab{doctype}"
-	roles = _role_sql(user)
-	return f"""(
-		`{table}`.`scope` = 'Global'
-		or (`{table}`.`scope` = 'User' and `{table}`.`scope_value` = {_escape(user)})
-		or (`{table}`.`scope` = 'Role' and `{table}`.`scope_value` in ({roles}))
-		or (`{table}`.`scope` = 'Agent' and (
-			not exists (
-				select 1 from `tabAI Agent Role` agent_role
-				where agent_role.parent = `{table}`.`scope_value`
-					and agent_role.parenttype = 'AI Agent'
-			)
-			or exists (
-				select 1 from `tabAI Agent Role` agent_role
-				where agent_role.parent = `{table}`.`scope_value`
-					and agent_role.parenttype = 'AI Agent'
-					and agent_role.role in ({roles})
-			)
-		))
-	)"""
+		table = f"tab{doctype}"
+		roles = _role_sql(user)
+		return f"""(
+			`{table}`.`scope` = 'Global'
+			or (`{table}`.`scope` = 'User' and `{table}`.`scope_value` = {_escape(user)})
+			or (`{table}`.`scope` = 'Role' and `{table}`.`scope_value` in ({roles}))
+			or (`{table}`.`scope` = 'Agent' and (
+				not exists (
+					select 1 from `tabAI Agent Role` agent_role
+					where agent_role.parent = `{table}`.`scope_value`
+						and agent_role.parenttype = 'AI Agent'
+				)
+				or exists (
+					select 1 from `tabAI Agent Role` agent_role
+					where agent_role.parent = `{table}`.`scope_value`
+						and agent_role.parenttype = 'AI Agent'
+						and agent_role.role in ({roles})
+				)
+			))
+		)"""
+	except Exception:
+		return "1=0"
 
 
 def memory_query(user: str) -> str:
@@ -195,9 +268,51 @@ def folder_favorite_query(user: str) -> str:
 	return _owned_condition("AI Folder Favorite", "user", user)
 
 
+
+# Wrap all list-query conditions so Desk return never throws 500
+conversation_query = _safe_condition(conversation_query)
+message_query = _safe_condition(message_query)
+knowledge_base_query = _safe_condition(knowledge_base_query)
+document_query = _safe_condition(document_query)
+translation_query = _safe_condition(translation_query)
+chunk_query = _safe_condition(chunk_query)
+agent_query = _safe_condition(agent_query)
+candidate_query = _safe_condition(candidate_query)
+memory_query = _safe_condition(memory_query)
+skill_query = _safe_condition(skill_query)
+task_query = _safe_condition(task_query)
+pipeline_run_query = _safe_condition(pipeline_run_query)
+execution_log_query = _safe_condition(execution_log_query)
+search_query = _safe_condition(search_query)
+tool_invocation_query = _safe_condition(tool_invocation_query)
+folder_settings_query = _safe_condition(folder_settings_query)
+folder_favorite_query = _safe_condition(folder_favorite_query)
+
 # ---------------------------------------------------------------------------
 # Direct-document permission
 # ---------------------------------------------------------------------------
+
+
+@contextmanager
+def scoped_knowledge_base_permission_cache():
+	"""Deduplicate KB grant queries inside one bounded list/tree operation.
+
+	The cache is deliberately opt-in and scoped rather than process- or
+	request-global, so a role mutation followed by a permission check in the same
+	request cannot observe stale authorization state.
+	"""
+	local = frappe.local
+	attribute = "ai_fr_hg_knowledge_base_permission_cache"
+	missing = object()
+	previous = getattr(local, attribute, missing)
+	setattr(local, attribute, {})
+	try:
+		yield
+	finally:
+		if previous is missing:
+			delattr(local, attribute)
+		else:
+			setattr(local, attribute, previous)
 
 
 def _knowledge_base_access(knowledge_base: str | None, user: str, *, write: bool = False) -> bool:
@@ -206,20 +321,30 @@ def _knowledge_base_access(knowledge_base: str | None, user: str, *, write: bool
 	if _is_manager(user):
 		return True
 
+	cache = getattr(frappe.local, "ai_fr_hg_knowledge_base_permission_cache", None)
+	cache_key = (user, knowledge_base, bool(write))
+	if cache is not None and cache_key in cache:
+		return cache[cache_key]
+
 	kb = frappe.db.get_value("AI Knowledge Base", knowledge_base, ["is_public"], as_dict=True)
 	if not kb:
-		return False
-
-	roles = _roles(user)
-	grants = frappe.get_all(
-		"AI Knowledge Base Role",
-		filters={"parent": knowledge_base, "parenttype": "AI Knowledge Base"},
-		fields=["role", "can_write"],
-	)
-	matching = [grant for grant in grants if grant.role in roles]
-	if write:
-		return any(bool(grant.can_write) for grant in matching)
-	return bool(kb.is_public or matching)
+		result = False
+	else:
+		roles = _roles(user)
+		grants = frappe.get_all(
+			"AI Knowledge Base Role",
+			filters={"parent": knowledge_base, "parenttype": "AI Knowledge Base"},
+			fields=["role", "can_write"],
+		)
+		matching = [grant for grant in grants if grant.role in roles]
+		result = (
+			any(bool(grant.can_write) for grant in matching)
+			if write
+			else bool(kb.is_public or matching)
+		)
+	if cache is not None:
+		cache[cache_key] = result
+	return result
 
 
 def _owned_document_access(doc, user: str, field: str, permission_type: str, *, auditors=False) -> bool:
@@ -280,7 +405,15 @@ def has_document_permission(
 		return _knowledge_base_access(doc.name, user, write=False) if _is_read(permission_type) else False
 	if doc.doctype == "AI Document":
 		return _knowledge_base_access(doc.knowledge_base, user, write=not _is_read(permission_type))
+	if doc.doctype == "AI Translation":
+		if doc.get("owner") == user or doc.get("requested_by") == user:
+			return True
+		return _knowledge_base_access(doc.knowledge_base, user, write=not _is_read(permission_type))
 	if doc.doctype == "AI Document Chunk":
+		return _is_read(permission_type) and _knowledge_base_access(doc.knowledge_base, user)
+	if doc.doctype == "AI Pattern Entity":
+		# Machine-written analysis rows: readable exactly like their document's
+		# knowledge base, mutable only by the scan service and managers.
 		return _is_read(permission_type) and _knowledge_base_access(doc.knowledge_base, user)
 	if doc.doctype == "AI Agent":
 		if not _is_read(permission_type):
@@ -319,3 +452,8 @@ def has_document_permission(
 			return False
 
 	return False
+
+
+# Wrapped last: the decorator needs the function above to already exist, so
+# Desk never sees an ImportError from this module.
+has_document_permission = _safe_doc_permission(has_document_permission)

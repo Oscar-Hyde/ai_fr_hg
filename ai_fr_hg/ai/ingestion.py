@@ -25,6 +25,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, now_datetime
 
+from ai_fr_hg.ai.language import detect_language, language_name, parse_language_codes, resolve_document_language
 from ai_fr_hg.ai.logging import write_audit_log
 from ai_fr_hg.ai.exceptions import (
 	CorruptDocumentError,
@@ -127,11 +128,55 @@ def _as_user(user: str):
 			frappe.set_user(previous)
 
 
-def _file_doc(file_url: str):
-	name = frappe.db.get_value("File", {"file_url": file_url}, "name")
+def _file_doc(file_url: str, file_record: str | None = None, document_name: str | None = None):
+	"""Resolve one stable File identity; ambiguous legacy URLs fail closed."""
+	name = file_record
+	if not name:
+		# Legacy rows have only a URL. An exact attachment to the requesting AI
+		# Document is stable enough to backfill; otherwise URL/content identity
+		# cannot distinguish duplicate File rows and must never select an
+		# arbitrary oldest record.
+		attached = (
+			frappe.get_all(
+				"File",
+				filters={
+					"file_url": file_url,
+					"is_folder": 0,
+					"attached_to_doctype": "AI Document",
+					"attached_to_name": document_name,
+				},
+				pluck="name",
+				order_by="creation asc, name asc",
+				limit_page_length=2,
+			)
+			if document_name
+			else []
+		)
+		if len(attached) > 1:
+			raise DocumentFetchError(
+				_("More than one File is attached as the source of AI Document {0}.").format(document_name)
+			)
+		if attached:
+			name = attached[0]
+		else:
+			matches = frappe.get_all(
+				"File",
+				filters={"file_url": file_url, "is_folder": 0},
+				pluck="name",
+				order_by="creation asc, name asc",
+				limit_page_length=2,
+			)
+			if len(matches) > 1:
+				raise DocumentFetchError(
+					_("More than one File record uses {0}; provide the exact File identity.").format(file_url)
+				)
+			name = matches[0] if matches else None
 	if not name:
 		raise DocumentFetchError(_("File record not found for {0}.").format(file_url))
-	return frappe.get_doc("File", name)
+	file_doc = frappe.get_doc("File", name)
+	if file_doc.file_url != file_url:
+		raise DocumentFetchError(_("File record {0} does not match {1}.").format(name, file_url))
+	return file_doc
 
 
 def validate_source_access(document, user: str | None = None) -> None:
@@ -144,7 +189,9 @@ def validate_source_access(document, user: str | None = None) -> None:
 	if source_type == "File":
 		if not document.source_file:
 			raise DocumentFetchError(_("No source file is attached."))
-		file_doc = _file_doc(document.source_file)
+		file_doc = _file_doc(
+			document.source_file, document.get("source_file_record"), document.name
+		)
 		if not frappe.has_permission("File", "read", doc=file_doc, user=user):
 			raise DocumentSourcePermissionError(
 				_("User {0} cannot read source File {1}.").format(user, file_doc.name)
@@ -356,6 +403,7 @@ def process_document(
 				document.db_set(
 					{
 						"content": result.text,
+						"language": detect_language(result.text) or document.language,
 						"reader_used": reader.label,
 						"mime_type": mime_type or mimetypes.guess_type(filename)[0],
 						"file_size": len(content),
@@ -522,7 +570,9 @@ def get_source_content(document, user: str | None = None) -> tuple[bytes, str, s
 	validate_source_access(document, user)
 
 	if document.source_type == "File":
-		file_doc = _file_doc(document.source_file)
+		file_doc = _file_doc(
+			document.source_file, document.get("source_file_record"), document.name
+		)
 		content = file_doc.get_content()
 		if isinstance(content, str):
 			content = content.encode("utf-8")
@@ -775,10 +825,14 @@ def _reconcile_file_privacy_from_url(file_doc) -> None:
 		frappe.clear_document_cache("File", file_doc.name)
 
 
-def get_file_content(file_url: str, user: str | None = None) -> tuple[bytes, str]:
-	"""Read a Frappe File only when the authenticated user can read it."""
+def get_file_content(
+	file_url: str,
+	user: str | None = None,
+	file_record: str | None = None,
+) -> tuple[bytes, str]:
+	"""Read an exact Frappe File identity only when the user can read it."""
 	user = _assert_valid_authority(user or frappe.session.user)
-	file_doc = _file_doc(file_url)
+	file_doc = _file_doc(file_url, file_record)
 	_reconcile_file_privacy_from_url(file_doc)
 	if not frappe.has_permission("File", "read", doc=file_doc, user=user):
 		raise DocumentSourcePermissionError(
@@ -849,6 +903,7 @@ def ingest_file(
 	extraction_schema: str | None = None,
 	enqueue_job: bool = True,
 	folder: str | None = None,
+	file_record: str | None = None,
 ) -> str:
 	"""Create an authorized AI Document from a Frappe File.
 
@@ -860,29 +915,31 @@ def ingest_file(
 	authority = _assert_valid_authority(frappe.session.user)
 	check_capability("document_upload")
 	check_document_quota()
-	_, filename = get_file_content(file_url, authority)
 
-	# Resolve folder provenance
-	resolved_folder = None
-	try:
-		from ai_fr_hg.ai.folders import _normalize_folder_path, _assert_folder_exists, get_default_folder
+	# A URL is content identity, not stable File identity. The central resolver
+	# rejects ambiguous legacy URL-only requests instead of selecting another
+	# document's established File row.
+	file_doc = _file_doc(file_url, file_record)
+	resolved_file_record = file_doc.name
+	_, filename = get_file_content(file_url, authority, resolved_file_record)
 
-		if folder:
-			resolved_folder = _normalize_folder_path(folder)
-			_assert_folder_exists(resolved_folder)
-		else:
-			# Use File's current folder or default
-			file_name = frappe.db.get_value("File", {"file_url": file_url}, "name")
-			if file_name:
-				current_folder = frappe.db.get_value("File", file_name, "folder")
-				if current_folder and frappe.db.exists("File", current_folder):
-					resolved_folder = current_folder
-				else:
-					resolved_folder = get_default_folder(user=authority)
-			else:
-				resolved_folder = get_default_folder(user=authority)
-	except Exception:
-		frappe.log_error(title="Folder resolution failed during ingest", message=frappe.get_traceback())
+	from ai_fr_hg.ai.folders import (
+		_assert_folder_exists,
+		_normalize_folder_path,
+		assign_file_to_folder,
+		get_default_folder,
+	)
+	if folder:
+		resolved_folder = _assert_folder_exists(_normalize_folder_path(folder))
+	elif file_doc.folder and frappe.db.exists("File", file_doc.folder):
+		resolved_folder = file_doc.folder
+	else:
+		resolved_folder = get_default_folder(user=authority)
+
+	# The physical File and AI Document parent change atomically in the caller's
+	# transaction. Fail rather than creating a document with stale provenance.
+	if file_doc.folder != resolved_folder:
+		assign_file_to_folder(file_doc.name, resolved_folder, user=authority)
 
 	document = frappe.new_doc("AI Document")
 	document.update(
@@ -891,6 +948,7 @@ def ingest_file(
 			"knowledge_base": knowledge_base,
 			"source_type": "File",
 			"source_file": file_url,
+			"source_file_record": resolved_file_record,
 			"extraction_schema": extraction_schema,
 			"status": "Draft",
 			"folder": resolved_folder,
@@ -902,14 +960,6 @@ def ingest_file(
 		enqueue_processing(document.name, requested_by=authority)
 	else:
 		process_document_now(document.name, requested_by=authority)
-	# Ensure File lives in the same folder (canonical service)
-	try:
-		if resolved_folder:
-			from ai_fr_hg.ai.folders import ensure_file_in_folder
-
-			ensure_file_in_folder(file_url, resolved_folder, user=authority)
-	except Exception:
-		frappe.log_error(title="File folder assignment during ingest failed", message=frappe.get_traceback())
 	return document.name
 
 
@@ -918,14 +968,28 @@ def ingest_text(
 	knowledge_base: str,
 	title: str,
 	enqueue_job: bool = True,
+	folder: str | None = None,
+	language: str | None = None,
 ) -> str:
-	"""Create an authorized AI Document from bounded inline text."""
+	"""Create an authorized AI Document from bounded inline text.
+
+	``folder`` places the document in an existing folder (the default folder is
+	used when it is omitted) and ``language`` records a known ISO 639-1 code so
+	generated content - a translation, for example - does not have to be
+	re-detected from its own text.
+	"""
 	from ai_fr_hg.ai.governance import check_capability, check_document_quota
 
 	authority = _assert_valid_authority(frappe.session.user)
 	check_capability("document_upload")
 	check_document_quota()
 	_validate_size((text or "").encode("utf-8"))
+
+	resolved_folder = None
+	if folder:
+		from ai_fr_hg.ai.folders import _assert_folder_exists, _normalize_folder_path
+
+		resolved_folder = _assert_folder_exists(_normalize_folder_path(folder))
 
 	document = frappe.new_doc("AI Document")
 	document.update(
@@ -937,6 +1001,11 @@ def ingest_text(
 			"status": "Draft",
 		}
 	)
+	if resolved_folder:
+		document.folder = resolved_folder
+		document.source_folder = resolved_folder
+	if codes := parse_language_codes(language):
+		document.language = ",".join(codes)
 	document.insert()
 	if enqueue_job:
 		enqueue_processing(document.name, requested_by=authority)
@@ -945,8 +1014,96 @@ def ingest_text(
 	return document.name
 
 
-DEFAULT_WAIT_SECONDS = 45.0
+DEFAULT_WAIT_SECONDS = 8.0
 POLL_INTERVAL = 0.4
+MAX_INLINE_CONTEXT_CHARS = 8000
+
+
+def prepare_documents_for_turn(document_names: list[str]) -> tuple[list[str], str]:
+	"""Make uploaded documents usable this turn without a long poll.
+
+	Indexed records stay in the retrieval scope. Documents that already have
+	extracted text — or that can be extracted inline — become extra prompt
+	context so the model can answer immediately instead of waiting for
+	embeddings. A short wait is used only when nothing readable is available.
+	"""
+	names = list(dict.fromkeys(name for name in (document_names or []) if name))
+	if not names:
+		return [], ""
+
+	indexed: list[str] = []
+	excerpts: list[str] = []
+	pending: list[str] = []
+
+	for name in names:
+		doc = frappe.get_doc("AI Document", name)
+		if not frappe.has_permission("AI Document", "read", doc=doc, user=frappe.session.user):
+			raise DocumentSourcePermissionError(
+				_("User {0} cannot read AI Document {1}.").format(frappe.session.user, name)
+			)
+		status = doc.status
+		content = (doc.content or "").strip()
+		title = doc.title or name
+		if status == "Indexed":
+			indexed.append(name)
+			continue
+		if not content and status in {"Draft", "Failed", "Queued"}:
+			try:
+				process_document(name, index=False)
+				content = (frappe.db.get_value("AI Document", name, "content") or "").strip()
+				title = frappe.db.get_value("AI Document", name, "title") or title
+			except Exception:
+				frappe.log_error(
+					title=_("Inline extraction for chat failed: {0}").format(name),
+					message=frappe.get_traceback(),
+				)
+		if content:
+			excerpts.append(_document_excerpt(name, title, content, doc.language))
+		else:
+			pending.append(name)
+
+	if pending:
+		wait_for_indexed(pending, timeout=DEFAULT_WAIT_SECONDS)
+		for name in pending:
+			status = frappe.db.get_value("AI Document", name, "status") or "Unknown"
+			if status == "Indexed":
+				indexed.append(name)
+				continue
+			content = (frappe.db.get_value("AI Document", name, "content") or "").strip()
+			title = frappe.db.get_value("AI Document", name, "title") or name
+			language = frappe.db.get_value("AI Document", name, "language")
+			if content:
+				excerpts.append(_document_excerpt(name, title, content, language))
+
+	return indexed, "\n\n".join(excerpts)
+
+
+def excerpts_for_documents(document_names: list[str]) -> str:
+	"""Unconditional readable text from attached documents the caller may read.
+
+	Used when retrieval returns nothing (no keyword overlap, embeddings below
+	threshold, or no chunks yet) so attach→ask still sees the file.
+	"""
+	parts: list[str] = []
+	for name in dict.fromkeys(n for n in (document_names or []) if n):
+		if not frappe.db.exists("AI Document", name):
+			continue
+		if not frappe.has_permission("AI Document", "read", doc=name):
+			continue
+		row = frappe.db.get_value("AI Document", name, ["title", "content", "language"], as_dict=True)
+		if row and (row.content or "").strip():
+			parts.append(_document_excerpt(name, row.title or name, row.content, row.language))
+	return "\n\n".join(parts)
+
+
+def _document_excerpt(name: str, title: str, content: str, language: str | None) -> str:
+	code = resolve_document_language(language, content)
+	if code and parse_language_codes(code) != parse_language_codes(language):
+		frappe.db.set_value("AI Document", name, "language", code, update_modified=False)
+	if not code:
+		return f"[{title}]\n{content[:MAX_INLINE_CONTEXT_CHARS]}"
+	names = language_name(code)
+	return f"[{title} | language={names}]\nLanguages in this file: {names}.\n{content[:MAX_INLINE_CONTEXT_CHARS]}"
 
 
 def wait_for_indexed(document_names: list[str], timeout: float | None = None) -> dict[str, str]:

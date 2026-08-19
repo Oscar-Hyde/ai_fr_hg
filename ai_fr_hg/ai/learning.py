@@ -778,6 +778,13 @@ def prepare_memory_context(
 	if not cint(settings.learning_enabled):
 		return {"memory_block": "", "skill_block": "", "memories": [], "skills": []}
 
+	# Existence checks are a single indexed probe each. An empty store must
+	# not pay for loading every memory/skill row on every chat turn.
+	if not frappe.db.exists("AI Memory", {"status": "Active"}) and not frappe.db.exists(
+		"AI Skill", {"enabled": 1}
+	):
+		return {"memory_block": "", "skill_block": "", "memories": [], "skills": []}
+
 	memories, skills = recall(query, agent=agent, user=user)
 	max_chars = cint(max_characters) or cint(settings.max_memory_characters) or 8000
 	memory_block = learning_utils.build_memory_block(memories, max_characters=max_chars)

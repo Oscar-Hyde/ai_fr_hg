@@ -60,8 +60,11 @@ app_include_js = "ai_fr_hg.bundle.js"
 # File is a Frappe core DocType, so its supported list-view extension lives in
 # this app's standard override location.  It augments FileView actions only;
 # it never replaces the native File list/tree/grid presentation.
+doctype_js = {"File": "public/js/file.js"}
 doctype_list_js = {"File": "public/js/file_list.js"}
-# doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
+# AI Document owns its Tree View the same way it owns form and list scripts.
+# Mutations stay in ai.document_tree; this file only configures Tree View.
+doctype_tree_js = {"AI Document": "ai_knowledge/doctype/ai_document/ai_document_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
 
 # Svg Icons
@@ -110,6 +113,7 @@ jinja = {
 
 before_install = "ai_fr_hg.install.before_install"
 after_install = "ai_fr_hg.install.after_install"
+after_migrate = "ai_fr_hg.install.after_migrate"
 
 # Uninstallation
 # ------------
@@ -165,6 +169,8 @@ permission_query_conditions = {
 	"AI Knowledge Base": "ai_fr_hg.utils.permissions.knowledge_base_query",
 	"AI Document": "ai_fr_hg.utils.permissions.document_query",
 	"AI Document Chunk": "ai_fr_hg.utils.permissions.chunk_query",
+	"AI Pattern Entity": "ai_fr_hg.utils.permissions.pattern_entity_query",
+	"AI Translation": "ai_fr_hg.utils.permissions.translation_query",
 	"AI Agent": "ai_fr_hg.utils.permissions.agent_query",
 	"AI Knowledge Candidate": "ai_fr_hg.utils.permissions.candidate_query",
 	"AI Memory": "ai_fr_hg.utils.permissions.memory_query",
@@ -196,9 +202,17 @@ doc_events = {
 		"on_trash": "ai_fr_hg.ai.automation.handle_document_event",
 	},
 	"File": {
+		"before_insert": "ai_fr_hg.utils.file_hooks.before_file_insert",
+		"before_save": "ai_fr_hg.utils.file_hooks.before_file_save",
 		"after_insert": "ai_fr_hg.utils.file_hooks.on_file_upload",
 		"on_update": "ai_fr_hg.utils.file_hooks.on_file_update",
 		"on_trash": "ai_fr_hg.utils.file_hooks.on_file_delete",
+	},
+	# The pattern layer owns its own rows; it never alters the document or the
+	# ingestion pipeline. Frappe runs on_trash hooks before link validation, so
+	# this cascade can never block document deletion.
+	"AI Document": {
+		"on_trash": "ai_fr_hg.ai.patterns.handle_document_trashed",
 	},
 }
 
@@ -218,6 +232,8 @@ scheduler_events = {
 	},
 	"hourly_long": [
 		"ai_fr_hg.tasks.process_pending_documents",
+		# Opt-in high-precision pattern extraction for indexed documents.
+		"ai_fr_hg.tasks.scan_pending_pattern_entities",
 	],
 	"daily_long": [
 		"ai_fr_hg.tasks.sync_models",
@@ -263,7 +279,9 @@ before_tests = "ai_fr_hg.install.before_tests"
 # Ignore links to specified DocTypes when deleting documents
 # -----------------------------------------------------------
 
-# ignore_links_on_delete = ["Communication", "ToDo"]
+# Audit references preserve historical identities and must never become
+# retention constraints on the business/File records they describe.
+ignore_links_on_delete = ["AI Audit Log"]
 
 # Request Events
 # ----------------

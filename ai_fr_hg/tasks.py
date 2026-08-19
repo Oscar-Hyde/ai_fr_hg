@@ -8,61 +8,108 @@ from frappe.utils import add_days, cint, now_datetime, today
 
 
 def health_check() -> None:
-	"""Probe provider availability. Runs on the interval set in settings."""
-	settings = frappe.get_cached_doc("AI Platform Settings")
-	if not settings.platform_enabled or not settings.health_check_enabled:
-		return
+	"""Probe provider availability. Runs on the interval set in settings.
 
-	interval = cint(settings.health_check_interval_minutes) or 15
-	minute = now_datetime().minute
-	# The cron fires every 5 minutes; only act on the configured cadence.
-	if interval > 5 and minute % interval >= 5:
-		return
+	Wraps the provider probe so a slow or failing Ollama does not block the
+	scheduler queue and starve the realtime (socket.io) worker. Returning to
+	Desk triggers a scheduler tick in some bench setups; a stuck health check
+	there would manifest as an xhr poll error.
+	"""
+	try:
+		settings = frappe.get_cached_doc("AI Platform Settings")
+		if not settings.platform_enabled or not settings.health_check_enabled:
+			return
 
-	from ai_fr_hg.ai.monitoring import check_all_providers
+		interval = cint(settings.health_check_interval_minutes) or 15
+		minute = now_datetime().minute
+		# The cron fires every 5 minutes; only act on the configured cadence.
+		if interval > 5 and minute % interval >= 5:
+			return
 
-	check_all_providers()
+		from ai_fr_hg.ai.monitoring import check_all_providers
+
+		check_all_providers()
+	except Exception:
+		try:
+			frappe.log_error(title="AI health_check failed", message=frappe.get_traceback())
+		except Exception:
+			pass
 
 
 def sync_models() -> None:
 	"""Reconcile registered models with what each runtime actually has."""
-	if not frappe.db.get_single_value("AI Platform Settings", "platform_enabled"):
-		return
+	try:
+		if not frappe.db.get_single_value("AI Platform Settings", "platform_enabled"):
+			return
 
-	from ai_fr_hg.ai.monitoring import sync_all_models
+		from ai_fr_hg.ai.monitoring import sync_all_models
 
-	sync_all_models()
+		sync_all_models()
+	except Exception:
+		try:
+			frappe.log_error(title="AI sync_models failed", message=frappe.get_traceback())
+		except Exception:
+			pass
 
 
 def process_pending_documents() -> None:
 	"""Retry documents stuck in Queued, and re-embed stale chunks."""
-	if not frappe.db.get_single_value("AI Platform Settings", "platform_enabled"):
-		return
+	try:
+		if not frappe.db.get_single_value("AI Platform Settings", "platform_enabled"):
+			return
 
-	from ai_fr_hg.ai.ingestion import process_pending_documents as reconcile_documents
+		from ai_fr_hg.ai.ingestion import process_pending_documents as reconcile_documents
 
-	# Authority, retry limits, queue deduplication, and stale-job inspection all
-	# belong to the canonical ingestion service.
-	reconcile_documents()
+		# Authority, retry limits, queue deduplication, and stale-job inspection all
+		# belong to the canonical ingestion service.
+		reconcile_documents()
 
-	# Chunks that were created but never embedded, e.g. the runtime was down.
-	unembedded = frappe.get_all(
-		"AI Document Chunk",
-		filters={"embedding": ["in", ["", None]]},
-		fields=["name"],
-		limit=200,
-	)
-	if unembedded:
-		from ai_fr_hg.ai.knowledge import embed_chunks
-
-		frappe.enqueue(
-			"ai_fr_hg.ai.knowledge.embed_chunks",
-			queue="long",
-			timeout=3600,
-			job_id="ai_backfill_embeddings",
-			deduplicate=True,
-			chunk_names=[row.name for row in unembedded],
+		# Chunks that were created but never embedded, e.g. the runtime was down.
+		unembedded = frappe.get_all(
+			"AI Document Chunk",
+			filters={"embedding": ["in", ["", None]]},
+			fields=["name"],
+			limit=200,
 		)
+		if unembedded:
+			from ai_fr_hg.ai.knowledge import embed_chunks
+
+			frappe.enqueue(
+				"ai_fr_hg.ai.knowledge.embed_chunks",
+				queue="long",
+				timeout=3600,
+				job_id="ai_backfill_embeddings",
+				deduplicate=True,
+				chunk_names=[row.name for row in unembedded],
+			)
+	except Exception:
+		try:
+			frappe.log_error(title="AI process_pending_documents failed", message=frappe.get_traceback())
+		except Exception:
+			pass
+
+
+def scan_pending_pattern_entities() -> None:
+	"""Backfill high-precision pattern entities for indexed documents.
+
+	Strictly opt-in: nothing runs until "Auto Pattern Scan" is enabled in AI
+	Platform Settings. The scan itself only reads already-extracted content
+	and writes the pattern layer's own AI Pattern Entity rows.
+	"""
+	try:
+		if not frappe.db.get_single_value("AI Platform Settings", "platform_enabled"):
+			return
+		if not frappe.db.get_single_value("AI Platform Settings", "auto_scan_patterns"):
+			return
+
+		from ai_fr_hg.ai.patterns import scan_pending_documents
+
+		scan_pending_documents()
+	except Exception:
+		try:
+			frappe.log_error(title="AI scan_pending_pattern_entities failed", message=frappe.get_traceback())
+		except Exception:
+			pass
 
 
 def run_scheduled_pipelines() -> None:
