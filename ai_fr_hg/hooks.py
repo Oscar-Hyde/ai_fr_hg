@@ -113,6 +113,7 @@ jinja = {
 
 before_install = "ai_fr_hg.install.before_install"
 after_install = "ai_fr_hg.install.after_install"
+after_migrate = "ai_fr_hg.install.after_migrate"
 
 # Uninstallation
 # ------------
