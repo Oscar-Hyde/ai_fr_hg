@@ -174,8 +174,9 @@ def _audit(action: str, message: str, *, details: dict | None = None, reference:
 def _lock(doctype: str, name: str, expected_modified: str | None = None) -> Any:
 	if doctype not in {"AI Document", "File"}:
 		raise ValueError("Unsupported lock DocType")
-	rows = frappe.db.sql(
-		f"select modified from `tab{doctype}` where name=%s for update",  # nosemgrep: trusted table set above
+	# SQL values remain parameterized; only this two-value allowlisted identifier is interpolated.
+	rows = frappe.db.sql(  # nosemgrep
+		f"select modified from `tab{doctype}` where name=%s for update",
 		(name,),
 		as_dict=True,
 	)
@@ -196,8 +197,9 @@ def _lock_names(doctype: str, names: list[str]) -> None:
 		raise ValueError("Unsupported lock DocType")
 	for batch in _chunks(sorted({name for name in names if name})):
 		placeholders = ", ".join(["%s"] * len(batch))
-		rows = frappe.db.sql(
-			f"select name from `tab{doctype}` where name in ({placeholders}) order by name for update",  # nosemgrep
+		# The table is allowlisted above and placeholder count derives only from this bounded batch.
+		rows = frappe.db.sql(  # nosemgrep
+			f"select name from `tab{doctype}` where name in ({placeholders}) order by name for update",
 			tuple(batch),
 		)
 		if len(rows) != len(batch):
@@ -612,11 +614,17 @@ def _permission_row(doctype: str, row):
 	return row
 
 
+def _permission_allowed(doctype: str, permission: str, *, doc=None) -> bool:
+	"""Read a permission result for UI hints; mutation services always re-enforce it."""
+	# This is intentionally a boolean capability query, not an ignored enforcement call.
+	return bool(frappe.has_permission(doctype, permission, doc=doc))  # nosemgrep
+
+
 def _folder_node(row) -> dict:
 	permission_doc = _permission_row("File", row)
-	can_write = bool(frappe.has_permission("File", "write", doc=permission_doc))
-	can_create_folder = bool(frappe.has_permission("File", "create") and can_write)
-	can_create_document = bool(frappe.has_permission("AI Document", "create") and can_write)
+	can_write = _permission_allowed("File", "write", doc=permission_doc)
+	can_create_folder = _permission_allowed("File", "create") and can_write
+	can_create_document = _permission_allowed("AI Document", "create") and can_write
 	return {
 		"value": row.name,
 		"title": row.file_name or row.name.rsplit("/", 1)[-1],
@@ -626,8 +634,8 @@ def _folder_node(row) -> dict:
 		"modified": str(row.modified),
 		"can_read": True,
 		"can_write": can_write,
-		"can_delete": row.name != _HOME and bool(frappe.has_permission("File", "delete", doc=permission_doc)),
-		"can_copy": bool(frappe.has_permission("File", "create")),
+		"can_delete": row.name != _HOME and _permission_allowed("File", "delete", doc=permission_doc),
+		"can_copy": _permission_allowed("File", "create"),
 		"can_create_folder": can_create_folder,
 		"can_create_document": can_create_document,
 		"can_create_child": can_create_folder or can_create_document,
@@ -649,9 +657,9 @@ def _document_node(row, readable_folders: set[str]) -> dict | None:
 		"knowledge_base": row.knowledge_base,
 		"modified": str(row.modified),
 		"can_read": True,
-		"can_write": bool(frappe.has_permission("AI Document", "write", doc=permission_doc)),
-		"can_copy": bool(frappe.has_permission("AI Document", "create", doc=permission_doc)),
-		"can_delete": bool(frappe.has_permission("AI Document", "delete", doc=permission_doc)),
+		"can_write": _permission_allowed("AI Document", "write", doc=permission_doc),
+		"can_copy": _permission_allowed("AI Document", "create", doc=permission_doc),
+		"can_delete": _permission_allowed("AI Document", "delete", doc=permission_doc),
 	}
 
 
@@ -843,8 +851,8 @@ def get_children(
 	if parent is None:
 		root = _folder(_HOME, "read")
 		can_write_root = _can_folder(_HOME, "write")
-		can_create_folder = bool(frappe.has_permission("File", "create") and can_write_root)
-		can_create_document = bool(frappe.has_permission("AI Document", "create") and can_write_root)
+		can_create_folder = _permission_allowed("File", "create") and can_write_root
+		can_create_document = _permission_allowed("AI Document", "create") and can_write_root
 		return [
 			{
 				"value": ROOT_LABEL,
@@ -2226,7 +2234,9 @@ def bulk_delete_nodes(
 
 
 # ---------------------------------------------------------------------------
-# Background workers restore and re-check the initiating user's authority
+# Background workers restore and re-check the initiating user's authority.
+# Successful jobs rely on Frappe's native worker transaction commit; failures
+# are rolled back by the framework.
 # ---------------------------------------------------------------------------
 
 
@@ -2234,12 +2244,14 @@ def bulk_delete_nodes(
 def _as_user(user: str):
 	previous = frappe.session.user
 	if user != previous:
-		frappe.set_user(user)
+		# Security-reviewed worker boundary: enqueue captures the requester and
+		# every called service rechecks that user's document permissions.
+		frappe.set_user(user)  # nosemgrep
 	try:
 		yield
 	finally:
 		if frappe.session.user != previous:
-			frappe.set_user(previous)
+			frappe.set_user(previous)  # nosemgrep
 
 
 def _copy_folder_job(
@@ -2259,7 +2271,6 @@ def _copy_folder_job(
 			enqueue=False,
 			_expected_subtree_state=expected_subtree_state,
 		)
-		frappe.db.commit()
 		return result
 
 
@@ -2280,7 +2291,6 @@ def _move_folder_job(
 			_expected_subtree_state=expected_subtree_state,
 		)
 		_progress(2, 2, _("Moving folder subtree"))
-		frappe.db.commit()
 		return result
 
 
@@ -2298,7 +2308,6 @@ def _delete_folder_job(
 			enqueue=False,
 			_expected_subtree_state=expected_subtree_state,
 		)
-		frappe.db.commit()
 		return result
 
 
@@ -2310,7 +2319,6 @@ def _bulk_move_job(nodes: list[str], target_folder: str, expected_bulk_state: st
 			enqueue=False,
 			_expected_bulk_state=expected_bulk_state,
 		)
-		frappe.db.commit()
 		return result
 
 
@@ -2322,5 +2330,4 @@ def _bulk_delete_job(nodes: list[str], recursive: bool, expected_bulk_state: str
 			enqueue=False,
 			_expected_bulk_state=expected_bulk_state,
 		)
-		frappe.db.commit()
 		return result

@@ -4,65 +4,60 @@
 from __future__ import annotations
 
 import frappe
+from frappe import _
+from frappe.utils import cint
 
 
 def execute(filters: dict | None = None) -> tuple[list, list]:
 	"""Memory Usage report showing how approved memories are performing."""
 	filters = filters or {}
-
-	conditions = []
-	if filters.get("memory_type"):
-		conditions.append(f"m.memory_type = {frappe.db.escape(filters['memory_type'])}")
-	if filters.get("status"):
-		conditions.append(f"m.status = {frappe.db.escape(filters['status'])}")
-	if filters.get("scope"):
-		conditions.append(f"m.scope = {frappe.db.escape(filters['scope'])}")
-	if filters.get("min_usage") is not None:
-		conditions.append(f"coalesce(m.usage_count, 0) >= {frappe.db.escape(str(filters['min_usage']))}")
-
-	where = " AND ".join(conditions) if conditions else "1=1"
-
-	data = frappe.db.sql(
-		f"""
-		SELECT
-			m.name AS "Memory ID",
-			m.content AS "Content",
-			m.memory_type AS "Type",
-			m.scope AS "Scope",
-			m.scope_value AS "Scope Value",
-			m.status AS "Status",
-			m.usage_count AS "Used",
-			m.helpful_count AS "Helpful",
-			m.not_helpful_count AS "Not Helpful",
-			m.confidence AS "Confidence",
-			m.embedding_dimensions AS "Embed Dims",
-			m.embedding_model AS "Embed Model",
-			m.last_used_on AS "Last Used",
-			m.creation AS "Created"
-		FROM
-			`tabAI Memory` m
-		WHERE {where}
-		ORDER BY m.usage_count DESC, m.last_used_on DESC NULLS LAST
-		LIMIT 500
-		""",
-		as_dict=True,
+	memory = frappe.qb.DocType("AI Memory")
+	query = (
+		frappe.qb.from_(memory)
+		.select(
+			memory.name.as_("Memory ID"),
+			memory.content.as_("Content"),
+			memory.memory_type.as_("Type"),
+			memory.scope.as_("Scope"),
+			memory.scope_value.as_("Scope Value"),
+			memory.status.as_("Status"),
+			memory.usage_count.as_("Used"),
+			memory.helpful_count.as_("Helpful"),
+			memory.not_helpful_count.as_("Not Helpful"),
+			memory.confidence.as_("Confidence"),
+			memory.embedding_dimensions.as_("Embed Dims"),
+			memory.embedding_model.as_("Embed Model"),
+			memory.last_used_on.as_("Last Used"),
+			memory.creation.as_("Created"),
+		)
+		.orderby(memory.usage_count, order=frappe.qb.desc)
+		.orderby(memory.last_used_on, order=frappe.qb.desc)
+		.limit(500)
 	)
+	if filters.get("memory_type"):
+		query = query.where(memory.memory_type == filters["memory_type"])
+	if filters.get("status"):
+		query = query.where(memory.status == filters["status"])
+	if filters.get("scope"):
+		query = query.where(memory.scope == filters["scope"])
+	if filters.get("min_usage") is not None:
+		query = query.where(memory.usage_count >= max(0, cint(filters["min_usage"])))
 
 	columns = [
-		{"fieldname": "Memory ID", "fieldtype": "Data", "label": "Memory ID", "width": 140},
-		{"fieldname": "Content", "fieldtype": "Long Text", "label": "Content", "width": 300},
-		{"fieldname": "Type", "fieldtype": "Data", "label": "Type", "width": 100},
-		{"fieldname": "Scope", "fieldtype": "Data", "label": "Scope", "width": 80},
-		{"fieldname": "Scope Value", "fieldtype": "Data", "label": "Scope Value", "width": 120},
-		{"fieldname": "Status", "fieldtype": "Data", "label": "Status", "width": 70},
-		{"fieldname": "Used", "fieldtype": "Int", "label": "Used", "width": 60},
-		{"fieldname": "Helpful", "fieldtype": "Int", "label": "Helpful", "width": 60},
-		{"fieldname": "Not Helpful", "fieldtype": "Int", "label": "Not Helpful", "width": 70},
-		{"fieldname": "Confidence", "fieldtype": "Percent", "label": "Confidence", "width": 70},
-		{"fieldname": "Embed Dims", "fieldtype": "Int", "label": "Embed Dims", "width": 70},
-		{"fieldname": "Embed Model", "fieldtype": "Data", "label": "Embed Model", "width": 120},
-		{"fieldname": "Last Used", "fieldtype": "Datetime", "label": "Last Used", "width": 150},
-		{"fieldname": "Created", "fieldtype": "Datetime", "label": "Created", "width": 150},
+		{"fieldname": "Memory ID", "fieldtype": "Data", "label": _("Memory ID"), "width": 140},
+		{"fieldname": "Content", "fieldtype": "Long Text", "label": _("Content"), "width": 300},
+		{"fieldname": "Type", "fieldtype": "Data", "label": _("Type"), "width": 100},
+		{"fieldname": "Scope", "fieldtype": "Data", "label": _("Scope"), "width": 80},
+		{"fieldname": "Scope Value", "fieldtype": "Data", "label": _("Scope Value"), "width": 120},
+		{"fieldname": "Status", "fieldtype": "Data", "label": _("Status"), "width": 70},
+		{"fieldname": "Used", "fieldtype": "Int", "label": _("Used"), "width": 60},
+		{"fieldname": "Helpful", "fieldtype": "Int", "label": _("Helpful"), "width": 60},
+		{"fieldname": "Not Helpful", "fieldtype": "Int", "label": _("Not Helpful"), "width": 70},
+		{"fieldname": "Confidence", "fieldtype": "Percent", "label": _("Confidence"), "width": 70},
+		{"fieldname": "Embed Dims", "fieldtype": "Int", "label": _("Embed Dims"), "width": 70},
+		{"fieldname": "Embed Model", "fieldtype": "Data", "label": _("Embed Model"), "width": 120},
+		{"fieldname": "Last Used", "fieldtype": "Datetime", "label": _("Last Used"), "width": 150},
+		{"fieldname": "Created", "fieldtype": "Datetime", "label": _("Created"), "width": 150},
 	]
 
-	return columns, data
+	return columns, query.run(as_dict=True)

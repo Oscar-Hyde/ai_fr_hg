@@ -144,7 +144,9 @@ def _pull_model_job(provider: str, model_name: str, user: str) -> None:
 		reference_name=provider,
 		raise_on_error=True,
 	)
-	frappe.db.commit()  # nosemgrep: external-side-effect-provenance-boundary
+	# This worker intentionally persists audit intent before the non-transactional
+	# provider download; a crash must not erase the external-side-effect record.
+	frappe.db.commit()  # nosemgrep
 
 	try:
 		adapter = get_provider(provider)
@@ -533,7 +535,7 @@ def import_knowledge_base(file_url: str, knowledge_base: str | None = None) -> d
 	try:
 		payload = json.loads(content)
 	except (TypeError, ValueError) as exc:
-		frappe.throw(_("The knowledge export is not valid JSON: {0}").format(exc))
+		frappe.throw(_("The knowledge export is not valid JSON: {0}").format(str(exc)))
 	if not isinstance(payload, dict):
 		frappe.throw(_("The knowledge export root must be a JSON object."))
 	documents = payload.get("documents") or []

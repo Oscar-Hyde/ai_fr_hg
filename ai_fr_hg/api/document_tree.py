@@ -12,21 +12,22 @@ from __future__ import annotations
 import json
 
 import frappe
+from frappe import _
 from frappe.utils import cint
 
 from ai_fr_hg.ai import document_tree as service
 
 
-def _list(value) -> list[str]:
+def _list(value: str | list[str]) -> list[str]:
 	if isinstance(value, str):
 		try:
 			value = json.loads(value)
 		except (TypeError, ValueError):
-			frappe.throw("nodes must be a valid JSON array", frappe.ValidationError)
+			frappe.throw(_("nodes must be a valid JSON array"), frappe.ValidationError)
 	if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
-		frappe.throw("nodes must be an array of tree node identifiers", frappe.ValidationError)
+		frappe.throw(_("nodes must be an array of tree node identifiers"), frappe.ValidationError)
 	if len(value) > 500:
-		frappe.throw("A bulk request cannot contain more than 500 selected nodes", frappe.ValidationError)
+		frappe.throw(_("A bulk request cannot contain more than 500 selected nodes"), frappe.ValidationError)
 	return value
 
 
@@ -97,7 +98,7 @@ def delete_node(
 
 
 @frappe.whitelist()
-def bulk_move_nodes(nodes, target_folder: str, enqueue: bool | str | None = None):
+def bulk_move_nodes(nodes: str | list[str], target_folder: str, enqueue: bool | str | None = None):
 	return service.bulk_move_nodes(
 		_list(nodes),
 		target_folder,
@@ -106,7 +107,9 @@ def bulk_move_nodes(nodes, target_folder: str, enqueue: bool | str | None = None
 
 
 @frappe.whitelist()
-def bulk_delete_nodes(nodes, recursive: bool | str = False, enqueue: bool | str | None = None):
+def bulk_delete_nodes(
+	nodes: str | list[str], recursive: bool | str = False, enqueue: bool | str | None = None
+):
 	return service.bulk_delete_nodes(
 		_list(nodes),
 		recursive=bool(cint(recursive)),

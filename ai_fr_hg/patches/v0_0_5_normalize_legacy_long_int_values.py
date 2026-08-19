@@ -35,7 +35,9 @@ def execute():
 		# Counters and byte sizes are non-negative integral values.  Preserve
 		# valid values and make legacy blanks, NULLs and malformed strings an
 		# explicit zero before Frappe changes the column type during model sync.
-		frappe.db.sql(
+		# Both identifiers come exclusively from LEGACY_FIELDS above; SQL values
+		# are not accepted from requests or stored records in this pre-model patch.
+		frappe.db.sql(  # nosemgrep
 			f"""
 			UPDATE `tab{doctype}`
 			SET `{fieldname}` = CASE

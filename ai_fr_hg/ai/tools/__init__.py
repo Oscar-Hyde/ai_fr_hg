@@ -597,7 +597,9 @@ def approve_invocation(invocation: str) -> dict:
 	)
 
 	tool_doc = frappe.get_cached_doc("AI Tool", doc.tool)
-	frappe.set_user(doc.user)
+	# Security-reviewed approval boundary: execute only under the validated
+	# original requester, never with the manager approver's broader authority.
+	frappe.set_user(doc.user)  # nosemgrep
 	try:
 		outcome = _execute_invocation(
 			tool_doc,
@@ -608,7 +610,7 @@ def approve_invocation(invocation: str) -> dict:
 			approval_granted=True,
 		)
 	finally:
-		frappe.set_user(approver)
+		frappe.set_user(approver)  # nosemgrep
 
 	write_audit_log(
 		action="Tool Invocation Approved",

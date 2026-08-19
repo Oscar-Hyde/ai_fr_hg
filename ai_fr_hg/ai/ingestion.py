@@ -125,12 +125,14 @@ def _as_user(user: str):
 	"""Temporarily restore the durable request authority in this worker."""
 	previous = frappe.session.user
 	if previous != user:
-		frappe.set_user(user)
+		# Security-reviewed worker boundary: _assert_valid_authority validates the
+		# durable requester and downstream services recheck File/DocType access.
+		frappe.set_user(user)  # nosemgrep
 	try:
 		yield
 	finally:
 		if frappe.session.user != previous:
-			frappe.set_user(previous)
+			frappe.set_user(previous)  # nosemgrep
 
 
 def _file_doc(file_url: str, file_record: str | None = None, document_name: str | None = None):

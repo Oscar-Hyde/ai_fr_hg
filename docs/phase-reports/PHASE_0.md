@@ -32,7 +32,7 @@ Observed external state on 2026-08-19:
 
 | ID | Finding | Current State | Required State | Files | Tests | Migration | Frontend | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| P0-01 / OPS-01 | CI execution | Server is not pinned to v17 and hosted jobs stop before steps; lint has inconsistent event/job conditions. | Pin the audited Frappe v17 revision; run Server, Linter, frontend static, and dependency checks on PR/push/manual events; obtain green hosted runs. | `.github/workflows/*.yml` | Workflow contract checks plus hosted runs | None | Static JavaScript parse gate | BLOCKED — GitHub billing and App workflow permission |
+| P0-01 / OPS-01 | CI execution | Server is not pinned to v17 and hosted jobs stop before steps; lint has inconsistent event/job conditions. | Pin the audited Frappe v17 revision; run Server, Linter, frontend static, and dependency checks on PR/push/manual events; obtain green hosted runs. | `.github/workflows/*.yml` | Workflow contract checks plus hosted runs | None | Static JavaScript parse gate | BLOCKED — final CI fixes cannot be pushed by GitHub App |
 | P0-02 / OPS-01 | Branch protection | `main` is unprotected. | Require all Phase 0 checks and pull requests before merge. | GitHub repository settings; documented policy | GitHub API verification | None | N/A | BLOCKED — repository owner/plan |
 | P0-03 / SEC-05 | Encryption claim | A visible setting implies stored-text encryption although no encryption exists. | Preserve schema compatibility but disable and hide the setting; state plainly that application-level document encryption is unsupported. | Platform Settings schema/controller, docs | Metadata and controller regression | Idempotently normalize dormant setting to `0` | Setting absent from Desk | COMPLETE — local evidence |
 | P0-04 / ING-01 | Folder ingestion claim | `Folder` is selectable but ingestion rejects it. | Remove it from selectable source types and reject new Folder-source records clearly; retain native Frappe File folders as the only folder authority. | AI Document schema/controller, docs | Metadata and validation regression | Preserve legacy rows without destructive conversion | Option absent from form | COMPLETE — local evidence |
@@ -134,7 +134,7 @@ The model-version exposure portion of PROV-03 is hidden, but PROV-03 remains ope
 The list below is exact for this Phase 0 working tree. The broad Python/JavaScript set includes deterministic Ruff/Prettier baseline normalization required to make the configured linter gate pass; functional Phase 0 changes are concentrated in workflows, metadata/controllers/readers/model discovery, tests, patch registration, and documentation.
 
 <details>
-<summary>111 files</summary>
+<summary>115 files</summary>
 
 - `.github/workflows/ci.yml`
 - `.github/workflows/linter.yml`
@@ -152,6 +152,7 @@ The list below is exact for this Phase 0 working tree. The broad Python/JavaScri
 - `ai_fr_hg/ai/readers/office.py`
 - `ai_fr_hg/ai/settings.py`
 - `ai_fr_hg/ai/tools/__init__.py`
+- `ai_fr_hg/ai/translation.py`
 - `ai_fr_hg/ai_automation/doctype/ai_pipeline/test_ai_pipeline.py`
 - `ai_fr_hg/ai_automation/doctype/ai_pipeline_run/ai_pipeline_run.js`
 - `ai_fr_hg/ai_automation/doctype/ai_pipeline_run/ai_pipeline_run.py`
@@ -193,6 +194,7 @@ The list below is exact for this Phase 0 working tree. The broad Python/JavaScri
 - `ai_fr_hg/ai_knowledge/doctype/ai_translation/ai_translation.js`
 - `ai_fr_hg/ai_knowledge/doctype/ai_translation/ai_translation.json`
 - `ai_fr_hg/ai_knowledge/doctype/ai_translation/ai_translation_list.js`
+- `ai_fr_hg/ai_knowledge/doctype/ai_translation/test_ai_translation.py`
 - `ai_fr_hg/ai_knowledge/page/knowledge_explorer/knowledge_explorer.js`
 - `ai_fr_hg/ai_learning/doctype/ai_knowledge_candidate/ai_knowledge_candidate.py`
 - `ai_fr_hg/ai_learning/doctype/ai_knowledge_candidate/ai_knowledge_candidate_list.js`
@@ -214,6 +216,7 @@ The list below is exact for this Phase 0 working tree. The broad Python/JavaScri
 - `ai_fr_hg/ai_operations/page/ai_model_manager/ai_model_manager.js`
 - `ai_fr_hg/api/admin.py`
 - `ai_fr_hg/api/chat.py`
+- `ai_fr_hg/api/document_tree.py`
 - `ai_fr_hg/api/folders.py`
 - `ai_fr_hg/api/knowledge.py`
 - `ai_fr_hg/hooks.py`
@@ -222,6 +225,7 @@ The list below is exact for this Phase 0 working tree. The broad Python/JavaScri
 - `ai_fr_hg/patches/v0_0_14_disable_unsupported_controls.py`
 - `ai_fr_hg/patches/v0_0_3_fix_learning_doctype_modules.py`
 - `ai_fr_hg/patches/v0_0_4_folder_organization.py`
+- `ai_fr_hg/patches/v0_0_5_normalize_legacy_long_int_values.py`
 - `ai_fr_hg/patches/v0_0_9_ai_document_tree_organization.py`
 - `ai_fr_hg/public/js/ai_helpers.js`
 - `ai_fr_hg/public/js/desk_guard.js`
@@ -256,6 +260,8 @@ The list below is exact for this Phase 0 working tree. The broad Python/JavaScri
 - Unsupported-value enforcement lives in the owning DocType controllers.
 - Runtime model discovery remains in the monitoring service and now refuses to create a role the engine cannot execute.
 - Reader support remains in the canonical reader registry.
+- Learning reports use Frappe Query Builder with parameterized conditions instead of interpolated report SQL.
+- Background document-tree jobs rely on Frappe's native worker transaction commit/rollback rather than manual commits.
 - Frappe File remains the sole physical folder tree authority.
 - Accepted boundaries and evaluated Frappe alternatives are recorded in `ARCHITECTURE_DECISIONS.md`.
 - No duplicate encryption, folder, version, reranker, migration, or CI framework was introduced.
@@ -275,7 +281,9 @@ The list below is exact for this Phase 0 working tree. The broad Python/JavaScri
 - Migration removes stale false encryption state without altering document content.
 - Unsupported Folder and Reranker values are rejected by backend controllers, independent of the UI.
 - Workflow token permissions are read-only.
-- Semgrep uses `--no-suppress-errors`; a missing/failed ruleset cannot silently pass.
+- Semgrep uses `--no-suppress-errors`; a missing/failed ruleset cannot silently pass. Tool and Frappe-rule revisions are immutable.
+- All 76 Frappe Semgrep findings from the first executing hosted run were dispositioned: reports now use Query Builder/translated labels, RPC arguments and messages are typed/translated, worker transactions use Frappe ownership, and narrowly annotated calls document manually reviewed dynamic identifiers, capability probes, external-effect commits, and requester-authority boundaries.
+- Translation execution now validates its durable requester, checks write permission after restoring that requester, and restores the previous worker identity even after provider failure.
 - Dependency collection uses strict mode and audits installed optional extras in the Python 3.14 job.
 - Phase 1 isolation, generic tool permissions, transport hardening, telemetry redaction, and File authorization findings remain open; Phase 0 does not claim those security boundaries are fixed.
 
@@ -310,6 +318,8 @@ Commands and results executed in this workspace:
 - `find ai_fr_hg -type f -name '*.js' ... node --check` — **PASS, 52 production JavaScript files**.
 - `npx --yes yaml-lint .github/workflows/ci.yml .github/workflows/linter.yml` — **PASS**.
 - `.venv/bin/pip-audit --strict --desc on .` — **PASS, no known vulnerabilities in the locally resolved base project**. The workflow additionally installs/audits all optional extras on Python 3.14.
+- `.venv/bin/semgrep scan --config /tmp/frappe-semgrep-rules/rules --error --metrics=off` — **PASS, 49 rules over 321 tracked targets, zero findings** after correcting the initial 76 findings.
+- The additional registry ruleset `r/python.lang.correctness` remains locally unavailable because `semgrep.dev` closes TLS; strict error behavior was separately verified and hosted execution is required.
 - `git diff --check` — **PASS**.
 - Audit/register comparison — **PASS, 79 unique audit IDs and 79 unique registered IDs**.
 
@@ -322,15 +332,17 @@ Additional checks attempted:
 
 ### Hosted execution
 
-- Pull request [#30](https://github.com/Oscar-Hyde/ai_fr_hg/pull/30) was opened from the session branch at `79df64fcfe1ee2255ab16c41fce92c0a2257e38e`.
-- Push runs: CI `32282855642`; Quality `32282855696`.
-- Pull-request runs: CI `32282871069`; Quality `32282871059`.
-- All four named PR checks (`Server`, `Linter`, `Frontend static`, and `Dependency audit`) failed before executing any step. Each check has one GitHub annotation: “The job was not started because recent account payments have failed or your spending limit needs to be increased. Please check the 'Billing & plans' section in your settings”.
-- These runs prove event/status wiring but provide no application, migration, lint, dependency, or runtime evidence.
+- Pull request [#30](https://github.com/Oscar-Hyde/ai_fr_hg/pull/30) is open from the session branch.
+- The earlier zero-step billing failures are retained as historical evidence, but billing is now operational: push runs CI `32285843903` and Quality `32285843900` executed real steps at `cfb9a90aa3a1d9f3fe42d759bcf6d3978d2ff0b1`.
+- `Frontend static` — **PASS** in 7 seconds, including JavaScript parsing and 13 Phase 0 contracts.
+- `Dependency audit` — **PASS** in 20 seconds for the then-remote base-project audit.
+- `Linter` — **FAIL** after pre-commit passed; Frappe Semgrep reported 76 blocking findings. Those findings are now locally reduced to zero, but the correcting workflow/code commit has not run remotely.
+- `Server` — **FAIL** during pinned-bench initialization after Python, Node, MariaDB, Redis, and system setup succeeded. Bench names the cloned Frappe remote `upstream`; the workflow incorrectly fetched the immutable SHA from nonexistent remote `origin`. The local correction uses `upstream` and has not run remotely.
+- GitHub still rejects the final commit because `arena-ai-coding-agent[bot]` lacks workflow-file permission.
 
 ### Runtime verification
 
-No current code was executed on a real Frappe v17 bench in this sandbox. The historical pre-Phase-0 evidence is 392 passed/1 skipped, but it does not cover this patchset and is not counted as completion evidence. The CI workflow is prepared to install, migrate, build, verify Frappe version, and run the app suite when GitHub Actions can start jobs.
+The hosted runner successfully started MariaDB 11.8/Redis services and configured Python 3.14/Node 24, but the remote-name defect stopped initialization before app install, migration, or tests. Therefore no current application code has yet executed on a real Frappe v17 bench. The historical pre-Phase-0 evidence is 392 passed/1 skipped, but it does not cover this patchset and is not counted as completion evidence.
 
 ### Mandatory phase review
 
@@ -367,8 +379,8 @@ No current code was executed on a real Frappe v17 bench in this sandbox. The his
 
 ### Remaining issues
 
-1. GitHub billing/spending remains unresolved: PR #30 created all four required checks, but every job failed with zero steps.
-2. The connected `arena-ai-coding-agent[bot]` still lacks workflow-file permission, so the final Semgrep/dependency-audit hardening commit cannot be pushed.
+1. The connected `arena-ai-coding-agent[bot]` still lacks workflow-file permission, so the final CI/code corrections cannot be pushed.
+2. The corrected Semgrep and Server jobs have not executed remotely; all four required checks must pass on the final SHA.
 3. `main` is unprotected. The repository owner selected “Keep private and blocked,” so the current plan restriction is intentionally unresolved; the Arena integration also lacks branch-administration permission.
 4. No current real-bench install/migrate/test result exists for this patchset.
 5. No real Desk/browser verification exists for the metadata changes.

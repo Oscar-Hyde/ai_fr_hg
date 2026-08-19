@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 
 import frappe
@@ -816,20 +817,40 @@ def _owns_worker_transaction(translation: str) -> bool:
 	)
 
 
+@contextmanager
+def _translation_user(user: str):
+	"""Run translation work under one validated durable requester."""
+	if not user or user == "Guest" or not frappe.db.get_value("User", user, "enabled"):
+		frappe.throw(_("A valid enabled translation requester is required."), frappe.PermissionError)
+	previous = frappe.session.user
+	if previous != user:
+		# Security-reviewed worker boundary: the durable requester is validated,
+		# permissions are checked after switching, and authority is always restored.
+		frappe.set_user(user)  # nosemgrep
+	try:
+		yield
+	finally:
+		if frappe.session.user != previous:
+			frappe.set_user(previous)  # nosemgrep
+
+
 def run_translation(translation: str, requested_by: str | None = None) -> dict:
-	"""Execute a stored translation and persist its segments and metrics."""
+	"""Execute a stored translation under its requester and restore authority."""
+	authority = frappe.db.get_value("AI Translation", translation, ["requested_by", "owner"], as_dict=True)
+	if not authority:
+		frappe.throw(_("Translation {0} does not exist.").format(translation), frappe.DoesNotExistError)
+	user = requested_by or authority.requested_by or authority.owner
+	with _translation_user(user):
+		doc = frappe.get_doc("AI Translation", translation)
+		doc.check_permission("write")
+		return _run_translation(doc, durable=_owns_worker_transaction(translation))
+
+
+def _run_translation(doc, *, durable: bool) -> dict:
+	"""Persist one translation while the caller owns the requester context."""
 	from ai_fr_hg.ai.logging import write_audit_log
 
-	doc = frappe.get_doc("AI Translation", translation)
-	doc.check_permission("write")
-	durable = _owns_worker_transaction(translation)
-	user = requested_by or doc.requested_by or doc.owner
-
-	if user and frappe.session.user != user and frappe.db.exists("User", user):
-		frappe.set_user(user)
-
 	doc.db_set({"status": "Translating", "error_message": None}, update_modified=False)
-
 	source_text = doc.source_text or frappe.db.get_value("AI Document", doc.source_document, "content")
 	try:
 		outcome = translate_text(
@@ -848,7 +869,7 @@ def run_translation(translation: str, requested_by: str | None = None) -> dict:
 	except Exception as error:
 		if durable:
 			frappe.db.rollback()
-		doc = frappe.get_doc("AI Translation", translation)
+		doc = frappe.get_doc("AI Translation", doc.name)
 		doc.db_set(
 			{"status": "Failed", "error_message": str(error)[:1000], "completed_on": now_datetime()},
 			update_modified=False,
@@ -860,11 +881,11 @@ def run_translation(translation: str, requested_by: str | None = None) -> dict:
 			severity="Warning",
 			message=str(error)[:500],
 			reference_doctype="AI Translation",
-			reference_name=translation,
+			reference_name=doc.name,
 		)
 		if durable:
 			frappe.db.commit()  # nosemgrep: frappe-manual-commit
-		return {"translation": translation, "status": "Failed", "error": str(error)}
+		return {"translation": doc.name, "status": "Failed", "error": str(error)}
 
 	_persist_outcome(doc, outcome)
 

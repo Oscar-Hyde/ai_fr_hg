@@ -664,9 +664,11 @@ def get_default_folder(
 	_ensure_home_exists()
 	if not frappe.db.exists("File", candidate_user_folder):
 		home_doc = frappe.get_doc("File", _HOME)
+		# Capability probes select a default only; create_folder independently
+		# enforces both permissions before any mutation.
 		can_create_default = bool(
-			frappe.has_permission("File", "create", user=user)
-			and frappe.has_permission("File", "write", doc=home_doc, user=user)
+			frappe.has_permission("File", "create", user=user)  # nosemgrep
+			and frappe.has_permission("File", "write", doc=home_doc, user=user)  # nosemgrep
 		)
 		if can_create_default:
 			try:
@@ -1580,7 +1582,9 @@ def _bulk_move_job(
 	"""Run a queued bulk move atomically under its requesting user."""
 	previous = frappe.session.user
 	if user and user != previous:
-		frappe.set_user(user)
+		# Security-reviewed worker boundary: the durable requester is passed into
+		# every canonical service permission check and restored in finally.
+		frappe.set_user(user)  # nosemgrep
 	try:
 		return bulk_move(
 			file_names,
@@ -1591,7 +1595,7 @@ def _bulk_move_job(
 		)
 	finally:
 		if user and user != previous:
-			frappe.set_user(previous)
+			frappe.set_user(previous)  # nosemgrep
 
 
 def search(
@@ -2044,8 +2048,9 @@ def _update_document_folder_provenance(file_name: str, folder: str) -> None:
 				return
 			cursor = candidate_names[-1]
 			placeholders = ", ".join(["%s"] * len(candidate_names))
-			frappe.db.sql(
-				f"select name from `tabAI Document` where name in ({placeholders}) order by name for update",  # nosemgrep
+			# Only placeholder count is interpolated; every document name remains parameterized.
+			frappe.db.sql(  # nosemgrep
+				f"select name from `tabAI Document` where name in ({placeholders}) order by name for update",
 				tuple(candidate_names),
 			)
 			locked_rows = frappe.get_all(

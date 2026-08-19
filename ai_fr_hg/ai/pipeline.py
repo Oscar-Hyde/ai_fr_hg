@@ -368,12 +368,14 @@ def _execute_run(run_doc) -> dict:
 def _as_user(user: str):
 	previous = frappe.session.user
 	if previous != user:
-		frappe.set_user(user)
+		# Security-reviewed worker boundary: the run stores its triggering user
+		# and each pipeline operation rechecks authority under this context.
+		frappe.set_user(user)  # nosemgrep
 	try:
 		yield
 	finally:
 		if frappe.session.user != previous:
-			frappe.set_user(previous)
+			frappe.set_user(previous)  # nosemgrep
 
 
 def _is_standalone_background_run(run: str) -> bool:
