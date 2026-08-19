@@ -68,7 +68,7 @@ ai_fr_hg/
 ├── ai_learning/             Module: knowledge candidates, memories, skills
 │
 ├── utils/                   network guard, permissions, jinja, file hooks
-├── public/                  Desk assets (SCSS bundles, form scripts)
+├── public/                  Desk SCSS bundles and File DocType extensions
 ├── tests/                   Unit and integration suites
 ├── install.py               Roles, defaults, seed records
 ├── tasks.py                 Scheduled jobs

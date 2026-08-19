@@ -62,9 +62,9 @@ app_include_js = "ai_fr_hg.bundle.js"
 # it never replaces the native File list/tree/grid presentation.
 doctype_js = {"File": "public/js/file.js"}
 doctype_list_js = {"File": "public/js/file_list.js"}
-# AI Document remains a normal processing record. Its native Tree View projects
-# canonical File folders and AI Documents through a permission-aware lazy API.
-doctype_tree_js = {"AI Document": "public/js/ai_document_tree.js"}
+# AI Document owns its Tree View the same way it owns form and list scripts.
+# Mutations stay in ai.document_tree; this file only configures Tree View.
+doctype_tree_js = {"AI Document": "ai_knowledge/doctype/ai_document/ai_document_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
 
 # Svg Icons

@@ -2,6 +2,10 @@
 // For license information, please see license.txt
 
 /**
+ * AI Document form. Tree View lives in `ai_document_tree.js` on this DocType;
+ * list actions live in `ai_document_list.js`. Folder mutations go through
+ * `ai_fr_hg.api.document_tree` so the form never writes provenance itself.
+ *
  * App bundles can be refreshed independently from a DocType script.  Do not
  * let that normal asset-loading window turn a native form/list action into an
  * uncaught JavaScript error.

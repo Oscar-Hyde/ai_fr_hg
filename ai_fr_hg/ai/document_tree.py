@@ -10,8 +10,9 @@ The tree is a mixed projection of two existing authoritative models:
 * ``AI Document.folder`` places stable document identities at a location.
 
 This is intentionally not a parallel browser, folder table, or hand-maintained
-Nested Set.  Frappe's native Tree View owns rendering and lazy expansion while
-this service owns permission-filtered reads and transactional mutations.  The
+Nested Set.  Frappe's native Tree View owns rendering and lazy expansion
+(``ai_knowledge/doctype/ai_document/ai_document_tree.js``) while this service
+owns permission-filtered reads and transactional mutations.  The
 underlying File DocType remains authoritative for uploads and physical files;
 AI Document processing, chunks, retrieval, and deletion hooks remain unchanged.
 """
