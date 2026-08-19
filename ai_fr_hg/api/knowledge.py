@@ -343,10 +343,12 @@ def get_pattern_entities(document: str, entity_type: str | None = None, limit: i
 		limit_page_length=max(1, cint(limit) or 200),
 	)
 
+	# Aggregates must use the dict form: SQL function strings are rejected by
+	# the query engine's field validation.
 	counts = frappe.get_all(
 		"AI Pattern Entity",
 		filters={"document": document},
-		fields=["entity_type", "count(name) as total"],
+		fields=["entity_type", {"COUNT": "*", "as": "total"}],
 		group_by="entity_type",
 		order_by="total desc",
 	)

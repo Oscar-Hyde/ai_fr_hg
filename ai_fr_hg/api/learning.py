@@ -139,7 +139,8 @@ def _visible_count(doctype: str, filters: dict | None = None) -> int:
 	rows = frappe.get_list(
 		doctype,
 		filters=filters or {},
-		fields=["count(name) as total"],
+		# Dict form: SQL function strings fail the engine's field validation.
+		fields=[{"COUNT": "*", "as": "total"}],
 		limit_page_length=1,
 	)
 	return cint(rows[0].total) if rows else 0

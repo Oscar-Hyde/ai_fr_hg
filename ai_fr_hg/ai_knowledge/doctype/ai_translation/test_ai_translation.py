@@ -163,7 +163,10 @@ class TestQualityGate(TranslationTestCase):
 		"""A retry may only replace the first attempt when it is actually better."""
 		from ai_fr_hg.ai.translation import run_translation
 
-		source = "The contractor shall deliver the works on time."
+		# The source must be unique across the whole suite: an identical clause
+		# translated earlier on the same knowledge base is served straight from
+		# translation memory and the model is never called at all.
+		source = "The supplier shall invoice the client after each delivery."
 		state = {"attempts": 0}
 
 		def flagged_then_empty(system, user, target):
@@ -180,7 +183,7 @@ class TestQualityGate(TranslationTestCase):
 
 		translation.reload()
 		self.assertEqual(mock.call_count, 2)
-		self.assertIn("contractor", translation.translated_text)
+		self.assertIn("supplier", translation.translated_text)
 		self.assertEqual(translation.status, "Needs Review")
 
 
@@ -296,7 +299,11 @@ class TestTranslationRecord(TranslationTestCase):
 	def test_a_document_without_text_cannot_be_translated(self):
 		from ai_fr_hg.ai.translation import create_translation
 
-		document = self.make_document("Empty", "")
+		# A text document cannot be *created* without content, so the state this
+		# guard protects is the post-extraction one (an empty file read, or text
+		# cleared later). Simulate that state directly.
+		document = self.make_document("Empty", "Original text.\n")
+		document.db_set("content", "")
 		self.assertRaises(frappe.ValidationError, create_translation, document.name, "ar")
 
 	def test_a_single_segment_can_be_retranslated_with_an_instruction(self):
