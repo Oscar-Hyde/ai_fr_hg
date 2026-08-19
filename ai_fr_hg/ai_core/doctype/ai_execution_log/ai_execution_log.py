@@ -30,6 +30,7 @@ class AIExecutionLog(Document):
 			"Classify",
 			"Extract",
 			"Compare",
+			"Translate",
 			"Rerank",
 			"Tool Call",
 			"Health Check",

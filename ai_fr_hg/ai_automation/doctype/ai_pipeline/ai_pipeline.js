@@ -55,6 +55,8 @@ frappe.ui.form.on("AI Pipeline Step", {
 			Summarize: '{\n  "max_words": 200,\n  "instructions": ""\n}',
 			Chunk: '{\n  "chunk_size": 1200,\n  "chunk_overlap": 150\n}',
 			Compare: '{\n  "document_a": "document_a",\n  "document_b": "document_b"\n}',
+			Translate:
+				'{\n  "target_language": "ar",\n  "tone": "Neutral",\n  "return": "text"\n}',
 			Tool: '{\n  "arguments": {}\n}',
 		};
 		if (templates[row.step_type] && !row.config) {

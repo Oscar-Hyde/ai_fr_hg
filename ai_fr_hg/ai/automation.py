@@ -188,6 +188,17 @@ def execute_rule(rule_name: str, doctype: str, docname: str) -> dict:
 				reference_name=docname,
 			)
 
+		elif rule.action_type == "Translate":
+			from ai_fr_hg.ai.translation import translate_text
+
+			outcome = translate_text(
+				source_text,
+				rule.target_language,
+				reference_doctype=doctype,
+				reference_name=docname,
+			)
+			result = outcome.text
+
 		elif rule.action_type == "Ingest Document":
 			from ai_fr_hg.ai.ingestion import process_document
 

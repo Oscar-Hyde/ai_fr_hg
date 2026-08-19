@@ -95,6 +95,7 @@ def get_builtin_handlers() -> dict:
 		"count_documents": builtin.count_documents,
 		"run_report": builtin.run_report,
 		"get_document_text": builtin.get_document_text,
+		"translate_content": builtin.translate_content,
 		"current_datetime": builtin.current_datetime,
 	}
 	for name, dotted_path in (frappe.get_hooks("ai_tools") or {}).items():

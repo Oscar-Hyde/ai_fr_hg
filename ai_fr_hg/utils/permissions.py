@@ -135,6 +135,22 @@ def document_query(user: str) -> str:
 	)
 
 
+def translation_query(user: str) -> str:
+	if _is_manager(user):
+		return ""
+	# A translation is readable by whoever can read the knowledge base it
+	# belongs to, and always by the person who requested it.
+	return (
+		"(`tabAI Translation`.`owner` = {user} or `tabAI Translation`.`requested_by` = {user} "
+		"or `tabAI Translation`.`knowledge_base` in ("
+		"select kb.name from `tabAI Knowledge Base` kb "
+		"where kb.is_public = 1 or exists ("
+		"select 1 from `tabAI Knowledge Base Role` kb_role "
+		"where kb_role.parent = kb.name and kb_role.parenttype = 'AI Knowledge Base' "
+		"and kb_role.role in ({roles}))))"
+	).format(user=_escape(user), roles=_role_sql(user))
+
+
 def chunk_query(user: str) -> str:
 	if _is_manager(user):
 		return ""
@@ -258,6 +274,7 @@ conversation_query = _safe_condition(conversation_query)
 message_query = _safe_condition(message_query)
 knowledge_base_query = _safe_condition(knowledge_base_query)
 document_query = _safe_condition(document_query)
+translation_query = _safe_condition(translation_query)
 chunk_query = _safe_condition(chunk_query)
 agent_query = _safe_condition(agent_query)
 candidate_query = _safe_condition(candidate_query)
@@ -388,6 +405,10 @@ def has_document_permission(
 		return _knowledge_base_access(doc.name, user, write=False) if _is_read(permission_type) else False
 	if doc.doctype == "AI Document":
 		return _knowledge_base_access(doc.knowledge_base, user, write=not _is_read(permission_type))
+	if doc.doctype == "AI Translation":
+		if doc.get("owner") == user or doc.get("requested_by") == user:
+			return True
+		return _knowledge_base_access(doc.knowledge_base, user, write=not _is_read(permission_type))
 	if doc.doctype == "AI Document Chunk":
 		return _is_read(permission_type) and _knowledge_base_access(doc.knowledge_base, user)
 	if doc.doctype == "AI Pattern Entity":
@@ -433,6 +454,6 @@ def has_document_permission(
 	return False
 
 
-# Wrap the direct-document permission check last: the plain function is
-# defined above, and the wrapped one is the identity hooks resolve at import.
+# Wrapped last: the decorator needs the function above to already exist, so
+# Desk never sees an ImportError from this module.
 has_document_permission = _safe_doc_permission(has_document_permission)

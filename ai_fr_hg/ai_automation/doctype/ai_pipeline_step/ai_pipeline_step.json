@@ -38,7 +38,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Type",
-   "options": "Extract Text\nChunk\nEmbed\nSummarize\nClassify\nExtract Data\nCompare\nPrompt\nTool\nPipeline\nCustom Method",
+   "options": "Extract Text\nChunk\nEmbed\nSummarize\nClassify\nExtract Data\nCompare\nTranslate\nPrompt\nTool\nPipeline\nCustom Method",
    "reqd": 1
   },
   {

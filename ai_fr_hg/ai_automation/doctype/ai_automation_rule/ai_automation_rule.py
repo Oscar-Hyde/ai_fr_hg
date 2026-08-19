@@ -18,7 +18,13 @@ class AIAutomationRule(Document):
 		from frappe.types import DF
 
 		action_type: DF.Literal[
-			"Run Pipeline", "Run Agent", "Summarize", "Classify", "Extract Data", "Ingest Document"
+			"Run Pipeline",
+			"Run Agent",
+			"Summarize",
+			"Classify",
+			"Extract Data",
+			"Translate",
+			"Ingest Document",
 		]
 		agent: DF.Link | None
 		condition: DF.Code | None
@@ -37,6 +43,7 @@ class AIAutomationRule(Document):
 		run_count: DF.Int
 		source_field: DF.Data | None
 		target_field: DF.Data | None
+		target_language: DF.Literal["", "ar", "en", "he"]
 	# end: auto-generated types
 
 	def validate(self):
@@ -49,6 +56,7 @@ class AIAutomationRule(Document):
 			"Run Pipeline": "pipeline",
 			"Run Agent": "agent",
 			"Extract Data": "extraction_schema",
+			"Translate": "target_language",
 			"Ingest Document": "knowledge_base",
 		}.get(self.action_type)
 

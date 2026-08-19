@@ -3,6 +3,7 @@
 
 """Shared fixtures for colocated Frappe DocType integration tests."""
 
+import re
 from contextlib import contextmanager
 from unittest.mock import patch
 
@@ -23,6 +24,83 @@ def stub_embeddings(dimensions: int = 8):
 
 	# `knowledge` imports run_embedding at module load, so patch the bound name.
 	with patch("ai_fr_hg.ai.knowledge.run_embedding", side_effect=fake_embed) as mock:
+		yield mock
+
+
+#: Letters used to synthesise deterministic pseudo-translations in tests. The
+#: output is nonsense, but it is nonsense in the right script and of the right
+#: length, which is exactly what the quality checks are meant to measure.
+_SCRIPT_ALPHABETS = {
+	"ar": "ابتثجحخدذرزسشصضطظعغفقكلمنهوي",
+	"he": "אבגדהוזחטיכלמנסעפצקרשת",
+	"en": "abcdefghijklmnopqrstuvwxyz",
+}
+
+_LETTER_RUN = re.compile(r"[^\W\d_]{2,}", re.UNICODE)
+_SENTINEL_SPLIT = re.compile(r"(\[\[T\d+\]\])")
+_BATCH_SEGMENT = re.compile(r"<<<SEG (\d+)>>>\n(.*?)(?=\n<<<SEG |\Z)", re.DOTALL)
+_SINGLE_TEXT = re.compile(r"<TEXT>\n(.*)\n</TEXT>", re.DOTALL)
+
+
+def pseudo_translate(text: str, target: str) -> str:
+	"""Rewrite every word into the target script, keeping length and placeholders."""
+	alphabet = _SCRIPT_ALPHABETS.get(target, _SCRIPT_ALPHABETS["en"])
+
+	def _swap(match):
+		word = match.group(0)
+		return "".join(alphabet[(index + len(word)) % len(alphabet)] for index in range(len(word)))
+
+	pieces = _SENTINEL_SPLIT.split(text)
+	# Odd indices are protected sentinels and must survive untouched.
+	return "".join(
+		piece if position % 2 else _LETTER_RUN.sub(_swap, piece) for position, piece in enumerate(pieces)
+	)
+
+
+def _target_from_system_prompt(system: str) -> str:
+	if "into Arabic" in system:
+		return "ar"
+	if "into Hebrew" in system:
+		return "he"
+	return "en"
+
+
+def _default_translation_reply(system: str, user: str, target: str) -> str:
+	if segments := _BATCH_SEGMENT.findall(user):
+		return "\n".join(
+			f"<<<SEG {index}>>>\n{pseudo_translate(body.strip(), target)}" for index, body in segments
+		)
+	match = _SINGLE_TEXT.search(user)
+	return pseudo_translate((match.group(1) if match else user).strip(), target)
+
+
+@contextmanager
+def stub_translation_model(behaviour=None):
+	"""Replace the chat engine with a deterministic offline pseudo-translator.
+
+	`behaviour(system, user, target)` can override the reply to simulate a
+	misbehaving model - dropped placeholders, refusals, untranslated echoes -
+	so the quality gate can be tested without a real runtime.
+	"""
+	from ai_fr_hg.ai.providers.base import CompletionResult
+
+	calls: list[dict] = []
+
+	def fake_run_chat(messages, **kwargs):
+		system = next((m.get("content", "") for m in messages if m.get("role") == "system"), "")
+		user = next((m.get("content", "") for m in messages if m.get("role") == "user"), "")
+		target = _target_from_system_prompt(system)
+		calls.append({"system": system, "user": user, "target": target, "options": kwargs})
+		reply = (behaviour or _default_translation_reply)(system, user, target)
+		return CompletionResult(
+			content=reply,
+			total_tokens=max(1, len(reply) // 4),
+			duration_ms=5,
+			model="stub-translator",
+		)
+
+	with patch("ai_fr_hg.ai.translation.run_chat", side_effect=fake_run_chat) as mock:
+		mock.calls = calls
 		yield mock
 
 

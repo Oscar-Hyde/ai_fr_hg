@@ -47,7 +47,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Operation",
-   "options": "Chat\nCompletion\nEmbedding\nSummarize\nClassify\nExtract\nCompare\nRerank\nTool Call\nHealth Check",
+   "options": "Chat\nCompletion\nEmbedding\nSummarize\nClassify\nExtract\nCompare\nTranslate\nRerank\nTool Call\nHealth Check",
    "reqd": 1
   },
   {

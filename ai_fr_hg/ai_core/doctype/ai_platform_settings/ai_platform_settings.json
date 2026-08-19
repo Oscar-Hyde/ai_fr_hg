@@ -46,6 +46,19 @@
   "allow_user_url_ingestion",
   "auto_scan_patterns",
   "max_pattern_entities",
+  "translation_sec",
+  "translation_enabled",
+  "default_target_language",
+  "default_translation_model",
+  "default_glossary",
+  "translation_cb",
+  "translation_segment_characters",
+  "translation_batch_segments",
+  "translation_quality_checks",
+  "translation_repair_pass",
+  "translation_memory_enabled",
+  "translation_back_translation_samples",
+  "translation_index_output",
   "storage_tab",
   "storage_folder",
   "encrypt_documents",
@@ -314,6 +327,88 @@
    "fieldname": "max_pattern_entities",
    "fieldtype": "Int",
    "label": "Max Pattern Entities per Document"
+  },
+  {
+   "fieldname": "translation_sec",
+   "fieldtype": "Section Break",
+   "label": "Translation"
+  },
+  {
+   "default": "1",
+   "fieldname": "translation_enabled",
+   "fieldtype": "Check",
+   "label": "Enable Translation"
+  },
+  {
+   "default": "en",
+   "fieldname": "default_target_language",
+   "fieldtype": "Select",
+   "label": "Default Target Language",
+   "options": "ar\nen\nhe"
+  },
+  {
+   "fieldname": "default_translation_model",
+   "fieldtype": "Link",
+   "label": "Default Translation Model",
+   "options": "AI Model",
+   "description": "Leave empty to use the default chat model."
+  },
+  {
+   "fieldname": "default_glossary",
+   "fieldtype": "Link",
+   "label": "Default Glossary",
+   "options": "AI Translation Glossary"
+  },
+  {
+   "fieldname": "translation_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1800",
+   "fieldname": "translation_segment_characters",
+   "fieldtype": "Int",
+   "label": "Segment Size (characters)",
+   "description": "How much source text is translated as one unit."
+  },
+  {
+   "default": "6",
+   "fieldname": "translation_batch_segments",
+   "fieldtype": "Int",
+   "label": "Segments per Model Call"
+  },
+  {
+   "default": "1",
+   "fieldname": "translation_quality_checks",
+   "fieldtype": "Check",
+   "label": "Run Quality Checks"
+  },
+  {
+   "default": "1",
+   "fieldname": "translation_repair_pass",
+   "fieldtype": "Check",
+   "label": "Repair Flagged Segments",
+   "description": "Retry a failed segment once with a stricter prompt naming the defect."
+  },
+  {
+   "default": "1",
+   "fieldname": "translation_memory_enabled",
+   "fieldtype": "Check",
+   "label": "Use Translation Memory",
+   "description": "Reuse previously translated identical segments from the same knowledge base."
+  },
+  {
+   "default": "0",
+   "fieldname": "translation_back_translation_samples",
+   "fieldtype": "Int",
+   "label": "Back-Translation Samples",
+   "description": "Verify this many segments per document by translating them back and comparing embeddings. 0 disables it."
+  },
+  {
+   "default": "0",
+   "fieldname": "translation_index_output",
+   "fieldtype": "Check",
+   "label": "Index Translations as Documents",
+   "description": "Default for new translations: store the finished text as its own searchable AI Document."
   },
   {
    "fieldname": "storage_tab",

@@ -321,6 +321,26 @@ class AIDocument(Document):
 		):
 			frappe.throw(_("The document changed while it was being deleted. Refresh and try again."), frappe.TimestampMismatchError)
 		frappe.db.delete("AI Document Chunk", {"document": self.name})
+		self._detach_translations()
+
+	def _detach_translations(self):
+		"""Keep translations of this document, but as standalone records.
+
+		A translation is reviewed, cited and sometimes indexed content of its
+		own. Deleting the source must neither be blocked by that link nor
+		silently destroy the reviewed output, so the reference is cleared and
+		the provenance is preserved in the title.
+		"""
+		translations = frappe.get_all(
+			"AI Translation", filters={"source_document": self.name}, pluck="name"
+		)
+		for name in translations:
+			frappe.db.set_value(
+				"AI Translation",
+				name,
+				{"source_document": None},
+				update_modified=False,
+			)
 
 	def after_delete(self):
 		if self.flags.get("skip_knowledge_base_stats"):
@@ -382,3 +402,31 @@ class AIDocument(Document):
 		if not target:
 			frappe.throw(_("Select an Extraction Schema first."))
 		return extract_document_data(self.name, target)
+
+	@frappe.whitelist()
+	def translate(
+		self,
+		target_language: str,
+		source_language: str | None = None,
+		model: str | None = None,
+		glossary: str | None = None,
+		tone: str = "Neutral",
+		domain: str = "",
+		index_output: bool = False,
+		background: bool = True,
+	) -> dict:
+		"""Translate this document's extracted text into Arabic, English or Hebrew."""
+		self.check_permission("read")
+		from ai_fr_hg.api.translation import translate_document
+
+		return translate_document(
+			self.name,
+			target_language,
+			source_language=source_language,
+			model=model,
+			glossary=glossary,
+			tone=tone,
+			domain=domain,
+			index_output=index_output,
+			background=background,
+		)

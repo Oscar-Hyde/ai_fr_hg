@@ -162,6 +162,75 @@ hallucinated label.
 
 ---
 
+## Translation
+
+Arabic, English and Hebrew, translated on local models. Full guide:
+[`docs/TRANSLATION.md`](TRANSLATION.md).
+
+### `ai_fr_hg.api.translation.translate_document`
+
+Translate an extracted document into a stored, reviewable `AI Translation`.
+
+| Parameter | Type | Notes |
+| --- | --- | --- |
+| `document` | string | Required. Must already have extracted text. |
+| `target_language` | string | Required: `ar`, `en` or `he`. |
+| `source_language` | string | Detected from the text when omitted. |
+| `model` | string | Overrides the default translation model. |
+| `glossary` | string | An `AI Translation Glossary` to enforce. |
+| `tone` | string | `Neutral`, `Formal`, `Informal`, `Technical` or `Legal`. |
+| `domain` | string | Subject domain hint, e.g. `construction contracts`. |
+| `preserve_formatting` | bool | Default true. |
+| `index_output` | bool | Also store the result as a searchable document. |
+| `background` | bool | Default true; false translates in the request. |
+
+```json
+{
+  "translation": "AITRN-2026-00001",
+  "status": "Queued",
+  "job_id": "ai-translation::AITRN-2026-00001"
+}
+```
+
+### `ai_fr_hg.api.translation.translate`
+
+Translate a passage inline, up to 20 000 characters. Same optional parameters,
+with `text` instead of `document`.
+
+```json
+{
+  "text": "…",
+  "source_language": "en",
+  "target_language": "ar",
+  "direction": "rtl",
+  "quality_score": 96.4,
+  "issues": {},
+  "memory_hits": 2,
+  "flagged": 0,
+  "segment_count": 14,
+  "model": "qwen2.5:7b",
+  "duration_ms": 18422,
+  "total_tokens": 5310
+}
+```
+
+### Other translation endpoints
+
+| Method | Returns |
+| --- | --- |
+| `get_languages()` | `{enabled, languages, pairs}` |
+| `get_translation(translation, include_segments)` | Record plus per-segment source, translation, status, score and issues. |
+| `list_translations(document, knowledge_base, target_language, limit)` | Translations the user may read. |
+| `retranslate(translation, segment_index, instructions)` | Re-runs one segment and rescores it. |
+| `index_output(translation)` | `{translation, document}` |
+| `get_glossaries(knowledge_base)` | Enabled glossaries. |
+
+Every segment is scored locally before it is stored: a translation that loses a
+figure, answers instead of translating, or comes back in the wrong script is
+flagged as **Needs Review** rather than returned as a clean result.
+
+---
+
 ## Administration
 
 All of these require `AI Manager` or `System Manager`.
