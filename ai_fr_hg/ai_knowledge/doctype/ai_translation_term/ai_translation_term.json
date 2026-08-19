@@ -1,0 +1,72 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-08-19 09:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "term_en",
+  "term_ar",
+  "term_he",
+  "do_not_translate",
+  "case_sensitive",
+  "notes"
+ ],
+ "fields": [
+  {
+   "columns": 3,
+   "fieldname": "term_en",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "English"
+  },
+  {
+   "columns": 3,
+   "fieldname": "term_ar",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Arabic"
+  },
+  {
+   "columns": 3,
+   "fieldname": "term_he",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Hebrew"
+  },
+  {
+   "columns": 1,
+   "default": "0",
+   "description": "Keep this term exactly as written in every language.",
+   "fieldname": "do_not_translate",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Keep As Is"
+  },
+  {
+   "default": "0",
+   "fieldname": "case_sensitive",
+   "fieldtype": "Check",
+   "label": "Case Sensitive"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-08-19 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Knowledge",
+ "name": "AI Translation Term",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "ASC",
+ "states": []
+}

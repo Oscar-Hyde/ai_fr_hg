@@ -169,6 +169,7 @@ permission_query_conditions = {
 	"AI Knowledge Base": "ai_fr_hg.utils.permissions.knowledge_base_query",
 	"AI Document": "ai_fr_hg.utils.permissions.document_query",
 	"AI Document Chunk": "ai_fr_hg.utils.permissions.chunk_query",
+	"AI Translation": "ai_fr_hg.utils.permissions.translation_query",
 	"AI Agent": "ai_fr_hg.utils.permissions.agent_query",
 	"AI Knowledge Candidate": "ai_fr_hg.utils.permissions.candidate_query",
 	"AI Memory": "ai_fr_hg.utils.permissions.memory_query",

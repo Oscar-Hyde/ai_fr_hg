@@ -38,6 +38,7 @@ class AIPipelineStep(Document):
 			"Classify",
 			"Extract Data",
 			"Compare",
+			"Translate",
 			"Prompt",
 			"Tool",
 			"Pipeline",

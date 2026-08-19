@@ -32,10 +32,13 @@ class AIPlatformSettings(Document):
 		default_context_window: DF.Int
 		default_embedding_model: DF.Link | None
 		default_max_tokens: DF.Int
+		default_glossary: DF.Link | None
 		default_system_prompt: DF.Code | None
+		default_target_language: DF.Literal["ar", "en", "he"]
 		default_temperature: DF.Float
 		default_top_k: DF.Int
 		default_top_p: DF.Float
+		default_translation_model: DF.Link | None
 		default_vision_model: DF.Link | None
 		enable_hybrid_search: DF.Check
 		encrypt_documents: DF.Check
@@ -66,6 +69,14 @@ class AIPlatformSettings(Document):
 		similarity_threshold: DF.Float
 		storage_folder: DF.Data | None
 		streaming_enabled: DF.Check
+		translation_back_translation_samples: DF.Int
+		translation_batch_segments: DF.Int
+		translation_enabled: DF.Check
+		translation_index_output: DF.Check
+		translation_memory_enabled: DF.Check
+		translation_quality_checks: DF.Check
+		translation_repair_pass: DF.Check
+		translation_segment_characters: DF.Int
 	# end: auto-generated types
 
 	def validate(self):
@@ -85,6 +96,10 @@ class AIPlatformSettings(Document):
 		self.similarity_threshold = normalize_similarity_threshold(self.similarity_threshold)
 		if cint(self.health_check_interval_minutes) < 1:
 			self.health_check_interval_minutes = 15
+		if cint(self.translation_segment_characters) and cint(self.translation_segment_characters) < 200:
+			frappe.throw(_("Translation Segment Size must be at least 200 characters."))
+		if cint(self.translation_batch_segments) < 0:
+			self.translation_batch_segments = 0
 
 	def validate_model_types(self):
 		"""A model selected as a default must actually be of that type."""
@@ -92,6 +107,7 @@ class AIPlatformSettings(Document):
 			"default_chat_model": ("Chat", "Vision"),
 			"default_embedding_model": ("Embedding",),
 			"default_vision_model": ("Vision",),
+			"default_translation_model": ("Chat", "Vision"),
 		}
 		for fieldname, allowed in expected.items():
 			if not self.get(fieldname):

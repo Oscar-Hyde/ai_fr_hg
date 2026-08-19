@@ -48,6 +48,7 @@ a how-to. For how things work see the other docs listed at the end.
 | Hybrid retrieval + citations | **IMPLEMENTED** | Dense + keyword, RRF fusion, numbered citations on the answer. |
 | One-shot ask / search | **IMPLEMENTED** | Knowledge Explorer + `api.knowledge.ask` / `search`. |
 | Document intelligence | **IMPLEMENTED** | Summarise, classify, extract, compare. Map-reduce for long text. |
+| Translation (ar/en/he) | **IMPLEMENTED** | `ai/translation.py` + pure `ai/translation_utils.py`. Structure-preserving segments, protected placeholders, glossary, translation memory, local quality gate with one repair pass, bilingual review UI, `Translate` pipeline step, `translate_content` tool. Patch `v0_0_13`. |
 | Model discovery & health | **IMPLEMENTED** | Operations + Model Manager pages. Scheduler probes every 5 min. |
 | Tool calling | **IMPLEMENTED** | Approval gate for writes. Tools run as the session user. |
 | Learning Loop | **IMPLEMENTED** | Teach → validate → approve → memory/skill → recall. Best-effort; cannot break a chat turn. |
@@ -149,6 +150,22 @@ Caps: 50 MB default, archive member limits, zip-bomb checks, File identity disam
 | `build_json_schema` / `extract_data` | `AI Extraction Schema` |
 | `compare_documents(a, b, ...)` | Diff two `AI Document`s |
 | `render_prompt_template` / `run_prompt_template` | Jinja templates |
+
+### 2.7a Translation — `ai/translation.py` + `ai/translation_utils.py` — **IMPLEMENTED** (unit-tested)
+
+| Function | Role |
+| --- | --- |
+| `translate_text(...)` | Segment → memory → protect → batch → score → repair → reassemble |
+| `create_translation` / `enqueue_translation` / `run_translation` | Stored `AI Translation` lifecycle |
+| `retranslate_segment(...)` | One segment, optionally with a reviewer instruction |
+| `index_translation(...)` | Store the result as its own searchable `AI Document` |
+| `verify_by_back_translation(...)` | Optional embedding-based sampling check |
+| `translation_utils.segment_text` / `reassemble` | Lossless structure-preserving split and rejoin |
+| `translation_utils.protect_placeholders` / `restore_placeholders` | Numbers, URLs, IDs, code, page markers, protected terms |
+| `translation_utils.assess_translation` | Eight local checks → 0-100 score and issue codes |
+
+`Translate` is a first-class `operation` on `AI Execution Log`, so every
+translation call carries the same audit trail as chat.
 
 ### 2.8 Chunking — `ai/chunking.py` — **READY** (unit-tested)
 
