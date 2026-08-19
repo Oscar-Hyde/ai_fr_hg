@@ -110,10 +110,10 @@ Grounded answers still happen when:
 This is intentional, not a missing retrieval path.
 
 Extracted text is labelled with its written language (`AI Document.language`,
-ISO 639-1). Bulgarian is first-class. The label is written on ingest, backfilled
-for existing documents by patch `v0_0_11`, and injected into the prompt as
-`language=Bulgarian` so the model can identify the file and answer in the
-user's language.
+ISO 639-1). English, Arabic and Hebrew are first-class, including mixed files
+(`en,ar,he`). The label is written on ingest, refreshed by patch `v0_0_12`,
+and injected into the prompt as `language=English + Arabic` so a small local
+model such as `qwen2.5:0.5b` can name every language in the file.
 
 ### Tuning guidance
 

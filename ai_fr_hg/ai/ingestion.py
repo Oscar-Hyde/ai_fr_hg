@@ -25,7 +25,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, now_datetime
 
-from ai_fr_hg.ai.language import detect_language, language_name, resolve_document_language
+from ai_fr_hg.ai.language import detect_language, language_name, parse_language_codes, resolve_document_language
 from ai_fr_hg.ai.logging import write_audit_log
 from ai_fr_hg.ai.exceptions import (
 	CorruptDocumentError,
@@ -1061,10 +1061,12 @@ def prepare_documents_for_turn(document_names: list[str]) -> tuple[list[str], st
 
 def _document_excerpt(name: str, title: str, content: str, language: str | None) -> str:
 	code = resolve_document_language(language, content)
-	if code and code != (language or "").strip():
+	if code and parse_language_codes(code) != parse_language_codes(language):
 		frappe.db.set_value("AI Document", name, "language", code, update_modified=False)
-	label = f"{title} | language={language_name(code)}" if code else title
-	return f"[{label}]\n{content[:MAX_INLINE_CONTEXT_CHARS]}"
+	if not code:
+		return f"[{title}]\n{content[:MAX_INLINE_CONTEXT_CHARS]}"
+	names = language_name(code)
+	return f"[{title} | language={names}]\nLanguages in this file: {names}.\n{content[:MAX_INLINE_CONTEXT_CHARS]}"
 
 
 def wait_for_indexed(document_names: list[str], timeout: float | None = None) -> dict[str, str]:

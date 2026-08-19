@@ -243,7 +243,7 @@ Public: `get_children`, `create_folder`, `rename_document` / `rename_folder` / `
 
 ### 2.21 Language — `ai/language.py` — **READY**
 
-`detect_language`, `language_name`, `resolve_document_language`. Script counts plus function-word hints. No extra packages. Bulgarian is first-class; also EN/DE/FR/ES/IT/RU/UK and script gates for EL/AR/HE/ZH/JA/KO.
+`detect_language`, `detect_languages`, `language_name`, `resolve_document_language`. Script counts plus function-word hints. No extra packages. English, Arabic and Hebrew are first-class, including mixed `en,ar,he` files and PDF presentation-form glyphs. Also BG/RU/UK/DE/FR/ES/IT and script gates for EL/ZH/JA/KO.
 
 ### 2.22 Organization — `ai/organization.py` — **IMPLEMENTED**
 
@@ -438,11 +438,11 @@ Default log retention (also in `hooks.default_log_clearing_doctypes`): Execution
 
 ## 8. Tests
 
-19 test modules, **56 classes, 287 methods**.
+19 test modules, **56 classes, 295 methods**.
 
 | Suite | Methods | Needs Frappe DB? |
 | --- | --- | --- |
-| `tests/test_units.py` | 89 | No — chunking, vectors, JSON, network, readers, tools, threshold, deadline, wait default, language detection, streaming decision |
+| `tests/test_units.py` | 97 | No — chunking, vectors, JSON, network, readers, tools, threshold, deadline, wait default, language detection (EN/AR/HE mixed), streaming decision |
 | `tests/test_learning_utils.py` | 19 | No |
 | `tests/test_folder_units.py` | 16 | No |
 | `tests/test_document_tree_units.py` | 20 | No |

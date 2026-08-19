@@ -48,13 +48,15 @@ CITATION_INSTRUCTIONS = (
 )
 
 LANGUAGE_INSTRUCTIONS = (
-	"When CONTEXT labels a document with language=..., that is the written language of that file. "
-	"If the user asks what language a document is in, use that label. "
-	"Reply in the same language as the user's message unless they ask for a different one."
+	"CONTEXT marks each file with language=... A file may mix English, Arabic and Hebrew. "
+	"If asked what language a file is in, list every language in that label. "
+	"Do not drop Arabic or Hebrew just because English is also present. "
+	"Reply in the same language the user wrote in unless they ask otherwise."
 )
 
 USER_LANGUAGE_INSTRUCTIONS = (
-	"Reply in the same language the user wrote in, unless they ask for a different one."
+	"Reply in the same language the user wrote in, unless they ask for a different one. "
+	"The user may write in English, Arabic, Hebrew, or a mix of those."
 )
 
 #: Conversation history window sent to the model, in messages.

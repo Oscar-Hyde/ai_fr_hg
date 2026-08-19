@@ -650,7 +650,81 @@ class TestLanguageDetection(UnitTestCase):
 		self.assertEqual(detect_language("これはひらがなと漢字が混ざった日本語の文書です"), "ja")
 		self.assertEqual(detect_language("이것은 한글로 작성된 문서이며 언어를 식별합니다"), "ko")
 		self.assertEqual(detect_language("هذا مستند مكتوب باللغة العربية وهو طويل بما يكفي"), "ar")
+		self.assertEqual(detect_language("זהו מסמך בעברית והוא ארוך מספיק לזיהוי השפה של המסמך"), "he")
 		self.assertEqual(detect_language("Αυτό είναι ένα ελληνικό κείμενο για αναγνώριση"), "el")
+
+	def test_arabic_presentation_forms_count_as_arabic(self):
+		"""PDF extractors often emit presentation-form Arabic, not the standard block."""
+		from ai_fr_hg.ai.language import detect_language
+
+		# Isolated / initial / medial / final forms in FB50–FDFF and FE70–FEFF.
+		text = "ﺍﻟﻌﻘﺪ ﺍﻟﺮﺳﻤﻲ ﻟﻠﻤﺸﺮﻭﻉ ﻭﻫﻮ ﻣﻜﺘﻮﺏ ﺑﺎﻟﻠﻐﺔ ﺍﻟﻌﺮﺑﻴﺔ ﺑﺸﻜﻞ ﻭﺍﺿﺢ"
+		self.assertEqual(detect_language(text), "ar")
+
+	def test_mixed_english_and_arabic(self):
+		from ai_fr_hg.ai.language import detect_language, detect_languages, language_name
+
+		text = (
+			"This is the official report for the project and the team with the results.\n"
+			"هذا هو التقرير الرسمي للمشروع وهو مكتوب باللغة العربية مع التفاصيل المطلوبة."
+		)
+		codes = detect_languages(text)
+		self.assertIn("en", codes)
+		self.assertIn("ar", codes)
+		self.assertEqual(set(detect_language(text).split(",")), {"en", "ar"})
+		self.assertIn("English", language_name(detect_language(text)))
+		self.assertIn("Arabic", language_name(detect_language(text)))
+
+	def test_mixed_english_and_hebrew(self):
+		from ai_fr_hg.ai.language import detect_languages
+
+		text = (
+			"This is the official report for the project and the team with the results.\n"
+			"זהו הדוח הרשמי של הפרויקט והוא כתוב בעברית עם הפרטים הנדרשים לזיהוי."
+		)
+		self.assertEqual(set(detect_languages(text)), {"en", "he"})
+
+	def test_mixed_arabic_and_hebrew(self):
+		from ai_fr_hg.ai.language import detect_languages
+
+		text = (
+			"هذا مستند مكتوب باللغة العربية وهو يغطي الاتفاق بين الأطراف بالتفصيل.\n"
+			"זהו מסמך בעברית והוא מכסה את ההסכם בין הצדדים לפרטי הפרטים."
+		)
+		self.assertEqual(set(detect_languages(text)), {"ar", "he"})
+
+	def test_mixed_english_arabic_and_hebrew(self):
+		from ai_fr_hg.ai.language import detect_language, detect_languages, language_name
+
+		text = (
+			"This is the official report for the project and the team with the results.\n"
+			"هذا هو التقرير الرسمي للمشروع وهو مكتوب باللغة العربية مع التفاصيل.\n"
+			"זהו הדוח הרשמי של הפרויקט והוא כתוב בעברית עם הפרטים הנדרשים."
+		)
+		self.assertEqual(set(detect_languages(text)), {"en", "ar", "he"})
+		label = language_name(detect_language(text))
+		self.assertIn("English", label)
+		self.assertIn("Arabic", label)
+		self.assertIn("Hebrew", label)
+
+	def test_english_heading_does_not_hide_arabic_body(self):
+		from ai_fr_hg.ai.language import detect_languages
+
+		text = (
+			"Contract\n"
+			"هذا العقد ساري المفعول بين الأطراف ويحدد الالتزامات الخاصة بالمشروع "
+			"وهو مكتوب باللغة العربية بشكل كامل مع كل البنود المطلوبة."
+		)
+		codes = detect_languages(text)
+		self.assertIn("ar", codes)
+		self.assertIn("en", codes)
+
+	def test_language_name_joins_mixed_codes(self):
+		from ai_fr_hg.ai.language import language_name, parse_language_codes
+
+		self.assertEqual(language_name("en,ar,he"), "English + Arabic + Hebrew")
+		self.assertEqual(parse_language_codes("English + Arabic"), ["en", "ar"])
+		self.assertEqual(parse_language_codes("en, he"), ["en", "he"])
 
 	def test_stored_code_wins_over_detection(self):
 		from ai_fr_hg.ai.language import resolve_document_language
@@ -697,6 +771,30 @@ class TestLanguageDetection(UnitTestCase):
 			max_characters=4000,
 		)
 		self.assertIn("language=English", context)
+
+	def test_build_context_labels_mixed_english_arabic_hebrew(self):
+		from ai_fr_hg.ai.knowledge import RetrievedChunk, build_context
+
+		content = (
+			"This is the official report for the project and the team.\n"
+			"هذا هو التقرير الرسمي للمشروع وهو مكتوب باللغة العربية.\n"
+			"זהו הדוח הרשמי של הפרויקט והוא כתוב בעברית."
+		)
+		context = build_context(
+			[
+				RetrievedChunk(
+					chunk="c1",
+					document="DOC-1",
+					document_title="Trilingual contract",
+					knowledge_base="KB",
+					content=content,
+					score=0.9,
+					language="en,ar,he",
+				)
+			],
+			max_characters=4000,
+		)
+		self.assertIn("language=English + Arabic + Hebrew", context)
 
 
 class TestStreamingDecision(UnitTestCase):
