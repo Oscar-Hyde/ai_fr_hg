@@ -98,12 +98,18 @@ class AIPlatformSettings(Document):
 				continue
 			model_type = frappe.db.get_value("AI Model", self.get(fieldname), "model_type")
 			if model_type not in allowed:
+				hint = {
+					"default_chat_model": _("Pick a Chat model such as qwen2.5:0.5b."),
+					"default_embedding_model": _("Pick an Embedding model such as nomic-embed-text."),
+					"default_vision_model": _("Pick a Vision model, or leave this empty."),
+				}.get(fieldname, "")
 				frappe.throw(
-					_("{0} must be a {1} model, but {2} is a {3} model.").format(
+					_("{0} must be a {1} model, but {2} is a {3} model. {4}").format(
 						_(self.meta.get_label(fieldname)),
 						" or ".join(allowed),
 						self.get(fieldname),
 						model_type,
+						hint,
 					)
 				)
 

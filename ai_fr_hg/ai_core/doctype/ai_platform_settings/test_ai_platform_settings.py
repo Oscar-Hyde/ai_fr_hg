@@ -36,6 +36,12 @@ class TestPlatformSettingsAPI(AIPlatformTestCase):
 		finally:
 			frappe.set_user("Administrator")
 
+	def test_default_chat_model_rejects_embedding_model(self):
+		settings = frappe.get_single("AI Platform Settings")
+		settings.default_chat_model = self.embedding_model.name
+		with self.assertRaises(frappe.ValidationError):
+			settings.validate_model_types()
+
 	def test_platform_metrics(self):
 		from ai_fr_hg.ai.monitoring import get_platform_metrics
 

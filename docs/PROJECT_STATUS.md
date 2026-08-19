@@ -447,7 +447,7 @@ Default log retention (also in `hooks.default_log_clearing_doctypes`): Execution
 | `tests/test_learning_utils.py` | 19 | No |
 | `tests/test_folder_units.py` | 16 | No |
 | `tests/test_document_tree_units.py` | 20 | No |
-| Colocated DocType integration | 139 | Yes — runtime stubbed, no GPU |
+| Colocated DocType integration | 146 | Yes — runtime stubbed, no GPU |
 
 This sandbox has **no Frappe**, so `python -m unittest` fails with `ModuleNotFoundError: frappe`. `compileall` succeeds. Full suite: `bench --site site1.local run-tests --app ai_fr_hg`.
 

@@ -14,6 +14,18 @@ function normalize_similarity_threshold(value) {
 }
 
 frappe.ui.form.on("AI Platform Settings", {
+	setup(frm) {
+		frm.set_query("default_chat_model", () => ({
+			filters: { enabled: 1, model_type: ["in", ["Chat", "Vision"]] },
+		}));
+		frm.set_query("default_embedding_model", () => ({
+			filters: { enabled: 1, model_type: "Embedding" },
+		}));
+		frm.set_query("default_vision_model", () => ({
+			filters: { enabled: 1, model_type: "Vision" },
+		}));
+	},
+
 	refresh(frm) {
 		frm.add_custom_button(__("Test All Providers"), async () => {
 			frappe.dom.freeze(__("Testing providers..."));
