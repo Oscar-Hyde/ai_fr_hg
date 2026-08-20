@@ -175,9 +175,7 @@ class TestConversationTurnIdentityPatch(TestCase):
 
 		sequences = {message["name"]: message["sequence"] for message in state.messages}
 		self.assertEqual(sequences, {"MSG-1": 1, "MSG-2": 2, "MSG-3": 3})
-		self.assertEqual(
-			state.indexes[MESSAGE_TABLE], {"unique_conversation_sequence", "turn_id_index"}
-		)
+		self.assertEqual(state.indexes[MESSAGE_TABLE], {"unique_conversation_sequence", "turn_id_index"})
 		self.assertEqual(len(state.alters), 2)
 		self.assertEqual(state.logged_errors, [])
 
@@ -203,9 +201,7 @@ class TestConversationTurnIdentityPatch(TestCase):
 		self.assertEqual(state.set_values, [])
 		self.assertEqual(len(state.alters), 1)
 		self.assertIn("turn_id_index", state.alters[0])
-		self.assertEqual(
-			state.indexes[MESSAGE_TABLE], {"unique_conversation_sequence", "turn_id_index"}
-		)
+		self.assertEqual(state.indexes[MESSAGE_TABLE], {"unique_conversation_sequence", "turn_id_index"})
 
 	def test_idempotent_second_run_changes_nothing(self):
 		state = _make_state(
@@ -252,7 +248,12 @@ class TestDocumentProcessingProgressPatch(TestCase):
 		module.execute()
 
 		added = state.columns[DOCUMENT_TABLE]
-		for field in ("processing_progress", "processing_message", "processing_heartbeat", "cancel_requested"):
+		for field in (
+			"processing_progress",
+			"processing_message",
+			"processing_heartbeat",
+			"cancel_requested",
+		):
 			self.assertIn(field, added)
 		self.assertEqual(len(state.alters), 4)
 
