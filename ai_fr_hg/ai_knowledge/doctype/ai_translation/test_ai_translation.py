@@ -31,6 +31,23 @@ class TranslationTestCase(AIPlatformTestCase):
 		name = create_translation(document.name, target, **kwargs)
 		return frappe.get_doc("AI Translation", name)
 
+	def ensure_other_knowledge_base(self):
+		if frappe.db.exists("AI Knowledge Base", "Other Test Knowledge Base"):
+			return frappe.get_doc("AI Knowledge Base", "Other Test Knowledge Base")
+		doc = frappe.get_doc(
+			{
+				"doctype": "AI Knowledge Base",
+				"knowledge_base_name": "Other Test Knowledge Base",
+				"enabled": 1,
+				"is_public": 1,
+				"chunk_size": 400,
+				"chunk_overlap": 40,
+				"embedding_model": self.embedding_model.name,
+			}
+		)
+		doc.insert(ignore_permissions=True)
+		return doc
+
 
 class TestDocumentTranslation(TranslationTestCase):
 	def test_worker_authority_is_restored_after_failure(self):

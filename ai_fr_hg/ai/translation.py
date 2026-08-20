@@ -62,6 +62,7 @@ from ai_fr_hg.ai.translation_utils import (
 	decode_separator,
 	is_supported,
 	language_label,
+	memory_fingerprint,
 	normalise_language,
 	normalise_source_text,
 	parse_batch_response,
@@ -70,7 +71,6 @@ from ai_fr_hg.ai.translation_utils import (
 	reassemble,
 	resolve_glossary,
 	restore_placeholders,
-	memory_fingerprint,
 	segment_text,
 	strip_model_preamble,
 	summarise_issues,
@@ -389,7 +389,15 @@ def translate_text(
 	memory_hits = 0
 	if options.use_translation_memory and pending:
 		fingerprints = {
-			segment.index: segment_fingerprint(segment.source, detected, options.target_language)
+			segment.index: memory_fingerprint(
+				segment.source,
+				detected,
+				options.target_language,
+				knowledge_base=options.knowledge_base,
+				glossary=options.glossary,
+				tone=options.tone,
+				domain=options.domain,
+			)
 			for segment in pending
 		}
 		memory = _memory_lookup(sorted(set(fingerprints.values())), options.knowledge_base)
