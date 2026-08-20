@@ -17,6 +17,7 @@ from frappe.utils import cint, flt
 
 from ai_fr_hg.ai.chunking import chunk_text, estimate_tokens
 from ai_fr_hg.ai.engine import resolve_model, run_chat
+from ai_fr_hg.ai.validation import ValidationError as _ValidationError, validate_extraction
 
 JSON_BLOCK = re.compile(r"```(?:json)?\s*(.+?)\s*```", re.DOTALL)
 
@@ -301,10 +302,20 @@ def extract_data(
 	)
 
 	data = parse_json_response(result.content)
+	if data is None:
+		raise _ValidationError("Model did not return valid JSON.", errors=[{"field":"","code":"malformed_json","message":"Model output is not valid JSON","severity":"error"}], provenance={"schema": schema_doc.name, "strict": bool(schema_doc.strict), "raw_preview": (result.content or "")[:500]})
 	if not isinstance(data, dict):
-		return {"_error": "Model did not return a JSON object.", "_raw": result.content}
-
-	return _coerce_types(data, schema_doc)
+		raise _ValidationError("Model did not return a JSON object.", errors=[{"field":"","code":"type","message":f"Expected object got {type(data).__name__}","severity":"error"}], provenance={"schema": schema_doc.name, "strict": bool(schema_doc.strict), "raw_preview": (result.content or "")[:500]})
+	# INT-02 canonical validation BEFORE coercion/persistence — single authority
+	ok, errors = validate_extraction(data, schema_doc)
+	if not ok:
+		raise _ValidationError(f"Structured output failed schema validation: {errors[0]['message'] if errors else 'invalid'}", errors=errors, provenance={"schema": schema_doc.name, "strict": bool(schema_doc.strict), "payload_bytes": len((result.content or "").encode("utf-8")), "field_count": len(data)})
+	coerced = _coerce_types(data, schema_doc)
+	# Re-validate after coercion to ensure persisted form is still valid
+	ok2, errors2 = validate_extraction(coerced, schema_doc)
+	if not ok2:
+		raise _ValidationError(f"Coerced output failed validation: {errors2[0]['message']}", errors=errors2, provenance={"schema": schema_doc.name, "strict": bool(schema_doc.strict)})
+	return coerced
 
 
 def _coerce_types(data: dict, schema_doc) -> dict:

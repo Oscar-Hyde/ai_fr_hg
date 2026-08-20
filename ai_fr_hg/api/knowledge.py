@@ -279,12 +279,24 @@ def extract_document_data(document: str, schema: str, save: bool = True) -> dict
 	doc = frappe.get_doc("AI Document", document)
 	doc.check_permission("read")
 
-	data = extract_data(
-		doc.content or "",
-		schema=schema,
-		reference_doctype="AI Document",
-		reference_name=document,
-	)
+	try:
+		data = extract_data(
+			doc.content or "",
+			schema=schema,
+			reference_doctype="AI Document",
+			reference_name=document,
+		)
+	except Exception as e:
+		# INT-02: distinguish validation failure from provider failure; never persist invalid output
+		from ai_fr_hg.ai.validation import ValidationError as _VE
+		if isinstance(e, _VE):
+			# Persist provenance for observability without persisting invalid data
+			try:
+				doc.db_set("extracted_data", frappe.as_json({"_validation_error": str(e), "errors": e.errors, "provenance": e.provenance}))
+			except Exception:
+				pass
+			frappe.throw(_("Validation failed: {0}").format(e.errors[0]["message"] if e.errors else str(e)), exc=e)
+		raise
 
 	if cint(save):
 		doc.check_permission("write")
