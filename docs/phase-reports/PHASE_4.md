@@ -42,3 +42,31 @@ INT-04 is already closed and reconciled in `PHASE_3_VERIFICATION.md`. ING-01–0
 ## Runtime gate
 
 Hosted Frappe v17 verification for this increment passed: Server run `32398794487` completed in 3m02s and Quality run `32398794523` passed. The integration test covers migration-loaded fields, cancellation persistence, and requeue recovery. ING-06 remains `IN PROGRESS` because worker-failure recovery and reconnect/browser evidence are still outstanding; those are not being inferred from a green full-suite run.
+
+## Deploy regression found and fixed (2026-08-20)
+
+The first real-bench execution of the two newest patches — on an existing site where patches actually run, unlike fresh CI sites — exposed two defects that a green CI run had not caught. Both are fixed in this increment, with behavioral regression tests that demonstrably failed before the fix:
+
+1. **`v0_0_17_conversation_turn_identity`** aborted `bench migrate` with
+   `TypeError: _index_exists() takes 1 positional argument but 2 were given` —
+   the turn_id index guard passed the table name to a one-argument helper. MariaDB's
+   implicit DDL commit had already persisted the renumbering and (where it succeeded)
+   the unique index, so the fixed patch resumes idempotently: it skips work already
+   committed and only adds the missing `turn_id_index`.
+2. **`v0_0_18_document_processing_progress`** would have *silently no-oped* on every
+   site: `frappe.db.table_exists("tabAI Document")` double-prefixes the table name
+   (`table_exists` itself prepends `tab`), so the probe always returned False and the
+   `Indexed`→100% backfill would never have run. Fixed to `table_exists("AI Document")`,
+   matching the call convention used by `v0_0_5`/`v0_0_6`/`v0_0_8`.
+
+Regression evidence: `ai_fr_hg/tests/test_patch_regressions.py` executes both real
+patch modules against an in-memory implementation of the Frappe database semantics
+they rely on (bare-DocType `table_exists`/`has_column`, index inspection, renumbering).
+Against the pre-fix code the suite errors with the exact bench `TypeError` and fails
+on the skipped backfill; against the fixed code all 8 tests pass. The same file runs
+under `bench --site site1.local run-tests --app ai_fr_hg` on the real bench.
+
+**Gate status correction:** because of these findings, the earlier statement that the
+migration is "idempotent" was true only of the code's intent, not of any executed run.
+It becomes a verified claim only when `bench migrate` completes cleanly on the
+production-like site; the bench output belongs in this section before ING-06 closes.

@@ -4,7 +4,10 @@ import frappe
 
 
 def execute():
-	if not frappe.db.table_exists("tabAI Document"):
+	# frappe.db.table_exists() takes a DocType name and prepends "tab" itself;
+	# passing "tabAI Document" would probe for "tabtabAI Document" and return
+	# early on every site, silently skipping the backfill.
+	if not frappe.db.table_exists("AI Document"):
 		return
 	columns = {
 		"processing_progress": "decimal(5,2) not null default 0",

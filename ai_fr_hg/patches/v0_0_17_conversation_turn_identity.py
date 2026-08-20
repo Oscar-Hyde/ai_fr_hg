@@ -67,7 +67,7 @@ def execute() -> None:
 				title="AI conversation unique sequence index skipped", message=frappe.get_traceback()
 			)
 
-	if not _index_exists("tabAI Message", TURN_INDEX):
+	if not _index_exists(TURN_INDEX):
 		try:
 			frappe.db.sql("ALTER TABLE `tabAI Message` ADD INDEX `turn_id_index` (`turn_id`)")
 		except Exception:
