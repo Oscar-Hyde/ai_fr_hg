@@ -176,8 +176,13 @@ def resolve_file_identity(file_url: str, file_record: str | None = None, documen
 	"""
 	name = file_record
 	if name:
-		if not frappe.db.exists("File", name):
-			_throw(FileNotFoundError, f"File record '{name}' does not exist.")
+		# Stable identity: read the exact record. A nonexistent name raises
+		# Frappe's DoesNotExistError in production and is translated by the
+		# ingestion wrapper into DocumentFetchError.
+		file_doc = frappe.get_doc("File", name)
+		if file_doc.file_url != file_url:
+			_throw(AmbiguousFileIdentityError, f"File record '{name}' does not match '{file_url}'.")
+		return file_doc
 	else:
 		# Legacy rows have only a URL. An exact attachment to the requesting AI
 		# Document is stable enough to backfill; otherwise URL/content identity
