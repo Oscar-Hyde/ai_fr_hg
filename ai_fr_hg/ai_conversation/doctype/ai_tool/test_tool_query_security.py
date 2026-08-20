@@ -41,7 +41,7 @@ class TestGenericToolRowPermissions(AIPlatformTestCase):
 				"doctype": "AI Conversation",
 				"title": title,
 				"user": user,
-				"status": "Open",
+				"status": "Active",
 			}
 		)
 		doc.insert(ignore_permissions=True)
@@ -215,8 +215,8 @@ class TestGenericToolQueryMechanics(IntegrationTestCase):
 			{"title": "A", "api_key": ["!=", ""], "body": ["in", ["x", "y"]]}, "Fake DocType", readable
 		)
 		self.assertIn("title", cleaned)
-		self.assertIn("body", cleaned)
 		self.assertNotIn("api_key", cleaned, "filters on denied fields must be dropped")
+		self.assertNotIn("body", cleaned, "malformed operator shapes must be dropped, not run")
 
 		# Dict/aggregate filter syntax is never accepted from a tool.
 		self.assertNotIn(
@@ -241,7 +241,10 @@ class TestGenericToolQueryMechanics(IntegrationTestCase):
 				("base_url", "Data", 0),
 			]
 		)
-		with patch("ai_fr_hg.ai.tools.query.frappe.get_meta", return_value=meta):
+		with (
+			patch("ai_fr_hg.ai.tools.query.frappe.get_meta", return_value=meta),
+			patch("ai_fr_hg.ai.tools.query.configured_sensitive_fields", return_value=set()),
+		):
 			denied = safe_query.denied_fieldnames("Fake DocType")
 		self.assertIn("api_key", denied)
 		self.assertIn("session_key", denied)

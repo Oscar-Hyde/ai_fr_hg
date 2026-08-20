@@ -6,14 +6,18 @@
 import json
 
 import frappe
-from frappe.tests import IntegrationTestCase
+from frappe.utils import cint
+
+from ai_fr_hg.tests.integration_test_case import AIPlatformTestCase
 
 
-class TestSearchTelemetry(IntegrationTestCase):
+class TestSearchTelemetry(AIPlatformTestCase):
 	def setUp(self):
 		self.settings = frappe.get_doc("AI Platform Settings")
 		self.previous_patterns = self.settings.redact_patterns
-		self.previous_flag = self.settings.get("log_search_queries", 1)
+		self.previous_flag = cint(
+			frappe.db.get_value("AI Platform Settings", "AI Platform Settings", "log_search_queries") or 1
+		)
 
 	def tearDown(self):
 		self.settings.db_set("redact_patterns", self.previous_patterns)
@@ -24,7 +28,7 @@ class TestSearchTelemetry(IntegrationTestCase):
 
 		_log_search_job(
 			query,
-			["Test Knowledge Base"],
+			[self.knowledge_base.name],
 			"Hybrid",
 			results,
 			result_count=len(results),

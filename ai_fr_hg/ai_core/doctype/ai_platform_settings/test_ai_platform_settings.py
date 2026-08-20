@@ -103,6 +103,7 @@ class TestStorageFolderSetting(AIPlatformTestCase):
 				"file_url": "/files/storage-folder-validation.txt",
 				"is_folder": 0,
 				"folder": "Home",
+				"content": "x",
 			}
 		)
 		file_doc.insert(ignore_permissions=True)

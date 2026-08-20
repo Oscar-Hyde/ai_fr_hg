@@ -687,8 +687,10 @@ def _log_search_job(query, targets, search_type, results, result_count, top_scor
 	enforced by the scheduled cleanup job.
 	"""
 	try:
-		settings = frappe.get_cached_doc("AI Platform Settings")
-		if not cint(settings.get("log_search_queries", 1)):
+		# Direct DB read: the policy flag must reflect the current value, not a
+		# stale cached Single DocType from before the setting changed.
+		enabled = frappe.db.get_value("AI Platform Settings", "AI Platform Settings", "log_search_queries")
+		if enabled is not None and not cint(enabled):
 			return
 
 		from ai_fr_hg.ai.logging import redact

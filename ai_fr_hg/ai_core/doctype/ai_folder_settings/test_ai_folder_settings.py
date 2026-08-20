@@ -541,6 +541,7 @@ class TestUploadFileIdentityResolution(AIPlatformTestCase):
 				"is_folder": 0,
 				"folder": "Home",
 				"is_private": is_private,
+				"content": "x",
 			}
 		)
 		doc.insert(ignore_permissions=True)

@@ -173,7 +173,12 @@ def _normalise_filters(filters, doctype: str, readable: set[str]) -> dict:
 				raise ToolExecutionError(
 					_("A filter list supports at most {0} values.").format(MAX_FILTER_VALUES)
 				)
-			value = [_bounded_scalar(item) for item in value]
+			try:
+				value = [_bounded_scalar(item) for item in value]
+			except ToolExecutionError:
+				# Malformed operator shapes (e.g. ["in", [[...]]]) are dropped
+				# rather than run: a model-supplied filter must not explode.
+				continue
 		elif isinstance(value, dict):
 			continue  # dict/aggregate syntax is never accepted from a tool
 		else:
