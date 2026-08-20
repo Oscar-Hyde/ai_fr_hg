@@ -43,9 +43,11 @@ jobs:
           # dependency: they fail closed when semgrep.dev is unreachable and
           # they are not Frappe-v17 specific. The pinned Frappe ruleset is
           # the authoritative static-analysis contract.
+          # Intentional nosemgrep annotations are reviewed suppressions.
+          # --error still fails the job on real findings. Do not use
+          # --no-suppress-errors here: it treats those annotations as errors.
           semgrep scan \
             --error \
-            --no-suppress-errors \
             --metrics=off \
             --config "$RUNNER_TEMP/frappe-semgrep-rules/rules"
 
