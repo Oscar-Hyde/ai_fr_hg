@@ -11,6 +11,7 @@
   "conversation",
   "role",
   "sequence",
+  "turn_id",
   "status",
   "msg_cb",
   "model",
@@ -68,12 +69,18 @@
    "label": "Sequence"
   },
   {
+   "fieldname": "turn_id",
+   "fieldtype": "Data",
+   "label": "Turn ID",
+   "search_index": 1
+  },
+  {
    "default": "Completed",
    "fieldname": "status",
    "fieldtype": "Select",
    "in_standard_filter": 1,
    "label": "Status",
-   "options": "Draft\nPending\nStreaming\nCompleted\nFailed"
+   "options": "Draft\nPending\nStreaming\nCompleted\nFailed\nCancelled"
   },
   {
    "fieldname": "msg_cb",

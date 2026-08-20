@@ -51,6 +51,8 @@ ai_fr_hg/
 │   ├── ingestion.py         Unified document pipeline
 │   ├── settings.py          Shared settings helpers (threshold normalisation)
 │   ├── agent.py             Agent runtime: prompt → retrieve → tools → answer
+│   ├── conversation.py      Canonical conversation service (history, turns, cancel)
+│   ├── conversation_utils.py Pure latest-N window / turn-id helpers
 │   ├── pipeline.py          Pipeline execution engine
 │   ├── automation.py        Event-driven rules
 │   ├── monitoring.py        Health checks and model discovery
@@ -219,9 +221,9 @@ frequency.
 ### Map-reduce for long documents
 
 Summarisation over content larger than the context window splits into windows,
-summarises each, then reduces summaries. The budget uses the declared context
-window. INT-03 remains open because final reduction can lose facts; whole-
-document coverage must be measured before this is production-qualified.
+summarises each, then reduces summaries hierarchically (INT-03). Whole-document
+classify/extract/compare report coverage (INT-04). Browser and large-corpus
+qualification remain Phase 7.
 
 ### Tools run as the calling user
 

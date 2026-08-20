@@ -20,7 +20,12 @@ from frappe import _
 from frappe.utils import cint, flt, now_datetime
 
 from ai_fr_hg.ai.deadline import get_deadline
-from ai_fr_hg.ai.exceptions import DeadlineExceededError, ModelNotAvailableError, ProviderError
+from ai_fr_hg.ai.exceptions import (
+	DeadlineExceededError,
+	ModelNotAvailableError,
+	ProviderError,
+	TurnCancelledError,
+)
 from ai_fr_hg.ai.providers import get_failover_providers, get_provider
 from ai_fr_hg.ai.providers.base import ChatMessage, CompletionResult
 from ai_fr_hg.utils.db import safe_set_value
@@ -176,6 +181,7 @@ def run_chat(
 	pipeline_run: str | None = None,
 	allow_failover: bool = True,
 	on_token: Callable[[str], None] | None = None,
+	turn_id: str | None = None,
 ) -> CompletionResult:
 	"""Execute a chat completion with full logging, quota checks and failover."""
 	from ai_fr_hg.ai.governance import check_quota, record_usage
@@ -228,11 +234,15 @@ def run_chat(
 					tools=tools,
 					json_schema=json_schema,
 					on_token=on_token,
+					turn_id=turn_id,
 				)
 				finish_execution_log(log, result, provider=provider_name, retry_count=retry)
 				update_model_metrics(model_doc.name, result)
 				record_usage(model_doc.name, result.total_tokens)
 				return result
+			except TurnCancelledError as exc:
+				last_error = exc
+				break
 			except Exception as exc:
 				last_error = exc
 				if not (retry < max_retries and _is_retryable(exc)):
@@ -244,8 +254,8 @@ def run_chat(
 					break
 				time.sleep(backoff)
 
-		if isinstance(last_error, DeadlineExceededError):
-			break  # out of time; further providers would fail identically
+		if isinstance(last_error, (DeadlineExceededError, TurnCancelledError)):
+			break  # out of time or cancelled; further providers would fail identically
 		if attempt_index < len(attempts) - 1:
 			frappe.log_error(
 				title="AI failover",
@@ -265,6 +275,7 @@ def _complete_chat(
 	tools: list[dict] | None,
 	json_schema: dict | None,
 	on_token: Callable[[str], None] | None,
+	turn_id: str | None = None,
 ) -> CompletionResult:
 	"""Use the provider stream when requested; fall back to blocking chat."""
 	if on_token and getattr(provider, "supports_streaming", False) and not json_schema:
@@ -278,11 +289,19 @@ def _complete_chat(
 
 		try:
 			result = _complete_via_stream(
-				provider, messages, model=model, options=options, tools=tools, on_token=emit
+				provider,
+				messages,
+				model=model,
+				options=options,
+				tools=tools,
+				on_token=emit,
+				turn_id=turn_id,
 			)
 			if streamed:
 				result.raw["streamed"] = True
 				return result
+		except TurnCancelledError:
+			raise
 		except Exception:
 			if streamed:
 				raise
@@ -290,11 +309,22 @@ def _complete_chat(
 
 
 def _complete_via_stream(
-	provider, messages, *, model: str, options: dict, tools: list[dict] | None, on_token
+	provider,
+	messages,
+	*,
+	model: str,
+	options: dict,
+	tools: list[dict] | None,
+	on_token,
+	turn_id: str | None = None,
 ) -> CompletionResult:
+	from ai_fr_hg.ai.conversation import is_turn_cancelled
+
 	started = time.monotonic()
 	parts: list[str] = []
 	for fragment in provider.stream_chat(messages, model=model, options=options, tools=tools):
+		if turn_id and is_turn_cancelled(turn_id):
+			raise TurnCancelledError(partial="".join(parts))
 		if not fragment:
 			continue
 		parts.append(fragment)

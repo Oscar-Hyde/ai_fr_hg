@@ -35,8 +35,8 @@ The previous version of this document described nearly every module as READY or 
 | Reports | 3 |
 | Audited pre-Phase-0 Python test methods | 392 |
 | Latest verified real-bench baseline | 392 passed, 1 skipped (before current Phase 0 changes) |
-| Production JavaScript files | 52 |
-| JavaScript/browser tests | 0 |
+| Production JavaScript files | 56 |
+| JavaScript unit test files | 1 (Node); browser E2E still 0 |
 
 The supplied `site1.local` run passed:
 
@@ -76,7 +76,7 @@ Green tests prove the covered paths. They do not cover browser behavior, real ru
 | Intelligence | **PARTIAL** | Summary/classify/extract/compare main paths exist. Extraction is explicitly JSON-only and the dormant target DocType field is hidden; whole-document strategies and strict local schema validation remain. |
 | Pattern extraction | **PARTIAL** | Strong deterministic extraction and tests. Durable zero-result scan state, correct tail offsets, semantic value validation, and aggregate explorer remain. |
 | Translation | **PARTIAL** | Strong segmentation, masking, quality checks, repair, review, memory, and indexing core. Memory requires authorized KB scope and policy identity (SEC-01/TRN-01). Progress/cancel, default index setting, glossary/KB parity, and worker restoration remain Phase 4. |
-| Assistant/agents | **PARTIAL** | Chat, retrieval, citations, tools, streaming, and friendly runtime failures work. Agent KB weights and folder-scoped ask are forwarded to retrieval. Latest-history selection, route state, cancellation, focused document, fallback answer, and conversation UX remain Phase 3. |
+| Assistant/agents | **READY / HARDENING REQUIRED** | Latest-N history, locked sequence + turn_id, route-state restore, focused document, fallback answer, footnote citations, rename/pin/archive/export, negative-feedback reason/correction, cooperative cancel/reconnect, and stable File identity on upload. Browser E2E remains Phase 7. |
 | Tools/approvals | **PARTIAL / HARDENING REQUIRED** | Approval, audit, argument validation, permissions, and runtime limit exist. Generic count/field isolation, defaults, expiry, async approval execution, and pipeline resume remain. |
 | Pipelines | **PARTIAL** | Ordered/nested execution, cycle guards, step logs, retries, cancel, and provenance exist. Trigger wiring, schedule claiming, resumable approval, and visual builder remain. |
 | Automation | **PARTIAL** | Cached event dispatch and main actions exist. Delete-event snapshots, source validation, atomic counters, revision-aware dedupe, and execution coverage remain. |
@@ -87,7 +87,7 @@ Green tests prove the covered paths. They do not cover browser behavior, real ru
 | Backup/import/export | **PARTIAL — restore work required** | Text JSON round-trip exists. Exported embeddings are ignored by import; component completeness, streaming, format version, retention, and restore drills remain. |
 | Encryption | **INTENTIONALLY UNSUPPORTED** | The dormant compatibility field is hidden/read-only, reset to 0, and rejected server-side. Use deployment-layer encrypted storage/database/backups. |
 | CI/release | **PARTIAL — owner branch protection** | Hosted Server, Linter, Frontend static, and Dependency audit are green on the Phase 2 PR and on `main` after Phase 1. Branch protection on `main` is still off (OPS-01; GitHub App HTTP 403). |
-| Frontend validation | **PARTIAL** | JavaScript parses and pages are implemented, but there are no JS unit, browser E2E, accessibility, or responsive tests. |
+| Frontend validation | **PARTIAL** | Shared route-state/RPC/realtime helpers have Node unit tests. Browser E2E, accessibility, and responsive tests remain Phase 7. |
 
 ---
 
@@ -96,22 +96,19 @@ Green tests prove the covered paths. They do not cover browser behavior, real ru
 ### P0 — fix before production use
 
 1. Repository owner must require Server, Linter, Frontend static, and Dependency audit on `main` (OPS-01; the GitHub App cannot enable branch protection).
-2. Phase 3 conversation correctness (latest-history, concurrent sequencing, cancellation).
 
-Phase 1 isolation/API safety and Phase 2 retrieval correctness are closed on this branch, with a 2026-08-20 verification pass that wired remaining agent folder/weight/citation paths and the Explorer facets API.
+Phase 1 isolation/API safety, Phase 2 retrieval correctness, and Phase 3 conversation contracts are closed on this branch. Browser E2E remains Phase 7.
 
 ### P1 — complete existing product promises
 
 1. Enforce resource/provider/model concurrency and provider rate limits.
-2. Fix latest conversation history and atomic message sequencing.
-3. Complete conversation route state, cancel/retry, pin/rename/archive/restore, and feedback correction UX.
-4. Keep removed Folder/`.msg`/reranker/target-mapping controls absent; implement translation/ingestion progress, parser hardening, and provider model lifecycle. Scanned-PDF OCR and original-format reconstruction remain intentionally unsupported unless a future decision supersedes Phase 0.
-5. Add pipeline API/document-ingest triggers, atomic schedule claims, waiting-approval resume, and a typed builder.
-6. Complete AI Task types, state transitions, scheduling, audit links, and UI.
-7. Add translation/pattern/ingestion progress and cancellation.
-8. Build Learning and Pattern Explorer dashboards and fix reports.
-9. Make export/import a versioned, tested restore path.
-10. Add browser, real-runtime, optional dependency, load, concurrency, security, and migration tests.
+2. Keep removed Folder/`.msg`/reranker/target-mapping controls absent; implement translation/ingestion progress, parser hardening, and provider model lifecycle. Scanned-PDF OCR and original-format reconstruction remain intentionally unsupported unless a future decision supersedes Phase 0.
+3. Add pipeline API/document-ingest triggers, atomic schedule claims, waiting-approval resume, and a typed builder.
+4. Complete AI Task types, state transitions, scheduling, audit links, and UI.
+5. Add translation/pattern/ingestion progress and cancellation.
+6. Build Learning and Pattern Explorer dashboards and fix reports.
+7. Make export/import a versioned, tested restore path.
+8. Add browser, real-runtime, optional dependency, load, concurrency, security, and migration tests.
 
 ---
 
@@ -123,9 +120,6 @@ The complete analysis is in the development plan. The most important current exa
 - `AI Provider.max_concurrent_requests` and `rate_limit_per_minute` — unused.
 - `AI Model.max_concurrent_requests` and `supports_json_mode` — not effectively connected; the unimplemented Versions table is retained but hidden/read-only.
 - `AI Provider.model_prefix` — unused.
-- `AI Agent.fallback_answer` — unused (CHAT-04, Phase 3).
-- `AI Agent Knowledge Base.weight` — applied during retrieval fusion (RET-04). Conversation configuration reload remains CHAT-04.
-- `AI Conversation.context_document` — unused (CHAT-04, Phase 3).
 - `AI Message.execution_log` and `AI Task.execution_log` — not populated.
 - `AI Execution Log.queue_time_ms` — not populated.
 - `AI Folder Settings.knowledge_tag` and `is_archived` — unused.
@@ -133,7 +127,6 @@ The complete analysis is in the development plan. The most important current exa
 - `AI Extraction Schema.target_doctype` — retained for compatibility but hidden/read-only; extraction is JSON-only.
 - `AI Usage Snapshot.document_count` — unused.
 - Folder source, `.msg`, and Reranker choices — removed from supported metadata/registration; legacy database rows are preserved where applicable.
-- Platform translation index-output default — loaded but not applied when new translations are created.
 
 Remaining visible controls require implementation, repurposing, or removal in
 their owning phase. Phase 0 decisions are recorded in
@@ -154,7 +147,7 @@ their owning phase. Phase 0 decisions are recorded in
 ### Not yet covered adequately
 
 - Browser/Desk end-to-end flows.
-- JavaScript unit tests.
+- Broader JavaScript unit coverage (route/RPC/realtime helpers exist).
 - Accessibility and mobile behavior.
 - Real Ollama/OpenAI-compatible runtime behavior.
 - PDF/Office/OCR optional dependencies as a matrix.
@@ -192,7 +185,7 @@ future implementation phase must update its owning guide with evidence.
 ## Recommended immediate sequence
 
 1. Repository owner: require Server, Linter, Frontend static, and Dependency audit on `main` (OPS-01).
-2. Phase 3 — conversation and agent completion (CHAT-01 through CHAT-08), starting with latest-N history.
-3. Then Phases 4–7 in order.
+2. Close remaining Phase 4 items (ING-06, TRN-03/04/05/07, PAT-01–04) before Phase 5.
+3. Then Phases 5–7 in order.
 
 See the roadmap for phased effort, frontend/backend deliverables, migration strategy, and exit criteria.

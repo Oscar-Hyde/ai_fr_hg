@@ -13,9 +13,10 @@ frappe.ui.form.on("AI Conversation", {
 			})
 		);
 
-		frm.add_custom_button(__("Open in Assistant"), () =>
-			frappe.set_route("ai-assistant", { conversation: frm.doc.name })
-		);
+		frm.add_custom_button(__("Open in Assistant"), () => {
+			frappe.route_options = { conversation: frm.doc.name };
+			frappe.set_route("ai-assistant", frm.doc.name);
+		});
 
 		if (frm.doc.agent) {
 			frm.add_custom_button(__("View Agent"), () =>

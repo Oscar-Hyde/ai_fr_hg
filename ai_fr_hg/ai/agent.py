@@ -16,6 +16,17 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, now_datetime
 
+from ai_fr_hg.ai.conversation import (
+	focused_documents,
+	history_was_truncated,
+	is_turn_cancelled,
+	save_message,
+	sync_turn_configuration,
+)
+from ai_fr_hg.ai.conversation import (
+	get_conversation_history as load_conversation_history,
+)
+from ai_fr_hg.ai.conversation_utils import HISTORY_LIMIT
 from ai_fr_hg.ai.deadline import allows as budget_allows
 from ai_fr_hg.ai.deadline import expired as budget_expired
 from ai_fr_hg.ai.engine import resolve_model, run_chat
@@ -24,6 +35,7 @@ from ai_fr_hg.ai.exceptions import (
 	ProviderError,
 	ProviderOfflineError,
 	ProviderTimeoutError,
+	TurnCancelledError,
 )
 from ai_fr_hg.ai.logging import write_audit_log
 from ai_fr_hg.ai.providers.base import ChatMessage
@@ -47,6 +59,11 @@ CITATION_INSTRUCTIONS = (
 	"Place each citation immediately after the statement it supports."
 )
 
+CITATION_FOOTNOTE_INSTRUCTIONS = (
+	"Cite the context passages using footnote style [^1], [^2] and collect the "
+	"footnote definitions at the end of your answer."
+)
+
 LANGUAGE_INSTRUCTIONS = (
 	"CONTEXT marks each file with language=... A file may mix English, Arabic and Hebrew. "
 	"If asked what language a file is in, list every language in that label. "
@@ -60,7 +77,7 @@ USER_LANGUAGE_INSTRUCTIONS = (
 )
 
 #: Conversation history window sent to the model, in messages.
-HISTORY_LIMIT = 20
+# `HISTORY_LIMIT` is imported from conversation_utils.
 
 #: Rough cost of one more model round trip. Used to decide whether the turn can
 #: afford another tool iteration, or should settle for the answer it has.
@@ -179,8 +196,10 @@ def build_system_prompt(
 	if context:
 		if agent_doc.strict_grounding:
 			parts.append(GROUNDING_INSTRUCTIONS)
-		if agent_doc.citation_mode and agent_doc.citation_mode != "None":
+		if agent_doc.citation_mode == "Inline":
 			parts.append(CITATION_INSTRUCTIONS)
+		elif agent_doc.citation_mode == "Footnote":
+			parts.append(CITATION_FOOTNOTE_INSTRUCTIONS)
 		if "language=" in context:
 			parts.append(LANGUAGE_INSTRUCTIONS)
 		parts.append(f"CONTEXT:\n{context}")
@@ -226,32 +245,8 @@ def get_agent_knowledge_base_weights(agent_doc, conversation_doc=None) -> dict[s
 
 
 def get_conversation_history(conversation: str, limit: int = HISTORY_LIMIT) -> list[ChatMessage]:
-	"""Load the recent turns of a conversation as chat messages."""
-	rows = frappe.get_all(
-		"AI Message",
-		filters={"conversation": conversation, "status": ["in", ["Completed", "Draft"]]},
-		fields=["role", "content", "tool_call_id", "tool_arguments", "tool_result", "tool"],
-		order_by="sequence asc, creation asc",
-		limit_page_length=limit,
-	)
-
-	messages = []
-	for row in rows:
-		role = (row.role or "user").lower()
-		if role == "system":
-			continue  # the system prompt is rebuilt fresh each turn
-		if role == "tool":
-			messages.append(
-				ChatMessage(
-					role="tool",
-					content=row.tool_result or "",
-					name=row.tool,
-					tool_call_id=row.tool_call_id,
-				)
-			)
-		else:
-			messages.append(ChatMessage(role=role, content=row.content or ""))
-	return messages
+	"""Load the most recent turns of a conversation as chat messages (CHAT-01)."""
+	return load_conversation_history(conversation, limit=limit)
 
 
 def run_agent_turn(
@@ -266,6 +261,7 @@ def run_agent_turn(
 	documents: list[str] | None = None,
 	folder: str | None = None,
 	on_token=None,
+	turn_id: str | None = None,
 ) -> dict:
 	"""Execute one full agent turn and return the answer with its provenance.
 
@@ -279,13 +275,25 @@ def run_agent_turn(
 	started = time.monotonic()
 	agent_doc = get_agent(agent)
 	conversation_doc = frappe.get_doc("AI Conversation", conversation) if conversation else None
+	turn_id = (turn_id or "").strip() or frappe.generate_hash(length=12)
 
 	model_name = model or (conversation_doc.model if conversation_doc else None) or agent_doc.model
 	model_doc = resolve_model(model_name, "Chat")
 
+	if conversation:
+		sync_turn_configuration(
+			conversation,
+			agent=agent_doc.name,
+			model=model_doc.name,
+			knowledge_bases=knowledge_bases or None,
+		)
+		conversation_doc = frappe.get_doc("AI Conversation", conversation)
+
 	# 1. Retrieve supporting knowledge.
 	retrieved = []
 	context = extra_context or ""
+	# CHAT-04: focused document is an authorized extra retrieval scope.
+	documents = focused_documents(conversation_doc, documents)
 	# Attached files and folder-scoped asks are this turn's source of truth
 	# even when the agent does not auto-retrieve from its knowledge bases
 	# (the seeded General Assistant keeps use_knowledge off so empty-site
@@ -344,21 +352,81 @@ def run_agent_turn(
 	except Exception:
 		frappe.log_error(title="AI memory recall failed", message=frappe.get_traceback())
 
-	messages = [
-		ChatMessage(
-			role="system",
-			content=build_system_prompt(agent_doc, context, override, memory_block, skills_block),
-		)
-	]
+	system_content = build_system_prompt(agent_doc, context, override, memory_block, skills_block)
+	if include_history and conversation and history_was_truncated(conversation) and conversation_doc:
+		summary = (conversation_doc.summary or "").strip()
+		if summary:
+			system_content = f"{system_content}\n\nEarlier turns were summarised as:\n{summary}"
+	messages = [ChatMessage(role="system", content=system_content)]
 	if include_history and conversation:
 		messages.extend(get_conversation_history(conversation))
 	messages.append(ChatMessage(role="user", content=prompt))
 
-	# 3. Persist the user's message.
 	user_message = None
+	assistant_message = None
+
+	# CHAT-04: strict-grounding fallback — when no context was retrieved and
+	# the agent defines a fallback_answer, return it without calling the model.
+	if not (context or "").strip() and agent_doc.strict_grounding and agent_doc.fallback_answer:
+		if save_messages and conversation:
+			user_message = save_message(
+				conversation,
+				role="User",
+				content=prompt,
+				agent=agent_doc.name,
+				model=model_doc.name,
+				turn_id=turn_id,
+			)
+			assistant_message = save_message(
+				conversation,
+				role="Assistant",
+				content=agent_doc.fallback_answer,
+				agent=agent_doc.name,
+				model=model_doc.name,
+				status="Completed",
+				turn_id=turn_id,
+			)
+			update_conversation_stats(conversation, None)
+		return {
+			"answer": agent_doc.fallback_answer,
+			"reasoning": "",
+			"conversation": conversation,
+			"agent": agent_doc.name,
+			"model": model_doc.name,
+			"citations": [],
+			"tool_invocations": [],
+			"timed_out": False,
+			"cancelled": False,
+			"turn_id": turn_id,
+			"user_message": user_message.name if user_message else None,
+			"message": assistant_message.name if assistant_message else None,
+			"prompt_tokens": 0,
+			"completion_tokens": 0,
+			"total_tokens": 0,
+			"duration_ms": int((time.monotonic() - started) * 1000),
+			"_streamed": False,
+			"fallback": True,
+		}
+
+	# 3. Persist the user's message and a Streaming assistant placeholder so
+	# cancel/reconnect have a durable turn identity (CHAT-07).
 	if save_messages and conversation:
 		user_message = save_message(
-			conversation, role="User", content=prompt, agent=agent_doc.name, model=model_doc.name
+			conversation,
+			role="User",
+			content=prompt,
+			agent=agent_doc.name,
+			model=model_doc.name,
+			turn_id=turn_id,
+		)
+		assistant_message = save_message(
+			conversation,
+			role="Assistant",
+			content="",
+			agent=agent_doc.name,
+			model=model_doc.name,
+			status="Streaming",
+			turn_id=turn_id,
 		)
 
 	# 4. Run the model, resolving tool calls iteratively.
@@ -369,10 +437,14 @@ def run_agent_turn(
 	tool_invocations: list[dict] = []
 	result = None
 	timed_out = False
+	cancelled = False
 	timeout_kind = "budget"
 	provider_answer = ""
 
 	for iteration in range(max_iterations + 1):
+		if is_turn_cancelled(turn_id):
+			cancelled = True
+			break
 		# Offering tools invites another round trip to interpret their output.
 		# Once the budget can no longer fund that, ask for a final answer
 		# instead - a grounded reply now beats a perfect one after the proxy
@@ -389,6 +461,7 @@ def run_agent_turn(
 				tools=offer_tools,
 				operation="Chat",
 				conversation=conversation,
+				turn_id=turn_id,
 				on_token=on_token
 				if should_stream_completion(
 					requested=bool(on_token),
@@ -397,6 +470,13 @@ def run_agent_turn(
 				)
 				else None,
 			)
+		except TurnCancelledError as exc:
+			cancelled = True
+			if exc.partial:
+				from ai_fr_hg.ai.providers.base import CompletionResult
+
+				result = CompletionResult(content=exc.partial)
+			break
 		except DeadlineExceededError:
 			# The whole turn ran out of its shared time budget.
 			timed_out = True
@@ -421,7 +501,7 @@ def run_agent_turn(
 			provider_answer = answer_for_provider_error(exc)
 			break
 
-		if not result.tool_calls:
+		if not result or not result.tool_calls:
 			break
 
 		# Tool results are only useful if we can afford the follow-up call
@@ -477,10 +557,14 @@ def run_agent_turn(
 					tool_arguments=frappe.as_json(call["arguments"]),
 					tool_result=frappe.as_json(outcome.get("result")),
 					agent=agent_doc.name,
+					turn_id=turn_id,
 				)
 
 	citations = [r.as_dict() for r in retrieved]
 	answer = (result.content if result else "") or ""
+
+	if cancelled and not answer.strip():
+		answer = "This turn was cancelled."
 
 	# A blown budget (or an unresponsive runtime) is a real outcome, not a
 	# dropped connection. Persist an explanation so the conversation stays
@@ -494,35 +578,49 @@ def run_agent_turn(
 			"provider": provider_answer or PROVIDER_ERROR_ANSWER,
 		}[timeout_kind]
 
-	# 5. Persist the assistant's reply.
-	assistant_message = None
+	if cancelled:
+		status = "Cancelled"
+		error_message = _("Cancelled by user")
+	elif timed_out:
+		status = "Failed"
+		error_message = {
+			"budget": "Turn exceeded its time budget.",
+			"timeout": "The model did not respond in time.",
+			"offline": "The AI runtime is unreachable.",
+			"provider": "The model runtime rejected the request.",
+		}.get(timeout_kind)
+	else:
+		status = "Completed"
+		error_message = None
+
 	if save_messages and conversation:
-		assistant_message = save_message(
-			conversation,
-			role="Assistant",
-			content=answer,
-			reasoning=result.reasoning if result else None,
-			model=model_doc.name,
-			agent=agent_doc.name,
-			citations=frappe.as_json(citations) if citations else None,
-			context_used=context or None,
-			learned_context=frappe.as_json(learned_context)
+		values = {
+			"content": answer,
+			"reasoning": (result.reasoning if result else None) or "",
+			"model": model_doc.name,
+			"citations": frappe.as_json(citations) if citations else None,
+			"context_used": context or None,
+			"learned_context": frappe.as_json(learned_context)
 			if learned_context["memories"] or learned_context["skills"]
 			else None,
-			prompt_tokens=result.prompt_tokens if result else 0,
-			completion_tokens=result.completion_tokens if result else 0,
-			total_tokens=result.total_tokens if result else 0,
-			duration_ms=result.duration_ms if result else 0,
-			status="Failed" if timed_out else "Completed",
-			error_message={
-				"budget": "Turn exceeded its time budget.",
-				"timeout": "The model did not respond in time.",
-				"offline": "The AI runtime is unreachable.",
-				"provider": "The model runtime rejected the request.",
-			}.get(timeout_kind)
-			if timed_out
-			else None,
-		)
+			"prompt_tokens": result.prompt_tokens if result else 0,
+			"completion_tokens": result.completion_tokens if result else 0,
+			"total_tokens": result.total_tokens if result else 0,
+			"duration_ms": result.duration_ms if result else 0,
+			"status": status,
+			"error_message": error_message,
+			"turn_id": turn_id,
+		}
+		if assistant_message:
+			assistant_message.db_set(values)
+		else:
+			assistant_message = save_message(
+				conversation,
+				role="Assistant",
+				content=answer,
+				agent=agent_doc.name,
+				**{key: value for key, value in values.items() if key != "content"},
+			)
 		update_conversation_stats(conversation, result)
 
 	update_agent_stats(agent_doc.name, result)
@@ -536,6 +634,8 @@ def run_agent_turn(
 		"citations": citations,
 		"tool_invocations": tool_invocations,
 		"timed_out": timed_out,
+		"cancelled": cancelled,
+		"turn_id": turn_id,
 		"user_message": user_message.name if user_message else None,
 		"message": assistant_message.name if assistant_message else None,
 		"prompt_tokens": result.prompt_tokens if result else 0,
@@ -544,33 +644,6 @@ def run_agent_turn(
 		"duration_ms": int((time.monotonic() - started) * 1000),
 		"_streamed": bool(result and getattr(result, "raw", None) and result.raw.get("streamed")),
 	}
-
-
-def save_message(conversation: str, role: str, content: str, **kwargs):
-	"""Append a message to a conversation with the next sequence number."""
-	sequence = (
-		frappe.db.sql(
-			"select coalesce(max(sequence), 0) from `tabAI Message` where conversation = %s",
-			(conversation,),
-		)[0][0]
-		or 0
-	)
-
-	message = frappe.new_doc("AI Message")
-	message.update(
-		{
-			"conversation": conversation,
-			"role": role,
-			"content": content,
-			"sequence": cint(sequence) + 1,
-			"status": "Completed",
-			"user": frappe.session.user,
-			**{k: v for k, v in kwargs.items() if v is not None},
-		}
-	)
-	message.flags.ignore_permissions = True
-	message.insert(ignore_permissions=True)
-	return message
 
 
 def update_conversation_stats(conversation: str, result) -> None:
@@ -636,7 +709,12 @@ def create_conversation(
 			"model": agent_doc.model,
 		}
 	)
-	for kb in knowledge_bases or []:
+	seed_kbs = (
+		knowledge_bases
+		if knowledge_bases is not None
+		else [row.knowledge_base for row in agent_doc.get("knowledge_bases") or [] if row.knowledge_base]
+	)
+	for kb in seed_kbs or []:
 		conversation.append("knowledge_bases", {"knowledge_base": kb})
 	conversation.insert()
 

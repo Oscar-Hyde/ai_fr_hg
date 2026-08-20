@@ -32,6 +32,22 @@
 	border-bottom: 1px solid var(--border-color);
 }
 
+.ai-archived-toggle {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 6px;
+	color: var(--text-muted);
+}
+
+.ai-archived-toggle {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 6px;
+	color: var(--text-muted);
+}
+
 .ai-conversation-list {
 	flex: 1;
 	overflow-y: auto;
@@ -50,6 +66,10 @@
 	&.active {
 		background: var(--bg-blue);
 		border-left: 3px solid var(--primary);
+	}
+
+	&.archived {
+		opacity: 0.7;
 	}
 }
 
@@ -226,6 +246,44 @@
 .ai-bubble-warning {
 	background: var(--bg-yellow);
 	color: var(--text-color);
+}
+
+.ai-bubble-cancelled {
+	background: var(--bg-light-gray);
+	color: var(--text-muted);
+	font-style: italic;
+}
+
+.ai-focus-chip,
+.ai-file-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	border: 1px solid var(--border-color);
+	border-radius: 12px;
+	padding: 1px 10px;
+	font-size: var(--text-xs);
+	background: var(--fg-color);
+}
+
+.ai-pending-files {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	margin-bottom: var(--margin-xs);
+}
+
+.ai-file-remove {
+	border: none;
+	background: transparent;
+	padding: 0 2px;
+	cursor: pointer;
+	color: var(--text-muted);
+}
+
+.ai-load-more {
+	display: block;
+	margin: 0 auto var(--margin-sm);
 }
 
 .ai-message-footer {

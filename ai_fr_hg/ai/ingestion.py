@@ -42,6 +42,7 @@ from ai_fr_hg.ai.language import (
 from ai_fr_hg.ai.logging import write_audit_log
 from ai_fr_hg.ai.readers import get_reader, supported_extensions
 from ai_fr_hg.ai.readers.base import MissingDependency
+from ai_fr_hg.ai.readers.base import coerce_warnings as __coerce_warnings
 from ai_fr_hg.utils.network import enforce_local_only, get_allowed_hosts
 
 DEFAULT_MAX_DOCUMENT_MB = 50
@@ -394,6 +395,11 @@ def process_document(
 						"metadata": json.dumps(result.metadata, default=str) if result.metadata else None,
 						"error_type": None,
 						"error_message": None,
+						"extraction_warnings": json.dumps(
+							__coerce_warnings(result.warnings, reader.label, filename), indent=2
+						)
+						if result.warnings
+						else "[]",
 					},
 					update_modified=False,
 				)

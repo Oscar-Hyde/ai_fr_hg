@@ -279,12 +279,27 @@ def extract_document_data(document: str, schema: str, save: bool = True) -> dict
 	doc = frappe.get_doc("AI Document", document)
 	doc.check_permission("read")
 
-	data = extract_data(
-		doc.content or "",
-		schema=schema,
-		reference_doctype="AI Document",
-		reference_name=document,
-	)
+	try:
+		data = extract_data(
+			doc.content or "",
+			schema=schema,
+			reference_doctype="AI Document",
+			reference_name=document,
+		)
+	except Exception as e:
+		from ai_fr_hg.ai.validation import ValidationError as _VE
+
+		if isinstance(e, _VE):
+			frappe.log_error(
+				title="INT-02 validation failed", message=f"{e} errors={e.errors} provenance={e.provenance}"
+			)
+			frappe.throw(
+				_("Validation failed: {0}").format(
+					e.errors[0]["message"] if getattr(e, "errors", None) else str(e)
+				),
+				exc=e,
+			)
+		raise
 
 	if cint(save):
 		doc.check_permission("write")
@@ -333,6 +348,24 @@ def get_document_chunks(document: str, limit: int = 100) -> list:
 
 
 @frappe.whitelist()
+def get_document_warnings(document: str) -> dict:
+	"""Return durable extraction warnings (ING-05) via canonical service.
+	Respects AI Document read permission; background workers persist via same ingestion path.
+	"""
+	doc = frappe.get_doc("AI Document", document)
+	doc.check_permission("read")
+	raw = doc.get("extraction_warnings") or "[]"
+	try:
+		import json
+
+		warnings = json.loads(raw) if isinstance(raw, str) else raw
+		if not isinstance(warnings, list):
+			warnings = []
+	except Exception:
+		warnings = []
+	return {"document": document, "warnings": warnings, "status": doc.status, "reader_used": doc.reader_used}
+
+
 def scan_pattern_entities(document: str) -> dict:
 	"""Extract high-precision pattern entities from a document's stored content.
 

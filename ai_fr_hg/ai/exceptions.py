@@ -120,3 +120,19 @@ class AmbiguousFileIdentityError(FolderError):
 
 class InvalidFolderNameError(FolderError):
 	"""Raised when a folder or file name is invalid."""
+
+
+class HierarchicalReductionError(DocumentProcessingError):
+	"""INT-03: Bounded hierarchical reduction exceeded safe levels — explicit failure, never silent truncation."""
+
+
+class TurnCancelledError(AIError):
+	"""Raised when a chat turn is cooperatively cancelled (CHAT-07).
+
+	``partial`` holds any tokens already produced so the assistant message can
+	be persisted as Cancelled rather than discarded.
+	"""
+
+	def __init__(self, message: str | None = None, partial: str = ""):
+		self.partial = partial or ""
+		super().__init__(message or _("This turn was cancelled."))

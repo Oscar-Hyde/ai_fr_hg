@@ -864,6 +864,33 @@ class TestStreamingDecision(UnitTestCase):
 		self.assertEqual(result.content, "Hello")
 		self.assertTrue(result.raw.get("streamed"))
 
+	def test_stream_stops_when_turn_is_cancelled(self):
+		from types import SimpleNamespace
+
+		from ai_fr_hg.ai.engine import _complete_via_stream
+		from ai_fr_hg.ai.exceptions import TurnCancelledError
+
+		provider = SimpleNamespace()
+		provider.stream_chat = lambda *args, **kwargs: iter(["Hel", "lo"])
+		state = {"n": 0}
+
+		def cancelled(_turn_id):
+			state["n"] += 1
+			return state["n"] > 1
+
+		with patch("ai_fr_hg.ai.conversation.is_turn_cancelled", side_effect=cancelled):
+			with self.assertRaises(TurnCancelledError) as ctx:
+				_complete_via_stream(
+					provider,
+					[],
+					model="test",
+					options={},
+					tools=None,
+					on_token=lambda delta: None,
+					turn_id="turn-1",
+				)
+		self.assertEqual(ctx.exception.partial, "Hel")
+
 	def test_mid_stream_failure_does_not_start_a_second_completion(self):
 		from types import SimpleNamespace
 		from unittest.mock import Mock
