@@ -12,6 +12,21 @@
 
 (() => {
 	if (typeof frappe === "undefined") return;
+	// Version gate: these overrides target the supported Frappe v17
+	// pre-release revision. On any other framework version they must not
+	// run - a stale monkey patch is a greater risk than the bypass it
+	// would otherwise prevent.
+	try {
+		const version = frappe?.boot?.versions?.frappe || "";
+		if (version && !String(version).startsWith("17.")) {
+			console.warn(
+				`AI folder: File list patches are gated to Frappe v17; found "${version}". Disabled.`
+			);
+			return;
+		}
+	} catch (_e) {
+		// Version probe failed; continue (Desk boot is incomplete).
+	}
 	// Ensure the global listview registry exists even during early Desk boot
 	// or when returning to Desk via SPA navigation and the module is
 	// re-evaluated from cache.

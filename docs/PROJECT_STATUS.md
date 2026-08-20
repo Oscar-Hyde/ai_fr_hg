@@ -65,11 +65,11 @@ Green tests prove the covered paths. They do not cover browser behavior, real ru
 | Area | Current status | Summary |
 | --- | --- | --- |
 | Provider adapters | **PARTIAL / HARDENING REQUIRED** | Ollama and OpenAI-compatible paths work. Provider/model concurrency, provider rate limits, capability enforcement, equivalent-model failover, versions, and full model lifecycle remain. |
-| Network guard | **PARTIAL / HARDENING REQUIRED** | Local/private validation exists. Connection-level DNS/proxy/redirect hardening is still required before using absolute “never leaves” claims. |
+| Network guard | **READY / HARDENING REQUIRED** | Connection-level transport hardening is implemented and runtime-tested (pinned dial, no env proxies, redirect refusal, peer revalidation, allowlist policy). Browser/E2E remains Phase 7. |
 | Ingestion | **PARTIAL** | File, text, URL, and DocType-record main paths exist. Unsupported Folder source and `.msg` exposure were removed; scanned-PDF OCR is explicitly unsupported; warnings/progress/cancel remain. |
 | Readers | **PARTIAL** | 36 extensions are registered with optional dependency degradation. PDF means text-layer extraction; OCR applies to image files, not scanned PDFs. |
 | Document tree | **READY / HARDENING REQUIRED** | Strong identity, locking, permissions, bulk operations, concurrency checks, and tests. Deep/large tree browser and load validation remain. |
-| File/folder organization | **PARTIAL / HARDENING REQUIRED** | Rich canonical service exists. Global Desk patches, native move fallback, stable File identity, default-folder semantics, and deep folder picker need revision. |
+| File/folder organization | **READY / HARDENING REQUIRED** | Canonical service is the sole mutation owner: native paste fallback removed, stable File identity enforced, storage folder is a validated File Link, “Shared Uploads”/“Public” naming is truthful, uploader uses a lazy native Link picker, and Desk patches are version-gated. Browser verification remains Phase 7. |
 | Chunking/vector math | **READY** | Pure logic is well tested. |
 | Retrieval | **PARTIAL — production blocker** | Hybrid flow works on small corpora. Semantic/keyword candidates are bounded before ranking, mixed KB embedding models are not reconciled, and KB-specific retrieval settings/weights are not fully applied. |
 | Knowledge Explorer | **PARTIAL** | Search/ask/upload/overview work. Pagination, folder/entity facets, diagnostics, and robust upload progress remain. |

@@ -156,12 +156,14 @@ for a fresh install.
 
 ### Air-gapped deployment
 
-The platform is intended for isolated networks. **Strict Local Only** performs
-application-level URL/address validation, but connection-level proxy, DNS
-rebinding, redirect, and socket hardening is still tracked as SEC-04. Use host
-firewall/egress controls as the actual network boundary. Model files can be
-transferred through runtime-supported offline procedures. Current knowledge
-JSON export/import is not a complete backup/restore mechanism (OPS-04).
+The platform is intended for isolated networks. **Strict Local Only** validates
+the hostname once (all resolved addresses must be private unless the host is
+allowlisted) and the provider transport ignores environment proxies, dials
+only the validated address, refuses redirects, and re-validates the peer
+socket before trusting a response. Use host firewall/egress controls as the
+actual network boundary. Model files can be transferred through
+runtime-supported offline procedures. Current knowledge JSON export/import is
+not a complete backup/restore mechanism (OPS-04).
 
 ---
 

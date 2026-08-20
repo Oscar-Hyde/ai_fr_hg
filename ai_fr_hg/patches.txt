@@ -18,3 +18,4 @@ ai_fr_hg.patches.v0_0_11_detect_document_languages
 ai_fr_hg.patches.v0_0_12_redetect_mixed_languages
 ai_fr_hg.patches.v0_0_13_translation_support
 ai_fr_hg.patches.v0_0_14_disable_unsupported_controls
+ai_fr_hg.patches.v0_0_15_folder_truthfulness

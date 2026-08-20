@@ -82,3 +82,75 @@ class TestPlatformSettingsAPI(AIPlatformTestCase):
 		self.assertEqual(legacy.enabled, 0)
 		self.assertEqual(legacy.is_default, 0)
 		self.assertIn("no supported execution path", legacy.last_error)
+
+
+class TestStorageFolderSetting(AIPlatformTestCase):
+	"""FILE-04: the storage folder is a real File folder identity, validated."""
+
+	def test_storage_folder_must_be_a_real_folder(self):
+		settings = frappe.get_single("AI Platform Settings")
+		previous = settings.storage_folder
+
+		settings.storage_folder = "NoSuchFolderAnywhere"
+		with self.assertRaises(frappe.ValidationError):
+			settings.validate_storage_folder()
+
+		# A File record that is not a folder is also rejected.
+		file_doc = frappe.get_doc(
+			{
+				"doctype": "File",
+				"file_name": "storage-folder-validation.txt",
+				"file_url": "/files/storage-folder-validation.txt",
+				"is_folder": 0,
+				"folder": "Home",
+			}
+		)
+		file_doc.insert(ignore_permissions=True)
+		try:
+			settings.storage_folder = file_doc.name
+			with self.assertRaises(frappe.ValidationError):
+				settings.validate_storage_folder()
+		finally:
+			frappe.delete_doc("File", file_doc.name, force=True, ignore_permissions=True)
+
+		# Restore previous value for isolation.
+		settings.db_set("storage_folder", previous)
+
+	def test_default_folder_requires_write_access_on_the_configured_folder(self):
+		from ai_fr_hg.ai.folders import get_default_folder
+
+		private_folder = frappe.get_doc(
+			{
+				"doctype": "File",
+				"file_name": "ManagerOnlyStorage",
+				"is_folder": 1,
+				"folder": "Home",
+				"is_private": 1,
+			}
+		)
+		private_folder.insert(ignore_permissions=True)
+		settings = frappe.get_single("AI Platform Settings")
+		previous = settings.storage_folder
+		settings.db_set("storage_folder", private_folder.name)
+
+		user = frappe.get_doc(
+			{
+				"doctype": "User",
+				"email": "storage-folder-user@example.com",
+				"first_name": "Storage Folder User",
+				"enabled": 1,
+				"send_welcome_email": 0,
+				"roles": [{"role": "AI User"}],
+			}
+		).insert(ignore_permissions=True)
+		try:
+			frappe.set_user(user.name)
+			# The configured folder is manager-owned/private; the default must
+			# not silently point an AI User at it.
+			chosen = get_default_folder(user=user.name)
+			self.assertNotEqual(chosen, private_folder.name)
+			self.assertTrue(chosen.startswith("Home"))
+		finally:
+			frappe.set_user("Administrator")
+			settings.db_set("storage_folder", previous)
+			frappe.delete_doc("File", private_folder.name, force=True, ignore_permissions=True)

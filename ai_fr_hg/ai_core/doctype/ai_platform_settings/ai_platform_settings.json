@@ -417,9 +417,11 @@
   },
   {
    "default": "AI Platform",
+   "description": "Shared destination folder used as the default for non-attachment uploads and platform output. Only applied when the uploading user has write access to the folder; otherwise the shared uploads folder is used.",
    "fieldname": "storage_folder",
-   "fieldtype": "Data",
-   "label": "Storage Folder"
+   "fieldtype": "Link",
+   "label": "Storage Folder",
+   "options": "File"
   },
   {
    "default": "0",

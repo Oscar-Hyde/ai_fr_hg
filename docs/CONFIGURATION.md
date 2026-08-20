@@ -45,16 +45,21 @@ budgeted, since no client is waiting on them.
 
 ### On Strict Local Only
 
-The guard resolves the hostname and checks every resulting IP against
-loopback, link-local and private ranges. Because it resolves first, a public
-hostname pointed at a private IP still passes, and `localhost` aliases behave
-correctly. Resolution is cached; the cache clears when settings or a provider
-are saved.
+The guard resolves the hostname once and requires every resolved address to
+be loopback, link-local or private (RFC 1918 / ULA) unless the host is
+explicitly allowlisted. Provider connections use a guarded transport:
+environment proxy variables are ignored (`trust_env=False`), the dial is
+pinned to the validated address (so DNS rebinding cannot move an approved
+connection), the original hostname is preserved for `Host`/TLS SNI, redirects
+are refused, and the established peer address is re-validated before a
+response is trusted. Resolution is cached; the cache clears when settings or
+a provider are saved.
 
-This is an application-layer guard, not the network security boundary. SEC-04
-tracks proxy bypass, DNS rebinding, redirects, IPv4/IPv6, and connection-level
-validation. Use host firewall and egress policy for an air-gapped or regulated
-deployment until that finding closes.
+An explicit allowlist entry permits a hostname to resolve publicly, but the
+host must still resolve. Suffixes such as `.local`/`.internal` are hints only:
+a suffix host that resolves publicly is refused. Use host firewall and egress
+policy for an air-gapped or regulated deployment as the actual network
+boundary.
 
 ---
 
@@ -145,7 +150,7 @@ Arabic / English / Hebrew translation. Full guide:
 | Segments per Model Call | 6 | Batch size. Larger batches mean fewer round trips but a longer prompt. |
 | Run Quality Checks | on | Score every segment locally: placeholders, script, length, glossary, refusals, repetition. |
 | Repair Flagged Segments | on | One stricter retry per flagged segment, kept only when it scores better. |
-| Use Translation Memory | on | **Do not enable in production yet.** SEC-01/TRN-01 track mandatory KB scope and policy-safe identity on every caller. |
+| Use Translation Memory | on | Reuse only within an authorized knowledge base under the identical translation policy (KB, glossary, tone, domain). No scope means no memory lookup. |
 | Back-Translation Samples | 0 | Verify this many segments by translating them back and comparing embeddings. Costs extra model calls. |
 | Index Translations as Documents | off | Default for new translations: store the result as its own searchable document. |
 
@@ -157,6 +162,8 @@ Arabic / English / Hebrew translation. Full guide:
 | Max Tokens Per User Per Day | Global token budget. 0 disables. |
 | Require Tool Approval | Hold every write-capable tool call for human approval. |
 | Log Prompts / Log Responses | Store prompt and response text on execution logs. |
+| Log Search Queries | Store search telemetry (redacted query plus identifiers, scores and bounded snippets - never full result content). Rows are removed by the native 30-day retention. |
+| Tool Sensitive Fields | Additional fields generic document tools must never expose, one per line (`fieldname` or `DocType.fieldname`). Password fields and common credential names are always denied. |
 | Redaction Patterns | Regular expressions, one per line, masked before storage. |
 
 Finer control comes from **AI Resource Policy** records, which apply to a role
@@ -174,6 +181,15 @@ distributed concurrency/rate enforcement remain Phase 6 work.
 Installation seeds a `Standard AI User` policy: 200 requests/hour,
 500k tokens/day, 100 documents/day, tools and uploads allowed, pipelines and
 model management denied.
+
+### Storage folder
+
+**Storage Folder** is a Link to a real `File` folder, validated server-side.
+It is a *shared* destination: `get_default_folder` applies it only when the
+uploading user has write access to the folder; otherwise resolution falls
+through to `Home/Shared Uploads` (a shared folder, not per-user) and then the
+native Attachments/Home paths. Legacy short-text values are normalised by
+patch `v0_0_15`.
 
 ### Redaction
 

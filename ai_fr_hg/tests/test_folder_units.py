@@ -181,6 +181,12 @@ class TestTabPresentation(UnitTestCase):
 		self.assertIn("recent", tab_ids)
 		self.assertIn("favorites", tab_ids)
 		self.assertIn("shared", tab_ids)
+		# FILE-06: the tab is the public-files view, and it must be labelled
+		# as such - "Shared with me" would promise sharing membership that
+		# the query (is_private = 0) does not implement.
+		shared_tab = next(t for t in tabs if t["id"] == "shared")
+		self.assertEqual(shared_tab["label"], "Public")
+		self.assertEqual(shared_tab["query"], {"is_private": 0})
 		# And folder tabs for real top-level folders
 		folder_tabs = [t for t in tabs if t["type"] == "folder"]
 		self.assertTrue(len(folder_tabs) >= 1)
