@@ -518,9 +518,7 @@ class TestFolderSettingsPermissionParity(AIPlatformTestCase):
 	def test_managers_see_every_folder_settings_row(self):
 		private = self.make_folder("ParityPrivateFolder", is_private=True)
 		private_settings = self.make_settings(private)
-		self.assertIn(
-			private_settings.name, set(frappe.get_list("AI Folder Settings", pluck="name"))
-		)
+		self.assertIn(private_settings.name, set(frappe.get_list("AI Folder Settings", pluck="name")))
 
 	def test_auditor_has_no_folder_settings_access(self):
 		auditor = self.make_ai_user("folder-auditor@example.com", "Folder Auditor", ["AI Auditor"])

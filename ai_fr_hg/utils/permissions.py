@@ -275,10 +275,7 @@ def folder_settings_query(user: str) -> str:
 		return "1=0"
 	if not conditions:
 		return ""
-	return (
-		"`tabAI Folder Settings`.`folder` in "
-		f"(select `name` from `tabFile` where {conditions})"
-	)
+	return f"`tabAI Folder Settings`.`folder` in (select `name` from `tabFile` where {conditions})"
 
 
 def _file_list_permission_conditions(user: str) -> str:
