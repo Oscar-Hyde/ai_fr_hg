@@ -263,6 +263,7 @@ def get_default_folder(doctype: str | None = None, docname: str | None = None) -
 @frappe.whitelist()
 def upload_file_with_folder(
 	file_url: str | None = None,
+	file_name: str | None = None,
 	folder: str | None = None,
 	attached_to_doctype: str | None = None,
 	attached_to_name: str | None = None,
@@ -273,19 +274,24 @@ def upload_file_with_folder(
 
 	The actual File record is already created by Frappe's upload endpoint;
 	this call re-files it into the user-selected folder server-side.
+
+	The caller must identify the File by its stable record identity
+	(`file_name`). A legacy URL-only request is resolved through the canonical
+	folder-service resolver and fails closed when the URL is ambiguous, so
+	duplicate File rows can never cause a move of the wrong record.
 	"""
-	if not file_url:
-		frappe.throw(_("File URL is required."))
-	name = frappe.db.get_value("File", {"file_url": file_url}, "name")
-	if not name:
-		frappe.throw(_("File with URL {0} not found.").format(file_url))
+	if not file_url and not file_name:
+		frappe.throw(_("A File identity (file_name) or file URL is required."))
+	from ai_fr_hg.ai.folders import resolve_file_identity
+
+	file_doc = resolve_file_identity(file_url or "", file_record=file_name)
 	folder = folder or __import__("ai_fr_hg.ai.folders", fromlist=["get_default_folder"]).get_default_folder(
 		user=frappe.session.user, doctype=attached_to_doctype, docname=attached_to_name
 	)
 	from ai_fr_hg.ai.folders import assign_file_to_folder
 
 	return assign_file_to_folder(
-		file_name=name,
+		file_name=file_doc.name,
 		folder=folder,
 		attached_to_doctype=attached_to_doctype,
 		attached_to_name=attached_to_name,

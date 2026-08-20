@@ -166,6 +166,66 @@ def _get_file_doc(name: str):
 	return frappe.get_doc("File", name)
 
 
+def resolve_file_identity(file_url: str, file_record: str | None = None, document_name: str | None = None):
+	"""Resolve one stable File identity; ambiguous legacy URLs fail closed.
+
+	This is the single resolver used by ingestion (document sources) and the
+	upload facade (attachment placement). Duplicate File rows may share a URL,
+	so a URL without a stable identity must never select an arbitrary record.
+	"""
+	name = file_record
+	if name:
+		if not frappe.db.exists("File", name):
+			_throw(FileNotFoundError, f"File record '{name}' does not exist.")
+	else:
+		# Legacy rows have only a URL. An exact attachment to the requesting AI
+		# Document is stable enough to backfill; otherwise URL/content identity
+		# cannot distinguish duplicate File rows.
+		attached = (
+			frappe.get_all(
+				"File",
+				filters={
+					"file_url": file_url,
+					"is_folder": 0,
+					"attached_to_doctype": "AI Document",
+					"attached_to_name": document_name,
+				},
+				pluck="name",
+				order_by="creation asc, name asc",
+				limit_page_length=2,
+			)
+			if document_name
+			else []
+		)
+		if len(attached) > 1:
+			_throw(
+				ValueError,
+				f"More than one File is attached as the source of AI Document '{document_name}'.",
+			)
+		if attached:
+			name = attached[0]
+		else:
+			matches = frappe.get_all(
+				"File",
+				filters={"file_url": file_url, "is_folder": 0},
+				pluck="name",
+				order_by="creation asc, name asc",
+				limit_page_length=2,
+			)
+			if len(matches) > 1:
+				_throw(
+					ValueError,
+					f"More than one File record uses '{file_url}'; provide the exact File identity.",
+				)
+			name = matches[0] if matches else None
+	if not name:
+		_throw(FileNotFoundError, f"File record not found for '{file_url}'.")
+	file_doc = frappe.get_doc("File", name)
+	if file_doc.file_url != file_url:
+		_throw(ValueError, f"File record '{name}' does not match '{file_url}'.")
+	return file_doc
+
+
 def _get_folder_doc(folder_path: str):
 	"""Return folder File doc or throw FolderNotFoundError."""
 	normalized = _normalize_folder_path(folder_path)
@@ -1979,35 +2039,6 @@ def assign_file_to_folder(
 	track_folder_operation("assign", file_name, target, user, details={"from": old_folder})
 	_update_document_folder_provenance(file_name, target)
 	return {"name": file_name, "folder": target, "old_folder": old_folder, "unchanged": False}
-
-
-def ensure_file_in_folder(
-	file_url: str | None,
-	folder: str | None,
-	*,
-	attached_to_doctype: str | None = None,
-	attached_to_name: str | None = None,
-	user: str | None = None,
-) -> str | None:
-	"""Given a file_url, ensure its File record lives in `folder` (or default)."""
-	if not file_url:
-		return None
-	name = frappe.db.get_value("File", {"file_url": file_url}, "name")
-	if not name:
-		return None
-	target = (
-		_normalize_folder_path(folder)
-		if folder
-		else get_default_folder(user=user, doctype=attached_to_doctype, docname=attached_to_name)
-	)
-	assign_file_to_folder(
-		name,
-		target,
-		attached_to_doctype=attached_to_doctype,
-		attached_to_name=attached_to_name,
-		user=user,
-	)
-	return name
 
 
 def _update_document_folder_provenance(file_name: str, folder: str) -> None:

@@ -451,3 +451,122 @@ class TestAttachmentPlacement(AIPlatformTestCase):
 			return [[0.1] * 8 for _text in texts]
 
 		return patch("ai_fr_hg.ai.knowledge.run_embedding", side_effect=fake_embed)
+
+
+class TestFolderSettingsPermissionParity(AIPlatformTestCase):
+	"""SEC-06: list visibility must match direct-document access."""
+
+	def make_ai_user(self, email, first_name, roles):
+		if frappe.db.exists("User", email):
+			return frappe.get_doc("User", email)
+		doc = frappe.get_doc(
+			{
+				"doctype": "User",
+				"email": email,
+				"first_name": first_name,
+				"send_welcome_email": 0,
+				"roles": [{"role": role} for role in roles],
+			}
+		)
+		doc.insert(ignore_permissions=True)
+		return doc
+
+	def make_folder(self, name, is_private):
+		path = f"Home/{name}"
+		if frappe.db.exists("File", path):
+			return frappe.get_doc("File", path)
+		doc = frappe.get_doc(
+			{
+				"doctype": "File",
+				"file_name": name,
+				"is_folder": 1,
+				"folder": "Home",
+				"is_private": 1 if is_private else 0,
+			}
+		)
+		doc.insert(ignore_permissions=True)
+		return doc
+
+	def make_settings(self, folder):
+		if frappe.db.exists("AI Folder Settings", {"folder": folder.name}):
+			return frappe.get_doc("AI Folder Settings", {"folder": folder.name})
+		doc = frappe.get_doc(
+			{"doctype": "AI Folder Settings", "folder": folder.name, "description": "parity test"}
+		)
+		doc.insert(ignore_permissions=True)
+		return doc
+
+	def test_list_and_direct_access_have_parity_for_ai_users(self):
+		user = self.make_ai_user("folder-parity@example.com", "Folder Parity", ["AI User"])
+		private = self.make_folder("ParityPrivateFolder", is_private=True)
+		public = self.make_folder("ParityPublicFolder", is_private=False)
+		private_settings = self.make_settings(private)
+		public_settings = self.make_settings(public)
+
+		frappe.set_user(user.name)
+		try:
+			listed = set(frappe.get_list("AI Folder Settings", pluck="name"))
+			self.assertIn(public_settings.name, listed)
+			self.assertNotIn(private_settings.name, listed, "list must not leak private-folder settings")
+
+			frappe.get_doc("AI Folder Settings", public_settings.name).check_permission("read")
+			with self.assertRaises(frappe.PermissionError):
+				frappe.get_doc("AI Folder Settings", private_settings.name).check_permission("read")
+		finally:
+			frappe.set_user("Administrator")
+
+	def test_managers_see_every_folder_settings_row(self):
+		private = self.make_folder("ParityPrivateFolder", is_private=True)
+		private_settings = self.make_settings(private)
+		self.assertIn(
+			private_settings.name, set(frappe.get_list("AI Folder Settings", pluck="name"))
+		)
+
+	def test_auditor_has_no_folder_settings_access(self):
+		auditor = self.make_ai_user("folder-auditor@example.com", "Folder Auditor", ["AI Auditor"])
+		frappe.set_user(auditor.name)
+		try:
+			self.assertFalse(frappe.has_permission("AI Folder Settings", "read"))
+		finally:
+			frappe.set_user("Administrator")
+
+
+class TestUploadFileIdentityResolution(AIPlatformTestCase):
+	"""FILE-02: URL-only upload resolution must fail closed when ambiguous."""
+
+	def make_file(self, name, url, is_private=0):
+		doc = frappe.get_doc(
+			{
+				"doctype": "File",
+				"file_name": name,
+				"file_url": url,
+				"is_folder": 0,
+				"folder": "Home",
+				"is_private": is_private,
+			}
+		)
+		doc.insert(ignore_permissions=True)
+		return doc
+
+	def test_stable_file_identity_resolves_exactly(self):
+		from ai_fr_hg.api.folders import upload_file_with_folder
+
+		url = "/files/stable-identity.txt"
+		file_doc = self.make_file("stable-identity.txt", url)
+		result = upload_file_with_folder(file_url=url, file_name=file_doc.name, folder="Home")
+		self.assertEqual(result.get("name"), file_doc.name)
+
+	def test_ambiguous_url_only_resolution_is_rejected(self):
+		from ai_fr_hg.api.folders import upload_file_with_folder
+
+		url = "/files/duplicate-identity.txt"
+		self.make_file("duplicate-identity-a.txt", url)
+		self.make_file("duplicate-identity-b.txt", url)
+		with self.assertRaises(frappe.ValidationError):
+			upload_file_with_folder(file_url=url, folder="Home")
+
+	def test_missing_url_without_identity_is_rejected(self):
+		from ai_fr_hg.api.folders import upload_file_with_folder
+
+		with self.assertRaises(frappe.ValidationError):
+			upload_file_with_folder(folder="Home")
