@@ -28,6 +28,7 @@ from frappe.utils import cint, now_datetime
 from ai_fr_hg.ai.exceptions import (
 	CorruptDocumentError,
 	DocumentFetchError,
+	DocumentProcessingCancelled,
 	DocumentProcessingError,
 	DocumentResourceLimitError,
 	DocumentSourcePermissionError,
@@ -88,6 +89,55 @@ MIME_EXTENSIONS = {
 	"text/plain": ".txt",
 	"text/tab-separated-values": ".tsv",
 }
+
+
+def _set_processing_progress(document_name: str, progress: float, message: str, user: str | None = None) -> None:
+	"""Persist bounded progress and publish it through Frappe's native realtime."""
+	progress = max(0.0, min(100.0, float(progress)))
+	values = {
+		"processing_progress": progress,
+		"processing_message": message[:200],
+		"processing_heartbeat": now_datetime(),
+	}
+	frappe.db.set_value("AI Document", document_name, values, update_modified=False)
+	frappe.publish_realtime(
+		"ai_document_progress",
+		{"document": document_name, "progress": progress, "message": message[:200]},
+		user=user or frappe.session.user,
+	)
+
+
+def _assert_not_cancelled(document_name: str) -> None:
+	if frappe.db.get_value("AI Document", document_name, "cancel_requested"):
+		raise DocumentProcessingCancelled(_("Document processing was cancelled."))
+
+
+def cancel_processing(document_name: str, requested_by: str | None = None) -> dict:
+	"""Cancel a queued/in-flight document job, preserving durable state."""
+	requested_by = _assert_valid_authority(requested_by or frappe.session.user)
+	with _as_user(requested_by):
+		document = frappe.get_doc("AI Document", document_name)
+		if not frappe.has_permission("AI Document", "write", doc=document, user=requested_by):
+			raise DocumentSourcePermissionError(_("You cannot cancel this document."))
+		if document.status in {"Indexed", "Failed", "Archived", "Cancelled"}:
+			return {"document": document_name, "status": document.status, "cancelled": False}
+		frappe.db.set_value(
+			"AI Document",
+			document_name,
+			{
+				"cancel_requested": 1,
+				"status": "Cancelled",
+				"processing_message": "Cancellation requested",
+				"processing_heartbeat": now_datetime(),
+			},
+			update_modified=False,
+		)
+		frappe.publish_realtime(
+			"ai_document_progress",
+			{"document": document_name, "status": "Cancelled", "message": "Cancellation requested"},
+			user=requested_by,
+		)
+	return {"document": document_name, "status": "Cancelled", "cancelled": True}
 
 
 def _max_document_bytes() -> int:
@@ -254,6 +304,10 @@ def enqueue_processing(
 
 			values = {
 				"status": "Queued",
+				"processing_progress": 0,
+				"processing_message": "Queued",
+				"processing_heartbeat": now_datetime(),
+				"cancel_requested": 0,
 				"processing_requested_by": requested_by,
 				"processing_requested_on": now_datetime(),
 				"processing_job_id": job_id,
@@ -378,8 +432,11 @@ def process_document(
 						)
 					)
 				validate_source_access(document, authority)
+				_assert_not_cancelled(document_name)
+				_set_processing_progress(document_name, 5, "Extracting", authority)
 				document.db_set("status", "Extracting", update_modified=False)
 				result, reader, content, filename, mime_type = _extract_source(document, authority)
+				_assert_not_cancelled(document_name)
 
 				document.db_set(
 					{
@@ -404,6 +461,7 @@ def process_document(
 					update_modified=False,
 				)
 
+				_set_processing_progress(document_name, 25, "Extraction complete", authority)
 				if interactive_extraction:
 					# Preserve Queued so the already submitted worker can build the index.
 					# Draft/Failed callers asked only for extraction and remain unindexed.
@@ -434,19 +492,24 @@ def process_document(
 
 				from ai_fr_hg.ai.knowledge import index_document
 
+				_assert_not_cancelled(document_name)
+				_set_processing_progress(document_name, 30, "Chunking and indexing", authority)
 				embed = (
 					bool(frappe.db.get_single_value("AI Platform Settings", "auto_embed_on_ingest"))
 					if index is None
 					else bool(index)
 				)
 				index_result = index_document(document_name, embed=embed)
+				_assert_not_cancelled(document_name)
 				if frappe.db.get_value("AI Document", document_name, "status") != "Indexed":
 					raise CorruptDocumentError(_("Document indexing did not complete successfully."))
 
 				duration = int((time.monotonic() - started) * 1000)
+				_set_processing_progress(document_name, 100, "Indexed", authority)
 				document.db_set(
 					{
 						"processing_duration_ms": duration,
+						"cancel_requested": 0,
 						"error_type": None,
 						"error_message": None,
 					},
@@ -490,16 +553,21 @@ def process_document(
 	except Exception as exc:
 		error_type = exc.__class__.__name__
 		duration = int((time.monotonic() - started) * 1000)
+		cancelled = isinstance(exc, DocumentProcessingCancelled) or bool(
+			frappe.db.get_value("AI Document", document_name, "cancel_requested")
+		)
 		current_retries = cint(frappe.db.get_value("AI Document", document_name, "retry_count"))
 		frappe.db.set_value(
 			"AI Document",
 			document_name,
 			{
-				"status": "Failed",
-				"error_type": error_type,
+				"status": "Cancelled" if cancelled else "Failed",
+				"processing_message": "Cancelled" if cancelled else "Failed",
+				"error_type": None if cancelled else error_type,
 				"error_message": str(exc)[:2000],
+				"processing_heartbeat": now_datetime(),
 				"processing_duration_ms": duration,
-				"retry_count": current_retries + 1,
+				"retry_count": current_retries if cancelled else current_retries + 1,
 			},
 			update_modified=False,
 		)
@@ -508,14 +576,19 @@ def process_document(
 			message=frappe.get_traceback(),
 		)
 		write_audit_log(
-			action="Document Processing Failed",
-			severity="Critical",
+			action="Document Processing Cancelled" if cancelled else "Document Processing Failed",
+			severity="Warning" if cancelled else "Critical",
 			reference_doctype="AI Document",
 			reference_name=document_name,
 			details={"authority": authority, "error_type": error_type, "error": str(exc)[:1000]},
 			raise_on_error=True,
 		)
-		return {"document": document_name, "status": "Failed", "error_type": error_type, "error": str(exc)}
+		return {
+			"document": document_name,
+			"status": "Cancelled" if cancelled else "Failed",
+			"error_type": None if cancelled else error_type,
+			"error": str(exc),
+		}
 
 
 def _extract_source(document, authority: str):

@@ -10,6 +10,38 @@ import frappe
 from ai_fr_hg.tests.integration_test_case import AIPlatformTestCase, stub_embeddings
 
 
+class TestIngestionProgressCancellation(AIPlatformTestCase):
+	def test_cancel_processing_is_durable_and_reprocessable(self):
+		from ai_fr_hg.ai.ingestion import cancel_processing
+
+		document = self.make_document("Cancellation Test Document", "cancel me")
+		document.db_set(
+			{
+				"status": "Extracting",
+				"processing_progress": 42,
+				"processing_message": "Extracting",
+				"processing_requested_by": frappe.session.user,
+			},
+			update_modified=False,
+		)
+
+		result = cancel_processing(document.name, requested_by=frappe.session.user)
+		self.assertEqual(result["status"], "Cancelled")
+		self.assertEqual(frappe.db.get_value("AI Document", document.name, "cancel_requested"), 1)
+		self.assertEqual(frappe.db.get_value("AI Document", document.name, "status"), "Cancelled")
+
+		# A new explicit process request clears the cancellation marker and starts
+		# a recoverable queued attempt instead of leaving a terminal dead end.
+		with patch("ai_fr_hg.ai.ingestion.frappe.enqueue") as enqueue:
+			from ai_fr_hg.ai.ingestion import enqueue_processing
+
+			enqueue_processing(document.name, requested_by=frappe.session.user)
+		self.assertEqual(frappe.db.get_value("AI Document", document.name, "status"), "Queued")
+		self.assertEqual(frappe.db.get_value("AI Document", document.name, "cancel_requested"), 0)
+		self.assertEqual(frappe.db.get_value("AI Document", document.name, "processing_progress"), 0)
+		enqueue.assert_called_once()
+
+
 class TestIndexing(AIPlatformTestCase):
 	def test_document_is_chunked_and_embedded(self):
 		from ai_fr_hg.ai.knowledge import index_document

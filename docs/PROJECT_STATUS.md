@@ -191,7 +191,7 @@ future implementation phase must update its owning guide with evidence.
 ## Recommended immediate sequence
 
 1. Repository owner: require Server, Linter, Frontend static, and Dependency audit on `main` (OPS-01).
-2. Close remaining Phase 4 items (ING-06, TRN-03/04/05/07, PAT-01–04) before Phase 5.
+2. Complete Phase 4 in register order: ING-06 is in progress with durable processing progress/cancel/recovery; then TRN-03/04/05/07 and PAT-01–04 before Phase 5.
 3. Then Phases 5–7 in order.
 
 See the roadmap for phased effort, frontend/backend deliverables, migration strategy, and exit criteria.
