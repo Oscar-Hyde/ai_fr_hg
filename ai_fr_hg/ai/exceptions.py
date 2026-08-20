@@ -120,3 +120,8 @@ class AmbiguousFileIdentityError(FolderError):
 
 class InvalidFolderNameError(FolderError):
 	"""Raised when a folder or file name is invalid."""
+
+
+class HierarchicalReductionError(DocumentProcessingError):
+	"""INT-03: Bounded hierarchical reduction exceeded safe levels — explicit failure, never silent truncation."""
+	"""Raised when a folder or file name is invalid."""

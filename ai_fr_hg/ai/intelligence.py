@@ -17,6 +17,7 @@ from frappe.utils import cint, flt
 
 from ai_fr_hg.ai.chunking import chunk_text, estimate_tokens
 from ai_fr_hg.ai.engine import resolve_model, run_chat
+from ai_fr_hg.ai.exceptions import HierarchicalReductionError
 from ai_fr_hg.ai.validation import ValidationError as _ValidationError, validate_extraction
 
 JSON_BLOCK = re.compile(r"```(?:json)?\s*(.+?)\s*```", re.DOTALL)
@@ -159,18 +160,12 @@ def summarize(
 				reference_name=reference_name,
 			)
 			return result.content.strip()
-		# Reduce each batch, then recurse — bounded by max 10 levels to prevent runaway
+			# INT-03: Bounded recursion — never silently discard to fit budget
 		if level > 10:
-			# Fallback: return first batch reduce (still preserves coverage better than tail truncation)
-			combined = "\n\n".join(batches[0])
-			result = run_chat(
-				[{"role": "user", "content": REDUCE_PROMPT.format(instructions=guidance, text=combined)}],
-				model=model_doc.name,
-				operation="Summarize",
-				reference_doctype=reference_doctype,
-				reference_name=reference_name,
+			raise HierarchicalReductionError(
+				f"Hierarchical reduction exceeded 10 levels ({len(summaries)} summaries, budget {budget}). "
+				f"Input too large for safe reduction — failing explicitly rather than truncating."
 			)
-			return result.content.strip()
 		next_level: list[str] = []
 		for batch in batches:
 			combined = "\n\n".join(batch)
