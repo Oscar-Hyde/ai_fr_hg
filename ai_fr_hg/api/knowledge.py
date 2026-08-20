@@ -110,7 +110,7 @@ def search(
 	offset: int = 0,
 ) -> dict:
 	"""Search the knowledge base and return ranked passages (folder-scoped if provided)."""
-	from ai_fr_hg.ai.knowledge import run_retrieval
+	from ai_fr_hg.ai.retrieval import run_retrieval
 	from ai_fr_hg.utils import api_validation
 
 	query = api_validation.bounded_text(query, label=_("Query"), max_length=4_000, required=True)
@@ -125,7 +125,9 @@ def search(
 	)
 	folder = api_validation.valid_identifier(folder, label=_("Folder")) if folder else None
 	entity_type = (
-		api_validation.bounded_text(entity_type, label=_("Entity type"), max_length=40) if entity_type else None
+		api_validation.bounded_text(entity_type, label=_("Entity type"), max_length=40)
+		if entity_type
+		else None
 	)
 	entity_value = (
 		api_validation.bounded_text(entity_value, label=_("Entity value"), max_length=200)

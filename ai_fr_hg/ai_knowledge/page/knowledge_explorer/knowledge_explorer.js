@@ -38,7 +38,8 @@ class KnowledgeExplorer {
 		this.page_size = 10;
 		this.last_query = "";
 		this.is_manager =
-			frappe.user_roles.includes("AI Manager") || frappe.user_roles.includes("System Manager");
+			frappe.user_roles.includes("AI Manager") ||
+			frappe.user_roles.includes("System Manager");
 		this.make();
 		this.restore_hash();
 		this.refresh();
@@ -176,9 +177,9 @@ class KnowledgeExplorer {
 			const $select = this.page.main.find(".ai-entity-type");
 			(facets.entity_types || []).forEach((row) => {
 				$select.append(
-					`<option value="${frappe.utils.escape_html(row.entity_type)}">${frappe.utils.escape_html(
+					`<option value="${frappe.utils.escape_html(
 						row.entity_type
-					)} (${row.total})</option>`
+					)}">${frappe.utils.escape_html(row.entity_type)} (${row.total})</option>`
 				);
 			});
 			if (this.entity_type) $select.val(this.entity_type);
@@ -363,7 +364,12 @@ class KnowledgeExplorer {
 					entity_type: this.entity_type || null,
 				});
 				this.render_diagnostics(response.diagnostics);
-				this.render_results(response.results || [], query, response.total, response.offset);
+				this.render_results(
+					response.results || [],
+					query,
+					response.total,
+					response.offset
+				);
 			}
 		} catch (error) {
 			const denied = /permission|not permitted|not allowed/i.test(error.message || "");
@@ -403,13 +409,15 @@ class KnowledgeExplorer {
 			<div class="ai-side-card">
 				<h6>${__("Retrieval diagnostics")}</h6>
 				<div class="ai-stat-row"><span>${__("Strategy")}</span><b>${frappe.utils.escape_html(
-					diagnostics.retrieval_strategy || ""
-				)}</b></div>
+			diagnostics.retrieval_strategy || ""
+		)}</b></div>
 				<div class="ai-stat-row"><span>${__("Corpus")}</span><b>${diagnostics.corpus_size || 0}</b></div>
-				<div class="ai-stat-row"><span>${__("Candidates")}</span><b>${diagnostics.candidate_count || 0}</b></div>
+				<div class="ai-stat-row"><span>${__("Candidates")}</span><b>${
+			diagnostics.candidate_count || 0
+		}</b></div>
 				<div class="ai-stat-row"><span>${__("Keyword")}</span><b>${frappe.utils.escape_html(
-					diagnostics.keyword_backend || ""
-				)}</b></div>
+			diagnostics.keyword_backend || ""
+		)}</b></div>
 				${models ? `<div class="text-muted small">${models}</div>` : ""}
 			</div>
 		`);
@@ -482,7 +490,10 @@ class KnowledgeExplorer {
 			<button type="button" class="btn btn-sm btn-default ai-page-prev" ${
 				can_prev ? "" : "disabled"
 			}>${__("Previous")}</button>
-			<span class="text-muted small">${start + 1}–${Math.min(start + this.page_size, known)} / ${known}</span>
+			<span class="text-muted small">${start + 1}–${Math.min(
+			start + this.page_size,
+			known
+		)} / ${known}</span>
 			<button type="button" class="btn btn-sm btn-default ai-page-next" ${
 				can_next ? "" : "disabled"
 			}>${__("Next")}</button>
@@ -501,26 +512,34 @@ class KnowledgeExplorer {
 		const params = new URLSearchParams();
 		const query = (this.$query.val() || "").trim();
 		if (query) params.set("q", query);
-		if (this.search_type && this.search_type !== "Hybrid") params.set("type", this.search_type);
+		if (this.search_type && this.search_type !== "Hybrid")
+			params.set("type", this.search_type);
 		if (this.selected_kbs.length) params.set("kb", this.selected_kbs.join(","));
 		if (this.folder) params.set("folder", this.folder);
 		if (this.entity_type) params.set("entity", this.entity_type);
 		if (this.page_offset) params.set("offset", String(this.page_offset));
 		const hash = params.toString();
 		if (typeof history !== "undefined" && history.replaceState) {
-			history.replaceState(null, "", hash ? `#${hash}` : location.pathname + location.search);
+			history.replaceState(
+				null,
+				"",
+				hash ? `#${hash}` : location.pathname + location.search
+			);
 		}
 	}
 
 	restore_hash() {
-		const raw = (typeof location !== "undefined" && location.hash ? location.hash.slice(1) : "") || "";
+		const raw =
+			(typeof location !== "undefined" && location.hash ? location.hash.slice(1) : "") || "";
 		if (!raw) return;
 		const params = new URLSearchParams(raw);
 		if (params.get("q")) this.$query.val(params.get("q"));
 		if (params.get("type")) {
 			this.search_type = params.get("type");
 			this.page.main.find(".ai-type-btn").removeClass("active");
-			this.page.main.find('.ai-type-btn[data-type="' + this.search_type + '"]').addClass("active");
+			this.page.main
+				.find('.ai-type-btn[data-type="' + this.search_type + '"]')
+				.addClass("active");
 		}
 		if (params.get("kb")) this.selected_kbs = params.get("kb").split(",").filter(Boolean);
 		if (params.get("folder")) {

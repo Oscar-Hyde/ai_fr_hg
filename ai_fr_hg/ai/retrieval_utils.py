@@ -271,7 +271,9 @@ def pack_context_blocks(
 
 	for result, header, content in blocks:
 		document = getattr(result, "document", "") or ""
-		if any(chunks_overlap(document, content, prev_doc, prev_content) for prev_doc, prev_content in kept_meta):
+		if any(
+			chunks_overlap(document, content, prev_doc, prev_content) for prev_doc, prev_content in kept_meta
+		):
 			continue
 		sep_cost = len(separator) if rendered else 0
 		remaining = limit - used - sep_cost

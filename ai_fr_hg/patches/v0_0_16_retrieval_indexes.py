@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import frappe
 
-
 CONTENT_FTS = "content_fts"
 KB_EMBED_IDX = "kb_embed_model_idx"
 
@@ -33,7 +32,9 @@ def execute() -> None:
 	table = "tabAI Document Chunk"
 	if not _index_exists(table, CONTENT_FTS):
 		try:
-			frappe.db.sql(f"ALTER TABLE `{table}` ADD FULLTEXT INDEX `{CONTENT_FTS}` (`content`)")  # nosemgrep
+			frappe.db.sql(
+				f"ALTER TABLE `{table}` ADD FULLTEXT INDEX `{CONTENT_FTS}` (`content`)"
+			)  # nosemgrep
 		except Exception:
 			frappe.log_error(title="AI retrieval FULLTEXT index skipped", message=frappe.get_traceback())
 

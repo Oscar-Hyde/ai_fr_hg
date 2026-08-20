@@ -89,7 +89,9 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
 	return dot(a, b) / (length_a * length_b)
 
 
-def score_pairs(query_vector: list[float], candidates: list[tuple[str, list[float]]]) -> list[tuple[str, float]]:
+def score_pairs(
+	query_vector: list[float], candidates: list[tuple[str, list[float]]]
+) -> list[tuple[str, float]]:
 	"""Score every compatible candidate. Incompatible dimensions are omitted.
 
 	Unlike :func:`rank`, this does not truncate: callers that page a corpus

@@ -92,7 +92,7 @@ def search_knowledge_base(
 	**kwargs,
 ) -> dict:
 	"""Semantic search across the knowledge bases the user may read."""
-	from ai_fr_hg.ai.knowledge import retrieve
+	from ai_fr_hg.ai.retrieval import retrieve
 
 	resolved_query = (
 		query

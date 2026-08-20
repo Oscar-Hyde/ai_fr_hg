@@ -371,9 +371,7 @@ class TestRetrieval(AIPlatformTestCase):
 		strong = normalize([1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 		weak = normalize([0.2, 0.98, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 		self._insert_chunk(doc_low, "sharedtopic low", 0, weak, knowledge_base=kb_low.name)
-		self._insert_chunk(
-			doc_high, "sharedtopic high UNIQUEHIGH", 0, strong, knowledge_base=kb_high.name
-		)
+		self._insert_chunk(doc_high, "sharedtopic high UNIQUEHIGH", 0, strong, knowledge_base=kb_high.name)
 
 		def fake_embed(texts, model=None, operation="Embedding", **kwargs):
 			return [list(strong) for _ in texts]

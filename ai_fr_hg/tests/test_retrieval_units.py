@@ -1,9 +1,6 @@
 # Copyright (c) 2026, Ai Fr Hg and contributors
 # For license information, please see license.txt
 
-# Multilingual fixtures intentionally contain non-Latin confusable characters.
-# ruff: noqa: RUF001
-
 """Pure unit tests for Phase 2 retrieval algorithms (no database)."""
 
 from pathlib import Path

@@ -334,3 +334,24 @@ def _log_search_job(*args, **kwargs):
 	from ai_fr_hg.ai.retrieval import _log_search_job as impl
 
 	return impl(*args, **kwargs)
+
+
+def __getattr__(name: str):
+	"""Re-export retrieval names without importing ``ai.retrieval`` at load time.
+
+	A module-level import would cycle: Frappe loads ``knowledge`` during app
+	import, and ``retrieval.run_retrieval`` lazily reads
+	``get_accessible_knowledge_bases`` from this module.
+	"""
+	if name in {
+		"RetrievedChunk",
+		"build_context",
+		"keyword_search",
+		"retrieve",
+		"run_retrieval",
+		"semantic_search",
+	}:
+		from ai_fr_hg.ai import retrieval
+
+		return getattr(retrieval, name)
+	raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

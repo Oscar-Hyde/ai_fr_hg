@@ -139,7 +139,9 @@ def _settings():
 
 def _brute_force_ceiling(settings=None) -> int:
 	settings = settings or _settings()
-	return max(cint(getattr(settings, "retrieval_brute_force_ceiling", 0)) or DEFAULT_BRUTE_FORCE_CEILING, 200)
+	return max(
+		cint(getattr(settings, "retrieval_brute_force_ceiling", 0)) or DEFAULT_BRUTE_FORCE_CEILING, 200
+	)
 
 
 def _mark_degraded(diagnostics: RetrievalDiagnostics, reason: str) -> None:
@@ -572,7 +574,9 @@ def run_retrieval(
 		if not entity_docs:
 			return outcome
 		scoped_documents = (
-			[name for name in scoped_documents if name in set(entity_docs)] if scoped_documents else entity_docs
+			[name for name in scoped_documents if name in set(entity_docs)]
+			if scoped_documents
+			else entity_docs
 		)
 		if not scoped_documents:
 			return outcome
@@ -630,7 +634,6 @@ def run_retrieval(
 	# 1. explicit API/agent override for the *request* top_k / threshold
 	# 2. knowledge-base policy per result group
 	# 3. platform default
-	request_top_k_explicit = top_k is not None and cint(top_k) > 0
 	request_threshold_explicit = similarity_threshold is not None
 	final_top_k = cint(top_k) or cint(settings.default_top_k) or 6
 	search_type = search_type or ("Hybrid" if settings.enable_hybrid_search else "Semantic")
@@ -762,7 +765,7 @@ def _knowledge_bases_for(names: list[str]) -> dict[str, str]:
 
 def _hydrate(ordered, semantic, keyword) -> list[RetrievedChunk]:
 	"""Load chunk bodies and document titles for the selected results."""
-	names = [name for name, _ in ordered]
+	names = [name for name, _score in ordered]
 	if not names:
 		return []
 

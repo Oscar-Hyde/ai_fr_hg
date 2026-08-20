@@ -25,9 +25,9 @@ from ai_fr_hg.ai.exceptions import (
 	ProviderOfflineError,
 	ProviderTimeoutError,
 )
-from ai_fr_hg.ai.knowledge import build_context, retrieve
 from ai_fr_hg.ai.logging import write_audit_log
 from ai_fr_hg.ai.providers.base import ChatMessage
+from ai_fr_hg.ai.retrieval import build_context, retrieve
 from ai_fr_hg.ai.settings import should_stream_completion
 from ai_fr_hg.utils.db import safe_set_value
 
