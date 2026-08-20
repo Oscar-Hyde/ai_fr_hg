@@ -777,7 +777,7 @@ def create_translation(
 			"tone": tone,
 			"domain": domain,
 			"preserve_formatting": 1 if preserve_formatting else 0,
-			"index_output": 1 if index_output else 0,
+			"index_output": 1 if (index_output if index_output is not None else _settings().get("translation_index_output")) else 0,
 			"status": "Draft",
 			"source_text": doc.content,
 		}

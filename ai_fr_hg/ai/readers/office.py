@@ -10,6 +10,34 @@ the ingestion pipeline records that on the document instead of failing hard.
 
 import csv
 import io
+def _validate_zip_archive(content: bytes, filename: str) -> None:
+    """Bounded secure archive validation for ZIP-based office formats (ING-04)."""
+    import zipfile, io, os
+    MAX_MEMBERS = 500
+    MAX_UNCOMPRESSED = 50 * 1024 * 1024  # 50 MB
+    MAX_RATIO = 100  # compression ratio
+    try:
+        z = zipfile.ZipFile(io.BytesIO(content))
+    except zipfile.BadZipFile:
+        raise ValueError(f"{filename}: invalid or corrupted archive")
+    if len(z.namelist()) > MAX_MEMBERS:
+        raise ValueError(f"{filename}: archive has too many members ({len(z.namelist())})")
+    total_uncompressed = 0
+    for info in z.infolist():
+        # Path traversal check
+        if ".." in info.filename or info.filename.startswith("/") or info.filename.startswith("\\"):
+            raise ValueError(f"{filename}: archive contains unsafe path {info.filename}")
+        total_uncompressed += info.file_size
+        if total_uncompressed > MAX_UNCOMPRESSED:
+            raise ValueError(f"{filename}: archive uncompressed size exceeds limit")
+        # Ratio check per member
+        if info.compress_size and info.file_size / max(info.compress_size,1) > MAX_RATIO:
+            raise ValueError(f"{filename}: archive compression ratio exceeded for {info.filename}")
+    # Also check total ratio
+    total_compressed = sum(i.compress_size for i in z.infolist())
+    if total_compressed and total_uncompressed / max(total_compressed,1) > MAX_RATIO:
+        raise ValueError(f"{filename}: archive total compression ratio exceeded")
+
 
 from ai_fr_hg.ai.readers.base import BaseReader, ReadResult
 
@@ -74,6 +102,7 @@ class DocxReader(BaseReader):
 	requires = "python-docx"
 
 	def read(self, content: bytes, filename: str) -> ReadResult:
+		_validate_zip_archive(content, filename)
 		docx = self.require("docx", "python-docx")
 
 		document = docx.Document(io.BytesIO(content))
@@ -124,6 +153,7 @@ class XlsxReader(BaseReader):
 	MAX_ROWS_PER_SHEET = 5000
 
 	def read(self, content: bytes, filename: str) -> ReadResult:
+		_validate_zip_archive(content, filename)
 		openpyxl = self.require("openpyxl")
 
 		workbook = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=True)
@@ -156,6 +186,7 @@ class PptxReader(BaseReader):
 	requires = "python-pptx"
 
 	def read(self, content: bytes, filename: str) -> ReadResult:
+		_validate_zip_archive(content, filename)
 		pptx = self.require("pptx", "python-pptx")
 
 		presentation = pptx.Presentation(io.BytesIO(content))
@@ -200,6 +231,7 @@ class OdtReader(BaseReader):
 	requires = "odfpy"
 
 	def read(self, content: bytes, filename: str) -> ReadResult:
+		_validate_zip_archive(content, filename)
 		opendocument = self.require("odf.opendocument", "odfpy")
 		odf_text = self.require("odf.text", "odfpy")
 		document = opendocument.load(io.BytesIO(content))
@@ -219,6 +251,7 @@ class OdsReader(BaseReader):
 	MAX_ROWS_PER_SHEET = 5000
 
 	def read(self, content: bytes, filename: str) -> ReadResult:
+		_validate_zip_archive(content, filename)
 		opendocument = self.require("odf.opendocument", "odfpy")
 		odf_table = self.require("odf.table", "odfpy")
 		document = opendocument.load(io.BytesIO(content))
