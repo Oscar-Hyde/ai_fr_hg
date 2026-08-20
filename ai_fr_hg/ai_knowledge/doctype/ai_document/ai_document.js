@@ -121,7 +121,9 @@ function renderProcessingState(frm, update = {}) {
 	const message = update.message || frm.doc.processing_message || status;
 	if (!["Queued", "Extracting", "Chunking", "Embedding", "Cancelled"].includes(status)) return;
 	frm.dashboard.set_headline(
-		`<span class="text-muted">${frappe.utils.escape_html(message)} — ${Math.round(progress)}%</span>`
+		`<span class="text-muted">${frappe.utils.escape_html(message)} — ${Math.round(
+			progress
+		)}%</span>`
 	);
 }
 

@@ -91,7 +91,9 @@ MIME_EXTENSIONS = {
 }
 
 
-def _set_processing_progress(document_name: str, progress: float, message: str, user: str | None = None) -> None:
+def _set_processing_progress(
+	document_name: str, progress: float, message: str, user: str | None = None
+) -> None:
 	"""Persist bounded progress and publish it through Frappe's native realtime."""
 	progress = max(0.0, min(100.0, float(progress)))
 	values = {

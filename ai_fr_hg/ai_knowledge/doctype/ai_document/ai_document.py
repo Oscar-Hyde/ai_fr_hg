@@ -93,7 +93,15 @@ class AIDocument(Document):
 		source_type: DF.Literal["File", "Text", "URL", "DocType Record"]
 		source_url: DF.Data | None
 		status: DF.Literal[
-			"Draft", "Queued", "Cancelled", "Extracting", "Chunking", "Embedding", "Indexed", "Failed", "Archived"
+			"Draft",
+			"Queued",
+			"Cancelled",
+			"Extracting",
+			"Chunking",
+			"Embedding",
+			"Indexed",
+			"Failed",
+			"Archived",
 		]
 		summary: DF.LongText | None
 		tags: DF.Table[AIDocumentTag]
