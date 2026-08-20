@@ -89,28 +89,40 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
 	return dot(a, b) / (length_a * length_b)
 
 
+def score_pairs(
+	query_vector: list[float], candidates: list[tuple[str, list[float]]]
+) -> list[tuple[str, float]]:
+	"""Score every compatible candidate. Incompatible dimensions are omitted.
+
+	Unlike :func:`rank`, this does not truncate: callers that page a corpus
+	must see every comparable row so a relevant vector beyond an old 200-row
+	boundary cannot disappear.
+	"""
+	if not query_vector or not candidates:
+		return []
+
+	query = normalize(query_vector)
+	dimensions = len(query)
+	usable = [(key, vec) for key, vec in candidates if len(vec) == dimensions]
+	if not usable:
+		return []
+
+	if _np is not None and len(usable) > 32:
+		matrix = _np.asarray([vec for _, vec in usable], dtype=_np.float32)
+		scores = matrix @ _np.asarray(query, dtype=_np.float32)
+		return [(usable[i][0], float(scores[i])) for i in range(len(usable))]
+
+	return [(key, dot(query, vector)) for key, vector in usable]
+
+
 def rank(query_vector: list[float], candidates: list[tuple[str, list[float]]], top_k: int = 10):
 	"""Score candidates against the query and return the best `top_k`.
 
 	`candidates` is a list of `(identifier, vector)` pairs, all expected to be
 	unit length. Returns `(identifier, score)` pairs sorted best first.
 	"""
-	if not query_vector or not candidates:
+	scored = score_pairs(query_vector, candidates)
+	if not scored:
 		return []
-
-	query = normalize(query_vector)
-
-	if _np is not None and len(candidates) > 32:
-		# Vectorised path: one matrix multiply instead of a Python loop.
-		dimensions = len(query)
-		usable = [(key, vec) for key, vec in candidates if len(vec) == dimensions]
-		if not usable:
-			return []
-		matrix = _np.asarray([vec for _, vec in usable], dtype=_np.float32)
-		scores = matrix @ _np.asarray(query, dtype=_np.float32)
-		order = _np.argsort(-scores)[:top_k]
-		return [(usable[i][0], float(scores[i])) for i in order]
-
-	scored = [(key, dot(query, vector)) for key, vector in candidates]
 	scored.sort(key=lambda row: row[1], reverse=True)
 	return scored[:top_k]

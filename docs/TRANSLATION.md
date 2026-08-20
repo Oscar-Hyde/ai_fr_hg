@@ -1,9 +1,9 @@
 # Translation
 
 Arabic ⇄ English ⇄ Hebrew translation of extracted text through configured
-providers, with segment review and execution records. This technical-beta path
-is not production-safe until translation-memory isolation (SEC-01/TRN-01),
-glossary permission parity, worker identity restoration, and cancellation pass.
+providers, with segment review and execution records. Translation-memory
+isolation and policy identity are enforced (SEC-01/TRN-01). Glossary permission
+parity, durable worker restoration, progress, and cancellation remain Phase 4.
 
 Translation is not a prompt wrapped around a document. It is a pipeline that
 segments the source, protects everything a model must not touch, translates in
@@ -44,9 +44,9 @@ reconstruct the original PDF, Office, email, or image binary.
 | **Terminology control** | A trilingual glossary can force a rendering for a term, or protect a name so it is never translated at all. |
 | **Quality scored** | Every segment gets a 0–100 score from local checks: placeholder integrity, target-script purity, residual source text, length ratio, glossary compliance, refusals, and degenerate repetition. |
 | **Self-repairing** | A segment that fails review is retried once with a stricter prompt that names the defect, and the retry is kept only when it scores better. |
-| **Translation memory** | Implemented but **not production-safe yet**: SEC-01/TRN-01 track mandatory authorized KB scope and policy identity on every path. Disable it until Phase 1 closes. |
+| **Translation memory** | Reuse requires an authorized knowledge-base scope. No scope means no lookup. Fingerprints include KB plus glossary, tone, and domain policy identity. |
 | **Quality signal** | Optional back-translation compares a sample with an embedding model; it is a heuristic, not formal verification. |
-| **Network scope** | Calls use configured providers. Strict-local connection hardening remains open under SEC-04, so firewall/egress policy is required for a local-only guarantee. |
+| **Network scope** | Calls use configured providers through the guarded transport (SEC-04). Firewall/egress policy remains the actual network boundary. |
 
 ---
 
@@ -85,7 +85,7 @@ extracted text
    ↓                canonicalise line endings and spacing
    ↓ detect         dominant script + function words decide the source language
    ↓ segment        structure-aware extracted-text blocks and separators
-   ↓ memory         optional reuse; disable until SEC-01/TRN-01 close
+   ↓ memory         authorized KB scope only; policy identity in the fingerprint
    ↓ protect        numbers, URLs, IDs, code, page markers, protected terms → [[T0]]
    ↓ translate      batched calls at temperature 0, per-segment fallback
    ↓ restore        placeholders put back, model chatter stripped
@@ -180,18 +180,16 @@ Attach a glossary per translation, or set a **Default Glossary** in
 
 ## Translation memory
 
-Every stored segment currently carries a fingerprint based on normalised source
-text and the language pair. Memory reuse is **disabled operational guidance for
-production** until Phase 1 closes SEC-01 and TRN-01:
+Every stored segment carries a fingerprint of normalised source text, language
+pair, authorized knowledge base, glossary, tone, and domain. Memory reuse:
 
-- no scope must perform no memory lookup;
-- every document, inline, and tool path must pass an authorized knowledge base;
-- the fingerprint/identity must include the effective translation policy;
-- cross-user and cross-KB isolation tests must pass.
+- no knowledge-base scope performs no lookup (never a global memory scan);
+- document, inline, and tool paths pass only an authorized knowledge base;
+- a policy change (glossary/tone/domain) produces a different fingerprint and
+  does not reuse a prior translation;
+- cross-user and cross-KB isolation tests cover these paths.
 
-The current main paths can mark reused segments as **Reused** and count **Memory
-Reuse**, but those indicators do not prove isolation. Turn off **Use Translation
-Memory** until the controlled gap register marks both findings closed.
+Turn off **Use Translation Memory** only when you want a fresh model pass.
 
 ---
 

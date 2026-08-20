@@ -91,7 +91,8 @@ search again.
 | Default Top K | 6 | Passages retrieved per query. |
 | Similarity Threshold | 0.25 | Minimum cosine score from 0 to 1. Values such as `25` are stored as `0.25`. Raise it if answers cite loosely related passages. |
 | Enable Hybrid Search | on | Fuse dense and keyword ranking. Recommended. |
-| Max Context Characters | 12000 | Ceiling on retrieved context injected into a prompt. |
+| Max Context Characters | 12000 | Ceiling on retrieved context injected into a prompt. Oversized first passages are truncated rather than dropped. |
+| Retrieval Brute-Force Ceiling | 10000 | Complete vector evaluation still scans every eligible chunk. Corpora above this size are flagged degraded relative to the published latency envelope (1k/10k interactive; 100k complete but possibly slow). |
 | Auto Process Documents | on | Ingest and index on upload with no further action. |
 | Auto Embed on Ingest | on | Embed immediately rather than waiting for the hourly backfill. |
 | Max Document Size (MB) | 50 | Rejected above this, before any parsing work. |
@@ -101,9 +102,10 @@ search again.
 | Max Pattern Entities | 500 | Upper bound of distinct entities stored per document. The scan samples at most 1 MB of extracted text (head and tail) with linear-time guards. |
 
 Knowledge-base chunk size, overlap, and embedding model affect ingestion.
-Although top K and threshold fields also exist, their complete per-KB retrieval
-precedence is not yet enforced (RET-04); treat platform/search-request values as
-the effective retrieval controls until Phase 2 closes that finding.
+Retrieval top K, similarity threshold, and agent knowledge-base weights are
+enforced with explicit request overrides taking precedence over per-KB policy,
+then the platform default. Mixed embedding models are grouped and never compared
+across incompatible dimensions.
 
 ### Default agent retrieval
 
@@ -131,7 +133,9 @@ model such as `qwen2.5:0.5b` can name every language in the file.
   lower the similarity threshold.
 - Answers cite irrelevant passages → raise the similarity threshold.
 - Facts get split across passages → raise chunk overlap.
-- Retrieval is slow on a very large corpus → lower Top K and install NumPy.
+- Retrieval is slow on a very large corpus → lower Top K, install NumPy, and
+  check the brute-force ceiling diagnostic. Completeness is preserved; latency
+  is not.
 
 ---
 

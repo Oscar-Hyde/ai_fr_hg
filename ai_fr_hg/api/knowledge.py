@@ -105,36 +105,64 @@ def search(
 	top_k: int = 10,
 	search_type: str | None = None,
 	folder: str | None = None,
+	entity_type: str | None = None,
+	entity_value: str | None = None,
+	offset: int = 0,
 ) -> dict:
 	"""Search the knowledge base and return ranked passages (folder-scoped if provided)."""
-	from ai_fr_hg.ai.knowledge import retrieve
+	from ai_fr_hg.ai.retrieval import run_retrieval
 	from ai_fr_hg.utils import api_validation
 
 	query = api_validation.bounded_text(query, label=_("Query"), max_length=4_000, required=True)
 	knowledge_bases = api_validation.bounded_list(
 		knowledge_bases, label=_("Knowledge bases"), max_items=api_validation.MAX_KNOWLEDGE_BASES_PER_REQUEST
 	)
-	top_k = api_validation.bounded_integer(
-		top_k, label=_("top_k"), default=10, maximum=api_validation.MAX_TOP_K
+	top_k, offset = api_validation.pagination(
+		top_k, offset, default_limit=10, hard_limit=api_validation.MAX_TOP_K
 	)
 	search_type = api_validation.enum_choice(
 		search_type, allowed=("Hybrid", "Semantic", "Keyword"), label=_("Search type")
 	)
 	folder = api_validation.valid_identifier(folder, label=_("Folder")) if folder else None
+	entity_type = (
+		api_validation.bounded_text(entity_type, label=_("Entity type"), max_length=40)
+		if entity_type
+		else None
+	)
+	entity_value = (
+		api_validation.bounded_text(entity_value, label=_("Entity value"), max_length=200)
+		if entity_value
+		else None
+	)
 
-	results = retrieve(
+	outcome = run_retrieval(
 		query,
-		knowledge_bases=knowledge_bases,
+		knowledge_bases=knowledge_bases or None,
 		top_k=top_k,
 		search_type=search_type,
 		folder=folder,
+		entity_type=entity_type or None,
+		entity_value=entity_value or None,
+		offset=offset,
 	)
 	return {
 		"query": query,
-		"count": len(results),
-		"results": [r.as_dict() for r in results],
+		"count": len(outcome.chunks),
+		"total": outcome.total,
+		"offset": offset,
+		"results": [r.as_dict() for r in outcome.chunks],
 		"folder": folder,
+		"diagnostics": outcome.diagnostics.as_dict(),
 	}
+
+
+@frappe.whitelist()
+def get_search_facets() -> dict:
+	"""Entity-type facets for Knowledge Explorer. Permission-aware."""
+	from ai_fr_hg.ai.retrieval import search_facets
+
+	frappe.has_permission("AI Document", "read", throw=True)
+	return search_facets()
 
 
 @frappe.whitelist()
@@ -169,25 +197,6 @@ def ask(
 	documents = _coerce_documents(documents)
 	folder = api_validation.valid_identifier(folder, label=_("Folder")) if folder else None
 
-	# Folder-scoped ask: if folder is provided and no explicit documents, resolve folder documents
-	folder_docs = None
-	if folder and not documents:
-		try:
-			from ai_fr_hg.ai.folders import _normalize_folder_path
-
-			norm = _normalize_folder_path(folder)
-			folder_docs = frappe.get_all(
-				"AI Document", filters={"folder": ["like", f"{norm}%"]}, pluck="name"
-			)
-			if not folder_docs:
-				folder_docs = frappe.get_all(
-					"AI Document", filters={"source_folder": ["like", f"{norm}%"]}, pluck="name"
-				)
-			if folder_docs:
-				documents = folder_docs
-		except Exception:
-			pass
-
 	# Interactive, so it honours the same optional turn budget as chat.
 	with turn_budget(_get_turn_budget()):
 		extra_context = None
@@ -202,6 +211,7 @@ def ask(
 			save_messages=False,
 			documents=documents or None,
 			extra_context=extra_context or None,
+			folder=folder,
 		)
 
 

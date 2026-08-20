@@ -103,6 +103,25 @@ class TestFolderPathHelpers(UnitTestCase):
 		self.assertFalse(_is_descendant("Home/A", "Home/B"))
 		self.assertFalse(_is_descendant("Home/A", "Home/A/B"))
 		self.assertFalse(_is_descendant("Home/Other", "Home/A"))
+		# RET-07: a sibling prefix must never count as a descendant.
+		self.assertFalse(_is_descendant("Home/AB", "Home/A"))
+		self.assertTrue(_is_descendant("Home/A/B", "Home/A"))
+
+	def test_folder_match_or_filters_uses_exact_or_slash_descendant(self):
+		from ai_fr_hg.ai.folders import folder_match_or_filters
+
+		filters = folder_match_or_filters("Home/A", ("folder", "source_folder"))
+		self.assertEqual(
+			filters,
+			[
+				["folder", "=", "Home/A"],
+				["folder", "like", "Home/A/%"],
+				["source_folder", "=", "Home/A"],
+				["source_folder", "like", "Home/A/%"],
+			],
+		)
+		escaped = folder_match_or_filters("Home/Reports_100%", ("folder",))
+		self.assertEqual(escaped[1][2], r"Home/Reports\_100\%/%")
 
 	def test_circular_detection(self):
 		from ai_fr_hg.ai.folders import _assert_no_circular

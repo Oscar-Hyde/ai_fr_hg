@@ -163,6 +163,8 @@ but nothing is persisted.
 | `knowledge_bases` | list |
 | `agent` | string |
 | `model` | string |
+| `documents` | list |
+| `folder` | string | exact folder or descendants |
 
 ### Document intelligence
 
@@ -179,6 +181,7 @@ but nothing is persisted.
 | `scan_pattern_entities(document)` | `{document, total, created, updated, removed, by_type}` — high-precision regex scan of the document's stored content into `AI Pattern Entity` rows. Requires write access, like the other intelligence actions. |
 | `get_pattern_entities(document, entity_type, limit)` | `{document, entities, entity_counts}` — occurrences-ordered rows with provenance quotes, grouped counts per type. Read access. |
 | `get_knowledge_overview()` | Counters, recent documents, failed documents. |
+| `get_search_facets()` | Permission-aware pattern-entity type counts for Explorer filters. |
 | `get_supported_formats()` | Extensions, grouped by reader. |
 
 Classification is constrained to the supplied categories: if the model invents

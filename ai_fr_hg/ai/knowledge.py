@@ -1,66 +1,29 @@
 # Copyright (c) 2026, Ai Fr Hg and contributors
 # For license information, please see license.txt
 
-"""Knowledge indexing and retrieval.
+"""Knowledge indexing.
 
-Indexing turns extracted document text into embedded chunks. Retrieval combines
-dense vector similarity with keyword matching (reciprocal rank fusion), which
-is materially more reliable than either signal alone for enterprise content
-full of identifiers, part numbers and proper nouns.
+Indexing turns extracted document text into embedded chunks. Retrieval
+orchestration lives in ``ai.retrieval`` and is re-exported here so existing
+``ai.knowledge.retrieve`` imports keep working.
 """
 
 import math
-import re
 import time
-from dataclasses import dataclass
 from numbers import Real
 
 import frappe
 from frappe import _
-from frappe.utils import cint, flt, now_datetime
+from frappe.utils import cint, now_datetime
 
 from ai_fr_hg.ai.chunking import chunk_text
 from ai_fr_hg.ai.engine import resolve_model, run_embedding
 from ai_fr_hg.ai.exceptions import DocumentProcessingError
-from ai_fr_hg.ai.language import language_name, resolve_document_language
-from ai_fr_hg.ai.vector import decode_vector, encode_vector, normalize, rank
+from ai_fr_hg.ai.vector import encode_vector, normalize
 from ai_fr_hg.utils.db import safe_set_value
 
-WORD = re.compile(r"[\w\-/.]{2,}")
 #: Embedding batch size, kept modest so local runtimes stay responsive.
 EMBED_BATCH_SIZE = 16
-
-
-@dataclass
-class RetrievedChunk:
-	"""A chunk returned by retrieval, with provenance for citation."""
-
-	chunk: str
-	document: str
-	document_title: str
-	knowledge_base: str
-	content: str
-	score: float = 0.0
-	semantic_score: float = 0.0
-	keyword_score: float = 0.0
-	heading: str | None = None
-	page_number: int = 0
-	language: str | None = None
-
-	def as_dict(self) -> dict:
-		return {
-			"chunk": self.chunk,
-			"document": self.document,
-			"document_title": self.document_title,
-			"knowledge_base": self.knowledge_base,
-			"content": self.content,
-			"score": round(self.score, 4),
-			"semantic_score": round(self.semantic_score, 4),
-			"keyword_score": round(self.keyword_score, 4),
-			"heading": self.heading,
-			"page_number": self.page_number,
-			"language": self.language,
-		}
 
 
 # ---------------------------------------------------------------------------
@@ -366,391 +329,29 @@ def get_accessible_knowledge_bases(user: str | None = None) -> list[str]:
 	return accessible
 
 
-def keyword_search(
-	query: str, knowledge_bases: list[str], limit: int = 50, documents: list[str] | None = None
-) -> dict[str, float]:
-	"""Score chunks by keyword overlap using a LIKE-based match.
+def _log_search_job(*args, **kwargs):
+	"""Queued-job alias so in-flight search telemetry jobs keep resolving."""
+	from ai_fr_hg.ai.retrieval import _log_search_job as impl
 
-	Deliberately dependency-free so the platform works on any MariaDB or
-	Postgres install without a full-text index. When `documents` is given, only
-	chunks belonging to those documents are considered.
+	return impl(*args, **kwargs)
+
+
+def __getattr__(name: str):
+	"""Re-export retrieval names without importing ``ai.retrieval`` at load time.
+
+	A module-level import would cycle: Frappe loads ``knowledge`` during app
+	import, and ``retrieval.run_retrieval`` lazily reads
+	``get_accessible_knowledge_bases`` from this module.
 	"""
-	terms = [term.lower() for term in WORD.findall(query or "")][:8]
-	if not terms or not knowledge_bases:
-		return {}
+	if name in {
+		"RetrievedChunk",
+		"build_context",
+		"keyword_search",
+		"retrieve",
+		"run_retrieval",
+		"semantic_search",
+	}:
+		from ai_fr_hg.ai import retrieval
 
-	filters: dict = {"knowledge_base": ["in", knowledge_bases]}
-	if documents:
-		filters["document"] = ["in", documents]
-	rows = frappe.get_all(
-		"AI Document Chunk",
-		filters=filters,
-		or_filters=[["content", "like", f"%{term}%"] for term in terms],
-		fields=["name", "content"],
-		limit_page_length=min(max(cint(limit), 1), 500),
-	)
-
-	scores: dict[str, float] = {}
-	for row in rows:
-		content = (row.content or "").lower()
-		hits = sum(content.count(term) for term in terms)
-		distinct = sum(1 for term in terms if term in content)
-		if hits:
-			# Reward covering many distinct query terms over repeating one.
-			scores[row.name] = (distinct / len(terms)) * 0.7 + min(hits / 20, 1.0) * 0.3
-	return scores
-
-
-def semantic_search(
-	query: str,
-	knowledge_bases: list[str],
-	top_k: int = 10,
-	model: str | None = None,
-	documents: list[str] | None = None,
-) -> dict[str, float]:
-	"""Score chunks by cosine similarity against the query embedding."""
-	if not knowledge_bases:
-		return {}
-
-	vectors = run_embedding([query], model=model, operation="Embedding")
-	if not vectors or not vectors[0]:
-		return {}
-	query_vector = vectors[0]
-
-	filters: dict = {"knowledge_base": ["in", knowledge_bases], "embedding": ["!=", ""]}
-	if documents:
-		filters["document"] = ["in", documents]
-
-	rows = frappe.get_all(
-		"AI Document Chunk",
-		filters=filters,
-		fields=["name", "embedding"],
-		limit_page_length=max(top_k * 20, 200),
-	)
-	candidates = [(row.name, decode_vector(row.embedding)) for row in rows]
-	candidates = [(name, vector) for name, vector in candidates if vector]
-
-	return dict(rank(query_vector, candidates, top_k=top_k * 4))
-
-
-def retrieve(
-	query: str,
-	knowledge_bases: list[str] | None = None,
-	top_k: int | None = None,
-	search_type: str | None = None,
-	similarity_threshold: float | None = None,
-	model: str | None = None,
-	log: bool = True,
-	documents: list[str] | None = None,
-	folder: str | None = None,
-) -> list[RetrievedChunk]:
-	"""Retrieve the most relevant chunks for `query`.
-
-	Hybrid mode fuses dense and keyword rankings with reciprocal rank fusion,
-	so a chunk that ranks well on either signal surfaces.
-
-	When `documents` is supplied, retrieval is scoped to those `AI Document`
-	records: only their chunks are ranked and only their knowledge bases are
-	considered. This is how "answer from the file I just uploaded" is grounded
-	solely in the new upload instead of the whole knowledge base.
-	"""
-	started = time.monotonic()
-	settings = frappe.get_cached_doc("AI Platform Settings")
-
-	accessible = set(get_accessible_knowledge_bases())
-
-	# Folder-scoped retrieval (File & Folder §7): constrain to documents in a folder subtree
-	if folder and not documents:
-		try:
-			from ai_fr_hg.ai.folders import _normalize_folder_path
-
-			norm = _normalize_folder_path(folder)
-			folder_docs = frappe.get_all(
-				"AI Document",
-				filters=[
-					["folder", "like", f"{norm}%"]  # includes descendants via prefix match
-				],
-				fields=["name", "knowledge_base"],
-				limit_page_length=500,
-			)
-			# Also include documents where folder exactly equals norm (covered by like) and handle source_folder fallback
-			if not folder_docs:
-				folder_docs = frappe.get_all(
-					"AI Document",
-					filters={"source_folder": ["like", f"{norm}%"]},
-					fields=["name", "knowledge_base"],
-					limit_page_length=500,
-				)
-			if folder_docs:
-				documents = [d.name for d in folder_docs]
-				doc_kbs = {d.knowledge_base for d in folder_docs}
-				targets = [kb for kb in doc_kbs if kb in accessible]
-			else:
-				return []
-		except Exception:
-			frappe.log_error(title="Folder-scoped retrieval failed", message=frappe.get_traceback())
-
-	if documents:
-		# The uploaded files are the source of truth; restrict targets to the
-		# knowledge bases they actually live in (and the caller can read).
-		doc_kbs = {
-			row.knowledge_base
-			for row in frappe.get_all(
-				"AI Document", filters={"name": ["in", documents]}, fields=["knowledge_base"]
-			)
-		}
-		targets = [kb for kb in doc_kbs if kb in accessible]
-	else:
-		if knowledge_bases:
-			targets = [kb for kb in knowledge_bases if kb in accessible]
-		else:
-			targets = list(accessible)
-
-	if not targets or not (query or "").strip():
-		return []
-
-	# Do not pay an embedding round-trip for empty knowledge bases.
-	populated_filters: dict = {"knowledge_base": ["in", targets]}
-	if documents:
-		populated_filters["document"] = ["in", documents]
-	populated = [
-		row.knowledge_base
-		for row in frappe.get_all(
-			"AI Document Chunk",
-			filters=populated_filters,
-			fields=["knowledge_base"],
-			distinct=True,
-			limit_page_length=len(targets),
-		)
-	]
-	targets = [kb for kb in targets if kb in set(populated)]
-	if not targets:
-		return []
-
-	top_k = cint(top_k) or cint(settings.default_top_k) or 6
-	search_type = search_type or ("Hybrid" if settings.enable_hybrid_search else "Semantic")
-	threshold = (
-		flt(similarity_threshold) if similarity_threshold is not None else flt(settings.similarity_threshold)
-	)
-
-	semantic: dict[str, float] = {}
-	keyword: dict[str, float] = {}
-
-	if search_type in ("Semantic", "Hybrid"):
-		try:
-			semantic = semantic_search(query, targets, top_k=top_k, model=model, documents=documents)
-		except Exception as exc:
-			frappe.log_error(title="AI semantic search failed", message=str(exc))
-			if search_type == "Semantic":
-				raise
-	if search_type in ("Keyword", "Hybrid"):
-		keyword = keyword_search(query, targets, documents=documents)
-
-	fused = _fuse(semantic, keyword, search_type)
-	if not fused and documents:
-		# The user attached these files. A question like "what language is this?"
-		# may share no keywords with the body; still return the first chunks.
-		rows = frappe.get_all(
-			"AI Document Chunk",
-			filters={"document": ["in", documents], "knowledge_base": ["in", targets]},
-			fields=["name"],
-			order_by="chunk_index asc",
-			limit_page_length=top_k,
-		)
-		fused = {row.name: 1.0 for row in rows}
-	if not fused:
-		return []
-
-	ordered = sorted(fused.items(), key=lambda row: row[1], reverse=True)
-	# Attached files are the source of truth: do not drop them because a local
-	# embedding scored below the site-wide similarity threshold.
-	if search_type != "Keyword" and not documents:
-		ordered = [(name, score) for name, score in ordered if semantic.get(name, 1.0) >= threshold]
-	ordered = ordered[:top_k]
-
-	results = _hydrate(ordered, semantic, keyword)
-
-	# Search telemetry is useful for administrators, but it writes a row on
-	# every chat turn. Queue it so retrieval latency is not dominated by an
-	# insert and local models stay responsive.
-	if log:
-		_log_search(query, targets, search_type, results, started)
-	return results
-
-
-def _fuse(semantic: dict, keyword: dict, search_type: str) -> dict[str, float]:
-	"""Reciprocal rank fusion of the two ranked lists."""
-	if search_type == "Semantic":
-		return dict(semantic)
-	if search_type == "Keyword":
-		return dict(keyword)
-
-	K = 60  # RRF damping constant
-	fused: dict[str, float] = {}
-
-	for ranked in (semantic, keyword):
-		ordered = sorted(ranked.items(), key=lambda row: row[1], reverse=True)
-		for position, (name, _score) in enumerate(ordered):
-			fused[name] = fused.get(name, 0.0) + 1 / (K + position + 1)
-	return fused
-
-
-def _hydrate(ordered, semantic, keyword) -> list[RetrievedChunk]:
-	"""Load chunk bodies and document titles for the selected results."""
-	names = [name for name, _ in ordered]
-	if not names:
-		return []
-
-	rows = {
-		row.name: row
-		for row in frappe.get_all(
-			"AI Document Chunk",
-			filters={"name": ["in", names]},
-			fields=[
-				"name",
-				"content",
-				"document",
-				"knowledge_base",
-				"heading",
-				"page_number",
-			],
-			limit_page_length=0,
-		)
-	}
-	titles = {
-		row.name: row
-		for row in frappe.get_all(
-			"AI Document",
-			filters={"name": ["in", list({r.document for r in rows.values()})]},
-			fields=["name", "title", "language"],
-		)
-	}
-
-	results = []
-	for name, score in ordered:
-		row = rows.get(name)
-		if not row:
-			continue
-		meta = titles.get(row.document)
-		results.append(
-			RetrievedChunk(
-				chunk=name,
-				document=row.document,
-				document_title=(meta.title if meta and meta.title else None) or row.document,
-				knowledge_base=row.knowledge_base,
-				content=row.content,
-				score=score,
-				semantic_score=semantic.get(name, 0.0),
-				keyword_score=keyword.get(name, 0.0),
-				heading=row.heading,
-				page_number=cint(row.page_number),
-				language=resolve_document_language(meta.language if meta else None, row.content) or None,
-			)
-		)
-	return results
-
-
-def _log_search(query, targets, search_type, results, started) -> None:
-	try:
-		# Bound the payload before it crosses the queue: the job redacts and
-		# tightens these to telemetry snippets before persistence.
-		telemetry = []
-		for result in results[:10]:
-			payload = result.as_dict()
-			payload["content"] = (payload.get("content") or "")[:1000]
-			payload["document_title"] = (payload.get("document_title") or "")[:200]
-			telemetry.append(payload)
-		frappe.enqueue(
-			"ai_fr_hg.ai.knowledge._log_search_job",
-			queue="short",
-			timeout=120,
-			job_id=f"ai_search_log:{frappe.generate_hash(length=10)}",
-			query=(query or "")[:1000],
-			targets=targets,
-			search_type=search_type,
-			results=telemetry,
-			result_count=len(results),
-			top_score=results[0].score if results else 0,
-			duration_ms=int((time.monotonic() - started) * 1000),
-			user=frappe.session.user,
-		)
-	except Exception:
-		frappe.log_error(title="AI Search Query log failed", message=frappe.get_traceback())
-
-
-def _log_search_job(query, targets, search_type, results, result_count, top_score, duration_ms, user) -> None:
-	"""Persist search telemetry: redacted, bounded, and policy-controlled.
-
-	The raw query is passed through the canonical redaction patterns and the
-	stored result rows carry identifiers, scores and bounded redacted snippets
-	only - never full chunk content. Retention for `AI Search Query` rows is
-	enforced by the scheduled cleanup job.
-	"""
-	try:
-		# Uncacheable read: the policy flag must reflect the current value, not
-		# a stale cached Single DocType from before the setting changed.
-		enabled = frappe.db.get_single_value("AI Platform Settings", "log_search_queries", cache=False)
-		if enabled is not None and not cint(enabled):
-			return
-
-		from ai_fr_hg.ai.logging import redact
-
-		telemetry = [
-			{
-				"chunk": item.get("chunk"),
-				"document": item.get("document"),
-				"title": redact(str(item.get("document_title") or ""))[:200],
-				"score": item.get("score"),
-				"snippet": redact(str(item.get("content") or ""))[:200],
-			}
-			for item in (results or [])[:10]
-		]
-		doc = frappe.new_doc("AI Search Query")
-		doc.update(
-			{
-				"query": redact(str(query or ""))[:1000],
-				"knowledge_base": targets[0] if len(targets) == 1 else None,
-				"user": user,
-				"search_type": search_type,
-				"result_count": result_count,
-				"top_score": top_score,
-				"duration_ms": duration_ms,
-				"results": frappe.as_json(telemetry),
-			}
-		)
-		doc.flags.ignore_permissions = True
-		doc.insert(ignore_permissions=True)
-	except Exception:
-		frappe.log_error(title="AI Search Query log failed", message=frappe.get_traceback())
-
-
-def build_context(results: list[RetrievedChunk], max_characters: int | None = None) -> str:
-	"""Render retrieved chunks into a numbered context block for the prompt."""
-	if not results:
-		return ""
-
-	limit = (
-		cint(max_characters)
-		or cint(frappe.db.get_single_value("AI Platform Settings", "max_context_characters"))
-		or 12000
-	)
-
-	parts: list[str] = []
-	used = 0
-	for position, result in enumerate(results, start=1):
-		header = f"[{position}] {result.document_title}"
-		if result.heading:
-			header += f" - {result.heading}"
-		if result.page_number:
-			header += f" (page {result.page_number})"
-		code = resolve_document_language(result.language, result.content)
-		if code:
-			header += f" [language={language_name(code)}]"
-
-		block = f"{header}\n{result.content}"
-		if used + len(block) > limit:
-			break
-		parts.append(block)
-		used += len(block)
-
-	return "\n\n---\n\n".join(parts)
+		return getattr(retrieval, name)
+	raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

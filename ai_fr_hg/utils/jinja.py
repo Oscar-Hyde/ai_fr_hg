@@ -34,7 +34,7 @@ def ai_search(query: str, knowledge_base: str | None = None, limit: int = 5) -> 
 
 	    {% for hit in ai_search("refund policy") %}{{ hit.content }}{% endfor %}
 	"""
-	from ai_fr_hg.ai.knowledge import retrieve
+	from ai_fr_hg.ai.retrieval import retrieve
 
 	results = retrieve(
 		query,

@@ -25,9 +25,9 @@ from ai_fr_hg.ai.exceptions import (
 	ProviderOfflineError,
 	ProviderTimeoutError,
 )
-from ai_fr_hg.ai.knowledge import build_context, retrieve
 from ai_fr_hg.ai.logging import write_audit_log
 from ai_fr_hg.ai.providers.base import ChatMessage
+from ai_fr_hg.ai.retrieval import build_context, retrieve
 from ai_fr_hg.ai.settings import should_stream_completion
 from ai_fr_hg.utils.db import safe_set_value
 
@@ -207,6 +207,24 @@ def get_agent_knowledge_bases(agent_doc, conversation_doc=None) -> list[str]:
 	return [row.knowledge_base for row in agent_doc.get("knowledge_bases") or []]
 
 
+def get_agent_knowledge_base_weights(agent_doc, conversation_doc=None) -> dict[str, float]:
+	"""Per-KB fusion weights from the agent child table (default 1.0)."""
+	weights: dict[str, float] = {}
+	for row in agent_doc.get("knowledge_bases") or []:
+		if not row.knowledge_base:
+			continue
+		weight = flt(row.weight)
+		weights[row.knowledge_base] = 1.0 if row.weight in (None, "") else weight
+	# Conversation KB overrides change the target set but inherit agent weights.
+	if conversation_doc and conversation_doc.get("knowledge_bases"):
+		return {
+			row.knowledge_base: weights.get(row.knowledge_base, 1.0)
+			for row in conversation_doc.knowledge_bases
+			if row.knowledge_base
+		}
+	return weights
+
+
 def get_conversation_history(conversation: str, limit: int = HISTORY_LIMIT) -> list[ChatMessage]:
 	"""Load the recent turns of a conversation as chat messages."""
 	rows = frappe.get_all(
@@ -246,6 +264,7 @@ def run_agent_turn(
 	save_messages: bool = True,
 	extra_context: str | None = None,
 	documents: list[str] | None = None,
+	folder: str | None = None,
 	on_token=None,
 ) -> dict:
 	"""Execute one full agent turn and return the answer with its provenance.
@@ -267,25 +286,32 @@ def run_agent_turn(
 	# 1. Retrieve supporting knowledge.
 	retrieved = []
 	context = extra_context or ""
-	# Attached files are this turn's source of truth even when the agent does
-	# not auto-retrieve from its knowledge bases (the seeded General Assistant
-	# keeps use_knowledge off so empty-site small talk stays cheap).
-	if agent_doc.use_knowledge or documents:
+	# Attached files and folder-scoped asks are this turn's source of truth
+	# even when the agent does not auto-retrieve from its knowledge bases
+	# (the seeded General Assistant keeps use_knowledge off so empty-site
+	# small talk stays cheap).
+	if agent_doc.use_knowledge or documents or folder:
 		targets = knowledge_bases or get_agent_knowledge_bases(agent_doc, conversation_doc)
 		# A configured agent with no attached knowledge bases still returns fast
 		# instead of paying an access/query round-trip on every chat.
 		# Retrieval is supporting evidence, not the answer. Skip it when the
 		# budget is already too tight to also pay for the generation that
 		# follows, rather than spending the whole turn on context.
-		if (targets or documents) and budget_allows(RETRIEVAL_BUDGET_SECONDS + ITERATION_COST_SECONDS):
+		if (targets or documents or folder) and budget_allows(
+			RETRIEVAL_BUDGET_SECONDS + ITERATION_COST_SECONDS
+		):
 			try:
+				packed: list = []
 				retrieved = retrieve(
 					prompt,
 					knowledge_bases=targets or None,
 					top_k=cint(agent_doc.top_k) or None,
 					documents=documents,
+					folder=folder,
+					weights=get_agent_knowledge_base_weights(agent_doc, conversation_doc) or None,
 				)
-				retrieved_context = build_context(retrieved)
+				retrieved_context = build_context(retrieved, packed=packed, model=model_doc.name)
+				retrieved = packed or retrieved
 				context = f"{context}\n\n{retrieved_context}".strip() if context else retrieved_context
 			except Exception as exc:
 				frappe.log_error(title="AI retrieval failed", message=str(exc))

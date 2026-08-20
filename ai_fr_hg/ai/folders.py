@@ -315,6 +315,27 @@ def _is_descendant(potential_descendant: str, ancestor: str) -> bool:
 	return potential_descendant.startswith(ancestor + "/")
 
 
+def escape_like(value: str) -> str:
+	"""Escape SQL LIKE metacharacters so a legal folder name cannot widen a prefix."""
+	return (value or "").replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def folder_match_or_filters(folder: str, fieldnames: tuple[str, ...] = ("folder",)) -> list[list]:
+	"""Permission-safe or_filters matching an exact folder or any descendant.
+
+	``Home/A`` matches ``Home/A`` and ``Home/A/B`` but never the sibling
+	``Home/AB``. LIKE metacharacters in the folder name are escaped. This is
+	the single descendant helper used by retrieval, ask, and folder statistics.
+	"""
+	norm = _normalize_folder_path(folder)
+	escaped = escape_like(norm)
+	filters: list[list] = []
+	for fieldname in fieldnames:
+		filters.append([fieldname, "=", norm])
+		filters.append([fieldname, "like", f"{escaped}/%"])
+	return filters
+
+
 def _assert_no_circular(source_folder: str, target_folder: str) -> None:
 	"""Raise CircularFolderError if moving source into its own descendant."""
 	source = _normalize_folder_path(source_folder)
@@ -1778,19 +1799,15 @@ def get_folder_info(folder_name: str, *, user: str | None = None) -> dict:
 		settings = frappe.get_doc("AI Folder Settings", {"folder": folder_name}).as_dict()
 
 	# Keep folder statistics on the same Frappe permission-aware query path as
-	# listings. Escaping LIKE metacharacters prevents a legal ``%`` or ``_`` in
-	# a folder name from widening the recursive prefix to unrelated paths.
-	escaped_prefix = folder_name.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+	# listings. Descendant matching is the shared RET-07 helper so a legal
+	# ``%`` or ``_`` in a folder name cannot widen the prefix.
 	stats = {
 		"folder_count": _permission_aware_count("File", {"folder": folder_name, "is_folder": 1}),
 		"file_count": _permission_aware_count("File", {"folder": folder_name, "is_folder": 0}),
 		"total_descendants": _permission_aware_count(
 			"File",
 			{},
-			or_filters=[
-				["folder", "=", folder_name],
-				["folder", "like", f"{escaped_prefix}/%"],
-			],
+			or_filters=folder_match_or_filters(folder_name, ("folder",)),
 		),
 	}
 	size = _permission_aware_file_size({"folder": folder_name, "is_folder": 0})

@@ -392,3 +392,12 @@ Hosted Server run `32325110514` on `main` at `a82ef4b491ed0607b2ddcc6b37df2a968e
 `FAIL`
 
 Hosted **Server**, **Linter**, **Frontend static**, and **Dependency audit** all passed on PR #31 SHA `61d19263ff60942532f535f29a70794671e4afcd` (Quality run `32328156242`, Server run `32328156228`). The only remaining Phase 0 gate is **branch protection on `main`**, which this GitHub App cannot enable (HTTP 403). Phase 1 must not begin until the repository owner requires those four statuses on `main`.
+
+## Verification addendum — 2026-08-20
+
+Closed-phase re-inspection of Phases 0–2 (see `PHASE_0_2_VERIFICATION.md`).
+
+- The four required checks remain green on `main` (Phase 1 merge) and on PR #33 (Phase 2, SHA `a798663`).
+- `main.protected` is still `false`. OPS-01 remains **BLOCKED**. The Phase 0 verdict is unchanged: **FAIL** solely because branch protection is owner-only.
+- Product-truth drift in `README.md`, `docs/PROJECT_STATUS.md`, `docs/TRANSLATION.md`, `docs/ARCHITECTURE.md`, and `docs/FILE_TO_ANSWER.md` was corrected so closed Phase 0/1/2 findings are no longer described as open.
+- Subsequent phases (1 and 2) were already executed on this branch after the original FAIL, with documented non-blocking limitation. This addendum does not reopen them.

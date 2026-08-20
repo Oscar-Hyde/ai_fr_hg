@@ -52,7 +52,7 @@ These decisions make the supported product boundary explicit. They remain author
 
 **Frappe v17 capability evaluated.** Frappe provides background jobs, DocTypes, configuration, and provider integration primitives, but reranking is application-domain behavior with no native Frappe implementation.
 
-**Decision.** Remove `Reranker` from model choices and automatic creation. Known reranker names are reported as unsupported. Legacy rows are retained and disabled. Phase 2 may add one canonical reranking contract or keep the option absent.
+**Decision.** Remove `Reranker` from model choices and automatic creation. Known reranker names are reported as unsupported. Legacy rows are retained and disabled. **Phase 2 (2026-08-20) reaffirms this decision:** retrieval diagnostics report `reranker: unsupported`. No rerank execution path is introduced until a timeout, failure, and test contract exists.
 
 **Why no placeholder.** A field or provider record without retrieval execution, timeout/failure behavior, diagnostics, and tests is not a feature.
 

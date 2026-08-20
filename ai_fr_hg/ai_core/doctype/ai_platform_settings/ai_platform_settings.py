@@ -66,6 +66,7 @@ class AIPlatformSettings(Document):
 		processing_queue: DF.Literal["default", "short", "long"]
 		redact_patterns: DF.SmallText | None
 		request_timeout: DF.Int
+		retrieval_brute_force_ceiling: DF.Int
 		require_memory_approval: DF.Check
 		require_tool_approval: DF.Check
 		similarity_threshold: DF.Float
@@ -123,6 +124,10 @@ class AIPlatformSettings(Document):
 			frappe.throw(_("Translation Segment Size must be at least 200 characters."))
 		if cint(self.translation_batch_segments) < 0:
 			self.translation_batch_segments = 0
+		if cint(self.retrieval_brute_force_ceiling) and cint(self.retrieval_brute_force_ceiling) < 200:
+			frappe.throw(
+				_("Retrieval Brute-Force Ceiling must be at least 200 chunks, or empty for the default.")
+			)
 
 	def validate_model_types(self):
 		"""A model selected as a default must actually be of that type."""

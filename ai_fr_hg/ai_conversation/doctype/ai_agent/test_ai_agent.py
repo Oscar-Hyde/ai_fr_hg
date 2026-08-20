@@ -210,6 +210,33 @@ class TestAgentRuntime(AIPlatformTestCase):
 		)
 		self.assertIn(LANGUAGE_INSTRUCTIONS, prompt)
 
+	def test_folder_and_weights_are_passed_to_retrieve(self):
+		"""RET-04/RET-07: ask/agent must forward folder scope and KB weights."""
+		from ai_fr_hg.ai.agent import run_agent_turn
+
+		captured = {}
+
+		def fake_retrieve(*args, **kwargs):
+			captured.update(kwargs)
+			return []
+
+		with (
+			patch("ai_fr_hg.ai.agent.retrieve", side_effect=fake_retrieve),
+			patch(
+				"ai_fr_hg.ai.agent.run_chat",
+				return_value=CompletionResult(content="ok", total_tokens=5),
+			),
+		):
+			run_agent_turn(
+				"What is in this folder?",
+				agent="Test Agent",
+				save_messages=False,
+				folder="Home/A",
+			)
+
+		self.assertEqual(captured.get("folder"), "Home/A")
+		self.assertIn("weights", captured)
+
 	def test_attached_documents_are_retrieved_when_agent_skips_knowledge(self):
 		"""Attach→ask must ground on the file even if use_knowledge is off."""
 		from ai_fr_hg.ai.agent import run_agent_turn

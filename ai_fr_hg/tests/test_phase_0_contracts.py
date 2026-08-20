@@ -155,6 +155,9 @@ class TestControlledBaseline(TestCase):
 		self.assertNotIn("A complete, fully local", project)
 		self.assertNotIn("37 registered", readme)
 		self.assertNotIn("37 ingestible", translation)
+		self.assertNotIn("Translation-memory isolation hardening remains open", readme)
+		self.assertNotIn("Connection-level network hardening is still tracked", readme)
+		self.assertNotIn("SEC-04 connection hardening remains open", translation)
 
 
 class TestRepositoryMetadata(TestCase):
