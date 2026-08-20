@@ -4,7 +4,7 @@
 
 **Opened:** 2026-08-20
 **Phase owner:** Security + Platform
-**Status:** COMPLETE PENDING HOSTED CI — all 14 Phase 1 findings implemented; hosted Frappe v17 bench verification runs on push
+**Status:** COMPLETE — Server, Linter, Frontend static, and Dependency audit all green on the pinned Frappe v17 bench (final code SHA `dcd5c12`)
 
 ## Phase inventory
 
@@ -102,20 +102,17 @@ Executed in this workspace (no MariaDB/bench available locally, as in Phase 0):
 
 ## Runtime verification
 
-Hosted CI on the pinned Frappe v17 bench was used to verify and debug this phase:
+Hosted CI on the pinned Frappe v17 bench (`17.0.0-dev` at `d7000da3...`) is green on the final code SHA (`dcd5c12`): **Server** (real bench: install-app → migrate → `bench build --app ai_fr_hg` → full `run-tests --app ai_fr_hg`), **Linter** (pre-commit suite + pinned Frappe Semgrep ruleset), **Frontend static**, and **Dependency audit** all pass.
 
-- **Bisect result:** `6ba65e4` (SEC-01) passes the full Server suite. Two CI-only defects were found and fixed: (1) `get_document` without a field list raised when a DocType exposed more than the 25-field budget (AI Provider) — now returns a bounded deterministic prefix plus `_fields_truncated`; (2) the legacy `storage_folder` default `AI Platform` (a bare name) flowed into the Single DocType on first save during `after_install`, before any folder existed, so the new server-side validation aborted `install-app` — the File Link now has no short default and patch `v0_0_15` normalizes legacy rows.
-- **Semgrep:** the pinned Frappe ruleset found 3 findings in the new provider/permission code; all fixed (`str(exc)` formatting, reviewed nosemgrep annotation for hook dispatch). Prettier (v2.7.1) and ESLint (v8.44, `--quiet`) pass on all JS.
-- The full-branch Server suite must be re-run green after the final fixes push (GitHub credentials expired in-session; see below).
+CI-driven debugging this phase fixed, with bench evidence: (1) `get_document` without a field list raised when a DocType exposed more than the 25-field budget (AI Provider) — now returns a bounded deterministic prefix plus `_fields_truncated`; (2) the legacy `storage_folder` default `AI Platform` (a bare name) flowed into the Single DocType on first save during `after_install`, before any folder existed, so the new server-side validation aborted `install-app` — the File Link now has no short default and patch `v0_0_15` normalizes legacy rows; (3) Semgrep: 3 findings in the new provider/permission code, fixed (`str(exc)` formatting, reviewed nosemgrep annotation, type-safe `get_single_value`); (4) bench test fixtures aligned with the real runtime (status enums, native File URL normalization, real KB rows); (5) Prettier v2.7.1 and ESLint v8.44 (`--quiet`) pass on all JS.
 
 Browser/Desk smoke for the gated patches and picker remains the Phase 7 browser matrix, as planned.
 
 ## Remaining issues
 
-1. The final SHA must be pushed and the hosted CI must be green before the phase verdict is final (GitHub token expired mid-session; push resumes after the user reconnects GitHub in Arena).
-2. FILE-07 exact-v17 browser smoke and the Desk picker/browser workflows are deliberately Phase 7 deliverables.
-3. Branch protection on `main` remains an owner-only GitHub administration action (recorded in Phase 0).
+1. FILE-07 exact-v17 browser smoke and the Desk picker/browser workflows are deliberately Phase 7 deliverables.
+2. Branch protection on `main` remains an owner-only GitHub administration action (recorded in Phase 0).
 
 ## Phase verdict
 
-`PASS WITH DOCUMENTED NON-BLOCKING LIMITATION` — pending the hosted Frappe v17 Server/Linter/Frontend static/Dependency audit runs on this branch's final SHA; browser E2E is scoped to Phase 7.
+`PASS WITH DOCUMENTED NON-BLOCKING LIMITATION` — all four required CI checks are green on the real Frappe v17 bench; the only deferred items are browser E2E (scoped to Phase 7) and repository-owner branch protection on `main`.
