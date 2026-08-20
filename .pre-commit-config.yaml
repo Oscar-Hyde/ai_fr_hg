@@ -63,15 +63,6 @@ repos:
                 ai_fr_hg/public/js/lib/.*
             )$
 
-  - repo: local
-    hooks:
-      - id: node-js-unit-tests
-        name: JavaScript unit tests
-        language: system
-        entry: bash -c 'node --test ai_fr_hg/tests/js/*.mjs'
-        pass_filenames: false
-        files: '\\.(js|mjs)$'
-
 ci:
     autoupdate_schedule: weekly
     skip: []

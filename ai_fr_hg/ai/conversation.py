@@ -129,9 +129,7 @@ def get_conversation_history(conversation: str, limit: int = HISTORY_LIMIT) -> l
 		order_by="sequence desc, creation desc",
 		limit=fetch,
 	)
-	window = window_latest_messages(
-		[row.as_dict() if hasattr(row, "as_dict") else dict(row) for row in rows], limit
-	)
+	window = window_latest_messages([dict(row) for row in rows], limit)
 
 	messages: list[ChatMessage] = []
 	for row in window:
@@ -175,7 +173,7 @@ def _parse_json_field(value, empty):
 def _decorate_messages(rows) -> list[dict]:
 	messages = []
 	for row in rows:
-		item = row.as_dict() if hasattr(row, "as_dict") else dict(row)
+		item = dict(row)
 		item["citations"] = _parse_json_field(item.get("citations"), [])
 		item["learned_context"] = _parse_json_field(item.get("learned_context"), {})
 		messages.append(item)
