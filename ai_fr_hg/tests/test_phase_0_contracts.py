@@ -118,8 +118,12 @@ class TestControlledBaseline(TestCase):
 		self.assertIn("FRAPPE_SEMGREP_SHA: b101a16e69df049b3fed1478bcc16223e957cca2", workflow)
 		self.assertIn("semgrep==1.173.0", workflow)
 		self.assertIn("--no-suppress-errors", workflow)
-		self.assertIn("python -m pip install --editable '.[all]'", workflow)
-		self.assertIn("pip-audit --strict --local --skip-editable --desc on", workflow)
+		self.assertIn("pip-audit==2.10.1", workflow)
+		self.assertIn('metadata["project"]["optional-dependencies"]', workflow)
+		self.assertIn('if group != "all"', workflow)
+		self.assertIn('--requirement "$AUDIT_REQUIREMENTS"', workflow)
+		self.assertIn("--progress-spinner off", workflow)
+		self.assertNotIn("--skip-editable", workflow)
 
 	def test_normalization_patch_is_registered(self):
 		patches = (APP / "patches.txt").read_text().splitlines()
