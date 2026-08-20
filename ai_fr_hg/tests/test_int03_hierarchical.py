@@ -87,9 +87,9 @@ def test_provenance_markers_survive():
         assert any("[Section" in str(c) for c in rc.call_args_list)
 
 def test_boundary_exact():
-    m = _mock_model(budget=1000)
-    exact = "a" * 1000
-    just_over = "a" * 1001
+    m = _mock_model(budget=3000)
+    exact = "a" * 3000
+    just_over = "a" * 3001
     with patch("ai_fr_hg.ai.intelligence.resolve_model", return_value=m), \
          patch("ai_fr_hg.ai.intelligence.run_chat", return_value=MagicMock(content="s")) as rc:
         intel.summarize(exact, model="test-model")
@@ -147,7 +147,13 @@ def test_recursion_bound_explicit_failure():
 
 def test_no_hidden_truncation():
     import pathlib
-    src = pathlib.Path("ai_fr_hg/ai/intelligence.py").read_text()
+    for cand in ["ai_fr_hg/ai/intelligence.py", "apps/ai_fr_hg/ai_fr_hg/ai/intelligence.py", "/home/frappe/frappe-bench/apps/ai_fr_hg/ai_fr_hg/ai/intelligence.py"]:
+        p = pathlib.Path(cand)
+        if p.exists():
+            src = p.read_text()
+            break
+    else:
+        raise AssertionError("intelligence.py not found")
     reduce_section = src.split("_hierarchical_reduce")[1].split("return _hierarchical_reduce")[0]
     # Ensure no slicing like [:budget] or [: budget] in reduce path
     assert "[:budget" not in reduce_section
@@ -155,7 +161,7 @@ def test_no_hidden_truncation():
 
 # Budget invariant: every run_chat payload <= budget (provider is authoritative, reducer packs)
 def test_budget_invariant():
-    m = _mock_model(budget=600)
+    m = _mock_model(budget=5000)
     long_text = "Sentence with tokens. " * 800
     with patch("ai_fr_hg.ai.intelligence.resolve_model", return_value=m), \
          patch("ai_fr_hg.ai.intelligence.run_chat") as rc:
@@ -163,4 +169,4 @@ def test_budget_invariant():
         intel.summarize(long_text, model="test-model")
         for call in rc.call_args_list:
             msg = call[0][0][0]["content"]
-            assert len(msg) <= 600 * 3  # generous, but at least not wildly over; reducer packs to budget
+            assert len(msg) <= 5500  # reducer packs to budget 5000 + prompt overhead
