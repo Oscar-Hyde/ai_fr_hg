@@ -287,23 +287,11 @@ def extract_document_data(document: str, schema: str, save: bool = True) -> dict
 			reference_name=document,
 		)
 	except Exception as e:
-		# INT-02: distinguish validation failure from provider failure; never persist invalid output
 		from ai_fr_hg.ai.validation import ValidationError as _VE
 
 		if isinstance(e, _VE):
-			# Persist provenance for observability without persisting invalid data
-			try:
-				doc.db_set(
-					"extracted_data",
-					frappe.as_json(
-						{"_validation_error": str(e), "errors": e.errors, "provenance": e.provenance}
-					),
-				)
-			except Exception:
-				pass
-			frappe.throw(
-				_("Validation failed: {0}").format(e.errors[0]["message"] if e.errors else str(e)), exc=e
-			)
+			frappe.log_error(title="INT-02 validation failed", message=f"{e} errors={e.errors} provenance={e.provenance}")
+			frappe.throw(_("Validation failed: {0}").format(e.errors[0]["message"] if getattr(e, "errors", None) else str(e)), exc=e)
 		raise
 
 	if cint(save):
