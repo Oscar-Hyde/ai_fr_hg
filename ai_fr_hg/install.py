@@ -350,7 +350,7 @@ def create_default_folders() -> None:
 		("Projects", "Home/AI Platform"),
 		("Reports", "Home/AI Platform"),
 		("Agent Outputs", "Home/AI Platform"),
-		("My Uploads", "Home"),
+		("Shared Uploads", "Home"),
 		("Attachments", "Home"),
 	]
 	for name, parent in folders:

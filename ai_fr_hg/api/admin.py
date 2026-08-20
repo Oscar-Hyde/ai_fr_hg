@@ -249,6 +249,13 @@ def test_model(model: str, prompt: str = "Reply with the single word: OK") -> di
 	"""
 	_require_manager()
 
+	from ai_fr_hg.utils import api_validation
+
+	model = api_validation.valid_identifier(model, label=_("Model"), required=True)
+	prompt = api_validation.bounded_text(
+		prompt, label=_("Prompt"), max_length=api_validation.MAX_MODEL_TEST_PROMPT_CHARS
+	)
+
 	from ai_fr_hg.ai.engine import run_chat, run_embedding
 	from ai_fr_hg.ai.exceptions import ProviderError
 
@@ -384,7 +391,12 @@ def get_usage_report(days: int = 30, user: str | None = None) -> dict:
 
 	from frappe.utils import add_days, today
 
-	since = add_days(today(), -cint(days) or -30)
+	from ai_fr_hg.utils import api_validation
+
+	days = api_validation.bounded_integer(
+		days, label=_("Days"), default=30, minimum=1, maximum=api_validation.MAX_USAGE_DAYS
+	)
+	since = add_days(today(), -days)
 	values = {"since": since, "user": user or None}
 
 	return {

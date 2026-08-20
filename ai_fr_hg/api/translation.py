@@ -174,6 +174,17 @@ def list_translations(
 	limit: int = 20,
 ) -> list:
 	"""List translations the current user may read."""
+	from ai_fr_hg.utils import api_validation
+
+	document = api_validation.valid_identifier(document, label=_("Document")) if document else None
+	knowledge_base = (
+		api_validation.valid_identifier(knowledge_base, label=_("Knowledge base")) if knowledge_base else None
+	)
+	target_language = (
+		api_validation.enum_choice(target_language, allowed=("ar", "en", "he"), label=_("Language"))
+		if target_language
+		else None
+	)
 	filters: dict = {}
 	if document:
 		filters["source_document"] = document
@@ -198,7 +209,9 @@ def list_translations(
 			"modified",
 		],
 		order_by="modified desc",
-		limit_page_length=cint(limit) or 20,
+		limit_page_length=api_validation.bounded_integer(
+			limit, label=_("limit"), default=20, maximum=api_validation.MAX_TRANSLATION_PAGE
+		),
 	)
 
 

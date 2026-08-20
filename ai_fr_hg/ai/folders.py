@@ -33,6 +33,7 @@ from frappe import _
 from frappe.utils import cint, now_datetime
 
 from ai_fr_hg.ai.exceptions import (
+	AmbiguousFileIdentityError,
 	CircularFolderError,
 	FileNotFoundError,
 	FolderAlreadyExistsError,
@@ -164,6 +165,71 @@ def _get_file_doc(name: str):
 	if not frappe.db.exists("File", name):
 		_throw(FileNotFoundError, f"File or folder '{name}' does not exist.")
 	return frappe.get_doc("File", name)
+
+
+def resolve_file_identity(file_url: str, file_record: str | None = None, document_name: str | None = None):
+	"""Resolve one stable File identity; ambiguous legacy URLs fail closed.
+
+	This is the single resolver used by ingestion (document sources) and the
+	upload facade (attachment placement). Duplicate File rows may share a URL,
+	so a URL without a stable identity must never select an arbitrary record.
+	"""
+	name = file_record
+	if name:
+		# Stable identity: read the exact record. A nonexistent name raises
+		# Frappe's DoesNotExistError in production and is translated by the
+		# ingestion wrapper into DocumentFetchError.
+		file_doc = frappe.get_doc("File", name)
+		if file_doc.file_url != file_url:
+			_throw(AmbiguousFileIdentityError, f"File record '{name}' does not match '{file_url}'.")
+		return file_doc
+	else:
+		# Legacy rows have only a URL. An exact attachment to the requesting AI
+		# Document is stable enough to backfill; otherwise URL/content identity
+		# cannot distinguish duplicate File rows.
+		attached = (
+			frappe.get_all(
+				"File",
+				filters={
+					"file_url": file_url,
+					"is_folder": 0,
+					"attached_to_doctype": "AI Document",
+					"attached_to_name": document_name,
+				},
+				pluck="name",
+				order_by="creation asc, name asc",
+				limit_page_length=2,
+			)
+			if document_name
+			else []
+		)
+		if len(attached) > 1:
+			_throw(
+				AmbiguousFileIdentityError,
+				f"More than one File is attached as the source of AI Document '{document_name}'.",
+			)
+		if attached:
+			name = attached[0]
+		else:
+			matches = frappe.get_all(
+				"File",
+				filters={"file_url": file_url, "is_folder": 0},
+				pluck="name",
+				order_by="creation asc, name asc",
+				limit_page_length=2,
+			)
+			if len(matches) > 1:
+				_throw(
+					AmbiguousFileIdentityError,
+					f"More than one File record uses '{file_url}'; provide the exact File identity.",
+				)
+			name = matches[0] if matches else None
+	if not name:
+		_throw(FileNotFoundError, f"File record not found for '{file_url}'.")
+	file_doc = frappe.get_doc("File", name)
+	if file_doc.file_url != file_url:
+		_throw(AmbiguousFileIdentityError, f"File record '{name}' does not match '{file_url}'.")
+	return file_doc
 
 
 def _get_folder_doc(folder_path: str):
@@ -614,16 +680,19 @@ def get_default_folder(
 	"""Return a sensible default folder for an upload.
 
 	Resolution order:
-	  1. If doctype/docname provided, try per-DocType default from settings or
-	     folder of the parent record's attachments.
-	  2. Per-user "My Uploads" under Home (auto-created).
-	  3. Home/Attachments (Frappe default).
-	  4. Home
+	  1. The configured shared storage folder, but only when it exists and the
+	     requesting user may write it (it is a shared, manager-configured
+	     destination - not a per-user home).
+	  2. If doctype/docname provided, the folder of the parent record's
+	     attachments or a conventional per-DocType folder.
+	  3. The shared "Shared Uploads" folder under Home (auto-created).
+	  4. Home/Attachments (Frappe default).
+	  5. Home
 	"""
 	user = user or frappe.session.user
 	# Try the configured storage folder when the app settings DocType is already
 	# installed. Unexpected database/permission failures propagate rather than
-	# leaving PostgreSQL in an aborted transaction and silently choosing a path.
+	# leaving the site in an aborted transaction and silently choosing a path.
 	if frappe.db.exists("DocType", "AI Platform Settings"):
 		storage_folder = frappe.db.get_single_value("AI Platform Settings", "storage_folder")
 		if (
@@ -631,7 +700,9 @@ def get_default_folder(
 			and frappe.db.exists("File", storage_folder)
 			and cint(frappe.db.get_value("File", storage_folder, "is_folder"))
 		):
-			return _normalize_folder_path(storage_folder)
+			storage_doc = frappe.get_doc("File", storage_folder)
+			if frappe.has_permission("File", "write", doc=storage_doc, user=user):
+				return _normalize_folder_path(storage_folder)
 
 	if doctype and docname and frappe.db.exists(doctype, docname):
 		attached_doc = frappe.get_doc(doctype, docname)
@@ -656,11 +727,11 @@ def get_default_folder(
 				if frappe.has_permission("File", "read", doc=candidate_doc, user=user):
 					return candidate
 
-	# Shared My Uploads.  Default discovery must not catch-and-commit a partial
+	# Shared Uploads. Default discovery must not catch-and-commit a partial
 	# folder creation (for example when fail-closed audit persistence raises).
 	# Users without File creation/write authority simply continue to the native
 	# Attachments/Home fallbacks.
-	candidate_user_folder = "Home/My Uploads"
+	candidate_user_folder = "Home/Shared Uploads"
 	_ensure_home_exists()
 	if not frappe.db.exists("File", candidate_user_folder):
 		home_doc = frappe.get_doc("File", _HOME)
@@ -672,7 +743,7 @@ def get_default_folder(
 		)
 		if can_create_default:
 			try:
-				create_folder("My Uploads", parent_folder=_HOME, is_private=0, user=user)
+				create_folder("Shared Uploads", parent_folder=_HOME, is_private=0, user=user)
 			except FolderAlreadyExistsError:
 				# A concurrent creator won after our existence check.
 				pass
@@ -1866,7 +1937,7 @@ def get_tabs(user: str | None = None) -> list[dict]:
 		{"id": "favorites", "label": _("Favorites"), "type": "favorite", "icon": "star"},
 		{
 			"id": "shared",
-			"label": _("Shared with me"),
+			"label": _("Public"),
 			"type": "filter",
 			"query": {"is_private": 0},
 			"icon": "users",
@@ -1979,35 +2050,6 @@ def assign_file_to_folder(
 	track_folder_operation("assign", file_name, target, user, details={"from": old_folder})
 	_update_document_folder_provenance(file_name, target)
 	return {"name": file_name, "folder": target, "old_folder": old_folder, "unchanged": False}
-
-
-def ensure_file_in_folder(
-	file_url: str | None,
-	folder: str | None,
-	*,
-	attached_to_doctype: str | None = None,
-	attached_to_name: str | None = None,
-	user: str | None = None,
-) -> str | None:
-	"""Given a file_url, ensure its File record lives in `folder` (or default)."""
-	if not file_url:
-		return None
-	name = frappe.db.get_value("File", {"file_url": file_url}, "name")
-	if not name:
-		return None
-	target = (
-		_normalize_folder_path(folder)
-		if folder
-		else get_default_folder(user=user, doctype=attached_to_doctype, docname=attached_to_name)
-	)
-	assign_file_to_folder(
-		name,
-		target,
-		attached_to_doctype=attached_to_doctype,
-		attached_to_name=attached_to_name,
-		user=user,
-	)
-	return name
 
 
 def _update_document_folder_provenance(file_name: str, folder: str) -> None:

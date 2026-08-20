@@ -17,6 +17,20 @@
 	if (typeof frappe === "undefined") return;
 	if (typeof frappe.provide !== "function") return;
 
+	// Version gate: these uploader overrides target the supported Frappe v17
+	// pre-release revision; they must not run on any other framework version.
+	try {
+		const version = frappe?.boot?.versions?.frappe || "";
+		if (version && !String(version).startsWith("17.")) {
+			console.warn(
+				`AI folder: uploader patches are gated to Frappe v17; found "${version}". Disabled.`
+			);
+			return;
+		}
+	} catch (_e) {
+		// Version probe failed; continue (Desk boot is incomplete).
+	}
+
 	frappe.provide("frappe.ai");
 	frappe.ai = frappe.ai || {};
 	const folder = (frappe.ai.folder = frappe.ai.folder || {});
@@ -39,14 +53,6 @@
 	}
 
 	Object.assign(folder, {
-		async get_tree(root = "Home", max_depth = 6) {
-			return frappe.xcall("ai_fr_hg.api.folders.get_tree", {
-				root,
-				max_depth,
-				include_files: 0,
-			});
-		},
-
 		async get_default_folder(doctype = null, docname = null) {
 			try {
 				const result = await frappe.xcall("ai_fr_hg.api.folders.get_default_folder", {
@@ -68,22 +74,6 @@
 
 		async get_file_info(file_name) {
 			return frappe.xcall("ai_fr_hg.api.folders.get_file_info", { file_name });
-		},
-
-		flatten_tree(node, depth = 0, rows = []) {
-			if (!node || !node.is_folder) return rows;
-			rows.push({
-				value: node.name,
-				label: `${"— ".repeat(depth)}${node.file_name || node.name}`,
-			});
-			(node.children || []).forEach((child) => {
-				try {
-					this.flatten_tree(child, depth + 1, rows);
-				} catch (_e) {
-					// Skip malformed subtree nodes rather than breaking Desk.
-				}
-			});
-			return rows;
 		},
 
 		/**
@@ -248,19 +238,6 @@
 				}
 				if (!$body || !$body.length || state.selector) return;
 
-				let tree;
-				try {
-					tree = await folder.get_tree("Home", 6);
-				} catch (error) {
-					console.warn("AI folder: get_tree failed, skipping selector injection", error);
-					return;
-				}
-				let options;
-				try {
-					options = folder.flatten_tree(tree);
-				} catch (_e) {
-					options = [{ value: FALLBACK_FOLDER, label: FALLBACK_FOLDER }];
-				}
 				const $section = $("<div class='form-section'></div>");
 				const $breadcrumbs = $("<div class='text-muted small'></div>");
 				try {
@@ -269,6 +246,9 @@
 					return;
 				}
 
+				// Lazy, permission-aware folder selection: the Link control searches
+				// the folder tree server-side with pagination instead of fetching
+				// and flattening a bounded global tree on every dialog open.
 				let destination;
 				try {
 					destination = frappe.ui.form.make_control({
@@ -276,13 +256,16 @@
 						render_input: true,
 						df: {
 							fieldname: "ai_folder_destination",
-							fieldtype: "Select",
+							fieldtype: "Link",
+							options: "File",
 							label: __("Destination Folder"),
-							options,
 							reqd: 1,
 							description: __(
 								"Choose where every selected upload in this batch will be stored."
 							),
+							get_query() {
+								return { filters: { is_folder: 1 } };
+							},
 						},
 					});
 					destination.set_value(state.selected_folder);
@@ -320,14 +303,6 @@
 										parent_folder: state.selected_folder,
 									}
 								);
-								let refreshed_tree;
-								try {
-									refreshed_tree = await folder.get_tree("Home", 6);
-									destination.df.options = folder.flatten_tree(refreshed_tree);
-									destination.set_options();
-								} catch (_err) {
-									// Keep existing options if refresh fails.
-								}
 								new_folder_name.set_value("");
 								this._set_native_destination(created.name);
 								destination.set_value(created.name);

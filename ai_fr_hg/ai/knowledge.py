@@ -652,15 +652,23 @@ def _hydrate(ordered, semantic, keyword) -> list[RetrievedChunk]:
 
 def _log_search(query, targets, search_type, results, started) -> None:
 	try:
+		# Bound the payload before it crosses the queue: the job redacts and
+		# tightens these to telemetry snippets before persistence.
+		telemetry = []
+		for result in results[:10]:
+			payload = result.as_dict()
+			payload["content"] = (payload.get("content") or "")[:1000]
+			payload["document_title"] = (payload.get("document_title") or "")[:200]
+			telemetry.append(payload)
 		frappe.enqueue(
 			"ai_fr_hg.ai.knowledge._log_search_job",
 			queue="short",
 			timeout=120,
 			job_id=f"ai_search_log:{frappe.generate_hash(length=10)}",
-			query=query,
+			query=(query or "")[:1000],
 			targets=targets,
 			search_type=search_type,
-			results=[r.as_dict() for r in results[:10]],
+			results=telemetry,
 			result_count=len(results),
 			top_score=results[0].score if results else 0,
 			duration_ms=int((time.monotonic() - started) * 1000),
@@ -671,18 +679,43 @@ def _log_search(query, targets, search_type, results, started) -> None:
 
 
 def _log_search_job(query, targets, search_type, results, result_count, top_score, duration_ms, user) -> None:
+	"""Persist search telemetry: redacted, bounded, and policy-controlled.
+
+	The raw query is passed through the canonical redaction patterns and the
+	stored result rows carry identifiers, scores and bounded redacted snippets
+	only - never full chunk content. Retention for `AI Search Query` rows is
+	enforced by the scheduled cleanup job.
+	"""
 	try:
+		# Uncacheable read: the policy flag must reflect the current value, not
+		# a stale cached Single DocType from before the setting changed.
+		enabled = frappe.db.get_single_value("AI Platform Settings", "log_search_queries", cache=False)
+		if enabled is not None and not cint(enabled):
+			return
+
+		from ai_fr_hg.ai.logging import redact
+
+		telemetry = [
+			{
+				"chunk": item.get("chunk"),
+				"document": item.get("document"),
+				"title": redact(str(item.get("document_title") or ""))[:200],
+				"score": item.get("score"),
+				"snippet": redact(str(item.get("content") or ""))[:200],
+			}
+			for item in (results or [])[:10]
+		]
 		doc = frappe.new_doc("AI Search Query")
 		doc.update(
 			{
-				"query": query[:1000],
+				"query": redact(str(query or ""))[:1000],
 				"knowledge_base": targets[0] if len(targets) == 1 else None,
 				"user": user,
 				"search_type": search_type,
 				"result_count": result_count,
 				"top_score": top_score,
 				"duration_ms": duration_ms,
-				"results": frappe.as_json(results),
+				"results": frappe.as_json(telemetry),
 			}
 		)
 		doc.flags.ignore_permissions = True

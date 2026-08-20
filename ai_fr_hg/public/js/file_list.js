@@ -12,6 +12,21 @@
 
 (() => {
 	if (typeof frappe === "undefined") return;
+	// Version gate: these overrides target the supported Frappe v17
+	// pre-release revision. On any other framework version they must not
+	// run - a stale monkey patch is a greater risk than the bypass it
+	// would otherwise prevent.
+	try {
+		const version = frappe?.boot?.versions?.frappe || "";
+		if (version && !String(version).startsWith("17.")) {
+			console.warn(
+				`AI folder: File list patches are gated to Frappe v17; found "${version}". Disabled.`
+			);
+			return;
+		}
+	} catch (_e) {
+		// Version probe failed; continue (Desk boot is incomplete).
+	}
 	// Ensure the global listview registry exists even during early Desk boot
 	// or when returning to Desk via SPA navigation and the module is
 	// re-evaluated from cache.
@@ -94,7 +109,6 @@
 		if (typeof manager.cut !== "function" || typeof manager.paste !== "function") return false;
 
 		manager.__ai_folder_paste__ = true;
-		const original_paste = manager.paste.bind(manager);
 		manager.paste = async (target_folder) => {
 			try {
 				const items = manager.files_to_move || [];
@@ -130,18 +144,19 @@
 				}
 				return result;
 			} catch (error) {
-				// Fall back to native paste so a folder-service outage never
-				// bricks the Desk file operation.
-				console.warn("AI folder paste failed, falling back to native", error);
-				try {
-					return await original_paste(target_folder);
-				} catch (_fallback_error) {
-					frappe.msgprint({
-						title: __("Move failed"),
-						message: error.message || __("The folder operation failed."),
-						indicator: "red",
-					});
-				}
+				// Fail closed. The canonical folder service is the sole mutation
+				// owner: falling back to the native paste would mutate the tree
+				// without AI Document provenance synchronization - the exact
+				// invariant the canonical service exists to protect.
+				console.warn("AI folder paste failed; native fallback refused", error);
+				frappe.msgprint({
+					title: __("Move failed"),
+					message:
+						error?.messages?.join("<br>") ||
+						error?.message ||
+						__("The folder operation failed and was not applied. Nothing was moved."),
+					indicator: "red",
+				});
 			}
 		};
 		return true;

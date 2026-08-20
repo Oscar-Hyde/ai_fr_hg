@@ -347,11 +347,11 @@
    "options": "ar\nen\nhe"
   },
   {
+   "description": "Leave empty to use the default chat model.",
    "fieldname": "default_translation_model",
    "fieldtype": "Link",
    "label": "Default Translation Model",
-   "options": "AI Model",
-   "description": "Leave empty to use the default chat model."
+   "options": "AI Model"
   },
   {
    "fieldname": "default_glossary",
@@ -365,10 +365,10 @@
   },
   {
    "default": "1800",
+   "description": "How much source text is translated as one unit.",
    "fieldname": "translation_segment_characters",
    "fieldtype": "Int",
-   "label": "Segment Size (characters)",
-   "description": "How much source text is translated as one unit."
+   "label": "Segment Size (characters)"
   },
   {
    "default": "6",
@@ -384,31 +384,31 @@
   },
   {
    "default": "1",
+   "description": "Retry a failed segment once with a stricter prompt naming the defect.",
    "fieldname": "translation_repair_pass",
    "fieldtype": "Check",
-   "label": "Repair Flagged Segments",
-   "description": "Retry a failed segment once with a stricter prompt naming the defect."
+   "label": "Repair Flagged Segments"
   },
   {
    "default": "1",
+   "description": "Technical beta only. Disable until SEC-01/TRN-01 enforce authorized KB scope and policy-safe identity on every translation path.",
    "fieldname": "translation_memory_enabled",
    "fieldtype": "Check",
-   "label": "Use Translation Memory",
-   "description": "Technical beta only. Disable until SEC-01/TRN-01 enforce authorized KB scope and policy-safe identity on every translation path."
+   "label": "Use Translation Memory"
   },
   {
    "default": "0",
+   "description": "Verify this many segments per document by translating them back and comparing embeddings. 0 disables it.",
    "fieldname": "translation_back_translation_samples",
    "fieldtype": "Int",
-   "label": "Back-Translation Samples",
-   "description": "Verify this many segments per document by translating them back and comparing embeddings. 0 disables it."
+   "label": "Back-Translation Samples"
   },
   {
    "default": "0",
+   "description": "Default for new translations: store the finished text as its own searchable AI Document.",
    "fieldname": "translation_index_output",
    "fieldtype": "Check",
-   "label": "Index Translations as Documents",
-   "description": "Default for new translations: store the finished text as its own searchable AI Document."
+   "label": "Index Translations as Documents"
   },
   {
    "fieldname": "storage_tab",
@@ -416,10 +416,11 @@
    "label": "Storage & Retention"
   },
   {
-   "default": "AI Platform",
+   "description": "Shared destination folder used as the default for non-attachment uploads and platform output. Must be a full File folder name (e.g. Home/AI Platform). Only applied when the uploading user has write access to the folder; otherwise the shared uploads folder is used.",
    "fieldname": "storage_folder",
-   "fieldtype": "Data",
-   "label": "Storage Folder"
+   "fieldtype": "Link",
+   "label": "Storage Folder",
+   "options": "File"
   },
   {
    "default": "0",
@@ -501,6 +502,13 @@
    "label": "Require Approval for Write Tools"
   },
   {
+   "description": "Additional fields that generic AI document tools must never expose. One per line: a bare fieldname applies to every DocType; 'Doctype.fieldname' scopes the entry to one DocType. Password fields and common credential field names are always denied.",
+   "fieldname": "tool_sensitive_fields",
+   "fieldtype": "Small Text",
+   "insert_after": "require_tool_approval",
+   "label": "Tool Sensitive Fields"
+  },
+  {
    "default": "0",
    "fieldname": "max_tokens_per_user_per_day",
    "fieldtype": "Int",
@@ -529,6 +537,14 @@
    "label": "Log Responses"
   },
   {
+   "default": "1",
+   "description": "Record search telemetry (query text, result identifiers, scores and bounded snippets). Values are passed through the configured redaction patterns before persistence; full result content is never stored. Rows are removed by the scheduled retention cleanup.",
+   "fieldname": "log_search_queries",
+   "fieldtype": "Check",
+   "insert_after": "log_responses",
+   "label": "Log Search Queries"
+  },
+  {
    "description": "Newline separated regular expressions redacted before logging.",
    "fieldname": "redact_patterns",
    "fieldtype": "Small Text",
@@ -547,10 +563,10 @@
   },
   {
    "default": "1",
+   "description": "When enabled, taught facts, preferences and instructions wait for an AI Manager to approve them before they affect future answers.",
    "fieldname": "require_memory_approval",
    "fieldtype": "Check",
-   "label": "Require Approval for Learned Knowledge",
-   "description": "When enabled, taught facts, preferences and instructions wait for an AI Manager to approve them before they affect future answers."
+   "label": "Require Approval for Learned Knowledge"
   },
   {
    "fieldname": "learning_cb",
@@ -581,7 +597,6 @@
  "owner": "Administrator",
  "permissions": [
   {
-   "role": "System Manager",
    "create": 1,
    "delete": 1,
    "email": 1,
@@ -589,11 +604,11 @@
    "print": 1,
    "read": 1,
    "report": 1,
+   "role": "System Manager",
    "share": 1,
    "write": 1
   },
   {
-   "role": "AI Manager",
    "create": 1,
    "delete": 1,
    "email": 1,
@@ -601,6 +616,7 @@
    "print": 1,
    "read": 1,
    "report": 1,
+   "role": "AI Manager",
    "share": 1,
    "write": 1
   }

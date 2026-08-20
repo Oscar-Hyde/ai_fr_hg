@@ -17,6 +17,20 @@
 (() => {
 	if (typeof frappe === "undefined") return;
 
+	// Version gate: this form guard targets the supported Frappe v17
+	// pre-release revision; it must not run on any other framework version.
+	try {
+		const version = frappe?.boot?.versions?.frappe || "";
+		if (version && !String(version).startsWith("17.")) {
+			console.warn(
+				`AI file guard: File form patches are gated to Frappe v17; found "${version}". Disabled.`
+			);
+			return;
+		}
+	} catch (_e) {
+		// Version probe failed; continue (Desk boot is incomplete).
+	}
+
 	function register() {
 		if (!frappe.ui || !frappe.ui.form || typeof frappe.ui.form.on !== "function") return false;
 		// Avoid double-registration when Desk is revisited and the module is

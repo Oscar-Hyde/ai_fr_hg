@@ -264,9 +264,32 @@ def tool_invocation_query(user: str) -> str:
 def folder_settings_query(user: str) -> str:
 	if _is_manager(user):
 		return ""
-	# Settings are visible if the user can read the underlying folder (checked via File permission on UI), but list query falls back to allow.
-	# We keep it open for discovery; row-level has_document_permission enforces true check.
-	return ""
+	# List visibility must match direct-document access (has_document_permission
+	# opens the linked File). Compose the same permission query conditions
+	# Frappe itself applies when listing Files, and require the settings row's
+	# folder to pass them - so an AI User can never list metadata for a folder
+	# they could not open directly.
+	try:
+		conditions = _file_list_permission_conditions(user)
+	except Exception:
+		return "1=0"
+	if not conditions:
+		return ""
+	return f"`tabAI Folder Settings`.`folder` in (select `name` from `tabFile` where {conditions})"
+
+
+def _file_list_permission_conditions(user: str) -> str:
+	"""The permission query conditions Frappe applies when listing ``File``."""
+	parts: list[str] = []
+	hooks = frappe.get_hooks("permission_query_conditions", {})
+	for method in hooks.get("File", []) + hooks.get("*", []):
+		# Security-reviewed dynamic dispatch: this is the exact mechanism
+		# Frappe's own DatabaseQuery uses to resolve registered permission
+		# hooks. Only hook methods registered by installed apps can be reached.
+		condition = frappe.call(frappe.get_attr(method), user, doctype="File")  # nosemgrep
+		if condition:
+			parts.append(str(condition))
+	return " and ".join(f"({part})" for part in parts)
 
 
 def folder_favorite_query(user: str) -> str:

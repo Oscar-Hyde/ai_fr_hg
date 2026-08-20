@@ -18,6 +18,29 @@ Authorization: token <api_key>:<api_secret>
 const response = await frappe.xcall("<dotted.path>", { ...params });
 ```
 
+## Shared input bounds
+
+Every endpoint validates its inputs through the shared facade validators in
+`ai_fr_hg.utils.api_validation` before reaching the service layer:
+
+| Input | Bound |
+| --- | --- |
+| Chat message / ask question | 32,000 characters |
+| Documents per turn | 25 |
+| Knowledge bases per request | 25 |
+| Search `top_k` | 100 (default 10) |
+| List pages (translations, learning, folders, chunks/entities) | 200–500 per endpoint, defaults as documented |
+| Usage report range | 1–366 days |
+| Model test prompt | 8,000 characters |
+| Folder tree depth | 20 |
+| Bulk move items | 100 |
+| Identifiers (document names, File paths) | 140 characters, `[A-Za-z0-9 _ . : % @ / -]` |
+| Idempotency keys | 64 characters, letters/numbers plus `. _ : -` |
+
+Limits clamp to the hard cap rather than raising for oversized numeric values;
+invalid enums, identifiers, and JSON shapes raise a validation error with a
+safe message.
+
 ---
 
 ## Chat
@@ -333,6 +356,24 @@ answer.
 | --- | --- |
 | `ai_fr_hg.ai.tools.approve_invocation(invocation)` | Approve and run a held tool call. |
 | `ai_fr_hg.ai.tools.reject_invocation(invocation)` | Reject it. |
+
+Generic document tools (`get_document`, `list_documents`, `count_documents`
+and the configurable **DocType Query** tool) all run through the central safe
+query mechanism: row-level permission hooks apply to listing and counting
+alike, returned fields are limited to the caller's readable non-sensitive
+fields, and results are bounded. Password fields, credential-named fields and
+any operator-configured sensitive fields are never exposed.
+
+## Folders
+
+| Method | Purpose |
+| --- | --- |
+| `ai_fr_hg.api.folders.upload_file_with_folder(file_url, file_name, ...)` | Re-file an uploaded File into a chosen folder. `file_name` (the stable File record identity) is preferred; URL-only legacy calls are resolved through the canonical resolver and fail closed when the URL is ambiguous. |
+| `ai_fr_hg.api.folders.bulk_move(file_names, target_folder, enqueue)` | Move up to 100 files/folders; large batches enqueue on the background worker. |
+
+The canonical folder service is the sole mutation owner for File moves: the
+Desk paste override fails closed (no native fallback) when the service cannot
+complete an operation.
 
 ---
 

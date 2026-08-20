@@ -136,54 +136,17 @@ def _as_user(user: str):
 
 
 def _file_doc(file_url: str, file_record: str | None = None, document_name: str | None = None):
-	"""Resolve one stable File identity; ambiguous legacy URLs fail closed."""
-	name = file_record
-	if not name:
-		# Legacy rows have only a URL. An exact attachment to the requesting AI
-		# Document is stable enough to backfill; otherwise URL/content identity
-		# cannot distinguish duplicate File rows and must never select an
-		# arbitrary oldest record.
-		attached = (
-			frappe.get_all(
-				"File",
-				filters={
-					"file_url": file_url,
-					"is_folder": 0,
-					"attached_to_doctype": "AI Document",
-					"attached_to_name": document_name,
-				},
-				pluck="name",
-				order_by="creation asc, name asc",
-				limit_page_length=2,
-			)
-			if document_name
-			else []
-		)
-		if len(attached) > 1:
-			raise DocumentFetchError(
-				_("More than one File is attached as the source of AI Document {0}.").format(document_name)
-			)
-		if attached:
-			name = attached[0]
-		else:
-			matches = frappe.get_all(
-				"File",
-				filters={"file_url": file_url, "is_folder": 0},
-				pluck="name",
-				order_by="creation asc, name asc",
-				limit_page_length=2,
-			)
-			if len(matches) > 1:
-				raise DocumentFetchError(
-					_("More than one File record uses {0}; provide the exact File identity.").format(file_url)
-				)
-			name = matches[0] if matches else None
-	if not name:
-		raise DocumentFetchError(_("File record not found for {0}.").format(file_url))
-	file_doc = frappe.get_doc("File", name)
-	if file_doc.file_url != file_url:
-		raise DocumentFetchError(_("File record {0} does not match {1}.").format(name, file_url))
-	return file_doc
+	"""Resolve one stable File identity; ambiguous legacy URLs fail closed.
+
+	Delegates to the canonical resolver in :mod:`ai_fr_hg.ai.folders` so the
+	ingestion and upload facades can never drift apart.
+	"""
+	from ai_fr_hg.ai.folders import resolve_file_identity
+
+	try:
+		return resolve_file_identity(file_url, file_record=file_record, document_name=document_name)
+	except frappe.ValidationError as error:
+		raise DocumentFetchError(str(error)) from error
 
 
 def validate_source_access(document, user: str | None = None) -> None:

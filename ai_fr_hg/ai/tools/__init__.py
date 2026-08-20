@@ -424,12 +424,17 @@ def _run_method(tool_doc, arguments: dict):
 
 
 def _run_doctype_query(tool_doc, arguments: dict):
-	"""Read records, always through the caller's own permissions."""
+	"""Read records, always through the caller's own permissions.
+
+	Field projection, sensitive-field denial and row-level enforcement are
+	centralized in :mod:`ai_fr_hg.ai.tools.query`; the tool's configured
+	``field_allowlist`` is an additional restriction, never a grant.
+	"""
+	from ai_fr_hg.ai.tools.query import safe_list
+
 	doctype = tool_doc.target_doctype
 	if not doctype:
 		raise ToolExecutionError(_("Tool {0} has no target DocType.").format(tool_doc.name))
-
-	frappe.has_permission(doctype, "read", throw=True)
 
 	filters = arguments.get("filters") or {}
 	if isinstance(filters, str):
@@ -438,38 +443,43 @@ def _run_doctype_query(tool_doc, arguments: dict):
 		except ValueError:
 			filters = {}
 
-	fields = arguments.get("fields") or ["name"]
+	fields = arguments.get("fields") or None
 	if isinstance(fields, str):
 		fields = [f.strip() for f in fields.split(",") if f.strip()]
 
-	meta = frappe.get_meta(doctype)
-	valid = {df.fieldname for df in meta.fields} | {
-		"name",
-		"owner",
-		"creation",
-		"modified",
-		"docstatus",
-	}
-	fields = [f for f in fields if f in valid] or ["name"]
+	allowlist = {
+		item.strip()
+		for item in (tool_doc.field_allowlist or "").replace(",", "\n").splitlines()
+		if item.strip()
+	} or None
 
-	return frappe.get_list(
+	return safe_list(
 		doctype,
 		filters=filters,
 		fields=fields,
-		limit_page_length=min(cint(arguments.get("limit")) or 20, 100),
-		order_by=arguments.get("order_by") or "modified desc",
+		limit=arguments.get("limit"),
+		order_by=arguments.get("order_by"),
+		allowlist=allowlist,
 	)
 
 
 def _run_doctype_action(tool_doc, arguments: dict):
-	"""Create or update a record, enforcing the caller's write permission."""
+	"""Create or update a record, enforcing the caller's write permission.
+
+	Model-supplied values are stripped to the caller's writable, non-denied
+	fields before they reach ``doc.update``, so even a DocType-level write
+	rule can never let a tool set a restricted field.
+	"""
+	from ai_fr_hg.ai.tools.query import safe_field_values
+
 	doctype = tool_doc.target_doctype
 	action = (arguments.get("action") or "create").lower()
+	values = safe_field_values(doctype, arguments.get("values") or {})
 
 	if action == "create":
 		frappe.has_permission(doctype, "create", throw=True)
 		doc = frappe.new_doc(doctype)
-		doc.update(arguments.get("values") or {})
+		doc.update(values)
 		doc.insert()
 		return {"name": doc.name, "doctype": doctype, "action": "created"}
 
@@ -479,7 +489,7 @@ def _run_doctype_action(tool_doc, arguments: dict):
 			raise ToolExecutionError(_("An update action needs a document name."))
 		doc = frappe.get_doc(doctype, name)
 		doc.check_permission("write")
-		doc.update(arguments.get("values") or {})
+		doc.update(values)
 		doc.save()
 		return {"name": doc.name, "doctype": doctype, "action": "updated"}
 

@@ -24,8 +24,41 @@
 	if (typeof window === "undefined") return;
 
 	// -------------------------------------------------------------------
-	// 1. Script load failures (build_events and any other bundle) should
-	//    not propagate as uncaught errors that freeze the Desk SPA router.
+	// 0. Version gate. These patches target the supported Frappe v17
+	//    pre-release revision (17.0.0-dev, immutable SHA d7000da3...).
+	//    On any other framework version the guards must not run: a stale
+	//    monkey patch is a greater risk than the failures it papers over.
+	// -------------------------------------------------------------------
+	const SUPPORTED_MAJOR = "17";
+	const frappeVersion = () => {
+		try {
+			return window.frappe?.boot?.versions?.frappe || window.frappe?.version || "";
+		} catch (_e) {
+			return "";
+		}
+	};
+	let versionDiagnosticShown = false;
+	const versionSupported = () => {
+		const version = frappeVersion();
+		if (!version) return true; // framework still booting; installers retry anyway
+		const supported = String(version).startsWith(`${SUPPORTED_MAJOR}.`);
+		if (!supported && !versionDiagnosticShown) {
+			versionDiagnosticShown = true;
+			console.warn(
+				`Desk guard: ai_fr_hg patches are gated to Frappe v${SUPPORTED_MAJOR}; ` +
+					`found "${version}". Patches disabled.`
+			);
+		}
+		return supported;
+	};
+	if (!versionSupported()) return;
+
+	// -------------------------------------------------------------------
+	// 1. Script load failures.
+	//    - Optional feature bundles (calendar) may be tolerated.
+	//    - Core Desk bundles (desk/form/list) are deployment errors: never
+	//      silently continue with a half-working Desk. Show a recoverable
+	//      rebuild diagnostic instead.
 	// -------------------------------------------------------------------
 	window.addEventListener(
 		"error",
@@ -36,22 +69,15 @@
 			const src = target && (target.src || target.href);
 			if (!src) return;
 
-			// Frappe's hashed bundles live under /assets/frappe/ or /assets/<app>/ .
-			// If one is missing (stale hash after `bench build --app` or a
-			// CDN cache mismatch), log and swallow so Desk stays interactive.
-			if (
-				src.includes("build_events.bundle") ||
-				src.includes("desk.bundle") ||
-				src.includes("list.bundle") ||
-				src.includes("form.bundle")
-			) {
+			// Optional calendar bundle: stale hash must not brick the Desk.
+			if (src.includes("build_events.bundle")) {
 				console.warn("Desk guard: bundle failed to load, continuing without it:", src);
 				// Prevent the error from bubbling to Frappe's global handler
 				// which otherwise shows a blocking "Loading failed" modal.
 				event.preventDefault();
 				// Stub minimal globals that some bundles expect so later code
 				// does not throw "undefined" when it checks for the feature.
-				if (src.includes("build_events.bundle") && typeof window.frappe !== "undefined") {
+				if (typeof window.frappe !== "undefined") {
 					window.frappe = window.frappe || {};
 					// Calendar / Event may check for frappe.views.calendar
 					window.frappe.views = window.frappe.views || {};
@@ -59,6 +85,37 @@
 				// Remove the failed script tag to avoid retry loops.
 				try {
 					if (target.parentNode) target.parentNode.removeChild(target);
+				} catch (_e) {
+					// ignore
+				}
+				return;
+			}
+
+			// Core Desk bundles: a missing desk/form/list bundle means the
+			// built assets are stale or incomplete. Suppressing this silently
+			// would leave a partially functioning Desk, so surface a clear,
+			// recoverable rebuild diagnostic.
+			if (
+				src.includes("desk.bundle") ||
+				src.includes("form.bundle") ||
+				src.includes("list.bundle")
+			) {
+				console.error("Desk guard: core Desk bundle failed to load:", src);
+				event.preventDefault();
+				try {
+					const rebuild =
+						"Run 'bench build --app ai_fr_hg' and 'bench restart', then reload this page.";
+					const message = "A required Desk bundle could not be loaded. " + rebuild;
+					if (window.frappe?.msgprint) {
+						window.frappe.msgprint({
+							title:
+								typeof __ === "function"
+									? __("Desk assets failed to load")
+									: "Desk assets failed to load",
+							message,
+							indicator: "red",
+						});
+					}
 				} catch (_e) {
 					// ignore
 				}

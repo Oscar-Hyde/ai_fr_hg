@@ -110,5 +110,13 @@ class FileNotFoundError(FolderError):
 	"""Raised when a file does not exist."""
 
 
+class AmbiguousFileIdentityError(FolderError):
+	"""Raised when a URL-only request cannot resolve one stable File record.
+
+	Duplicate File rows may share a file_url; the platform must never select an
+	arbitrary record, so callers must supply the exact File identity.
+	"""
+
+
 class InvalidFolderNameError(FolderError):
 	"""Raised when a folder or file name is invalid."""

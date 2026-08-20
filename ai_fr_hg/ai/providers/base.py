@@ -12,6 +12,7 @@ import json
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
+from urllib.parse import urlparse
 
 import frappe
 from frappe import _
@@ -19,11 +20,13 @@ from frappe.utils import cint, flt
 
 from ai_fr_hg.ai.exceptions import (
 	DeadlineExceededError,
+	LocalOnlyViolation,
 	ProviderError,
 	ProviderOfflineError,
 	ProviderTimeoutError,
 )
-from ai_fr_hg.utils.network import enforce_local_only
+from ai_fr_hg.utils import netguard
+from ai_fr_hg.utils.network import enforce_local_only, get_allowed_hosts
 
 
 @dataclass
@@ -178,7 +181,12 @@ class BaseProvider:
 			effective_timeout = clamped
 
 		try:
-			response = requests.request(
+			# One validated DNS decision, pinned dialing, no environment
+			# proxies, no redirects, and peer re-validation - see netguard.
+			session = netguard.secure_provider_session(
+				(urlparse(url).hostname or "").lower(), get_allowed_hosts()
+			)
+			response = session.request(
 				method,
 				url,
 				json=payload,
@@ -187,6 +195,14 @@ class BaseProvider:
 				verify=self.verify_ssl,
 				stream=stream,
 			)
+		except netguard.AddressPolicyViolation as exc:
+			raise LocalOnlyViolation(
+				_("Provider {0} was not called: {1}").format(self.name, str(exc))
+			) from exc
+		except netguard.TransportGuardError as exc:
+			raise ProviderError(
+				_("Provider {0} request was refused: {1}").format(self.name, str(exc))
+			) from exc
 		except requests.exceptions.ConnectTimeout as exc:
 			raise ProviderTimeoutError(
 				_("Provider {0} timed out while connecting to {1}.").format(self.name, url)

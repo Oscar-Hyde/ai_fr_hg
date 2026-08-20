@@ -69,7 +69,7 @@ class AIPlatformSettings(Document):
 		require_memory_approval: DF.Check
 		require_tool_approval: DF.Check
 		similarity_threshold: DF.Float
-		storage_folder: DF.Data | None
+		storage_folder: DF.Link | None
 		streaming_enabled: DF.Check
 		translation_back_translation_samples: DF.Int
 		translation_batch_segments: DF.Int
@@ -86,6 +86,16 @@ class AIPlatformSettings(Document):
 		self.validate_intervals()
 		self.validate_model_types()
 		self.validate_redaction_patterns()
+		self.validate_storage_folder()
+
+	def validate_storage_folder(self):
+		"""The storage folder is a real File folder identity the manager may use."""
+		if not self.storage_folder:
+			return
+		if not frappe.db.exists("File", self.storage_folder):
+			frappe.throw(_("Storage Folder {0} does not exist.").format(self.storage_folder))
+		if not cint(frappe.db.get_value("File", self.storage_folder, "is_folder")):
+			frappe.throw(_("Storage Folder must be a folder."))
 
 	def validate_unsupported_settings(self):
 		"""Reject dormant controls that could otherwise imply a security boundary."""

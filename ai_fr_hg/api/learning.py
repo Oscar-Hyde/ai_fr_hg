@@ -9,6 +9,7 @@ script. Approval and rejection are restricted to AI Manager / System Manager
 """
 
 import frappe
+from frappe import _
 from frappe.utils import cint
 
 from ai_fr_hg.ai import learning
@@ -58,6 +59,11 @@ def reject_candidate(candidate: str, notes: str | None = None) -> dict:
 @frappe.whitelist()
 def list_candidates(status: str | None = None) -> list:
 	"""Candidates the caller may review, optionally filtered by status."""
+	from ai_fr_hg.utils import api_validation
+
+	status = api_validation.enum_choice(
+		status, allowed=("Pending", "Approved", "Rejected", "Conflict"), label=_("Status")
+	)
 	filters = {}
 	if status:
 		filters["status"] = status
@@ -87,6 +93,11 @@ def list_candidates(status: str | None = None) -> list:
 @frappe.whitelist()
 def list_memories(status: str = "Active", limit: int = 200) -> list:
 	"""Active (or archived) memories, most used first."""
+	from ai_fr_hg.utils import api_validation
+
+	status = api_validation.enum_choice(
+		status, allowed=("Active", "Archived"), label=_("Status"), default="Active"
+	)
 	return frappe.get_list(
 		"AI Memory",
 		filters={"status": status},
@@ -106,13 +117,20 @@ def list_memories(status: str = "Active", limit: int = 200) -> list:
 			"creation",
 		],
 		order_by="usage_count desc, creation desc",
-		limit_page_length=min(max(cint(limit) or 200, 1), 500),
+		limit_page_length=api_validation.bounded_integer(
+			limit, label=_("limit"), default=200, maximum=api_validation.MAX_LEARNING_PAGE
+		),
 	)
 
 
 @frappe.whitelist()
 def list_skills(enabled: int = 1, limit: int = 100) -> list:
 	"""Known skills, optionally only the enabled ones."""
+	from ai_fr_hg.utils import api_validation
+
+	limit = api_validation.bounded_integer(
+		limit, label=_("limit"), default=100, maximum=api_validation.MAX_LEARNING_PAGE
+	)
 	return frappe.get_list(
 		"AI Skill",
 		filters={"enabled": enabled} if cint(enabled) else {},
@@ -130,7 +148,7 @@ def list_skills(enabled: int = 1, limit: int = 100) -> list:
 			"usage_count",
 		],
 		order_by="usage_count desc, creation desc",
-		limit_page_length=min(max(cint(limit) or 100, 1), 500),
+		limit_page_length=limit,
 	)
 
 

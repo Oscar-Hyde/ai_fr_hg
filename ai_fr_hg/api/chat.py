@@ -33,16 +33,17 @@ def send_message(
 	from ai_fr_hg.ai.engine import publish_chat_token
 	from ai_fr_hg.ai.ingestion import prepare_documents_for_turn
 	from ai_fr_hg.ai.settings import should_stream_completion
+	from ai_fr_hg.utils import api_validation
 
-	if not (message or "").strip():
-		frappe.throw(_("Message cannot be empty."))
-
-	if isinstance(knowledge_bases, str):
-		try:
-			knowledge_bases = json.loads(knowledge_bases)
-		except ValueError:
-			knowledge_bases = [knowledge_bases]
-
+	message = api_validation.bounded_text(
+		message, label=_("Message"), max_length=api_validation.MAX_CHAT_MESSAGE_CHARS, required=True
+	)
+	knowledge_bases = api_validation.bounded_list(
+		knowledge_bases, label=_("Knowledge bases"), max_items=api_validation.MAX_KNOWLEDGE_BASES_PER_REQUEST
+	)
+	documents = api_validation.bounded_list(
+		documents, label=_("Documents"), max_items=api_validation.MAX_DOCUMENTS_PER_TURN
+	)
 	documents = _coerce_documents(documents)
 
 	if not conversation:

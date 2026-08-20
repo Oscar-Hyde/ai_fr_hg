@@ -24,6 +24,9 @@ frappe.ui.form.on("AI Platform Settings", {
 		frm.set_query("default_vision_model", () => ({
 			filters: { enabled: 1, model_type: "Vision" },
 		}));
+		frm.set_query("storage_folder", () => ({
+			filters: { is_folder: 1 },
+		}));
 	},
 
 	refresh(frm) {
