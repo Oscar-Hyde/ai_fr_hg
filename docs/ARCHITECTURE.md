@@ -6,15 +6,17 @@
    builder, permission hooks, File, background jobs, scheduler, realtime and
    Desk are the default authorities. Legacy raw SQL remains and MariaDB is the
    only qualified database; portability work must move toward Frappe APIs.
-2. **Local intent, layered enforcement.** A URL/address guard restricts configured
-   endpoints, but SEC-04 connection hardening remains open. Host firewall and
-   egress controls are required as the actual network boundary.
+2. **Local intent, layered enforcement.** Provider transport is connection-level:
+   `trust_env=False`, one validated resolution, pinned dial, redirect refusal,
+   and peer revalidation (SEC-04). Host firewall and egress controls remain the
+   actual network boundary.
 3. **Supervised background operation.** Supported ingestion, indexing, model
    discovery, health, usage and retention paths use Frappe workers/scheduler.
    Durable cancellation/recovery and several state machines remain open.
-4. **Traceability is the target.** Model/tool/audit records exist, but message/task
-   links, queue timing, stale-run reconciliation and telemetry redaction remain
-   tracked gaps; current records are not described as a complete trace.
+4. **Traceability is the target.** Model/tool/audit records exist and search
+   telemetry is redacted (SEC-07). Message/task links, queue timing, and
+   stale-run reconciliation remain tracked gaps (OPS-05); current records are
+   not described as a complete trace.
 5. **Extension over modification.** Providers, readers and tools are registries
    merged from hooks, so other apps extend the platform without forking it.
 

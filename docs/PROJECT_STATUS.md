@@ -29,7 +29,7 @@ The previous version of this document described nearly every module as READY or 
 | Measure | Value |
 | --- | ---: |
 | DocTypes | 47 |
-| Whitelisted methods | 117 |
+| Whitelisted methods | 118 |
 | Custom Desk pages | 4 |
 | Workspaces | 5 |
 | Reports | 3 |
@@ -75,8 +75,8 @@ Green tests prove the covered paths. They do not cover browser behavior, real ru
 | Knowledge Explorer | **PARTIAL** | Search/ask/upload/overview, diagnostics, pagination, folder and entity filters. Upload progress and browser E2E remain Phase 7. |
 | Intelligence | **PARTIAL** | Summary/classify/extract/compare main paths exist. Extraction is explicitly JSON-only and the dormant target DocType field is hidden; whole-document strategies and strict local schema validation remain. |
 | Pattern extraction | **PARTIAL** | Strong deterministic extraction and tests. Durable zero-result scan state, correct tail offsets, semantic value validation, and aggregate explorer remain. |
-| Translation | **PARTIAL — isolation fix required** | Strong segmentation, masking, quality checks, repair, review, memory, and indexing core. Unscoped inline memory, policy-aware memory identity, progress/cancel, default index setting, and format output remain. |
-| Assistant/agents | **PARTIAL** | Chat, retrieval, citations, tools, streaming, and friendly runtime failures work. Latest-history selection, route state, cancellation, focused document, fallback answer, KB weights, and conversation UX remain. |
+| Translation | **PARTIAL** | Strong segmentation, masking, quality checks, repair, review, memory, and indexing core. Memory requires authorized KB scope and policy identity (SEC-01/TRN-01). Progress/cancel, default index setting, glossary/KB parity, and worker restoration remain Phase 4. |
+| Assistant/agents | **PARTIAL** | Chat, retrieval, citations, tools, streaming, and friendly runtime failures work. Agent KB weights and folder-scoped ask are forwarded to retrieval. Latest-history selection, route state, cancellation, focused document, fallback answer, and conversation UX remain Phase 3. |
 | Tools/approvals | **PARTIAL / HARDENING REQUIRED** | Approval, audit, argument validation, permissions, and runtime limit exist. Generic count/field isolation, defaults, expiry, async approval execution, and pipeline resume remain. |
 | Pipelines | **PARTIAL** | Ordered/nested execution, cycle guards, step logs, retries, cancel, and provenance exist. Trigger wiring, schedule claiming, resumable approval, and visual builder remain. |
 | Automation | **PARTIAL** | Cached event dispatch and main actions exist. Delete-event snapshots, source validation, atomic counters, revision-aware dedupe, and execution coverage remain. |
@@ -86,7 +86,7 @@ Green tests prove the covered paths. They do not cover browser behavior, real ru
 | Operations | **PARTIAL** | Readiness, health, usage snapshot, failures, approvals, and queues are visible. SLOs, charts, job detail, stale-state reconciliation, and timer lifecycle remain. |
 | Backup/import/export | **PARTIAL — restore work required** | Text JSON round-trip exists. Exported embeddings are ignored by import; component completeness, streaming, format version, retention, and restore drills remain. |
 | Encryption | **INTENTIONALLY UNSUPPORTED** | The dormant compatibility field is hidden/read-only, reset to 0, and rejected server-side. Use deployment-layer encrypted storage/database/backups. |
-| CI/release | **BLOCKED** | Hosted Server is green on `main` (run `32325110514`). Quality fails on Semgrep Cloud + editable pip-audit. Branch protection is not active; the Arena GitHub App cannot write workflows or administer protection. |
+| CI/release | **PARTIAL — owner branch protection** | Hosted Server, Linter, Frontend static, and Dependency audit are green on the Phase 2 PR and on `main` after Phase 1. Branch protection on `main` is still off (OPS-01; GitHub App HTTP 403). |
 | Frontend validation | **PARTIAL** | JavaScript parses and pages are implemented, but there are no JS unit, browser E2E, accessibility, or responsive tests. |
 
 ---
@@ -95,10 +95,10 @@ Green tests prove the covered paths. They do not cover browser behavior, real ru
 
 ### P0 — fix before production use
 
-1. Restore GitHub Actions execution and require checks before merge (owner branch protection; OPS-01).
+1. Repository owner must require Server, Linter, Frontend static, and Dependency audit on `main` (OPS-01; the GitHub App cannot enable branch protection).
 2. Phase 3 conversation correctness (latest-history, concurrent sequencing, cancellation).
 
-Phase 1 isolation/API safety and Phase 2 retrieval correctness are closed on this branch.
+Phase 1 isolation/API safety and Phase 2 retrieval correctness are closed on this branch, with a 2026-08-20 verification pass that wired remaining agent folder/weight/citation paths and the Explorer facets API.
 
 ### P1 — complete existing product promises
 
@@ -123,9 +123,9 @@ The complete analysis is in the development plan. The most important current exa
 - `AI Provider.max_concurrent_requests` and `rate_limit_per_minute` — unused.
 - `AI Model.max_concurrent_requests` and `supports_json_mode` — not effectively connected; the unimplemented Versions table is retained but hidden/read-only.
 - `AI Provider.model_prefix` — unused.
-- `AI Agent.fallback_answer` — unused.
-- `AI Agent Knowledge Base.weight` — unused.
-- `AI Conversation.context_document` — unused.
+- `AI Agent.fallback_answer` — unused (CHAT-04, Phase 3).
+- `AI Agent Knowledge Base.weight` — applied during retrieval fusion (RET-04). Conversation configuration reload remains CHAT-04.
+- `AI Conversation.context_document` — unused (CHAT-04, Phase 3).
 - `AI Message.execution_log` and `AI Task.execution_log` — not populated.
 - `AI Execution Log.queue_time_ms` — not populated.
 - `AI Folder Settings.knowledge_tag` and `is_archived` — unused.
@@ -160,23 +160,19 @@ their owning phase. Phase 0 decisions are recorded in
 - PDF/Office/OCR optional dependencies as a matrix.
 - Large-corpus retrieval correctness/performance.
 - Multi-request concurrency and quota races.
-- DNS/proxy/redirect hostile networking.
+- DNS/proxy/redirect hostile networking in a real provider matrix (unit coverage exists for SEC-04).
 - Backup restore completeness.
 - Upgrade from prior public data snapshots.
 - Worker death, Redis outage, and stale-running reconciliation.
 
 ### GitHub Actions
 
-The Phase 0 workflow definitions now pin Frappe v17 development and define
-Server, Linter, Frontend static, and Dependency audit statuses. Recent hosted
-jobs still have zero steps and fail immediately. GitHub’s check annotation says:
-
-> The job was not started because recent account payments have failed or your spending limit needs to be increased.
-
-This is an account/repository operations issue, not a passing or failing code
-test. In addition, GitHub reports `main` as unprotected and the current private
-repository plan rejects rulesets. The repository owner must remediate the
-account/plan and require all four checks before Phase 0 can pass.
+The Phase 0 workflow definitions pin Frappe v17 development and define
+Server, Linter, Frontend static, and Dependency audit statuses. Those four
+checks execute and pass on current `main` and on the Phase 2 pull request.
+GitHub still reports `main` as unprotected (`protected: false`). The Arena
+GitHub App cannot administer classic branch protection (HTTP 403). The
+repository owner must require all four checks before merge.
 
 ---
 
@@ -195,9 +191,8 @@ future implementation phase must update its owning guide with evidence.
 
 ## Recommended immediate sequence
 
-1. Repair GitHub Actions billing/spending/plan limits, run all four checks, and protect `main`.
-2. Stop; do not begin Phase 1 until the Phase 0 report can truthfully pass.
-3. Then fix translation-memory scope, generic tool permissions, provider transport, File ownership, and shared API bounds in the registered Phase 1 order.
-4. Rebuild retrieval only after the Phase 1 review passes.
+1. Repository owner: require Server, Linter, Frontend static, and Dependency audit on `main` (OPS-01).
+2. Phase 3 — conversation and agent completion (CHAT-01 through CHAT-08), starting with latest-N history.
+3. Then Phases 4–7 in order.
 
 See the roadmap for phased effort, frontend/backend deliverables, migration strategy, and exit criteria.

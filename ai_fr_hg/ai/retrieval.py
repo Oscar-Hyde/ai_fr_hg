@@ -237,13 +237,28 @@ def _resolve_entity_documents(entity_type: str | None, entity_value: str | None)
 		filters["normalized_value"] = entity_value
 	if not filters:
 		return []
-	rows = frappe.get_list(
-		"AI Pattern Entity",
-		filters=filters,
-		fields=["document"],
-		limit_page_length=5000,
-	)
-	return list(dict.fromkeys(row.document for row in rows if row.document))
+	# Keyset-page every visible entity row. A 5000-row cap would hide
+	# documents the same way the old retrieval candidate caps hid chunks.
+	names: list[str] = []
+	cursor = None
+	while True:
+		page_filters = dict(filters)
+		if cursor:
+			page_filters["name"] = [">", cursor]
+		rows = frappe.get_list(
+			"AI Pattern Entity",
+			filters=page_filters,
+			fields=["name", "document"],
+			order_by="name asc",
+			limit_page_length=500,
+		)
+		if not rows:
+			break
+		cursor = rows[-1].name
+		for row in rows:
+			if row.document:
+				names.append(row.document)
+	return list(dict.fromkeys(names))
 
 
 def _has_content_fts() -> bool:
@@ -401,6 +416,7 @@ def semantic_search(
 	stale = 0
 	incompatible = 0
 	scanned = 0
+	embedding_errors: list[Exception] = []
 
 	for (group_model, group_dims), kbs in groups.items():
 		embed_model = group_model or model or settings.default_embedding_model
@@ -411,7 +427,8 @@ def semantic_search(
 			from ai_fr_hg.ai.engine import run_embedding
 
 			vectors = run_embedding([query], model=embed_model, operation="Embedding")
-		except Exception:
+		except Exception as exc:
+			embedding_errors.append(exc)
 			if diagnostics is not None:
 				_mark_degraded(diagnostics, "semantic_embedding_failed")
 			continue
@@ -457,6 +474,10 @@ def semantic_search(
 		if scanned > ceiling:
 			_mark_degraded(diagnostics, "corpus_exceeds_brute_force_ceiling")
 
+	if not all_scores and embedding_errors and not models_used:
+		# Semantic-only callers re-raise; hybrid catches and falls back.
+		raise embedding_errors[-1]
+
 	return all_scores
 
 
@@ -495,6 +516,22 @@ def _scan_semantic_group(
 		else:
 			incompatible += 1
 	return scores, scanned, stale, incompatible
+
+
+def search_facets() -> dict:
+	"""Permission-aware entity-type counts for Knowledge Explorer filters."""
+	rows = frappe.get_list(
+		"AI Pattern Entity",
+		fields=["entity_type", {"COUNT": "*", "as": "total"}],
+		group_by="entity_type",
+		order_by="total desc",
+		limit_page_length=50,
+	)
+	return {
+		"entity_types": [
+			{"entity_type": row.entity_type, "total": cint(row.total)} for row in rows if row.entity_type
+		]
+	}
 
 
 def retrieve(
@@ -567,21 +604,24 @@ def run_retrieval(
 		return outcome
 
 	accessible = set(get_accessible_knowledge_bases())
+	allowed_kbs = set(knowledge_bases) & accessible if knowledge_bases else accessible
+	if not allowed_kbs:
+		return outcome
+
 	scoped_documents = list(documents or [])
 
 	if entity_type or entity_value:
 		entity_docs = _resolve_entity_documents(entity_type, entity_value)
 		if not entity_docs:
 			return outcome
+		entity_set = set(entity_docs)
 		scoped_documents = (
-			[name for name in scoped_documents if name in set(entity_docs)]
-			if scoped_documents
-			else entity_docs
+			[name for name in scoped_documents if name in entity_set] if scoped_documents else entity_docs
 		)
 		if not scoped_documents:
 			return outcome
 
-	if folder and not scoped_documents:
+	if folder:
 		try:
 			from ai_fr_hg.ai.folders import _normalize_folder_path
 
@@ -593,22 +633,26 @@ def run_retrieval(
 			return outcome
 		if not folder_docs:
 			return outcome
-		scoped_documents = [row.name for row in folder_docs]
-		doc_kbs = {row.knowledge_base for row in folder_docs}
-		targets = [kb for kb in doc_kbs if kb in accessible]
-	elif scoped_documents:
-		doc_kbs = {
-			row.knowledge_base
-			for row in frappe.get_all(
-				"AI Document", filters={"name": ["in", scoped_documents]}, fields=["knowledge_base"]
-			)
-		}
-		targets = [kb for kb in doc_kbs if kb in accessible]
-	else:
-		if knowledge_bases:
-			targets = [kb for kb in knowledge_bases if kb in accessible]
+		folder_names = {row.name for row in folder_docs}
+		if scoped_documents:
+			scoped_documents = [name for name in scoped_documents if name in folder_names]
 		else:
-			targets = list(accessible)
+			scoped_documents = [row.name for row in folder_docs]
+		if not scoped_documents:
+			return outcome
+
+	if scoped_documents:
+		doc_rows = frappe.get_all(
+			"AI Document",
+			filters={"name": ["in", scoped_documents]},
+			fields=["name", "knowledge_base"],
+		)
+		scoped_documents = [row.name for row in doc_rows if row.knowledge_base in allowed_kbs]
+		targets = list(
+			dict.fromkeys(row.knowledge_base for row in doc_rows if row.knowledge_base in allowed_kbs)
+		)
+	else:
+		targets = list(allowed_kbs)
 
 	if not targets:
 		return outcome
@@ -925,8 +969,8 @@ def build_context(
 		limit = min(limit or token_budget * CHARS_PER_TOKEN, token_budget * CHARS_PER_TOKEN)
 
 	prepared: list[tuple[RetrievedChunk, str, str]] = []
-	for position, result in enumerate(results, start=1):
-		header = f"[{position}] {result.document_title}"
+	for result in results:
+		header = result.document_title or result.document
 		if result.heading:
 			header += f" - {result.heading}"
 		if result.page_number:
@@ -936,7 +980,7 @@ def build_context(
 			header += f" [language={language_name(code)}]"
 		prepared.append((result, header, result.content or ""))
 
-	kept, text = ru.pack_context_blocks(prepared, limit=limit)
+	kept, text = ru.pack_context_blocks(prepared, limit=limit, number_citations=True)
 	if packed is not None:
 		packed.extend(kept)
 	return text

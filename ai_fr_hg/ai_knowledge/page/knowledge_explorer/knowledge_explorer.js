@@ -372,14 +372,16 @@ class KnowledgeExplorer {
 				);
 			}
 		} catch (error) {
+			const offline = typeof navigator !== "undefined" && navigator.onLine === false;
 			const denied = /permission|not permitted|not allowed/i.test(error.message || "");
+			const message = offline
+				? __("You appear to be offline. Reconnect and retry.")
+				: denied
+				? __("You do not have permission to search these knowledge bases.")
+				: error.message || __("Search failed.");
 			this.$results.html(`
 				<div class="ai-ops-empty text-danger">
-					${frappe.utils.escape_html(
-						denied
-							? __("You do not have permission to search these knowledge bases.")
-							: error.message || __("Search failed.")
-					)}
+					${frappe.utils.escape_html(message)}
 					<button type="button" class="btn btn-sm btn-default ai-search-retry">${__("Retry")}</button>
 				</div>
 			`);

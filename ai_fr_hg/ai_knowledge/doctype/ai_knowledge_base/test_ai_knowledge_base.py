@@ -408,6 +408,76 @@ class TestRetrieval(AIPlatformTestCase):
 		self.assertTrue(any(result.knowledge_base == kb_low.name for result in overridden))
 		self.assertEqual(weighted[0].knowledge_base, kb_low.name)
 
+	def test_folder_scope_intersects_requested_knowledge_bases(self):
+		"""Folder + KB filters must intersect; folder must not ignore the KB chip."""
+		from ai_fr_hg.ai.knowledge import retrieve
+
+		other = frappe.get_doc(
+			{
+				"doctype": "AI Knowledge Base",
+				"knowledge_base_name": "Folder Other KB",
+				"enabled": 1,
+				"is_public": 1,
+				"chunk_size": 400,
+				"chunk_overlap": 40,
+				"embedding_model": self.embedding_model.name,
+			}
+		).insert(ignore_permissions=True)
+		in_default = self.make_document("Folder Default Doc", "folder-default zircon policy. " * 8)
+		in_other = frappe.get_doc(
+			{
+				"doctype": "AI Document",
+				"title": "Folder Other Doc",
+				"knowledge_base": other.name,
+				"source_type": "Text",
+				"content": "folder-other zircon policy. " * 8,
+				"status": "Draft",
+			}
+		)
+		in_other.flags.skip_auto_process = True
+		in_other.insert(ignore_permissions=True)
+		frappe.db.set_value("AI Document", in_default.name, {"folder": "Home/A", "source_folder": "Home/A"})
+		frappe.db.set_value("AI Document", in_other.name, {"folder": "Home/A", "source_folder": "Home/A"})
+		vec = normalize([1.0] * 8)
+		self._insert_chunk(in_default, "folder-default zircon policy", 0, vec)
+		self._insert_chunk(in_other, "folder-other zircon policy", 0, vec, knowledge_base=other.name)
+
+		results = retrieve(
+			"zircon policy",
+			knowledge_bases=[self.knowledge_base.name],
+			search_type="Keyword",
+			top_k=10,
+			folder="Home/A",
+			log=False,
+		)
+		self.assertTrue(results)
+		self.assertTrue(all(result.knowledge_base == self.knowledge_base.name for result in results))
+		self.assertFalse(any(result.document == in_other.name for result in results))
+
+	def test_semantic_search_raises_when_every_embedding_group_fails(self):
+		"""Semantic-only retrieval must not swallow a total embedding failure."""
+		from ai_fr_hg.ai.knowledge import retrieve
+
+		document = self.make_document("Embed Fail Doc", "zircon embedding failure body. " * 8)
+		self._insert_chunk(document, "zircon embedding failure body", 0, normalize([1.0] * 8))
+
+		def boom(*args, **kwargs):
+			raise RuntimeError("embedding offline")
+
+		with (
+			patch("ai_fr_hg.ai.knowledge.run_embedding", side_effect=boom),
+			patch("ai_fr_hg.ai.engine.run_embedding", side_effect=boom),
+			self.assertRaises(RuntimeError),
+		):
+			retrieve(
+				"zircon embedding failure",
+				knowledge_bases=[self.knowledge_base.name],
+				search_type="Semantic",
+				top_k=5,
+				similarity_threshold=0,
+				log=False,
+			)
+
 	def test_folder_scope_does_not_match_sibling_prefix(self):
 		"""RET-07: Home/A must not retrieve documents in Home/AB."""
 		from ai_fr_hg.ai.knowledge import retrieve

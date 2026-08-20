@@ -2,18 +2,20 @@
 
 A feature-rich, local-first enterprise AI platform, built as a native Frappe app.
 
-> **Project status:** technical beta, not production-ready. The last audited real-bench
-> baseline passed 392 tests before the Phase 0 quality-gate changes, but security,
-> retrieval, workflow, browser, load, upgrade, and restore qualification remains. See
-> the [audited project status](docs/PROJECT_STATUS.md), [controlled gap register](docs/GAP_REGISTER.md),
+> **Project status:** technical beta, not production-ready. Phases 0–2 closed
+> isolation, API bounds, connection-level provider transport, and retrieval
+> correctness on the pinned Frappe v17 bench. Conversation concurrency,
+> ingestion/translation cancellation, automation state machines, governance
+> enforcement, browser E2E, load, upgrade, and restore qualification remain.
+> See the [audited project status](docs/PROJECT_STATUS.md), [controlled gap register](docs/GAP_REGISTER.md),
 > and [completion roadmap](docs/DEVELOPMENT_PLAN.md) before any deployment.
 
 Models are designed to run on your own hardware. The platform ships with a
 strict local-only guard that refuses provider URLs outside private networks
-unless an administrator explicitly allows them. Connection-level network
-hardening is still tracked in the completion roadmap, so deploy with normal
-host firewall and egress controls rather than treating the application guard
-as the only network boundary.
+unless an administrator explicitly allows them. Provider connections ignore
+environment proxies, pin the dial to the validated address, refuse redirects,
+and re-validate the peer socket. Deploy with host firewall and egress controls
+as the actual network boundary.
 
 The design goal is supervised automation. Supported document, model-discovery,
 pipeline, and event-rule paths can run on Frappe background workers, while
@@ -28,7 +30,7 @@ explicit human or operator concerns.
 | --- | --- |
 | **Local AI engine** | Ollama first-class, plus configured OpenAI-compatible local runtimes. Model discovery, health records, retry/failover scaffolding, and performance records exist; capability, rate, concurrency, and equivalent-model failover hardening remains. |
 | **Document intelligence** | 36 registered extensions through one pipeline: extract → chunk → embed → index. Text-layer PDFs, Office/OpenDocument files, RFC `.eml`, text/code, and images (vision or optional image OCR). Scanned-PDF OCR and Outlook `.msg` are not supported. Extraction returns JSON; it does not create target DocType records. |
-| **Translation** | Arabic ⇄ English ⇄ Hebrew text translation. Segmentation preserves extracted-text structure, not the original PDF/Office/image binary. Translation-memory isolation hardening remains open, so do not treat it as production-safe yet. |
+| **Translation** | Arabic ⇄ English ⇄ Hebrew text translation. Segmentation preserves extracted-text structure, not the original PDF/Office/image binary. Translation memory requires an authorized knowledge-base scope and includes policy identity. Progress, cancellation, glossary/KB parity, and worker restoration remain Phase 4. |
 | **Knowledge & search** | Hybrid retrieval (dense vectors + keyword, fused with RRF) scans every eligible chunk, groups mixed embedding models, and applies per-KB top-k, threshold and weight. A configurable brute-force ceiling flags large corpora as degraded without dropping results. Reranking is not implemented. |
 | **Conversational AI** | Multi-session chat with retrieval grounding, inline citations and tool calling. Turn cancellation, concurrent ordering, reconnect, latest-history, and trace-link completion remain open. |
 | **Automation** | Main-path declarative pipelines and event rules on Frappe workers. Delete snapshots, atomic schedule claims, resumable approvals, and several task/trigger contracts remain open. |

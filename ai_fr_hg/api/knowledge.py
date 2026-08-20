@@ -157,6 +157,15 @@ def search(
 
 
 @frappe.whitelist()
+def get_search_facets() -> dict:
+	"""Entity-type facets for Knowledge Explorer. Permission-aware."""
+	from ai_fr_hg.ai.retrieval import search_facets
+
+	frappe.has_permission("AI Document", "read", throw=True)
+	return search_facets()
+
+
+@frappe.whitelist()
 def ask(
 	question: str,
 	knowledge_bases: str | list | None = None,

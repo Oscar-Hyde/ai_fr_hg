@@ -1799,19 +1799,15 @@ def get_folder_info(folder_name: str, *, user: str | None = None) -> dict:
 		settings = frappe.get_doc("AI Folder Settings", {"folder": folder_name}).as_dict()
 
 	# Keep folder statistics on the same Frappe permission-aware query path as
-	# listings. Escaping LIKE metacharacters prevents a legal ``%`` or ``_`` in
-	# a folder name from widening the recursive prefix to unrelated paths.
-	escaped_prefix = folder_name.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+	# listings. Descendant matching is the shared RET-07 helper so a legal
+	# ``%`` or ``_`` in a folder name cannot widen the prefix.
 	stats = {
 		"folder_count": _permission_aware_count("File", {"folder": folder_name, "is_folder": 1}),
 		"file_count": _permission_aware_count("File", {"folder": folder_name, "is_folder": 0}),
 		"total_descendants": _permission_aware_count(
 			"File",
 			{},
-			or_filters=[
-				["folder", "=", folder_name],
-				["folder", "like", f"{escaped_prefix}/%"],
-			],
+			or_filters=folder_match_or_filters(folder_name, ("folder",)),
 		),
 	}
 	size = _permission_aware_file_size({"folder": folder_name, "is_folder": 0})

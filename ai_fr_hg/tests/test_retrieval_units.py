@@ -123,6 +123,22 @@ class TestContextPacking(UnitTestCase):
 		)
 		self.assertEqual(kept, [a, b])
 
+	def test_citation_numbers_follow_the_packed_list(self):
+		long = "Employees receive twenty days of leave each calendar year. " * 3
+		a = _Chunk(document="DOC-1", content=long)
+		b = _Chunk(document="DOC-1", content=long[20:80])
+		c = _Chunk(document="DOC-2", content="Overtime must be approved in advance.")
+		kept, text = ru.pack_context_blocks(
+			[(a, "Handbook", a.content), (b, "Dup", b.content), (c, "Policy", c.content)],
+			limit=5000,
+			number_citations=True,
+		)
+		self.assertEqual(kept, [a, c])
+		self.assertIn("[1] Handbook", text)
+		self.assertIn("[2] Policy", text)
+		self.assertNotIn("[2] Dup", text)
+		self.assertNotIn("[3]", text)
+
 
 class TestRetrievalSourceContract(UnitTestCase):
 	def test_old_candidate_caps_are_absent_from_the_retriever(self):
@@ -132,6 +148,15 @@ class TestRetrievalSourceContract(UnitTestCase):
 		self.assertNotIn('["folder", "like", f"{norm}%"]', source)
 		self.assertIn("brute_force", source)
 		self.assertIn('reranker: str = "unsupported"', source)
+		self.assertIn("def search_facets", source)
+		self.assertNotIn("limit_page_length=5000", source)
+
+	def test_agent_wires_folder_weights_and_packed_citations(self):
+		source = (Path(__file__).resolve().parents[1] / "ai" / "agent.py").read_text()
+		self.assertIn("folder=folder", source)
+		self.assertIn("get_agent_knowledge_base_weights", source)
+		self.assertIn("packed=packed", source)
+		self.assertIn("or folder", source)
 
 
 class TestScorePairsCompleteness(UnitTestCase):

@@ -254,12 +254,15 @@ def pack_context_blocks(
 	*,
 	limit: int,
 	separator: str = "\n\n---\n\n",
+	number_citations: bool = False,
 ) -> tuple[list[object], str]:
 	"""Pack ``(result, header, content)`` tuples into a character budget.
 
 	Duplicate overlapping passages are skipped. The first kept block is always
 	truncated to fit when it would otherwise overflow. Returns the kept result
-	objects (citation mapping) and the packed prompt string.
+	objects (citation mapping) and the packed prompt string. When
+	``number_citations`` is set, ``[n]`` follows the packed list, not the
+	pre-pack candidate order.
 	"""
 	if limit <= 0 or not blocks:
 		return [], ""
@@ -275,9 +278,10 @@ def pack_context_blocks(
 			chunks_overlap(document, content, prev_doc, prev_content) for prev_doc, prev_content in kept_meta
 		):
 			continue
+		display_header = f"[{len(kept) + 1}] {header}" if number_citations else header
 		sep_cost = len(separator) if rendered else 0
 		remaining = limit - used - sep_cost
-		block = fit_block(header, content, remaining, force=not rendered)
+		block = fit_block(display_header, content, remaining, force=not rendered)
 		if not block:
 			if not rendered:
 				continue

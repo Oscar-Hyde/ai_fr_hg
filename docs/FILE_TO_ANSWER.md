@@ -8,10 +8,10 @@ worker-failure recovery remain in the controlled gap register. Retrieval
 correctness (complete candidate evaluation, mixed models, KB policy, folder
 descendants, context packing) is implemented in `ai.retrieval`.
 
-The path is designed for local providers. SEC-04 connection hardening remains
-open, so host firewall/egress controls are required for a local-only guarantee.
-Audit, execution, and search records exist, but OPS-05 and SEC-07 track missing
-links and redaction parity.
+The path is designed for local providers. SEC-04 connection-level transport
+hardening is in place; host firewall/egress controls remain the actual
+network boundary. Search telemetry is redacted (SEC-07). OPS-05 still tracks
+missing message/task links, queue timing, and stale-run reconciliation.
 
 ---
 
@@ -43,9 +43,11 @@ User asks about the file       (chat composer → send_message)
    │  documents=[<uploaded doc>]          ← the new wiring
    ├─ prepare_documents_for_turn()         ← extract inline if needed; no 45s poll
    ├─ run_agent_turn(..., documents=…, extra_context=…)
-   │     ├─ retrieve(..., documents=…)     ← retrieval scoped to indexed uploads
+   │     ├─ retrieve(..., documents=…, folder=…, weights=…)
+   │     │                                 ← scoped uploads, folder descendants,
+   │     │                                   and agent KB weights
    │     ├─ extra_context                  ← extracted text when not yet embedded
-   │     ├─ build_system_prompt(context)   ← numbered, cited context block
+   │     ├─ build_system_prompt(context)   ← packed, numbered, cited context block
    │     └─ run_chat()  → tool loop → final answer
    ▼
 Persist + attach
@@ -215,9 +217,9 @@ stub the chat and embedding engines so CI needs no GPU or Ollama.
 | --- | --- |
 | `ai/ingestion.py` | `prepare_documents_for_turn()` extracts unread uploads inline and only polls briefly when nothing readable exists. |
 | `api/chat.py` | `send_message` accepts `documents`, checks read permission, prepares them, and passes indexed names plus extracted text to the agent. |
-| `ai/agent.py` | `run_agent_turn` accepts `documents` and scopes retrieval even when `use_knowledge` is off; language instructions when context is labelled; catches provider OOM/timeout/offline as saved answers. |
+| `ai/agent.py` | `run_agent_turn` accepts `documents` and `folder`, forwards agent KB weights, and uses the packed citation list; language instructions when context is labelled; catches provider OOM/timeout/offline as saved answers. |
 | `ai/language.py` | Detects written language (BG first-class) and labels excerpts / retrieved chunks. |
-| `ai/knowledge.py` | `retrieve`, `semantic_search`, `keyword_search` accept a `documents` filter and scope targets to the uploaded files' knowledge bases. |
+| `ai/retrieval.py` | Canonical retrieve/search: complete scans, mixed-model groups, KB policy, folder descendants intersecting requested KBs, packed citations. |
 | `api/knowledge.py` | One-shot `ask` accepts `documents`, waits for indexing, and grounds the answer on the chosen records. |
 | `public/js/ai_helpers.js` | `frappe.ai.ask` forwards `documents` so the AI Document "Ask About This" button answers from that record. |
 | `ai_knowledge/doctype/ai_document/ai_document.js` | "Ask About This" passes the current document to scope retrieval. |

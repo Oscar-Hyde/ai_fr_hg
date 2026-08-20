@@ -4,7 +4,7 @@
 
 **Opened:** 2026-08-20
 **Phase owner:** Retrieval
-**Status:** COMPLETE — backend contracts implemented and unit-tested; hosted Frappe v17 bench evidence is required for the integration suite
+**Status:** COMPLETE — backend contracts implemented; hosted Frappe v17 bench green on PR #33 (`a798663`) plus 2026-08-20 verification wiring (agent folder/weights/packed citations, KB∩folder, facets API)
 
 ## Phase inventory
 
@@ -107,11 +107,11 @@ Executed in this workspace:
 - `python3 -m compileall -q ai_fr_hg` — **PASS**.
 - `node --check` on Knowledge Explorer JS — **PASS**.
 
-Hosted bench integration (220/520-row completeness, mixed models, KB policy, folder sibling, search diagnostics) is in `test_ai_knowledge_base.py` and must run on the pinned Frappe v17 CI.
+Hosted bench integration (221-chunk semantic needle, 521-chunk keyword needle, mixed models, KB policy, folder sibling, search diagnostics) is in `test_ai_knowledge_base.py` and passed on the pinned Frappe v17 Server job.
 
 ## Runtime verification
 
-No MariaDB/bench in this sandbox (same constraint as Phases 0–1). Hosted Server on the PR is the real-bench evidence.
+Hosted Server on PR #33 SHA `a798663` passed in 2m27s (`bench run-tests --app ai_fr_hg`). Linter, Frontend static, and Dependency audit also passed. A 2026-08-20 closed-phase verification found and corrected remaining wiring gaps (see `PHASE_0_2_VERIFICATION.md`).
 
 ## Remaining issues
 
@@ -119,7 +119,8 @@ No MariaDB/bench in this sandbox (same constraint as Phases 0–1). Hosted Serve
 2. MariaDB VECTOR index is intentionally not introduced.
 3. Reranker remains unsupported (ADR-004).
 4. Branch protection on `main` remains owner-only (Phase 0 / OPS-01).
+5. Ranked MariaDB FULLTEXT uses a result pool (`FULLTEXT_POOL`, default 1000) rather than an unordered cap. Unique identifiers and non-latin terms take the complete LIKE path. Empty FULLTEXT falls back to LIKE.
 
 ## Phase verdict
 
-`PASS WITH DOCUMENTED NON-BLOCKING LIMITATION` — required Phase 2 correctness, policy, packing, folder, diagnostics, and Explorer wiring are implemented and unit-tested. Hosted Frappe v17 integration and Phase 7 browser/load matrices remain the runtime proof, matching the Phase 1 evidence model.
+`PASS WITH DOCUMENTED NON-BLOCKING LIMITATION` — required Phase 2 correctness, policy, packing, folder, diagnostics, and Explorer wiring are implemented. Hosted Frappe v17 integration passed on PR #33. Browser E2E and 100k-chunk load remain Phase 7.
