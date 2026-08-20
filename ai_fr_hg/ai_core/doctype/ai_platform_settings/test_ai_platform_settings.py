@@ -154,3 +154,33 @@ class TestStorageFolderSetting(AIPlatformTestCase):
 			frappe.set_user("Administrator")
 			settings.db_set("storage_folder", previous)
 			frappe.delete_doc("File", private_folder.name, force=True, ignore_permissions=True)
+
+
+class TestStorageFolderSchemaContract(AIPlatformTestCase):
+	"""FILE-04: the storage folder schema must not re-introduce the legacy shape.
+
+	The historical default ``AI Platform`` (a bare name, not a File identity)
+	broke installation once the setting gained server-side validation: the
+	default flowed into the Single DocType on first save, before any folder
+	existed. The schema contract now forbids that shape.
+	"""
+
+	def test_storage_folder_is_a_file_link_without_a_short_default(self):
+		from frappe.model.meta import get_meta
+
+		field = get_meta("AI Platform Settings").get_field("storage_folder")
+		self.assertEqual(field.fieldtype, "Link")
+		self.assertEqual(field.options, "File")
+		self.assertIn(
+			field.default,
+			(None, "", "Home/AI Platform"),
+			"the legacy short default 'AI Platform' must not return",
+		)
+
+	def test_legacy_short_storage_value_is_rejected_until_normalized(self):
+		settings = frappe.get_single("AI Platform Settings")
+		previous = settings.storage_folder
+		settings.storage_folder = "AI Platform"
+		with self.assertRaises(frappe.ValidationError):
+			settings.validate_storage_folder()
+		settings.db_set("storage_folder", previous)
