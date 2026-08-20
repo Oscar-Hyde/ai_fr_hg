@@ -143,7 +143,12 @@ def test_extract_validates_every_window():
 
 def test_no_prefix_only():
 	import pathlib
-	for _p in ["ai_fr_hg/ai/intelligence.py", "apps/ai_fr_hg/ai_fr_hg/ai/intelligence.py", "/home/frappe/frappe-bench/apps/ai_fr_hg/ai_fr_hg/ai/intelligence.py"]:
+
+	for _p in [
+		"ai_fr_hg/ai/intelligence.py",
+		"apps/ai_fr_hg/ai_fr_hg/ai/intelligence.py",
+		"/home/frappe/frappe-bench/apps/ai_fr_hg/ai_fr_hg/ai/intelligence.py",
+	]:
 		_pp = pathlib.Path(_p)
 		if _pp.exists():
 			src = _pp.read_text()

@@ -290,8 +290,15 @@ def extract_document_data(document: str, schema: str, save: bool = True) -> dict
 		from ai_fr_hg.ai.validation import ValidationError as _VE
 
 		if isinstance(e, _VE):
-			frappe.log_error(title="INT-02 validation failed", message=f"{e} errors={e.errors} provenance={e.provenance}")
-			frappe.throw(_("Validation failed: {0}").format(e.errors[0]["message"] if getattr(e, "errors", None) else str(e)), exc=e)
+			frappe.log_error(
+				title="INT-02 validation failed", message=f"{e} errors={e.errors} provenance={e.provenance}"
+			)
+			frappe.throw(
+				_("Validation failed: {0}").format(
+					e.errors[0]["message"] if getattr(e, "errors", None) else str(e)
+				),
+				exc=e,
+			)
 		raise
 
 	if cint(save):
