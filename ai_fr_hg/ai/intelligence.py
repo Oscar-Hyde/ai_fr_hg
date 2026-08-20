@@ -522,6 +522,7 @@ def extract_data(
 			"strategy": "single_pass",
 			"provenance": [{"window_index": 0, "chars": source_chars, "status": "processed"}],
 		}
+		coerced["coverage"] = coerced["_coverage"]
 		return coerced
 
 	# Long document: map/merge
@@ -641,6 +642,7 @@ def extract_data(
 		"provenance": provenance,
 		"merge_conflicts": merge_conflicts,
 	}
+	merged["coverage"] = merged["_coverage"]
 	return merged
 
 
