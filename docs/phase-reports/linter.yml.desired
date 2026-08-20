@@ -1,0 +1,104 @@
+name: Quality
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linter:
+    name: Linter
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.14"
+          cache: pip
+      - name: Run pre-commit quality suite
+        run: |
+          python -m pip install pre-commit==4.6.2
+          pre-commit run --all-files --show-diff-on-failure
+
+      - name: Run Frappe Semgrep rules
+        env:
+          FRAPPE_SEMGREP_SHA: b101a16e69df049b3fed1478bcc16223e957cca2
+        run: |
+          git init "$RUNNER_TEMP/frappe-semgrep-rules"
+          git -C "$RUNNER_TEMP/frappe-semgrep-rules" remote add origin https://github.com/frappe/semgrep-rules.git
+          git -C "$RUNNER_TEMP/frappe-semgrep-rules" fetch --depth 1 origin "$FRAPPE_SEMGREP_SHA"
+          git -C "$RUNNER_TEMP/frappe-semgrep-rules" checkout --detach "$FRAPPE_SEMGREP_SHA"
+          test "$(git -C "$RUNNER_TEMP/frappe-semgrep-rules" rev-parse HEAD)" = "$FRAPPE_SEMGREP_SHA"
+          python -m pip install semgrep==1.173.0
+          # Semgrep Cloud registry rules are not a Phase 0 quality-gate
+          # dependency: they fail closed when semgrep.dev is unreachable and
+          # they are not Frappe-v17 specific. The pinned Frappe ruleset is
+          # the authoritative static-analysis contract.
+          semgrep scan \
+            --error \
+            --no-suppress-errors \
+            --metrics=off \
+            --config "$RUNNER_TEMP/frappe-semgrep-rules/rules"
+
+  frontend-static:
+    name: Frontend static
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.14"
+
+      - name: Parse production JavaScript
+        run: find ai_fr_hg -type f -name '*.js' -print0 | xargs -0 -n1 node --check
+
+      - name: Validate JSON and Phase 0 product contracts
+        run: |
+          python -m json.tool ai_fr_hg/ai_core/doctype/ai_platform_settings/ai_platform_settings.json >/dev/null
+          python -m unittest discover -s ai_fr_hg/tests -p 'test_phase_0_contracts.py' -v
+
+  deps-vulnerable-check:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Audit Python dependencies
+        run: |
+          python -m pip install pip-audit==2.10.1
+          AUDIT_REQUIREMENTS="$RUNNER_TEMP/ai-fr-hg-audit-requirements.txt"
+          python -c 'import pathlib, tomllib, sys
+pyproject = pathlib.Path("pyproject.toml")
+metadata = tomllib.loads(pyproject.read_text())
+groups = metadata["project"]["optional-dependencies"]
+requirements = {requirement.strip() for group, entries in groups.items() if group != "all" for requirement in entries}
+if not requirements or "" in requirements:
+    raise SystemExit("Concrete optional dependency declarations are missing or empty")
+pathlib.Path(sys.argv[1]).write_text("\n".join(sorted(requirements, key=str.casefold)) + "\n")
+' "$AUDIT_REQUIREMENTS"
+          cat "$AUDIT_REQUIREMENTS"
+          pip-audit \
+            --strict \
+            --requirement "$AUDIT_REQUIREMENTS" \
+            --desc on \
+            --progress-spinner off
