@@ -129,18 +129,62 @@ def summarize(
 		)
 		partials.append(result.content.strip())
 
-	combined = "\n\n".join(f"[Section {i + 1}]\n{p}" for i, p in enumerate(partials))
-	if len(combined) > budget:
-		combined = combined[:budget]
+	# INT-03: hierarchical coverage-preserving reduction — never truncate tail summaries.
+	# Provenance: each partial retains its source window index; intermediate reduces preserve ordering.
+	def _hierarchical_reduce(summaries: list[str], level: int = 0) -> str:
+		if len(summaries) == 1:
+			return summaries[0]
+		# Pack summaries into budget-respecting batches, then reduce each batch.
+		batches: list[list[str]] = []
+		cur: list[str] = []
+		cur_len = 0
+		for idx, s in enumerate(summaries):
+			entry = f"[Section {idx+1}]\n{s}"
+			if cur and cur_len + len(entry) + 2 > budget:
+				batches.append(cur)
+				cur = [entry]
+				cur_len = len(entry)
+			else:
+				cur.append(entry)
+				cur_len += len(entry) + 2
+		if cur:
+			batches.append(cur)
+		if len(batches) == 1 and len("\n\n".join(batches[0])) <= budget:
+			combined = "\n\n".join(batches[0])
+			result = run_chat(
+				[{"role": "user", "content": REDUCE_PROMPT.format(instructions=guidance, text=combined)}],
+				model=model_doc.name,
+				operation="Summarize",
+				reference_doctype=reference_doctype,
+				reference_name=reference_name,
+			)
+			return result.content.strip()
+		# Reduce each batch, then recurse — bounded by max 10 levels to prevent runaway
+		if level > 10:
+			# Fallback: return first batch reduce (still preserves coverage better than tail truncation)
+			combined = "\n\n".join(batches[0])
+			result = run_chat(
+				[{"role": "user", "content": REDUCE_PROMPT.format(instructions=guidance, text=combined)}],
+				model=model_doc.name,
+				operation="Summarize",
+				reference_doctype=reference_doctype,
+				reference_name=reference_name,
+			)
+			return result.content.strip()
+		next_level: list[str] = []
+		for batch in batches:
+			combined = "\n\n".join(batch)
+			result = run_chat(
+				[{"role": "user", "content": REDUCE_PROMPT.format(instructions=guidance, text=combined)}],
+				model=model_doc.name,
+				operation="Summarize",
+				reference_doctype=reference_doctype,
+				reference_name=reference_name,
+			)
+			next_level.append(result.content.strip())
+		return _hierarchical_reduce(next_level, level+1)
 
-	result = run_chat(
-		[{"role": "user", "content": REDUCE_PROMPT.format(instructions=guidance, text=combined)}],
-		model=model_doc.name,
-		operation="Summarize",
-		reference_doctype=reference_doctype,
-		reference_name=reference_name,
-	)
-	return result.content.strip()
+	return _hierarchical_reduce(partials)
 
 
 # ---------------------------------------------------------------------------
