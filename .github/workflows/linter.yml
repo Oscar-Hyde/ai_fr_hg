@@ -39,10 +39,15 @@ jobs:
           git -C "$RUNNER_TEMP/frappe-semgrep-rules" checkout --detach "$FRAPPE_SEMGREP_SHA"
           test "$(git -C "$RUNNER_TEMP/frappe-semgrep-rules" rev-parse HEAD)" = "$FRAPPE_SEMGREP_SHA"
           python -m pip install semgrep==1.173.0
-          semgrep ci \
+          # Semgrep Cloud registry rules are not a Phase 0 quality-gate
+          # dependency: they fail closed when semgrep.dev is unreachable and
+          # they are not Frappe-v17 specific. The pinned Frappe ruleset is
+          # the authoritative static-analysis contract.
+          semgrep scan \
+            --error \
             --no-suppress-errors \
-            --config "$RUNNER_TEMP/frappe-semgrep-rules/rules" \
-            --config r/python.lang.correctness
+            --metrics=off \
+            --config "$RUNNER_TEMP/frappe-semgrep-rules/rules"
 
   frontend-static:
     name: Frontend static
@@ -80,6 +85,20 @@ jobs:
 
       - name: Audit Python dependencies
         run: |
-          python -m pip install pip-audit
-          python -m pip install --editable '.[all]'
-          pip-audit --strict --local --skip-editable --desc on
+          python -m pip install pip-audit==2.10.1
+          AUDIT_REQUIREMENTS="$RUNNER_TEMP/ai-fr-hg-audit-requirements.txt"
+          python -c 'import pathlib, tomllib, sys
+pyproject = pathlib.Path("pyproject.toml")
+metadata = tomllib.loads(pyproject.read_text())
+groups = metadata["project"]["optional-dependencies"]
+requirements = {requirement.strip() for group, entries in groups.items() if group != "all" for requirement in entries}
+if not requirements or "" in requirements:
+    raise SystemExit("Concrete optional dependency declarations are missing or empty")
+pathlib.Path(sys.argv[1]).write_text("\n".join(sorted(requirements, key=str.casefold)) + "\n")
+' "$AUDIT_REQUIREMENTS"
+          cat "$AUDIT_REQUIREMENTS"
+          pip-audit \
+            --strict \
+            --requirement "$AUDIT_REQUIREMENTS" \
+            --desc on \
+            --progress-spinner off
