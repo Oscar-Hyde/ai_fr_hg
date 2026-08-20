@@ -34,7 +34,7 @@ The previous version of this document described nearly every module as READY or 
 | Workspaces | 5 |
 | Reports | 3 |
 | Audited pre-Phase-0 Python test methods | 392 |
-| Latest verified real-bench baseline | 392 passed, 1 skipped (before current Phase 0 changes) |
+| Current verified real-bench suite | 565 passed, 1 skipped (CI run 32394651654, 2m43s) |
 | Production JavaScript files | 56 |
 | JavaScript unit test files | 1 (Node); browser E2E still 0 |
 
@@ -139,6 +139,7 @@ their owning phase. Phase 0 decisions are recorded in
 ### Passing
 
 - Last audited pre-Phase-0 real-bench suite: 392 passed, 1 skipped.
+- Current post-Phase-3 real-bench suite: **565 passed, 1 skipped** on CI run `32394651654` (Server, 2m43s). The count includes the 100-worker concurrent conversation test.
 - Python compile check.
 - JSON parsing.
 - JavaScript syntax check.
@@ -162,10 +163,15 @@ their owning phase. Phase 0 decisions are recorded in
 
 The Phase 0 workflow definitions pin Frappe v17 development and define
 Server, Linter, Frontend static, and Dependency audit statuses. Those four
-checks execute and pass on current `main` and on the Phase 2 pull request.
-GitHub still reports `main` as unprotected (`protected: false`). The Arena
-GitHub App cannot administer classic branch protection (HTTP 403). The
-repository owner must require all four checks before merge.
+checks execute and pass on current `main` and on the post-Phase-3 verification
+push (Server run `32394651654`; Quality run `32394651579`). GitHub still reports
+`main` as unprotected (`protected: false`); the branch-protection API returns
+HTTP 403, and repository metadata reports the installed integration has no
+administration permission. Branch protection is therefore **not platform
+active**. Until the repository owner grants the GitHub App repository
+`administration:write` permission and enables required-status protection, the
+manual merge rule is: the PR UI must show green Server, Linter, Frontend
+static, and Dependency audit checks before merge.
 
 ---
 
