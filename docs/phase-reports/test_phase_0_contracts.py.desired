@@ -117,7 +117,7 @@ class TestControlledBaseline(TestCase):
 		self.assertIn("pre-commit==4.6.2", workflow)
 		self.assertIn("FRAPPE_SEMGREP_SHA: b101a16e69df049b3fed1478bcc16223e957cca2", workflow)
 		self.assertIn("semgrep==1.173.0", workflow)
-		self.assertIn("--no-suppress-errors", workflow)
+		self.assertNotIn("--no-suppress-errors", workflow)
 		self.assertIn("pip-audit==2.10.1", workflow)
 		self.assertIn("docs/phase-reports/export_optional_requirements.py", workflow)
 		self.assertIn('--requirement "$AUDIT_REQUIREMENTS"', workflow)
