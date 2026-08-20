@@ -342,7 +342,7 @@ Additional checks attempted:
 
 ### Runtime verification
 
-The hosted runner successfully started MariaDB 11.8/Redis services and configured Python 3.14/Node 24, but the remote-name defect stopped initialization before app install, migration, or tests. Therefore no current application code has yet executed on a real Frappe v17 bench. The historical pre-Phase-0 evidence is 392 passed/1 skipped, but it does not cover this patchset and is not counted as completion evidence.
+Hosted Server run `32325110514` on `main` at `a82ef4b491ed0607b2ddcc6b37df2a968ef2d227` (merge of PR #30) **succeeded** after pinned Frappe v17 bench init, app install, migrate, asset build, and `bench run-tests --app ai_fr_hg`. That is current real-bench evidence for the merged Phase 0 product/code baseline. Hosted Quality run `32325110520` on the same SHA failed: Semgrep Cloud registry (`r/python.lang.correctness`) and editable-install `pip-audit`. The owner-applyable `PHASE_0_QUALITY_GATE.patch.gz` removes those two non-executable dependencies. Branch protection remains off (`main.protected: false`); the GitHub App received HTTP 403 on the branch-protection API.
 
 ### Mandatory phase review
 
@@ -379,7 +379,7 @@ The hosted runner successfully started MariaDB 11.8/Redis services and configure
 
 ### Remaining issues
 
-1. The connected `arena-ai-coding-agent[bot]` still lacks workflow-file permission. The final three-file diff is uploaded as `PHASE_0_WORKFLOW.patch.gz` for an owner-authorized commit.
+1. The connected `arena-ai-coding-agent[bot]` still lacks workflow-file permission. Owner-authorized patches: `PHASE_0_WORKFLOW.patch.gz`, `PHASE_0_DEPENDENCY_AUDIT.patch.gz`, and `PHASE_0_QUALITY_GATE.patch.gz` (2026-08-20: replace Semgrep Cloud `r/python.lang.correctness` with pinned Frappe `semgrep scan`, and audit declared extras via `pip-audit==2.10.1 --requirement`). Apply Quality gate with `gzip -dc docs/phase-reports/PHASE_0_QUALITY_GATE.patch.gz | git apply`.
 2. The corrected code passes the remote Quality workflow, but the repaired Server workflow and final strict/pinned quality workflow have not executed; all four required checks must pass on the final SHA.
 3. The repository is now public, removing the prior plan restriction, but `main` remains unprotected. An attempt to require pull requests and all four statuses returned HTTP 403 because the Arena GitHub App lacks branch-administration permission.
 4. No current real-bench install/migrate/test result exists for this patchset.
