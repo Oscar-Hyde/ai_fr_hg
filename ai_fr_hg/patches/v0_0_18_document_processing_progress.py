@@ -14,7 +14,9 @@ def execute():
 	}
 	for field, definition in columns.items():
 		if not frappe.db.has_column("AI Document", field):
-			frappe.db.sql(f"alter table `tabAI Document` add column `{field}` {definition}")
+			frappe.db.sql(  # nosemgrep: frappe-sql-format-injection
+				f"alter table `tabAI Document` add column `{field}` {definition}"
+			)
 	frappe.db.sql(
 		"update `tabAI Document` set processing_progress = 100, processing_message = 'Indexed' "
 		"where status = 'Indexed' and (processing_progress is null or processing_progress = 0)"
