@@ -4,7 +4,7 @@
 
 **Opened:** 2026-08-19
 **Phase owner:** Release Engineering
-**Status:** OPEN
+**Status:** OPEN — four hosted checks green on `61d1926`; `main` still unprotected
 
 This is the controlled inventory, contract, and eventual completion report for Phase 0. Phase 1 must not begin until the verdict at the end of this document is `PASS`.
 
@@ -32,7 +32,7 @@ Observed external state on 2026-08-19:
 
 | ID | Finding | Current State | Required State | Files | Tests | Migration | Frontend | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| P0-01 / OPS-01 | CI execution | Server is not pinned to v17 and hosted jobs stop before steps; lint has inconsistent event/job conditions. | Pin the audited Frappe v17 revision; run Server, Linter, frontend static, and dependency checks on PR/push/manual events; obtain green hosted runs. | `.github/workflows/*.yml` | Workflow contract checks plus hosted runs | None | Static JavaScript parse gate | BLOCKED — final CI fixes cannot be pushed by GitHub App |
+| P0-01 / OPS-01 | CI execution | Hosted Server + Quality execute on pinned Frappe v17. | Pin the audited Frappe v17 revision; run Server, Linter, frontend static, and dependency checks; obtain green hosted runs. | `.github/workflows/*.yml` | Workflow contract checks plus hosted runs | None | Static JavaScript parse gate | COMPLETE — PR #31 SHA `61d1926` all four statuses green |
 | P0-02 / OPS-01 | Branch protection | `main` is unprotected. | Require all Phase 0 checks and pull requests before merge. | GitHub repository settings; documented policy | GitHub API verification | None | N/A | BLOCKED — GitHub App lacks administration permission |
 | P0-03 / SEC-05 | Encryption claim | A visible setting implies stored-text encryption although no encryption exists. | Preserve schema compatibility but disable and hide the setting; state plainly that application-level document encryption is unsupported. | Platform Settings schema/controller, docs | Metadata and controller regression | Idempotently normalize dormant setting to `0` | Setting absent from Desk | COMPLETE — local evidence |
 | P0-04 / ING-01 | Folder ingestion claim | `Folder` is selectable but ingestion rejects it. | Remove it from selectable source types and reject new Folder-source records clearly; retain native Frappe File folders as the only folder authority. | AI Document schema/controller, docs | Metadata and validation regression | Preserve legacy rows without destructive conversion | Option absent from form | COMPLETE — local evidence |
@@ -125,7 +125,7 @@ No custom feature flag, schema registry, folder tree, migration runner, or test 
 - **ING-03 — CLOSED BY REMOVAL.** Outlook `.msg` is no longer mapped to the RFC/MIME email reader or returned by the supported-format API. `.eml` remains supported.
 - **INT-01 — CLOSED BY REMOVAL.** Target DocType extraction is hidden/read-only and described as compatibility-only; extraction is truthfully JSON-only.
 - **TRN-06 — CLOSED BY SCOPING.** The translation control and API/docs promise extracted-text blocks/separators only, never source-binary reconstruction.
-- **OPS-01 — NOT COMPLETE.** Workflow definitions are corrected locally, but hosted execution and branch protection remain externally blocked.
+- **OPS-01 — PARTIAL.** Hosted Server/Linter/Frontend static/Dependency audit passed on `61d1926`. Branch protection on `main` is still off.
 
 The model-version exposure portion of PROV-03 is hidden, but PROV-03 remains open for its Phase 6 provider/model lifecycle contract.
 
@@ -391,4 +391,4 @@ Hosted Server run `32325110514` on `main` at `a82ef4b491ed0607b2ddcc6b37df2a968e
 
 `FAIL`
 
-The code/configuration/documentation portion of Phase 0 is locally complete, but the non-negotiable exit gate requires hosted workflows to execute and pass, required branch protection to be active, and current real Frappe evidence. Phase 1 must not begin.
+Hosted **Server**, **Linter**, **Frontend static**, and **Dependency audit** all passed on PR #31 SHA `61d19263ff60942532f535f29a70794671e4afcd` (Quality run `32328156242`, Server run `32328156228`). The only remaining Phase 0 gate is **branch protection on `main`**, which this GitHub App cannot enable (HTTP 403). Phase 1 must not begin until the repository owner requires those four statuses on `main`.
