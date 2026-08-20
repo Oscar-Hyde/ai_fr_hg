@@ -536,6 +536,14 @@
    "label": "Log Responses"
   },
   {
+   "default": "1",
+   "description": "Record search telemetry (query text, result identifiers, scores and bounded snippets). Values are passed through the configured redaction patterns before persistence; full result content is never stored. Rows are removed by the scheduled retention cleanup.",
+   "fieldname": "log_search_queries",
+   "fieldtype": "Check",
+   "insert_after": "log_responses",
+   "label": "Log Search Queries"
+  },
+  {
    "description": "Newline separated regular expressions redacted before logging.",
    "fieldname": "redact_patterns",
    "fieldtype": "Small Text",
