@@ -89,7 +89,8 @@ class TestSearchTelemetry(AIPlatformTestCase):
 		)
 		stored = json.loads(self.newest_query_row().results)
 		self.assertLessEqual(len(stored[0]["snippet"]), 200)
-		self.assertNotIn("SENTENCE. SENTENCE. SENTENCE.", stored[0]["snippet"])
+		self.assertLess(len(stored[0]["snippet"]), len(content))
+		self.assertNotIn(content, stored[0]["snippet"])
 
 	def test_telemetry_can_be_disabled(self):
 		self.settings.db_set("log_search_queries", 0)

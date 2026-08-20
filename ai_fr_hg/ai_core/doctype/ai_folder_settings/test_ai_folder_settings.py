@@ -550,19 +550,26 @@ class TestUploadFileIdentityResolution(AIPlatformTestCase):
 	def test_stable_file_identity_resolves_exactly(self):
 		from ai_fr_hg.api.folders import upload_file_with_folder
 
-		url = "/files/stable-identity.txt"
-		file_doc = self.make_file("stable-identity.txt", url)
-		result = upload_file_with_folder(file_url=url, file_name=file_doc.name, folder="Home")
+		file_doc = self.make_file("stable-identity.txt", "/files/stable-identity.txt")
+		file_doc.reload()  # the native File hook may normalize the stored URL
+		result = upload_file_with_folder(file_url=file_doc.file_url, file_name=file_doc.name, folder="Home")
 		self.assertEqual(result.get("name"), file_doc.name)
 
 	def test_ambiguous_url_only_resolution_is_rejected(self):
 		from ai_fr_hg.api.folders import upload_file_with_folder
 
-		url = "/files/duplicate-identity.txt"
-		self.make_file("duplicate-identity-a.txt", url)
-		self.make_file("duplicate-identity-b.txt", url)
+		first = self.make_file("duplicate-identity-a.txt", "/files/duplicate-identity.txt")
+		first.reload()
+		second = self.make_file("duplicate-identity-b.txt", "/files/duplicate-identity.txt")
+		second.reload()
+		shared_url = first.file_url
+		# Force the two records to share one stored URL (the native hook
+		# normalizes URLs on insert, so set it after the fact).
+		frappe.db.set_value("File", second.name, "file_url", shared_url, update_modified=False)
+		# A URL-only request must fail closed instead of selecting an
+		# arbitrary record.
 		with self.assertRaises(frappe.ValidationError):
-			upload_file_with_folder(file_url=url, folder="Home")
+			upload_file_with_folder(file_url=shared_url, folder="Home")
 
 	def test_missing_url_without_identity_is_rejected(self):
 		from ai_fr_hg.api.folders import upload_file_with_folder
