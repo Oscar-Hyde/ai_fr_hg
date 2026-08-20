@@ -50,7 +50,7 @@ A closed row is not permission to weaken the audit's cross-cutting requirements.
 | INT-02 | Structured output is not fully validated locally | 4 | Intelligence | OPEN | Validate every output against local schema and fail safely. | Type/required/enum/nested/extra-field/provider-malformation tests. |
 | INT-03 | Long summarization reduction is lossy | 4 | Intelligence | OPEN | Use bounded hierarchical coverage-preserving reduction. | Long-document fact-retention and coverage diagnostics tests. |
 | INT-04 | Compare/classify/extract only inspect leading text | 4 | Intelligence | OPEN | Define whole-document strategy and report coverage. | Tail-only evidence and long-document coverage tests. |
-| TRN-01 | Translation memory identity ignores policy | 1 | Translation + Security | OPEN | Include authorized KB and effective policy identity. | Cross-policy and cross-KB non-reuse tests. |
+| TRN-01 | Translation memory identity ignores policy | 1 | Translation + Security | IN PROGRESS | Include authorized KB and effective policy identity. | Cross-policy and cross-KB non-reuse tests. |
 | TRN-02 | Translation index-output default is ignored | 4 | Translation | OPEN | Apply platform default with explicit-request precedence. | Defaults/override/API/form tests. |
 | TRN-03 | Worker user switching is not restored | 4 | Translation + Security | OPEN | Use scoped user restoration and revalidate requester authority. | Success/failure restoration and revoked-access tests. |
 | TRN-04 | Translation lacks progress/cancel/refresh | 4 | Translation + Jobs + Frontend | OPEN | Implement durable progress, cancellation, retry, realtime/polling. | Worker/browser cancel/reconnect/failure tests. |

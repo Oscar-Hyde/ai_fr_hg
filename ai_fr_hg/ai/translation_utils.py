@@ -261,6 +261,42 @@ def segment_fingerprint(text: str, source_language: str, target_language: str) -
 	return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:40]
 
 
+def memory_policy_identity(
+	*,
+	knowledge_base: str | None = None,
+	glossary: str | None = None,
+	tone: str | None = None,
+	domain: str | None = None,
+) -> str:
+	"""Canonical policy key that must match before memory may be reused."""
+	return "|".join(
+		(
+			(knowledge_base or "").strip(),
+			(glossary or "").strip(),
+			(tone or "Neutral").strip().casefold() or "neutral",
+			comparison_key(domain or ""),
+		)
+	)
+
+
+def memory_fingerprint(
+	text: str,
+	source_language: str,
+	target_language: str,
+	*,
+	knowledge_base: str | None = None,
+	glossary: str | None = None,
+	tone: str | None = None,
+	domain: str | None = None,
+) -> str:
+	"""Memory identity: language pair plus authorized KB and translation policy."""
+	payload = (
+		f"{segment_fingerprint(text, source_language, target_language)}|"
+		f"{memory_policy_identity(knowledge_base=knowledge_base, glossary=glossary, tone=tone, domain=domain)}"
+	)
+	return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:40]
+
+
 # ---------------------------------------------------------------------------
 # Placeholder protection
 # ---------------------------------------------------------------------------

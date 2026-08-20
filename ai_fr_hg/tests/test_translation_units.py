@@ -40,6 +40,8 @@ from ai_fr_hg.ai.translation_utils import (
 	resolve_glossary,
 	restore_placeholders,
 	script_ratio,
+	memory_fingerprint,
+	memory_policy_identity,
 	segment_fingerprint,
 	segment_text,
 	strip_bidi_controls,
@@ -111,6 +113,29 @@ class TestNormalisation(UnitTestCase):
 		first = segment_fingerprint("Contract value", "en", "ar")
 		self.assertEqual(first, segment_fingerprint(" contract   value ", "en", "ar"))
 		self.assertNotEqual(first, segment_fingerprint("Contract value", "en", "he"))
+
+	def test_memory_fingerprint_includes_authorized_scope_and_policy(self):
+		base = memory_fingerprint("Clause", "en", "ar", knowledge_base="KB-A", glossary="G1", tone="Legal")
+		self.assertEqual(
+			base,
+			memory_fingerprint(" clause ", "en", "ar", knowledge_base="KB-A", glossary="G1", tone="Legal"),
+		)
+		self.assertNotEqual(
+			base,
+			memory_fingerprint("Clause", "en", "ar", knowledge_base="KB-B", glossary="G1", tone="Legal"),
+		)
+		self.assertNotEqual(
+			base,
+			memory_fingerprint("Clause", "en", "ar", knowledge_base="KB-A", glossary="G2", tone="Legal"),
+		)
+		self.assertNotEqual(
+			base,
+			memory_fingerprint("Clause", "en", "ar", knowledge_base="KB-A", glossary="G1", tone="Neutral"),
+		)
+		self.assertEqual(
+			memory_policy_identity(knowledge_base="KB-A", glossary="G1", tone="Legal"),
+			"KB-A|G1|legal|",
+		)
 
 
 class TestSegmentation(UnitTestCase):

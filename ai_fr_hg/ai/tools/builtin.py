@@ -344,6 +344,7 @@ def get_document_text(
 		"document": doc.name,
 		"title": doc.title,
 		"status": doc.status,
+		"knowledge_base": doc.knowledge_base,
 		"language": code or None,
 		"language_name": language_name(code) if code else None,
 		"summary": doc.summary,

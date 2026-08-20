@@ -249,6 +249,77 @@ class TestTranslationMemory(TranslationTestCase):
 		self.assertEqual(hebrew.memory_hits, 0)
 		self.assertGreater(mock.call_count, 0)
 
+	def test_memory_is_not_used_without_an_authorized_knowledge_base(self):
+		from ai_fr_hg.ai.translation import translate_text
+
+		clause = "Unscoped memory must never read every translation corpus.\n"
+		stored = self.make_translation(self.make_document("Scoped Store", clause), "ar")
+		with stub_translation_model():
+			from ai_fr_hg.ai.translation import run_translation
+
+			run_translation(stored.name)
+
+		with stub_translation_model() as mock:
+			outcome = translate_text(clause, "ar")
+
+		self.assertEqual(outcome.memory_hits, 0)
+		self.assertGreater(mock.call_count, 0)
+
+	def test_memory_is_isolated_across_knowledge_bases(self):
+		from ai_fr_hg.ai.translation import run_translation
+
+		other = self.ensure_other_knowledge_base()
+		clause = "Cross knowledge base memory reuse is a disclosure.\n"
+		first = self.make_translation(self.make_document("KB One", clause), "ar")
+		with stub_translation_model():
+			run_translation(first.name)
+
+		foreign = self.make_document("KB Two", clause)
+		foreign.db_set("knowledge_base", other.name)
+		second = self.make_translation(foreign, "ar")
+		with stub_translation_model() as mock:
+			run_translation(second.name)
+
+		second.reload()
+		self.assertEqual(second.memory_hits, 0)
+		self.assertGreater(mock.call_count, 0)
+
+	def test_memory_is_not_reused_under_a_different_policy(self):
+		from ai_fr_hg.ai.translation import run_translation
+
+		clause = "Policy identity must be part of translation memory.\n"
+		first = self.make_translation(self.make_document("Policy A", clause), "ar", tone="Legal")
+		with stub_translation_model():
+			run_translation(first.name)
+
+		second = self.make_translation(self.make_document("Policy B", clause), "ar", tone="Neutral")
+		with stub_translation_model() as mock:
+			run_translation(second.name)
+
+		second.reload()
+		self.assertEqual(second.memory_hits, 0)
+		self.assertGreater(mock.call_count, 0)
+
+	def test_document_tool_uses_only_the_source_document_knowledge_base(self):
+		from ai_fr_hg.ai.tools.builtin import translate_content
+
+		other = self.ensure_other_knowledge_base()
+		clause = "The tool must not query another knowledge base for memory.\n"
+		seed = self.make_document("Tool Seed", clause)
+		seed.db_set("knowledge_base", other.name)
+		stored = self.make_translation(seed, "ar")
+		with stub_translation_model():
+			from ai_fr_hg.ai.translation import run_translation
+
+			run_translation(stored.name)
+
+		document = self.make_document("Tool Target", clause)
+		with stub_translation_model() as mock:
+			result = translate_content(target_language="ar", document=document.name)
+
+		self.assertTrue(result["translated"])
+		self.assertGreater(mock.call_count, 0)
+
 
 class TestGlossary(TranslationTestCase):
 	def ensure_glossary(self):
