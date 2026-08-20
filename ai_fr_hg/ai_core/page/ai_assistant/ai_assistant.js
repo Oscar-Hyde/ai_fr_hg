@@ -46,6 +46,16 @@ class AIAssistant {
 		this.make();
 		this.load_context();
 		this.bind_realtime();
+		// CHAT-03: restore conversation from route /app/ai-assistant/<name> or ?conversation=
+		setTimeout(()=> {
+			try {
+				const route = frappe.get_route && frappe.get_route();
+				const name = route && route[2];
+				if (name && name.startsWith("AICONV")) this.open_conversation(name);
+				const q = new URLSearchParams(window.location.search).get("conversation");
+				if (q) this.open_conversation(q);
+			} catch(e) {}
+		}, 400);
 	}
 
 	make() {
@@ -141,11 +151,14 @@ class AIAssistant {
 
 	add_page_actions() {
 		this.page.set_secondary_action(__("Refresh"), () => this.load_context());
-
-		this.page.add_menu_item(__("Knowledge Explorer"), () =>
-			frappe.set_route("knowledge-explorer")
-		);
+		this.page.add_menu_item(__("Knowledge Explorer"), () => frappe.set_route("knowledge-explorer"));
 		this.page.add_menu_item(__("Summarise Conversation"), () => this.summarize());
+		this.page.add_menu_item(__("Rename Conversation"), () => this.rename_conversation());
+		this.page.add_menu_item(__("Pin / Unpin"), () => this.pin_toggle());
+		this.page.add_menu_item(__("Export Conversation"), () => this.export_conversation());
+		this.page.add_menu_item(__("Retry Last"), () => this.retry_last());
+		this.page.add_menu_item(__("Stop Generation"), () => this.stop_generation());
+		this.page.add_menu_item(__("Restore Archived"), () => this.restore_conversation());
 		this.page.add_menu_item(__("Archive Conversation"), () => this.archive());
 		this.page.add_menu_item(__("Delete Conversation"), () => this.delete_conversation());
 	}
@@ -702,12 +715,33 @@ class AIAssistant {
 	async send_feedback(message, value, $button) {
 		if (!message || message === "pending") return;
 		const active = $button.hasClass("active");
-		await frappe.xcall("ai_fr_hg.api.chat.submit_feedback", {
-			message,
-			feedback: active ? "" : value,
-		});
+		if (active) {
+			await frappe.xcall("ai_fr_hg.api.chat.submit_feedback", { message, feedback: "" });
+			$button.closest(".ai-message-actions").find(".ai-feedback").removeClass("active");
+			return;
+		}
+		if (value === "Negative") {
+			const d = new frappe.ui.Dialog({
+				title: __("Improve this answer"),
+				fields: [
+					{ fieldtype: "Select", fieldname: "reason", label: __("Reason"), options: "\nCorrection\nMissing Information\nIncorrect Information", reqd: 0 },
+					{ fieldtype: "Small Text", fieldname: "correction", label: __("Correction (optional)") },
+					{ fieldtype: "Small Text", fieldname: "comment", label: __("Additional comment") },
+				],
+				primary_action_label: __("Send feedback"),
+				primary_action: async (vals) => {
+					await frappe.xcall("ai_fr_hg.api.chat.submit_feedback", { message, feedback: value, reason: vals.reason, correction: vals.correction });
+					d.hide();
+					$button.closest(".ai-message-actions").find(".ai-feedback").removeClass("active");
+					$button.addClass("active");
+				},
+			});
+			d.show();
+			return;
+		}
+		await frappe.xcall("ai_fr_hg.api.chat.submit_feedback", { message, feedback: value });
 		$button.closest(".ai-message-actions").find(".ai-feedback").removeClass("active");
-		if (!active) $button.addClass("active");
+		$button.addClass("active");
 	}
 
 	async attach_document() {
@@ -835,5 +869,49 @@ class AIAssistant {
 
 	scroll_to_bottom() {
 		this.$messages.scrollTop(this.$messages[0].scrollHeight);
+	}
+
+	// -- CHAT-05/07 additions: pin, rename, restore, export, stop, retry, pagination
+	async pin_toggle() {
+		if (!this.conversation) return;
+		const isPinned = this.$title.data("pinned");
+		await frappe.xcall("ai_fr_hg.api.chat.pin_conversation", { conversation: this.conversation, pinned: isPinned ? 0 : 1 });
+		this.refresh_conversations(); this.open_conversation(this.conversation);
+	}
+	async rename_conversation() {
+		if (!this.conversation) return;
+		frappe.prompt({ fieldtype:"Data", fieldname:"title", label:__("Title"), reqd:1, default: this.$title.text() }, async (vals)=>{
+			await frappe.xcall("ai_fr_hg.api.chat.rename_conversation", { conversation: this.conversation, title: vals.title });
+			this.$title.text(vals.title); this.refresh_conversations();
+		}, __("Rename Conversation"), __("Rename"));
+	}
+	async restore_conversation() {
+		if (!this.conversation) return;
+		await frappe.xcall("ai_fr_hg.api.chat.restore_conversation", { conversation: this.conversation });
+		this.refresh_conversations();
+	}
+	async export_conversation() {
+		if (!this.conversation) return;
+		const data = await frappe.xcall("ai_fr_hg.api.chat.export_conversation", { conversation: this.conversation });
+		const blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json"});
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement("a"); a.href=url; a.download=`conversation-${this.conversation}.json`; a.click(); URL.revokeObjectURL(url);
+	}
+	async stop_generation() {
+		if (!this.conversation || !this.sending) return;
+		await frappe.xcall("ai_fr_hg.api.chat.cancel_turn", { conversation: this.conversation });
+		this.sending=false; this.$send.prop("disabled", false);
+		frappe.show_alert({message:__("Cancelled"), indicator:"orange"});
+	}
+	async retry_last() {
+		if (!this.conversation) return;
+		const last = this.$messages.find(".ai-message-user").last().text();
+		if (last) { this.$input.val(last.trim()); this.send(); }
+	}
+	async load_more_messages() {
+		if (!this.conversation) return;
+		const offset = this.$messages.find(".ai-message").length;
+		const res = await frappe.xcall("ai_fr_hg.api.chat.get_messages", { conversation: this.conversation, offset, limit: 50 });
+		res.messages.forEach(m=> this.append_message(m));
 	}
 }

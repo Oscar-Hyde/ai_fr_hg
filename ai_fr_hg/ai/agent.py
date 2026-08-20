@@ -47,6 +47,11 @@ CITATION_INSTRUCTIONS = (
 	"Place each citation immediately after the statement it supports."
 )
 
+CITATION_FOOTNOTE_INSTRUCTIONS = (
+	"Cite the context passages using footnote style [^1], [^2] and collect the "
+	"footnote definitions at the end of your answer."
+)
+
 LANGUAGE_INSTRUCTIONS = (
 	"CONTEXT marks each file with language=... A file may mix English, Arabic and Hebrew. "
 	"If asked what language a file is in, list every language in that label. "
@@ -179,8 +184,10 @@ def build_system_prompt(
 	if context:
 		if agent_doc.strict_grounding:
 			parts.append(GROUNDING_INSTRUCTIONS)
-		if agent_doc.citation_mode and agent_doc.citation_mode != "None":
+		if agent_doc.citation_mode == "Inline":
 			parts.append(CITATION_INSTRUCTIONS)
+		elif agent_doc.citation_mode == "Footnote":
+			parts.append(CITATION_FOOTNOTE_INSTRUCTIONS)
 		if "language=" in context:
 			parts.append(LANGUAGE_INSTRUCTIONS)
 		parts.append(f"CONTEXT:\n{context}")
@@ -293,6 +300,16 @@ def run_agent_turn(
 	# 1. Retrieve supporting knowledge.
 	retrieved = []
 	context = extra_context or ""
+	# CHAT-04: focused document (conversation.context_document) is an additional
+	# scoped document that must participate in retrieval even when the agent's
+	# own KB list does not contain it.
+	if conversation_doc and conversation_doc.get("context_document"):
+		doc_name = conversation_doc.get("context_document")
+		if doc_name:
+			if documents is None:
+				documents = []
+			if doc_name not in documents:
+				documents = list(documents) + [doc_name]
 	# Attached files and folder-scoped asks are this turn's source of truth
 	# even when the agent does not auto-retrieve from its knowledge bases
 	# (the seeded General Assistant keeps use_knowledge off so empty-site
@@ -360,6 +377,32 @@ def run_agent_turn(
 	if include_history and conversation:
 		messages.extend(get_conversation_history(conversation))
 	messages.append(ChatMessage(role="user", content=prompt))
+
+	# CHAT-04: strict-grounding fallback — when no context was retrieved and
+	# the agent defines a fallback_answer, return it without calling the model.
+	if not (context or "").strip() and agent_doc.strict_grounding and agent_doc.fallback_answer:
+		if save_messages and conversation:
+			user_message = save_message(conversation, role="User", content=prompt, agent=agent_doc.name, model=model_doc.name)
+			assistant_message = save_message(conversation, role="Assistant", content=agent_doc.fallback_answer, agent=agent_doc.name, model=model_doc.name, status="Completed")
+			update_conversation_stats(conversation, None)
+		return {
+			"answer": agent_doc.fallback_answer,
+			"reasoning": "",
+			"conversation": conversation,
+			"agent": agent_doc.name,
+			"model": model_doc.name,
+			"citations": [],
+			"tool_invocations": [],
+			"timed_out": False,
+			"user_message": user_message.name if user_message else None,
+			"message": assistant_message.name if assistant_message else None,
+			"prompt_tokens": 0,
+			"completion_tokens": 0,
+			"total_tokens": 0,
+			"duration_ms": int((time.monotonic() - started) * 1000),
+			"_streamed": False,
+			"fallback": True,
+		}
 
 	# 3. Persist the user's message.
 	user_message = None

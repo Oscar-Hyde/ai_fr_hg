@@ -73,7 +73,7 @@
    "fieldtype": "Select",
    "in_standard_filter": 1,
    "label": "Status",
-   "options": "Draft\nPending\nStreaming\nCompleted\nFailed"
+   "options": "Draft\nPending\nStreaming\nCompleted\nFailed\nCancelled"
   },
   {
    "fieldname": "msg_cb",
