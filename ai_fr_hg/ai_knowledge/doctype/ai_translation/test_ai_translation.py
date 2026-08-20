@@ -31,15 +31,30 @@ class TranslationTestCase(AIPlatformTestCase):
 		name = create_translation(document.name, target, **kwargs)
 		return frappe.get_doc("AI Translation", name)
 
-	def ensure_other_knowledge_base(self):
-		if frappe.db.exists("AI Knowledge Base", "Other Test Knowledge Base"):
-			return frappe.get_doc("AI Knowledge Base", "Other Test Knowledge Base")
+	def make_ai_user(self, email, first_name):
+		if frappe.db.exists("User", email):
+			return frappe.get_doc("User", email)
+		doc = frappe.get_doc(
+			{
+				"doctype": "User",
+				"email": email,
+				"first_name": first_name,
+				"send_welcome_email": 0,
+				"roles": [{"role": "AI User"}],
+			}
+		)
+		doc.insert(ignore_permissions=True)
+		return doc
+
+	def make_knowledge_base(self, label, public):
+		if frappe.db.exists("AI Knowledge Base", label):
+			return frappe.get_doc("AI Knowledge Base", label)
 		doc = frappe.get_doc(
 			{
 				"doctype": "AI Knowledge Base",
-				"knowledge_base_name": "Other Test Knowledge Base",
+				"knowledge_base_name": label,
 				"enabled": 1,
-				"is_public": 1,
+				"is_public": 1 if public else 0,
 				"chunk_size": 400,
 				"chunk_overlap": 40,
 				"embedding_model": self.embedding_model.name,
@@ -47,6 +62,12 @@ class TranslationTestCase(AIPlatformTestCase):
 		)
 		doc.insert(ignore_permissions=True)
 		return doc
+
+	def ensure_other_knowledge_base(self):
+		return self.make_knowledge_base("Other Test Knowledge Base", public=True)
+
+	def ensure_private_knowledge_base(self):
+		return self.make_knowledge_base("Private Test Knowledge Base", public=False)
 
 
 class TestDocumentTranslation(TranslationTestCase):
@@ -336,6 +357,63 @@ class TestTranslationMemory(TranslationTestCase):
 
 		self.assertTrue(result["translated"])
 		self.assertGreater(mock.call_count, 0)
+
+	def test_document_tool_reuses_memory_within_the_documents_knowledge_base(self):
+		from ai_fr_hg.ai.tools.builtin import translate_content
+		from ai_fr_hg.ai.translation import run_translation
+
+		clause = "Memory reuse inside the same knowledge base is the point of translation memory.\n"
+		seed = self.make_document("Same KB Seed", clause)
+		stored = self.make_translation(seed, "ar")
+		with stub_translation_model():
+			run_translation(stored.name)
+
+		target = self.make_document("Same KB Target", clause)
+		with stub_translation_model() as mock:
+			result = translate_content(target_language="ar", document=target.name)
+
+		self.assertTrue(result["translated"])
+		self.assertEqual(mock.call_count, 0)
+
+	def test_inline_translation_rejects_an_unauthorized_knowledge_base(self):
+		from ai_fr_hg.api.translation import translate
+
+		self.make_ai_user("translator-b@example.com", "Translator B")
+		private = self.ensure_private_knowledge_base()
+
+		frappe.set_user("translator-b@example.com")
+		try:
+			with self.assertRaises(frappe.PermissionError):
+				translate("An unauthorized memory scope must be rejected.", "ar", knowledge_base=private.name)
+		finally:
+			frappe.set_user("Administrator")
+
+	def test_memory_is_isolated_across_users(self):
+		from ai_fr_hg.ai.translation import _memory_lookup, run_translation, translate_text
+		from ai_fr_hg.ai.translation_utils import memory_fingerprint
+
+		self.make_ai_user("translator-b@example.com", "Translator B")
+		private = self.ensure_private_knowledge_base()
+		clause = "A cross user memory hit is a data disclosure.\n"
+
+		frappe.set_user("Administrator")
+		document = self.make_document("Private Clause", clause)
+		document.db_set("knowledge_base", private.name)
+		stored = self.make_translation(document, "ar")
+		with stub_translation_model():
+			run_translation(stored.name)
+
+		frappe.set_user("translator-b@example.com")
+		try:
+			fingerprint = memory_fingerprint(clause, "en", "ar", knowledge_base=private.name)
+			self.assertEqual(_memory_lookup([fingerprint], private.name), {})
+
+			with stub_translation_model() as mock:
+				outcome = translate_text(clause, "ar", source_language="en", knowledge_base=private.name)
+			self.assertEqual(outcome.memory_hits, 0)
+			self.assertGreater(mock.call_count, 0)
+		finally:
+			frappe.set_user("Administrator")
 
 
 class TestGlossary(TranslationTestCase):

@@ -417,6 +417,7 @@ def translate_content(
 	source_text = text or kwargs.get("content") or kwargs.get("passage")
 	title = None
 	document_name = None
+	knowledge_base = None
 
 	if not source_text:
 		identifier = document or kwargs.get("document_name") or kwargs.get("title") or kwargs.get("file")
@@ -426,6 +427,9 @@ def translate_content(
 		source_text = extracted.get("content") or ""
 		title = extracted.get("title")
 		document_name = extracted.get("document")
+		# The document was already permission-checked by `get_document_text`.
+		# Its knowledge base is the only memory scope this tool may use.
+		knowledge_base = extracted.get("knowledge_base")
 
 	if not (source_text or "").strip():
 		return {"error": "There is no text to translate.", "translated": False}
@@ -439,6 +443,7 @@ def translate_content(
 		source_language,
 		reference_doctype="AI Document" if document_name else None,
 		reference_name=document_name,
+		knowledge_base=knowledge_base,
 	)
 	return {
 		"translated": True,
