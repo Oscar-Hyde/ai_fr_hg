@@ -102,11 +102,17 @@ Executed in this workspace (no MariaDB/bench available locally, as in Phase 0):
 
 ## Runtime verification
 
-Hosted: push CI on the pinned Frappe v17 bench (Server suite) is the real-runtime gate; see the latest run on this branch. Browser/Desk smoke for the gated patches and picker remains the Phase 7 browser matrix, as planned.
+Hosted CI on the pinned Frappe v17 bench was used to verify and debug this phase:
+
+- **Bisect result:** `6ba65e4` (SEC-01) passes the full Server suite. Two CI-only defects were found and fixed: (1) `get_document` without a field list raised when a DocType exposed more than the 25-field budget (AI Provider) — now returns a bounded deterministic prefix plus `_fields_truncated`; (2) the legacy `storage_folder` default `AI Platform` (a bare name) flowed into the Single DocType on first save during `after_install`, before any folder existed, so the new server-side validation aborted `install-app` — the File Link now has no short default and patch `v0_0_15` normalizes legacy rows.
+- **Semgrep:** the pinned Frappe ruleset found 3 findings in the new provider/permission code; all fixed (`str(exc)` formatting, reviewed nosemgrep annotation for hook dispatch). Prettier (v2.7.1) and ESLint (v8.44, `--quiet`) pass on all JS.
+- The full-branch Server suite must be re-run green after the final fixes push (GitHub credentials expired in-session; see below).
+
+Browser/Desk smoke for the gated patches and picker remains the Phase 7 browser matrix, as planned.
 
 ## Remaining issues
 
-1. Hosted CI must be green on the final SHA before the phase verdict is final.
+1. The final SHA must be pushed and the hosted CI must be green before the phase verdict is final (GitHub token expired mid-session; push resumes after the user reconnects GitHub in Arena).
 2. FILE-07 exact-v17 browser smoke and the Desk picker/browser workflows are deliberately Phase 7 deliverables.
 3. Branch protection on `main` remains an owner-only GitHub administration action (recorded in Phase 0).
 
