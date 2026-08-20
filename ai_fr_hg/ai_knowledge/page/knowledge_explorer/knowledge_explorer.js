@@ -32,7 +32,15 @@ class KnowledgeExplorer {
 		this.page = page;
 		this.search_type = "Hybrid";
 		this.selected_kbs = [];
+		this.folder = null;
+		this.entity_type = "";
+		this.page_offset = 0;
+		this.page_size = 10;
+		this.last_query = "";
+		this.is_manager =
+			frappe.user_roles.includes("AI Manager") || frappe.user_roles.includes("System Manager");
 		this.make();
+		this.restore_hash();
 		this.refresh();
 	}
 
@@ -43,14 +51,15 @@ class KnowledgeExplorer {
 				<div class="ai-explorer-search">
 					<div class="ai-search-row">
 						<input type="text" class="form-control ai-query"
-							placeholder="${__("Search your documents in natural language...")}">
-						<button class="btn btn-primary ai-search-btn">${__("Search")}</button>
+							placeholder="${__("Search your documents in natural language...")}"
+							aria-label="${__("Search query")}">
+						<button class="btn btn-primary ai-search-btn" type="button">${__("Search")}</button>
 					</div>
 					<div class="ai-search-options">
-						<div class="ai-search-types">
-							<button class="ai-type-btn active" data-type="Hybrid">${__("Hybrid")}</button>
-							<button class="ai-type-btn" data-type="Semantic">${__("Semantic")}</button>
-							<button class="ai-type-btn" data-type="Keyword">${__("Keyword")}</button>
+						<div class="ai-search-types" role="group" aria-label="${__("Search type")}">
+							<button class="ai-type-btn active" type="button" data-type="Hybrid">${__("Hybrid")}</button>
+							<button class="ai-type-btn" type="button" data-type="Semantic">${__("Semantic")}</button>
+							<button class="ai-type-btn" type="button" data-type="Keyword">${__("Keyword")}</button>
 						</div>
 						<label class="ai-ask-toggle">
 							<input type="checkbox" class="ai-ask-mode">
@@ -58,12 +67,22 @@ class KnowledgeExplorer {
 						</label>
 						<div class="ai-kb-filters"></div>
 					</div>
+					<div class="ai-search-scope">
+						<div class="ai-folder-control"></div>
+						<select class="form-control ai-entity-type" aria-label="${__("Entity type")}">
+							<option value="">${__("All entities")}</option>
+						</select>
+					</div>
 				</div>
+
+				<div class="ai-degraded-banner hidden" role="status"></div>
+				<div class="ai-diagnostics hidden"></div>
 
 				<div class="ai-explorer-body">
 					<div class="ai-explorer-main">
 						<div class="ai-answer-panel hidden"></div>
 						<div class="ai-results"></div>
+						<div class="ai-pagination hidden"></div>
 					</div>
 					<aside class="ai-explorer-side">
 						<div class="ai-kb-stats"></div>
@@ -76,6 +95,9 @@ class KnowledgeExplorer {
 		this.$query = this.page.main.find(".ai-query");
 		this.$results = this.page.main.find(".ai-results");
 		this.$answer = this.page.main.find(".ai-answer-panel");
+		this.$banner = this.page.main.find(".ai-degraded-banner");
+		this.$diagnostics = this.page.main.find(".ai-diagnostics");
+		this.$pagination = this.page.main.find(".ai-pagination");
 
 		this.page.set_primary_action(__("Upload Document"), () => this.upload());
 		this.page.add_menu_item(__("New Knowledge Base"), () =>
@@ -86,9 +108,9 @@ class KnowledgeExplorer {
 		);
 		this.page.add_menu_item(__("Supported Formats"), () => this.show_formats());
 
-		this.page.main.find(".ai-search-btn").on("click", () => this.search());
+		this.page.main.find(".ai-search-btn").on("click", () => this.search({ reset: true }));
 		this.$query.on("keydown", (event) => {
-			if (event.key === "Enter") this.search();
+			if (event.key === "Enter") this.search({ reset: true });
 		});
 
 		const me = this;
@@ -96,20 +118,73 @@ class KnowledgeExplorer {
 			me.page.main.find(".ai-type-btn").removeClass("active");
 			$(this).addClass("active");
 			me.search_type = $(this).data("type");
-			if (me.$query.val().trim()) me.search();
+			if (me.$query.val().trim()) me.search({ reset: true });
 		});
 
 		this.$results.on("click", ".ai-result-open", function () {
 			frappe.set_route("Form", "AI Document", $(this).data("document"));
 		});
+		this.$results.on("click", ".ai-search-retry", () => this.search());
+
+		this.folder_control = frappe.ui.form.make_control({
+			parent: this.page.main.find(".ai-folder-control"),
+			df: {
+				fieldtype: "Link",
+				options: "File",
+				label: __("Folder"),
+				filters: { is_folder: 1 },
+			},
+			render_input: true,
+		});
+		this.folder_control.df.onchange = () => {
+			this.folder = this.folder_control.get_value() || null;
+			if (this.$query.val().trim()) this.search({ reset: true });
+		};
+
+		this.page.main.find(".ai-entity-type").on("change", (event) => {
+			this.entity_type = event.target.value || "";
+			if (this.$query.val().trim()) this.search({ reset: true });
+		});
+
+		this.load_facets();
 	}
 
 	async refresh() {
-		this.overview = await frappe.xcall("ai_fr_hg.api.knowledge.get_knowledge_overview");
+		try {
+			this.overview = await frappe.xcall("ai_fr_hg.api.knowledge.get_knowledge_overview");
+		} catch (error) {
+			this.$results.html(
+				`<div class="ai-ops-empty text-danger">${frappe.utils.escape_html(
+					error.message || __("Could not load knowledge overview.")
+				)}</div>`
+			);
+			return;
+		}
 		this.render_stats();
 		this.render_kb_list();
 		this.render_kb_filters();
-		if (!this.$query.val().trim()) this.render_recent();
+		if (this.last_query || this.$query.val().trim()) {
+			this.search();
+		} else {
+			this.render_recent();
+		}
+	}
+
+	async load_facets() {
+		try {
+			const facets = await frappe.xcall("ai_fr_hg.api.knowledge.get_search_facets");
+			const $select = this.page.main.find(".ai-entity-type");
+			(facets.entity_types || []).forEach((row) => {
+				$select.append(
+					`<option value="${frappe.utils.escape_html(row.entity_type)}">${frappe.utils.escape_html(
+						row.entity_type
+					)} (${row.total})</option>`
+				);
+			});
+			if (this.entity_type) $select.val(this.entity_type);
+		} catch (error) {
+			// Facets are optional; search still works without them.
+		}
 	}
 
 	render_stats() {
@@ -190,13 +265,14 @@ class KnowledgeExplorer {
 					${frappe.utils.escape_html(kb.knowledge_base_name)}
 				</button>`
 			);
+			if (this.selected_kbs.includes(kb.name)) $chip.addClass("active");
 			$chip.on("click", () => {
 				$chip.toggleClass("active");
 				this.selected_kbs = $wrap
 					.find(".ai-kb-chip.active")
 					.map((_, el) => $(el).data("kb"))
 					.get();
-				if (this.$query.val().trim()) this.search();
+				if (this.$query.val().trim()) this.search({ reset: true });
 			});
 			$wrap.append($chip);
 		});
@@ -244,27 +320,34 @@ class KnowledgeExplorer {
 		`);
 	}
 
-	async search() {
+	async search(opts = {}) {
 		const query = (this.$query.val() || "").trim();
 		if (!query) return;
+		if (opts.reset) this.page_offset = 0;
+		this.last_query = query;
+		this.persist_hash();
 
 		const askMode = this.page.main.find(".ai-ask-mode").is(":checked");
 		this.$results.html(`<div class="ai-loading">${__("Searching...")}</div>`);
 		this.$answer.addClass("hidden").empty();
+		this.$banner.addClass("hidden").empty();
+		this.$diagnostics.addClass("hidden").empty();
+		this.$pagination.addClass("hidden").empty();
 
 		try {
 			if (askMode) {
 				const response = await frappe.xcall("ai_fr_hg.api.knowledge.ask", {
 					question: query,
 					knowledge_bases: this.selected_kbs.length ? this.selected_kbs : null,
+					folder: this.folder,
 				});
 				this.$answer.removeClass("hidden").html(`
 					<div class="ai-answer">
 						<div class="ai-answer-label text-muted small">${__("AI Answer")}</div>
 						<div class="ai-answer-body">${frappe.markdown(response.answer || "")}</div>
 						<div class="text-muted small">
-							${response.model} · ${response.total_tokens} ${__("tokens")} ·
-							${(response.duration_ms / 1000).toFixed(1)}s
+							${frappe.utils.escape_html(response.model || "")} · ${response.total_tokens || 0} ${__("tokens")} ·
+							${((response.duration_ms || 0) / 1000).toFixed(1)}s
 						</div>
 					</div>
 				`);
@@ -273,21 +356,66 @@ class KnowledgeExplorer {
 				const response = await frappe.xcall("ai_fr_hg.api.knowledge.search", {
 					query,
 					knowledge_bases: this.selected_kbs.length ? this.selected_kbs : null,
-					top_k: 20,
+					top_k: this.page_size,
+					offset: this.page_offset,
 					search_type: this.search_type,
+					folder: this.folder,
+					entity_type: this.entity_type || null,
 				});
-				this.render_results(response.results, query);
+				this.render_diagnostics(response.diagnostics);
+				this.render_results(response.results || [], query, response.total, response.offset);
 			}
 		} catch (error) {
+			const denied = /permission|not permitted|not allowed/i.test(error.message || "");
 			this.$results.html(`
 				<div class="ai-ops-empty text-danger">
-					${frappe.utils.escape_html(error.message || __("Search failed."))}
+					${frappe.utils.escape_html(
+						denied
+							? __("You do not have permission to search these knowledge bases.")
+							: error.message || __("Search failed.")
+					)}
+					<button type="button" class="btn btn-sm btn-default ai-search-retry">${__("Retry")}</button>
 				</div>
 			`);
 		}
 	}
 
-	render_results(results, query) {
+	render_diagnostics(diagnostics) {
+		if (!diagnostics) return;
+		if (diagnostics.degraded) {
+			const reasons = (diagnostics.degraded_reasons || [diagnostics.fallback_reason])
+				.filter(Boolean)
+				.map((reason) => frappe.utils.escape_html(reason))
+				.join(", ");
+			this.$banner
+				.removeClass("hidden")
+				.html(
+					`<strong>${__("Degraded retrieval")}</strong> — ${
+						reasons || __("semantic search fell back to keyword matching.")
+					}`
+				);
+		}
+		if (!this.is_manager) return;
+		const models = (diagnostics.embedding_models || [])
+			.map((item) => `${frappe.utils.escape_html(item.model)} (${item.dimensions}d)`)
+			.join(", ");
+		this.$diagnostics.removeClass("hidden").html(`
+			<div class="ai-side-card">
+				<h6>${__("Retrieval diagnostics")}</h6>
+				<div class="ai-stat-row"><span>${__("Strategy")}</span><b>${frappe.utils.escape_html(
+					diagnostics.retrieval_strategy || ""
+				)}</b></div>
+				<div class="ai-stat-row"><span>${__("Corpus")}</span><b>${diagnostics.corpus_size || 0}</b></div>
+				<div class="ai-stat-row"><span>${__("Candidates")}</span><b>${diagnostics.candidate_count || 0}</b></div>
+				<div class="ai-stat-row"><span>${__("Keyword")}</span><b>${frappe.utils.escape_html(
+					diagnostics.keyword_backend || ""
+				)}</b></div>
+				${models ? `<div class="text-muted small">${models}</div>` : ""}
+			</div>
+		`);
+	}
+
+	render_results(results, query, total, offset) {
 		if (!results.length) {
 			this.$results.html(`
 				<div class="ai-ops-empty text-muted">
@@ -338,6 +466,69 @@ class KnowledgeExplorer {
 				)
 				.join("")}
 		`);
+		this.render_pagination(total, offset);
+	}
+
+	render_pagination(total, offset) {
+		const known = Number(total || 0);
+		if (!known || known <= this.page_size) {
+			this.$pagination.addClass("hidden").empty();
+			return;
+		}
+		const start = Number(offset || 0);
+		const can_prev = start > 0;
+		const can_next = start + this.page_size < known;
+		this.$pagination.removeClass("hidden").html(`
+			<button type="button" class="btn btn-sm btn-default ai-page-prev" ${
+				can_prev ? "" : "disabled"
+			}>${__("Previous")}</button>
+			<span class="text-muted small">${start + 1}–${Math.min(start + this.page_size, known)} / ${known}</span>
+			<button type="button" class="btn btn-sm btn-default ai-page-next" ${
+				can_next ? "" : "disabled"
+			}>${__("Next")}</button>
+		`);
+		this.$pagination.find(".ai-page-prev").on("click", () => {
+			this.page_offset = Math.max(0, start - this.page_size);
+			this.search();
+		});
+		this.$pagination.find(".ai-page-next").on("click", () => {
+			this.page_offset = start + this.page_size;
+			this.search();
+		});
+	}
+
+	persist_hash() {
+		const params = new URLSearchParams();
+		const query = (this.$query.val() || "").trim();
+		if (query) params.set("q", query);
+		if (this.search_type && this.search_type !== "Hybrid") params.set("type", this.search_type);
+		if (this.selected_kbs.length) params.set("kb", this.selected_kbs.join(","));
+		if (this.folder) params.set("folder", this.folder);
+		if (this.entity_type) params.set("entity", this.entity_type);
+		if (this.page_offset) params.set("offset", String(this.page_offset));
+		const hash = params.toString();
+		if (typeof history !== "undefined" && history.replaceState) {
+			history.replaceState(null, "", hash ? `#${hash}` : location.pathname + location.search);
+		}
+	}
+
+	restore_hash() {
+		const raw = (typeof location !== "undefined" && location.hash ? location.hash.slice(1) : "") || "";
+		if (!raw) return;
+		const params = new URLSearchParams(raw);
+		if (params.get("q")) this.$query.val(params.get("q"));
+		if (params.get("type")) {
+			this.search_type = params.get("type");
+			this.page.main.find(".ai-type-btn").removeClass("active");
+			this.page.main.find('.ai-type-btn[data-type="' + this.search_type + '"]').addClass("active");
+		}
+		if (params.get("kb")) this.selected_kbs = params.get("kb").split(",").filter(Boolean);
+		if (params.get("folder")) {
+			this.folder = params.get("folder");
+			if (this.folder_control) this.folder_control.set_value(this.folder);
+		}
+		if (params.get("entity")) this.entity_type = params.get("entity");
+		if (params.get("offset")) this.page_offset = parseInt(params.get("offset"), 10) || 0;
 	}
 
 	highlight(content, query) {

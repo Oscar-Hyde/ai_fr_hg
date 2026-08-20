@@ -3,8 +3,10 @@
 This document walks the current main path from a file attached in the AI
 Assistant through ingestion, indexing, retrieval, grounded answering, and
 citations. It is not a production-completeness claim: stable attachment
-identity, cancellation/reconnect, retrieval scale, complete trace links,
-browser E2E, and worker-failure recovery remain in the controlled gap register.
+identity, cancellation/reconnect, complete trace links, browser E2E, and
+worker-failure recovery remain in the controlled gap register. Retrieval
+correctness (complete candidate evaluation, mixed models, KB policy, folder
+descendants, context packing) is implemented in `ai.retrieval`.
 
 The path is designed for local providers. SEC-04 connection hardening remains
 open, so host firewall/egress controls are required for a local-only guarantee.

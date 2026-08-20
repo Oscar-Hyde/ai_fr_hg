@@ -37,6 +37,7 @@
   "similarity_threshold",
   "enable_hybrid_search",
   "max_context_characters",
+  "retrieval_brute_force_ceiling",
   "ingest_sec",
   "auto_process_documents",
   "auto_embed_on_ingest",
@@ -272,6 +273,14 @@
    "fieldname": "max_context_characters",
    "fieldtype": "Int",
    "label": "Max Context Characters"
+  },
+  {
+   "default": "10000",
+   "description": "Complete brute-force vector evaluation is used for every eligible chunk. Corpora larger than this ceiling are still scanned completely but are flagged as degraded relative to the published latency envelope (1k/10k interactive; 100k complete but possibly slow).",
+   "fieldname": "retrieval_brute_force_ceiling",
+   "fieldtype": "Int",
+   "label": "Retrieval Brute-Force Ceiling",
+   "min_value": 200
   },
   {
    "fieldname": "ingest_sec",

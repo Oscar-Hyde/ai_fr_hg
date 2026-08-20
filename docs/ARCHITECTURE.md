@@ -41,7 +41,9 @@ ai_fr_hg/
 │   ├── engine.py            Model resolution, retries, failover, metrics
 │   ├── chunking.py          Structure-aware chunker
 │   ├── vector.py            Base64 float32 vectors, cosine similarity, ranking
-│   ├── knowledge.py         Indexing and hybrid retrieval
+│   ├── knowledge.py         Indexing (retrieve/build_context re-exported)
+│   ├── retrieval.py         Canonical hybrid retrieval + diagnostics
+│   ├── retrieval_utils.py   Pure scoring, fusion, packing (no Frappe)
 │   ├── intelligence.py      Summarise, classify, extract, compare
 │   ├── patterns.py          High-precision pattern entities (pure layer)
 │   ├── ingestion.py         Unified document pipeline
@@ -188,17 +190,21 @@ NumPy is importable, with a pure-Python fallback when it is not.
 This costs throughput at larger scale but avoids a second vector service and
 keeps rows under Frappe permissions. Standard Frappe site backups include the
 DocType data; the application-level knowledge export is not yet a complete
-selective restore path (OPS-04). Retrieval completeness and scale remain Phase
-2 qualification work.
+selective restore path (OPS-04). Retrieval correctness is a complete brute-force
+scan of every eligible vector, grouped by embedding model. A configurable
+ceiling flags corpora above the published latency envelope without dropping
+results. MariaDB VECTOR indexes are not used: Frappe has no VECTOR field type,
+and a second column would duplicate the Long Text embedding.
 
 Vectors are stored normalised so retrieval never pays for a square root.
 
 ### Hybrid retrieval with reciprocal rank fusion
 
 Pure vector search can be weak on part numbers, IDs, proper nouns and acronyms;
-pure keyword search misses paraphrase. The current small-corpus path runs both
-and fuses ranked lists, but RET-01 through RET-04 remain correctness blockers
-for candidate completeness, mixed models, and per-KB policy:
+pure keyword search misses paraphrase. Retrieval pages every eligible chunk
+(MariaDB FULLTEXT when the index exists and every term is latin ≥3 characters;
+otherwise a complete LIKE scan), groups mixed embedding models, applies per-KB
+top-k and threshold before fusion, then fuses ranked lists:
 
 ```
 score(chunk) = Σ 1 / (K + rank_in_list)      K = 60
@@ -217,17 +223,14 @@ document coverage must be measured before this is production-qualified.
 
 ### Tools run as the calling user
 
-Tools are intended to execute as the calling user and write tools have an
-approval gate. SEC-02 and SEC-03 remain open because generic count and field
-selection do not yet have complete row/field parity. Until those close, this is
-an architectural invariant under remediation rather than a proven guarantee.
+Tools execute as the calling user and write tools have an approval gate.
+Generic document tools go through `ai.tools.query` (SEC-02/SEC-03).
 
 ### Redaction happens before storage
 
-`AI Platform Settings` holds regular expressions applied before prompts and
-responses are written to `AI Execution Log`. This reduces exposure but is not a
-universal storage guarantee: SEC-07 tracks search telemetry that does not yet
-use the same path, and the model/provider still receives original request text.
+`AI Platform Settings` holds regular expressions applied before prompts,
+responses, and search telemetry are written. The model/provider still receives
+original request text.
 
 ### Automation cannot recurse
 

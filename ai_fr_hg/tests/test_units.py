@@ -745,7 +745,7 @@ class TestLanguageDetection(UnitTestCase):
 		self.assertEqual(resolve_document_language(None, ""), "")
 
 	def test_build_context_labels_language(self):
-		from ai_fr_hg.ai.knowledge import RetrievedChunk, build_context
+		from ai_fr_hg.ai.retrieval import RetrievedChunk, build_context
 
 		context = build_context(
 			[
@@ -765,7 +765,7 @@ class TestLanguageDetection(UnitTestCase):
 		self.assertIn("Договор", context)
 
 	def test_build_context_detects_language_when_field_is_empty(self):
-		from ai_fr_hg.ai.knowledge import RetrievedChunk, build_context
+		from ai_fr_hg.ai.retrieval import RetrievedChunk, build_context
 
 		context = build_context(
 			[
@@ -783,7 +783,7 @@ class TestLanguageDetection(UnitTestCase):
 		self.assertIn("language=English", context)
 
 	def test_build_context_labels_mixed_english_arabic_hebrew(self):
-		from ai_fr_hg.ai.knowledge import RetrievedChunk, build_context
+		from ai_fr_hg.ai.retrieval import RetrievedChunk, build_context
 
 		content = (
 			"This is the official report for the project and the team.\n"

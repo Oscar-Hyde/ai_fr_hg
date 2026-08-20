@@ -207,6 +207,24 @@ def get_agent_knowledge_bases(agent_doc, conversation_doc=None) -> list[str]:
 	return [row.knowledge_base for row in agent_doc.get("knowledge_bases") or []]
 
 
+def get_agent_knowledge_base_weights(agent_doc, conversation_doc=None) -> dict[str, float]:
+	"""Per-KB fusion weights from the agent child table (default 1.0)."""
+	weights: dict[str, float] = {}
+	for row in agent_doc.get("knowledge_bases") or []:
+		if not row.knowledge_base:
+			continue
+		weight = flt(row.weight)
+		weights[row.knowledge_base] = 1.0 if row.weight in (None, "") else weight
+	# Conversation KB overrides change the target set but inherit agent weights.
+	if conversation_doc and conversation_doc.get("knowledge_bases"):
+		return {
+			row.knowledge_base: weights.get(row.knowledge_base, 1.0)
+			for row in conversation_doc.knowledge_bases
+			if row.knowledge_base
+		}
+	return weights
+
+
 def get_conversation_history(conversation: str, limit: int = HISTORY_LIMIT) -> list[ChatMessage]:
 	"""Load the recent turns of a conversation as chat messages."""
 	rows = frappe.get_all(
@@ -246,6 +264,7 @@ def run_agent_turn(
 	save_messages: bool = True,
 	extra_context: str | None = None,
 	documents: list[str] | None = None,
+	folder: str | None = None,
 	on_token=None,
 ) -> dict:
 	"""Execute one full agent turn and return the answer with its provenance.

@@ -29,7 +29,7 @@ explicit human or operator concerns.
 | **Local AI engine** | Ollama first-class, plus configured OpenAI-compatible local runtimes. Model discovery, health records, retry/failover scaffolding, and performance records exist; capability, rate, concurrency, and equivalent-model failover hardening remains. |
 | **Document intelligence** | 36 registered extensions through one pipeline: extract → chunk → embed → index. Text-layer PDFs, Office/OpenDocument files, RFC `.eml`, text/code, and images (vision or optional image OCR). Scanned-PDF OCR and Outlook `.msg` are not supported. Extraction returns JSON; it does not create target DocType records. |
 | **Translation** | Arabic ⇄ English ⇄ Hebrew text translation. Segmentation preserves extracted-text structure, not the original PDF/Office/image binary. Translation-memory isolation hardening remains open, so do not treat it as production-safe yet. |
-| **Knowledge & search** | Small-corpus hybrid retrieval (dense vectors + keyword, fused with RRF) computed in Python. Correct full-corpus selection, mixed embedding models, and KB policy enforcement remain production blockers. |
+| **Knowledge & search** | Hybrid retrieval (dense vectors + keyword, fused with RRF) scans every eligible chunk, groups mixed embedding models, and applies per-KB top-k, threshold and weight. A configurable brute-force ceiling flags large corpora as degraded without dropping results. Reranking is not implemented. |
 | **Conversational AI** | Multi-session chat with retrieval grounding, inline citations and tool calling. Turn cancellation, concurrent ordering, reconnect, latest-history, and trace-link completion remain open. |
 | **Automation** | Main-path declarative pipelines and event rules on Frappe workers. Delete snapshots, atomic schedule claims, resumable approvals, and several task/trigger contracts remain open. |
 | **Governance** | Quota checks, capability gates, prompt redaction, write-tool approvals, and audit records exist. Distributed concurrency/rate enforcement, quota reservations, and complete trace linkage remain open. |
@@ -123,8 +123,9 @@ context. Attached files are submitted to Frappe ingestion workers; durable
 progress/cancel/reconnect and attachment-identity hardening remain open.
 
 **Search** — `/app/knowledge-explorer`
-Hybrid, semantic or keyword small-corpus search with an "Answer with AI"
-toggle. Full-corpus correctness and diagnostics are Phase 2 work.
+Hybrid, semantic or keyword search with folder and entity filters, pagination,
+and (for managers) retrieval diagnostics. Degraded mode is shown when semantic
+embedding fails or the corpus exceeds the published brute-force envelope.
 
 **Operate** — `/app/ai-operations`
 Current provider, usage, latency, failure, queue, and approval summaries. SLO

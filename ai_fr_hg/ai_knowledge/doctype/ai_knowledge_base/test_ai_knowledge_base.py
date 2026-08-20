@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import frappe
 
+from ai_fr_hg.ai.vector import encode_vector, normalize
 from ai_fr_hg.tests.integration_test_case import AIPlatformTestCase, stub_embeddings
 
 
@@ -163,6 +164,315 @@ class TestRetrieval(AIPlatformTestCase):
 		self.assertTrue(results)
 		self.assertTrue(all(result.document == document.name for result in results))
 		self.assertTrue(any("Refunds" in result.content for result in results))
+
+	def _insert_chunk(self, document, content, index, embedding, *, knowledge_base=None, model=None):
+		row = frappe.get_doc(
+			{
+				"doctype": "AI Document Chunk",
+				"document": document.name,
+				"knowledge_base": knowledge_base or document.knowledge_base,
+				"chunk_index": index,
+				"content": content,
+				"checksum": frappe.generate_hash(f"{content}:{index}", length=32),
+				"embedding": encode_vector(embedding) if embedding else None,
+				"embedding_model": model or self.embedding_model.name,
+				"embedding_dimensions": len(embedding) if embedding else 0,
+				"embedding_format": "Base64 Float32",
+				"embedding_norm": 1.0,
+				"character_count": len(content),
+				"token_count": max(1, len(content) // 4),
+			}
+		)
+		row.flags.ignore_permissions = True
+		row.insert(ignore_permissions=True)
+		return row
+
+	def test_semantic_search_finds_the_only_relevant_chunk_beyond_200(self):
+		"""RET-01: the needle beyond the old 200-row cap must still be found."""
+		from ai_fr_hg.ai.knowledge import retrieve
+
+		document = self.make_document("Corpus Boundary", "Needle document body. " * 8)
+		needle = normalize([1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+		filler = normalize([0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+		self._insert_chunk(document, "THE UNIQUE NEEDLE PASSAGE about zircon refunds.", 0, needle)
+		for index in range(1, 221):
+			self._insert_chunk(document, f"unrelated filler passage number {index}", index, filler)
+
+		query = "THE UNIQUE NEEDLE PASSAGE about zircon refunds."
+
+		def fake_embed(texts, model=None, operation="Embedding", **kwargs):
+			return [list(needle) for _ in texts]
+
+		with (
+			patch("ai_fr_hg.ai.knowledge.run_embedding", side_effect=fake_embed),
+			patch("ai_fr_hg.ai.engine.run_embedding", side_effect=fake_embed),
+		):
+			results = retrieve(
+				query,
+				knowledge_bases=[self.knowledge_base.name],
+				search_type="Semantic",
+				top_k=5,
+				similarity_threshold=0,
+				log=False,
+			)
+		self.assertTrue(results)
+		self.assertTrue(any("UNIQUE NEEDLE PASSAGE" in result.content for result in results))
+
+	def test_keyword_search_finds_the_only_relevant_chunk_beyond_500(self):
+		"""RET-02: a high-score match outside the old 500-row LIKE cap is found."""
+		from ai_fr_hg.ai.knowledge import retrieve
+
+		document = self.make_document("Keyword Corpus", "Keyword document body. " * 8)
+		self._insert_chunk(
+			document,
+			"alpha uniqueneedletermxyz appears only here",
+			0,
+			normalize([0.1] * 8),
+		)
+		for index in range(1, 521):
+			self._insert_chunk(document, f"alpha filler passage {index}", index, normalize([0.2] * 8))
+
+		results = retrieve(
+			"alpha uniqueneedletermxyz",
+			knowledge_bases=[self.knowledge_base.name],
+			search_type="Keyword",
+			top_k=5,
+			log=False,
+		)
+		self.assertTrue(results)
+		self.assertTrue(any("uniqueneedletermxyz" in result.content for result in results))
+
+	def test_mixed_embedding_models_are_grouped_not_compared(self):
+		"""RET-03: incompatible dimensions are never scored against one query vector."""
+		from ai_fr_hg.ai.knowledge import retrieve
+
+		other_model = self.ensure_model("Test Embedding Model Dim4", "Embedding")
+		frappe.db.set_value("AI Model", other_model.name, "embedding_dimensions", 4)
+		frappe.db.set_value("AI Model", self.embedding_model.name, "embedding_dimensions", 8)
+
+		kb_b = frappe.get_doc(
+			{
+				"doctype": "AI Knowledge Base",
+				"knowledge_base_name": "Mixed Model KB B",
+				"enabled": 1,
+				"is_public": 1,
+				"chunk_size": 400,
+				"chunk_overlap": 40,
+				"embedding_model": other_model.name,
+			}
+		).insert(ignore_permissions=True)
+
+		doc_a = self.make_document("Mixed A", "alpha corpus in eight dimensions. " * 8)
+		doc_b = frappe.get_doc(
+			{
+				"doctype": "AI Document",
+				"title": "Mixed B",
+				"knowledge_base": kb_b.name,
+				"source_type": "Text",
+				"content": "beta corpus in four dimensions. " * 8,
+				"status": "Draft",
+			}
+		)
+		doc_b.flags.skip_auto_process = True
+		doc_b.insert(ignore_permissions=True)
+
+		vec8 = normalize([1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+		vec4 = normalize([1.0, 0.0, 0.0, 0.0])
+		self._insert_chunk(doc_a, "eight-dim filler", 0, vec8, model=self.embedding_model.name)
+		self._insert_chunk(
+			doc_b,
+			"four-dim NEEDLE mixed-model zircon",
+			0,
+			vec4,
+			knowledge_base=kb_b.name,
+			model=other_model.name,
+		)
+
+		def fake_embed(texts, model=None, operation="Embedding", **kwargs):
+			if model == other_model.name:
+				return [list(vec4) for _ in texts]
+			return [list(vec8) for _ in texts]
+
+		with (
+			patch("ai_fr_hg.ai.knowledge.run_embedding", side_effect=fake_embed),
+			patch("ai_fr_hg.ai.engine.run_embedding", side_effect=fake_embed),
+		):
+			results, diagnostics = retrieve(
+				"NEEDLE mixed-model zircon",
+				knowledge_bases=[self.knowledge_base.name, kb_b.name],
+				search_type="Semantic",
+				top_k=5,
+				similarity_threshold=0,
+				log=False,
+				with_diagnostics=True,
+			)
+		self.assertTrue(any("NEEDLE mixed-model" in result.content for result in results))
+		self.assertTrue(diagnostics["mixed_embedding_models"])
+		dims = {item["dimensions"] for item in diagnostics["embedding_models"]}
+		self.assertIn(4, dims)
+		self.assertIn(8, dims)
+
+	def test_kb_threshold_and_weight_change_results(self):
+		"""RET-04: per-KB threshold and agent weight actually affect ranking."""
+		from ai_fr_hg.ai.knowledge import retrieve
+
+		kb_low = frappe.get_doc(
+			{
+				"doctype": "AI Knowledge Base",
+				"knowledge_base_name": "Policy Low Threshold",
+				"enabled": 1,
+				"is_public": 1,
+				"chunk_size": 400,
+				"chunk_overlap": 40,
+				"embedding_model": self.embedding_model.name,
+				"top_k": 6,
+				"similarity_threshold": 0.05,
+			}
+		).insert(ignore_permissions=True)
+		kb_high = frappe.get_doc(
+			{
+				"doctype": "AI Knowledge Base",
+				"knowledge_base_name": "Policy High Threshold",
+				"enabled": 1,
+				"is_public": 1,
+				"chunk_size": 400,
+				"chunk_overlap": 40,
+				"embedding_model": self.embedding_model.name,
+				"top_k": 6,
+				"similarity_threshold": 0.99,
+			}
+		).insert(ignore_permissions=True)
+
+		doc_low = frappe.get_doc(
+			{
+				"doctype": "AI Document",
+				"title": "Low Threshold Doc",
+				"knowledge_base": kb_low.name,
+				"source_type": "Text",
+				"content": "sharedtopic low-threshold body. " * 8,
+				"status": "Draft",
+			}
+		)
+		doc_low.flags.skip_auto_process = True
+		doc_low.insert(ignore_permissions=True)
+		doc_high = frappe.get_doc(
+			{
+				"doctype": "AI Document",
+				"title": "High Threshold Doc",
+				"knowledge_base": kb_high.name,
+				"source_type": "Text",
+				"content": "sharedtopic high-threshold body. " * 8,
+				"status": "Draft",
+			}
+		)
+		doc_high.flags.skip_auto_process = True
+		doc_high.insert(ignore_permissions=True)
+
+		strong = normalize([1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+		weak = normalize([0.2, 0.98, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+		self._insert_chunk(doc_low, "sharedtopic low", 0, weak, knowledge_base=kb_low.name)
+		self._insert_chunk(
+			doc_high, "sharedtopic high UNIQUEHIGH", 0, strong, knowledge_base=kb_high.name
+		)
+
+		def fake_embed(texts, model=None, operation="Embedding", **kwargs):
+			return [list(strong) for _ in texts]
+
+		with (
+			patch("ai_fr_hg.ai.knowledge.run_embedding", side_effect=fake_embed),
+			patch("ai_fr_hg.ai.engine.run_embedding", side_effect=fake_embed),
+		):
+			strict = retrieve(
+				"sharedtopic",
+				knowledge_bases=[kb_low.name, kb_high.name],
+				search_type="Semantic",
+				top_k=5,
+				log=False,
+			)
+			overridden = retrieve(
+				"sharedtopic",
+				knowledge_bases=[kb_low.name, kb_high.name],
+				search_type="Semantic",
+				top_k=5,
+				similarity_threshold=0,
+				log=False,
+			)
+			weighted = retrieve(
+				"sharedtopic",
+				knowledge_bases=[kb_low.name, kb_high.name],
+				search_type="Keyword",
+				top_k=2,
+				weights={kb_low.name: 10.0, kb_high.name: 0.01},
+				log=False,
+			)
+
+		self.assertTrue(any("UNIQUEHIGH" in result.content for result in strict))
+		self.assertTrue(any(result.knowledge_base == kb_low.name for result in overridden))
+		self.assertEqual(weighted[0].knowledge_base, kb_low.name)
+
+	def test_folder_scope_does_not_match_sibling_prefix(self):
+		"""RET-07: Home/A must not retrieve documents in Home/AB."""
+		from ai_fr_hg.ai.knowledge import retrieve
+
+		in_a = self.make_document("Folder A Doc", "folder-a-only zircon policy. " * 10)
+		in_ab = self.make_document("Folder AB Doc", "folder-ab-only zircon policy. " * 10)
+		frappe.db.set_value("AI Document", in_a.name, {"folder": "Home/A", "source_folder": "Home/A"})
+		frappe.db.set_value("AI Document", in_ab.name, {"folder": "Home/AB", "source_folder": "Home/AB"})
+		vec = normalize([1.0] * 8)
+		self._insert_chunk(in_a, "folder-a-only zircon policy", 0, vec)
+		self._insert_chunk(in_ab, "folder-ab-only zircon policy", 0, vec)
+
+		results = retrieve(
+			"zircon policy",
+			knowledge_bases=[self.knowledge_base.name],
+			search_type="Keyword",
+			top_k=10,
+			folder="Home/A",
+			log=False,
+		)
+		self.assertTrue(results)
+		self.assertTrue(all(result.document == in_a.name for result in results))
+		self.assertFalse(any(result.document == in_ab.name for result in results))
+
+	def test_build_context_truncates_oversized_first_block(self):
+		"""RET-06: an oversized first passage still yields useful context."""
+		from ai_fr_hg.ai.knowledge import RetrievedChunk, build_context
+
+		results = [
+			RetrievedChunk(
+				chunk="c1",
+				document="DOC-1",
+				document_title="Huge",
+				knowledge_base=self.knowledge_base.name,
+				content="x" * 20000,
+				score=1.0,
+			)
+		]
+		context = build_context(results, max_characters=800)
+		self.assertTrue(context)
+		self.assertIn("[1]", context)
+		self.assertLessEqual(len(context), 800)
+
+	def test_search_api_returns_diagnostics(self):
+		from ai_fr_hg.ai.knowledge import index_document
+		from ai_fr_hg.api.knowledge import search
+
+		document = self.make_document(
+			"Diagnostics Policy",
+			"Refunds are allowed within thirty days of purchase with the original receipt. " * 12,
+		)
+		with stub_embeddings():
+			index_document(document.name)
+		payload = search(
+			"refund policy",
+			knowledge_bases=[self.knowledge_base.name],
+			top_k=5,
+			search_type="Keyword",
+		)
+		self.assertIn("diagnostics", payload)
+		self.assertGreaterEqual(payload["diagnostics"]["corpus_size"], 1)
+		self.assertEqual(payload["diagnostics"]["reranker"], "unsupported")
+		self.assertIn("retrieval_strategy", payload["diagnostics"])
 
 
 class TestKnowledgeBaseAPI(AIPlatformTestCase):

@@ -315,6 +315,27 @@ def _is_descendant(potential_descendant: str, ancestor: str) -> bool:
 	return potential_descendant.startswith(ancestor + "/")
 
 
+def escape_like(value: str) -> str:
+	"""Escape SQL LIKE metacharacters so a legal folder name cannot widen a prefix."""
+	return (value or "").replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def folder_match_or_filters(folder: str, fieldnames: tuple[str, ...] = ("folder",)) -> list[list]:
+	"""Permission-safe or_filters matching an exact folder or any descendant.
+
+	``Home/A`` matches ``Home/A`` and ``Home/A/B`` but never the sibling
+	``Home/AB``. LIKE metacharacters in the folder name are escaped. This is
+	the single descendant helper used by retrieval, ask, and folder statistics.
+	"""
+	norm = _normalize_folder_path(folder)
+	escaped = escape_like(norm)
+	filters: list[list] = []
+	for fieldname in fieldnames:
+		filters.append([fieldname, "=", norm])
+		filters.append([fieldname, "like", f"{escaped}/%"])
+	return filters
+
+
 def _assert_no_circular(source_folder: str, target_folder: str) -> None:
 	"""Raise CircularFolderError if moving source into its own descendant."""
 	source = _normalize_folder_path(source_folder)

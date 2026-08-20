@@ -22,8 +22,11 @@ def stub_embeddings(dimensions: int = 8):
 			vectors.append([((seed + i * 7) % 100) / 100 for i in range(dimensions)])
 		return vectors
 
-	# `knowledge` imports run_embedding at module load, so patch the bound name.
-	with patch("ai_fr_hg.ai.knowledge.run_embedding", side_effect=fake_embed) as mock:
+	# Indexing binds run_embedding on knowledge; retrieval lazy-imports engine.
+	with (
+		patch("ai_fr_hg.ai.knowledge.run_embedding", side_effect=fake_embed) as mock,
+		patch("ai_fr_hg.ai.engine.run_embedding", side_effect=fake_embed),
+	):
 		yield mock
 
 

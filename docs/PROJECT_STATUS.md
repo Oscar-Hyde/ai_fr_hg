@@ -71,8 +71,8 @@ Green tests prove the covered paths. They do not cover browser behavior, real ru
 | Document tree | **READY / HARDENING REQUIRED** | Strong identity, locking, permissions, bulk operations, concurrency checks, and tests. Deep/large tree browser and load validation remain. |
 | File/folder organization | **READY / HARDENING REQUIRED** | Canonical service is the sole mutation owner: native paste fallback removed, stable File identity enforced, storage folder is a validated File Link, “Shared Uploads”/“Public” naming is truthful, uploader uses a lazy native Link picker, and Desk patches are version-gated. Browser verification remains Phase 7. |
 | Chunking/vector math | **READY** | Pure logic is well tested. |
-| Retrieval | **PARTIAL — production blocker** | Hybrid flow works on small corpora. Semantic/keyword candidates are bounded before ranking, mixed KB embedding models are not reconciled, and KB-specific retrieval settings/weights are not fully applied. |
-| Knowledge Explorer | **PARTIAL** | Search/ask/upload/overview work. Pagination, folder/entity facets, diagnostics, and robust upload progress remain. |
+| Retrieval | **READY / HARDENING REQUIRED** | Complete brute-force hybrid retrieval, mixed-model grouping, per-KB policy, folder descendants, context packing, and diagnostics. Browser E2E and 100k-chunk load remain Phase 7. |
+| Knowledge Explorer | **PARTIAL** | Search/ask/upload/overview, diagnostics, pagination, folder and entity filters. Upload progress and browser E2E remain Phase 7. |
 | Intelligence | **PARTIAL** | Summary/classify/extract/compare main paths exist. Extraction is explicitly JSON-only and the dormant target DocType field is hidden; whole-document strategies and strict local schema validation remain. |
 | Pattern extraction | **PARTIAL** | Strong deterministic extraction and tests. Durable zero-result scan state, correct tail offsets, semantic value validation, and aggregate explorer remain. |
 | Translation | **PARTIAL — isolation fix required** | Strong segmentation, masking, quality checks, repair, review, memory, and indexing core. Unscoped inline memory, policy-aware memory identity, progress/cancel, default index setting, and format output remain. |
@@ -95,14 +95,10 @@ Green tests prove the covered paths. They do not cover browser behavior, real ru
 
 ### P0 — fix before production use
 
-1. Scope translation memory on inline and tool paths; no scope must never mean all knowledge bases.
-2. Make retrieval correct beyond the first bounded chunk candidates and support multiple embedding models across KBs.
-3. Make generic tool counts and field output permission-aware.
-4. Enforce API input caps and pagination for messages, conversations, chunks, entities, translations, and searches.
-5. Harden provider networking at connection time against proxy/DNS/redirect weaknesses.
-6. Remove the native File mutation fallback that can bypass canonical AI-document provenance updates.
-7. Require stable File identities in upload/folder APIs.
-8. Restore GitHub Actions execution and require checks before merge.
+1. Restore GitHub Actions execution and require checks before merge (owner branch protection; OPS-01).
+2. Phase 3 conversation correctness (latest-history, concurrent sequencing, cancellation).
+
+Phase 1 isolation/API safety and Phase 2 retrieval correctness are closed on this branch.
 
 ### P1 — complete existing product promises
 
