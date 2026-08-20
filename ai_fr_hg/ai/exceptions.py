@@ -66,6 +66,10 @@ class DocumentResourceLimitError(DocumentProcessingError):
 	"""A source exceeded a deterministic ingestion size or redirect limit."""
 
 
+class DocumentProcessingCancelled(DocumentProcessingError):
+	"""A document worker observed a durable cancellation request."""
+
+
 class DocumentFetchError(DocumentProcessingError):
 	"""A URL source could not be fetched safely."""
 

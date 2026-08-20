@@ -4,7 +4,7 @@
 
 **Opened:** 2026-08-20
 **Phase owner:** Conversation
-**Status:** COMPLETE — backend contracts implemented; JS unit tests for shared UI helpers; hosted Frappe v17 bench required for integration evidence
+**Status:** COMPLETE — backend contracts and hosted Frappe v17 verification complete; browser E2E remains Phase 7
 
 ## Phase inventory
 
@@ -41,10 +41,10 @@ No parallel permission, pagination, realtime, or File system was introduced.
 ## Remaining issues
 
 1. Browser/Desk E2E for deep-link, Stop, upload chips, and conversation menus is Phase 7.
-2. A true multi-worker concurrent-send soak is evidenced by the unique index + row lock; thread-pool Frappe connections are not part of this patchset.
+2. The named 100-worker concurrent-send test now runs on independent Frappe connections and passed in hosted Server run `32394651654`; see `PHASE_3_VERIFICATION.md`.
 3. `AI Message.execution_log` remains unpopulated (OPS-05, Phase 6).
-4. Branch protection on `main` remains owner-only (OPS-01).
+4. Branch protection on `main` remains owner-only (OPS-01); four green checks are required by manual process until the owner enables platform protection.
 
 ## Phase verdict
 
-`PASS WITH DOCUMENTED NON-BLOCKING LIMITATION` — required Phase 3 conversation contracts are implemented and unit-tested. Hosted Frappe v17 `run-tests --app ai_fr_hg` is the remaining runtime evidence. Browser E2E is Phase 7.
+`PASS WITH DOCUMENTED NON-BLOCKING LIMITATION` — required Phase 3 conversation contracts and the named concurrent-send gate are implemented and passed on a hosted Frappe v17 bench. Browser E2E is Phase 7; branch protection remains an explicit repository-owner limitation documented as OPS-01.

@@ -115,6 +115,18 @@ async function open_translation_dialog(frm) {
 	dialog.show();
 }
 
+function renderProcessingState(frm, update = {}) {
+	const progress = Number(update.progress ?? frm.doc.processing_progress ?? 0);
+	const status = update.status || frm.doc.status;
+	const message = update.message || frm.doc.processing_message || status;
+	if (!["Queued", "Extracting", "Chunking", "Embedding", "Cancelled"].includes(status)) return;
+	frm.dashboard.set_headline(
+		`<span class="text-muted">${frappe.utils.escape_html(message)} — ${Math.round(
+			progress
+		)}%</span>`
+	);
+}
+
 async function renderWarnings(frm) {
 	// ING-05 UI states: loading, empty, partial, failure, permission, retry, realtime
 	const $area = frm.fields_dict.extraction_warnings
@@ -207,10 +219,19 @@ frappe.ui.form.on("AI Document", {
 		if (frm.is_new()) return;
 
 		frm.page.set_indicator(frm.doc.status, frappe.ai.status_color(frm.doc.status));
+		renderProcessingState(frm);
 		renderWarnings(frm);
-		// realtime: update warnings when processing completes
+		// Native realtime updates are authoritative; reload fallback handles a
+		// disconnected Desk session and makes recovery observable after reconnect.
+		frappe.realtime.on("ai_document_progress", (data) => {
+			if (data.document === frm.doc.name) renderProcessingState(frm, data);
+		});
 		frappe.realtime.on("ai_document_processed", (data) => {
-			if (data.document === frm.doc.name) renderWarnings(frm);
+			if (data.document === frm.doc.name) {
+				renderProcessingState(frm, data);
+				renderWarnings(frm);
+				frm.reload_doc();
+			}
 		});
 
 		// The source folder is a native Link field and a standard list filter.
@@ -219,12 +240,19 @@ frappe.ui.form.on("AI Document", {
 			frm.dashboard.add_indicator(__("Folder: {0}", [frm.doc.folder]), "blue");
 		}
 
-		if (["Draft", "Failed", "Queued"].includes(frm.doc.status)) {
+		if (["Draft", "Failed", "Queued", "Cancelled"].includes(frm.doc.status)) {
 			frm.add_custom_button(__("Process Now"), async () => {
 				await frm.call("process");
 				frappe.show_alert({ message: __("Queued for processing"), indicator: "blue" });
 				frm.reload_doc();
 			}).addClass("btn-primary");
+		}
+		if (["Queued", "Extracting", "Chunking", "Embedding"].includes(frm.doc.status)) {
+			frm.add_custom_button(__("Cancel Processing"), async () => {
+				await frm.call("cancel_processing");
+				frappe.show_alert({ message: __("Cancellation requested"), indicator: "orange" });
+				frm.reload_doc();
+			}).addClass("btn-danger");
 		}
 
 		// Folder organization actions use the same server-authoritative facade as

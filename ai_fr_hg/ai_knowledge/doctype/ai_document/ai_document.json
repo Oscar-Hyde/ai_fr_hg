@@ -54,6 +54,10 @@
         "indexed_on",
         "index_cb",
         "processing_duration_ms",
+        "processing_progress",
+        "processing_message",
+        "processing_heartbeat",
+        "cancel_requested",
         "retry_count",
         "processing_requested_by",
         "processing_requested_on",
@@ -98,7 +102,7 @@
             "in_list_view": 1,
             "in_standard_filter": 1,
             "label": "Status",
-            "options": "Draft\nQueued\nExtracting\nChunking\nEmbedding\nIndexed\nFailed\nArchived"
+            "options": "Draft\nQueued\nCancelled\nExtracting\nChunking\nEmbedding\nIndexed\nFailed\nArchived"
         },
         {
             "fieldname": "document_type",
@@ -366,6 +370,31 @@
             "fieldname": "processing_duration_ms",
             "fieldtype": "Int",
             "label": "Processing Duration (ms)",
+            "read_only": 1
+        },
+        {
+            "fieldname": "processing_progress",
+            "fieldtype": "Percent",
+            "label": "Processing Progress",
+            "read_only": 1
+        },
+        {
+            "fieldname": "processing_message",
+            "fieldtype": "Small Text",
+            "label": "Processing Status",
+            "read_only": 1
+        },
+        {
+            "fieldname": "processing_heartbeat",
+            "fieldtype": "Datetime",
+            "label": "Processing Heartbeat",
+            "read_only": 1
+        },
+        {
+            "fieldname": "cancel_requested",
+            "fieldtype": "Check",
+            "hidden": 1,
+            "label": "Cancel Requested",
             "read_only": 1
         },
         {

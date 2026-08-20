@@ -76,6 +76,10 @@ class AIDocument(Document):
 		naming_series: DF.Literal["AIDOC-.YYYY.-"]
 		page_count: DF.Int
 		processing_duration_ms: DF.Int
+		processing_progress: DF.Percent
+		processing_message: DF.SmallText | None
+		processing_heartbeat: DF.Datetime | None
+		cancel_requested: DF.Check
 		processing_job_id: DF.Data | None
 		processing_requested_by: DF.Link | None
 		processing_requested_on: DF.Datetime | None
@@ -89,7 +93,15 @@ class AIDocument(Document):
 		source_type: DF.Literal["File", "Text", "URL", "DocType Record"]
 		source_url: DF.Data | None
 		status: DF.Literal[
-			"Draft", "Queued", "Extracting", "Chunking", "Embedding", "Indexed", "Failed", "Archived"
+			"Draft",
+			"Queued",
+			"Cancelled",
+			"Extracting",
+			"Chunking",
+			"Embedding",
+			"Indexed",
+			"Failed",
+			"Archived",
 		]
 		summary: DF.LongText | None
 		tags: DF.Table[AIDocumentTag]
@@ -311,7 +323,7 @@ class AIDocument(Document):
 			"File",
 			filters={"attached_to_doctype": self.doctype, "attached_to_name": self.name},
 			fields=["name", "folder"],
-			limit_page_length=0,
+			limit=0,
 		)
 		file_names = {row.name for row in files}
 		if self.source_file_record and frappe.db.exists("File", self.source_file_record):
@@ -372,15 +384,23 @@ class AIDocument(Document):
 	def process(self) -> dict:
 		"""Validate source authority and enqueue first-time or failed processing."""
 		self._assert_write_access()
-		self._assert_status({"Draft", "Failed", "Queued"}, _("process"))
+		self._assert_status({"Draft", "Failed", "Queued", "Cancelled"}, _("process"))
 		validate_source_access(self, user=frappe.session.user)
 		return enqueue_processing(self.name, requested_by=frappe.session.user)
+
+	@frappe.whitelist()
+	def cancel_processing(self) -> dict:
+		"""Request cooperative cancellation and persist the terminal state."""
+		self._assert_write_access()
+		from ai_fr_hg.ai.ingestion import cancel_processing
+
+		return cancel_processing(self.name, requested_by=frappe.session.user)
 
 	@frappe.whitelist()
 	def reprocess(self) -> dict:
 		"""Discard existing chunks and enqueue a fresh authorized processing run."""
 		self._assert_write_access()
-		self._assert_status({"Draft", "Failed", "Indexed"}, _("reprocess"))
+		self._assert_status({"Draft", "Failed", "Indexed", "Cancelled"}, _("reprocess"))
 		validate_source_access(self, user=frappe.session.user)
 		frappe.db.delete("AI Document Chunk", {"document": self.name})
 		frappe.db.set_value(
