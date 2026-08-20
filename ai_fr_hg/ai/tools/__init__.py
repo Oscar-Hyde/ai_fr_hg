@@ -148,7 +148,7 @@ def _normalise_arguments(arguments: dict | str | None) -> dict:
 	if isinstance(arguments, str):
 		try:
 			arguments = json.loads(arguments)
-		except TypeError, ValueError:
+		except (TypeError, ValueError):
 			return {"_raw": arguments}
 	if not isinstance(arguments, dict):
 		return {} if arguments is None else {"_raw": arguments}
@@ -586,7 +586,7 @@ def approve_invocation(invocation: str) -> dict:
 
 	try:
 		arguments = json.loads(doc.arguments or "{}")
-	except TypeError, ValueError:
+	except (TypeError, ValueError):
 		frappe.throw(_("Invocation {0} contains invalid arguments.").format(invocation))
 	if not isinstance(arguments, dict):
 		frappe.throw(_("Invocation {0} arguments must be a JSON object.").format(invocation))
