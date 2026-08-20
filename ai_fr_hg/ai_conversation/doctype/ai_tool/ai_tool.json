@@ -84,6 +84,13 @@
    "options": "DocType"
   },
   {
+   "description": "Optional comma or line separated list of fieldnames this DocType Query tool may return. When set, results are restricted to these fields in addition to the caller's own readable, non-sensitive fields. It never grants access.",
+   "fieldname": "field_allowlist",
+   "fieldtype": "Small Text",
+   "insert_after": "target_doctype",
+   "label": "Field Allowlist"
+  },
+  {
    "depends_on": "eval:doc.tool_type=='Report'",
    "fieldname": "target_report",
    "fieldtype": "Link",
@@ -99,10 +106,10 @@
   },
   {
    "default": "30",
+   "description": "Hard execution deadline. Tools fail closed if the runtime cannot enforce it.",
    "fieldname": "max_runtime_seconds",
    "fieldtype": "Int",
-   "label": "Max Runtime (s)",
-   "description": "Hard execution deadline. Tools fail closed if the runtime cannot enforce it."
+   "label": "Max Runtime (s)"
   },
   {
    "fieldname": "description_sec",
@@ -163,7 +170,18 @@
  "owner": "Administrator",
  "permissions": [
   {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
    "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
    "create": 1,
    "delete": 1,
    "email": 1,
@@ -171,28 +189,17 @@
    "print": 1,
    "read": 1,
    "report": 1,
-   "share": 1,
-   "write": 1
-  },
-  {
    "role": "AI Manager",
-   "create": 1,
-   "delete": 1,
-   "email": 1,
-   "export": 1,
-   "print": 1,
-   "read": 1,
-   "report": 1,
    "share": 1,
    "write": 1
   },
   {
-   "role": "AI User",
-   "read": 1,
+   "email": 1,
    "export": 1,
    "print": 1,
+   "read": 1,
    "report": 1,
-   "email": 1,
+   "role": "AI User",
    "share": 1
   }
  ],

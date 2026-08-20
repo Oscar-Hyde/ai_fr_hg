@@ -138,7 +138,12 @@ def get_document(
 	fields: list | str | None = None,
 	**kwargs,
 ) -> dict:
-	"""Fetch a single Frappe document the user is allowed to read."""
+	"""Fetch a single Frappe document the user is allowed to read.
+
+	Row-level and field-level enforcement is centralized in
+	:mod:`ai_fr_hg.ai.tools.query`; requesting no fields returns every
+	readable, non-sensitive field, never a raw ``as_dict`` dump.
+	"""
 	resolved_doctype = doctype or kwargs.get("doc_type") or kwargs.get("document_type")
 	resolved_name = (
 		name or kwargs.get("id") or kwargs.get("docname") or kwargs.get("doc_name") or kwargs.get("document")
@@ -148,17 +153,12 @@ def get_document(
 	if not resolved_doctype or not resolved_name:
 		return {"error": "Both 'doctype' and 'name' are required to fetch a document."}
 
-	frappe.has_permission(resolved_doctype, "read", doc=resolved_name, throw=True)
-	doc = frappe.get_doc(resolved_doctype, resolved_name)
+	if isinstance(resolved_fields, str):
+		resolved_fields = [f.strip() for f in resolved_fields.split(",") if f.strip()]
 
-	if resolved_fields:
-		if isinstance(resolved_fields, str):
-			resolved_fields = [f.strip() for f in resolved_fields.split(",") if f.strip()]
-		return {
-			field: doc.get(field) for field in resolved_fields if doc.meta.has_field(field) or field == "name"
-		}
+	from ai_fr_hg.ai.tools.query import safe_get
 
-	return doc.as_dict(no_nulls=True, no_default_fields=False)
+	return safe_get(resolved_doctype, resolved_name, resolved_fields or None)
 
 
 def list_documents(
@@ -170,21 +170,13 @@ def list_documents(
 	**kwargs,
 ) -> list:
 	"""List records of a DocType, respecting the user's permissions."""
-	import json
+	from ai_fr_hg.ai.tools.query import safe_list
 
 	resolved_doctype = doctype or kwargs.get("doc_type") or kwargs.get("document_type")
 	if not resolved_doctype:
 		return []
 
-	frappe.has_permission(resolved_doctype, "read", throw=True)
-
 	resolved_filters = filters or kwargs.get("filter") or kwargs.get("where") or {}
-	if isinstance(resolved_filters, str):
-		try:
-			resolved_filters = json.loads(resolved_filters)
-		except ValueError:
-			resolved_filters = {}
-
 	resolved_fields = fields or kwargs.get("columns") or kwargs.get("fieldnames")
 	if isinstance(resolved_fields, str):
 		resolved_fields = [f.strip() for f in resolved_fields.split(",") if f.strip()]
@@ -192,12 +184,12 @@ def list_documents(
 	resolved_limit = limit or kwargs.get("limit_page_length") or kwargs.get("count") or 20
 	resolved_order = order_by or kwargs.get("sort_by") or kwargs.get("order")
 
-	return frappe.get_list(
+	return safe_list(
 		resolved_doctype,
-		filters=resolved_filters or {},
-		fields=resolved_fields or ["name"],
-		limit_page_length=min(cint(resolved_limit) or 20, 100),
-		order_by=resolved_order or "modified desc",
+		filters=resolved_filters,
+		fields=resolved_fields or None,
+		limit=cint(resolved_limit),
+		order_by=resolved_order,
 	)
 
 
@@ -206,23 +198,19 @@ def count_documents(
 	filters: dict | str | None = None,
 	**kwargs,
 ) -> dict:
-	"""Count records of a DocType matching optional filters."""
-	import json
+	"""Count records of a DocType matching optional filters.
+
+	The count is row-level permission aware and bounded; it never uses
+	``frappe.db.count``, which ignores permission query conditions.
+	"""
+	from ai_fr_hg.ai.tools.query import safe_count
 
 	resolved_doctype = doctype or kwargs.get("doc_type") or kwargs.get("document_type")
 	if not resolved_doctype:
-		return {"doctype": "", "count": 0}
-
-	frappe.has_permission(resolved_doctype, "read", throw=True)
+		return {"doctype": "", "count": 0, "exact": True, "bounded": False}
 
 	resolved_filters = filters or kwargs.get("filter") or kwargs.get("where") or {}
-	if isinstance(resolved_filters, str):
-		try:
-			resolved_filters = json.loads(resolved_filters)
-		except ValueError:
-			resolved_filters = {}
-
-	return {"doctype": resolved_doctype, "count": frappe.db.count(resolved_doctype, resolved_filters or {})}
+	return safe_count(resolved_doctype, resolved_filters)
 
 
 def run_report(
