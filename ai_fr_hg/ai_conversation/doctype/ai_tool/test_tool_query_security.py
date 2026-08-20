@@ -161,7 +161,7 @@ class TestGenericToolFieldPermissions(AIPlatformTestCase):
 		try:
 			result = get_document("AI Provider", self.provider.name)
 			permitted, deny = safe_query.readable_fields("AI Provider", user.name)
-			allowed = (permitted - deny) | {"name"}
+			allowed = (permitted - deny) | {"name", "_fields_truncated"}
 			for key in result:
 				self.assertIn(key, allowed, f"unexpected field {key} in tool result")
 			self.assertIn("name", result)

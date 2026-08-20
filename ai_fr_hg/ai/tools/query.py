@@ -209,15 +209,11 @@ def _normalise_fields(meta, requested, readable: set[str], deny: set[str], *, al
 			if len(fields) >= MAX_FIELDS:
 				break
 		return fields or ["name"]
-	# No explicit request: return every readable non-denied field, bounded.
+	# No explicit request: return readable non-denied fields, bounded to a
+	# deterministic prefix. The caller-side tools surface the truncation
+	# marker instead of failing the whole call on a wide DocType.
 	fields = sorted(allowed)
-	if len(fields) > MAX_FIELDS:
-		raise ToolExecutionError(
-			_("Request specific fields: {0} exposes more than {1} readable fields.").format(
-				meta.name, MAX_FIELDS
-			)
-		)
-	return fields or ["name"]
+	return fields[:MAX_FIELDS] or ["name"]
 
 
 def _normalise_order_by(order_by, readable: set[str], deny: set[str]) -> str:
@@ -262,12 +258,15 @@ def safe_get(
 	meta = frappe.get_meta(doctype)
 	permitted, deny = readable_fields(doctype, user)
 	projected = _normalise_fields(meta, fields, permitted, deny, allowlist=allowlist)
+	truncated = not fields and len(sorted(permitted - deny)) > len(projected)
 	doc = frappe.get_doc(doctype, name)
 	result = {}
 	for field in projected:
 		# A field could be readable on the DocType but restricted on this
 		# record by has_permission; the record check above is the authority.
 		result[field] = doc.get(field)
+	if truncated:
+		result["_fields_truncated"] = True
 	return result
 
 
