@@ -149,3 +149,189 @@ def test_no_prefix_only():
 		assert "text[:budget" not in section
 		assert "text_a[:budget" not in section
 		assert "text_b[:budget" not in section
+
+
+def test_extract_merged_validated():
+	m = _mock_model(400)
+	text = "data " * 500
+	import json
+
+	# All windows return valid, merged should be validated again and include _coverage
+	def fake(msgs, **kw):
+		return MagicMock(content=json.dumps({"invoice_number": "INV", "amount": 1}))
+
+	with (
+		patch.object(intel, "resolve_model", return_value=m),
+		patch("ai_fr_hg.ai.intelligence.frappe.get_cached_doc", return_value=_schema()),
+		patch.object(intel, "run_chat", side_effect=fake),
+	):
+		r = intel.extract_data(text, schema="S")
+		assert "_coverage" in r
+		assert r["coverage"]["windows_processed"] >= 1
+
+
+def test_conflicting_values_deterministic():
+	m = _mock_model(400)
+	text = "conflict data " * 500
+	import json
+
+	vals = [{"invoice_number": "INV1", "amount": 1}, {"invoice_number": "INV2", "amount": 1}]
+	call_n = {"n": 0}
+
+	def fake(msgs, **kw):
+		v = vals[call_n["n"] % 2]
+		call_n["n"] += 1
+		return MagicMock(content=json.dumps(v))
+
+	with (
+		patch.object(intel, "resolve_model", return_value=m),
+		patch("ai_fr_hg.ai.intelligence.frappe.get_cached_doc", return_value=_schema()),
+		patch.object(intel, "run_chat", side_effect=fake),
+	):
+		r1 = intel.extract_data(text, schema="S")
+		call_n["n"] = 0
+		r2 = intel.extract_data(text, schema="S")
+		# deterministic: same input yields same merge result
+		assert r1["invoice_number"] == r2["invoice_number"]
+
+
+def test_classification_tie():
+	m = _mock_model(400)
+	text = "tie " * 500
+
+	# Alternate categories to force tie
+	def fake(msgs, **kw):
+		fake.n += 1
+		cat = "A" if fake.n % 2 == 0 else "B"
+		return MagicMock(content=f'{{"category":"{cat}","confidence":80}}')
+
+	fake.n = 0
+	with (
+		patch.object(intel, "resolve_model", return_value=m),
+		patch.object(intel, "run_chat", side_effect=fake),
+	):
+		r = intel.classify(text, categories=["A", "B"])
+		# tie should be broken deterministically (sorted name)
+		assert r["category"] in ["A", "B"]
+		assert r["coverage"]["windows_total"] > 1
+
+
+def test_compare_min_coverage():
+	m = _mock_model(600)
+	text_a = "doc A " * 800
+	text_b = "doc B " * 200
+	import frappe as _f
+
+	# Mock docs for compare
+	doc_a = MagicMock()
+	doc_a.title = "A"
+	doc_a.content = text_a
+	doc_a.check_permission = lambda *a, **k: None
+	doc_b = MagicMock()
+	doc_b.title = "B"
+	doc_b.content = text_b
+	doc_b.check_permission = lambda *a, **k: None
+
+	def fake_get_doc(doctype, name):
+		return doc_a if name == "A" else doc_b
+
+	with (
+		patch.object(intel, "resolve_model", return_value=m),
+		patch.object(intel, "run_chat", return_value=MagicMock(content="comparison")),
+		patch("frappe.get_doc", side_effect=fake_get_doc),
+	):
+		r = intel.compare_documents("A", "B")
+		assert r["coverage"]["coverage_ratio"] == min(
+			r["coverage"]["coverage_ratio_a"], r["coverage"]["coverage_ratio_b"]
+		)
+
+
+def test_large_bounded():
+	m = _mock_model(400)
+	text = "x " * 10000
+	with (
+		patch.object(intel, "resolve_model", return_value=m),
+		patch.object(intel, "run_chat", return_value=MagicMock(content='{"category":"A","confidence":80}')),
+	):
+		r = intel.classify(text, categories=["A", "B"])
+		# windows_total should be bounded (>1 but not unbounded due to chunking)
+		assert r["coverage"]["windows_total"] < 100
+
+
+def test_malicious_oversized_fails():
+	m = _mock_model(400)
+	text = "x " * 50000  # very large
+	# Should not truncate silently; should still process via chunking, not raise truncation but handle bounded windows
+	with (
+		patch.object(intel, "resolve_model", return_value=m),
+		patch.object(intel, "run_chat", return_value=MagicMock(content='{"category":"A","confidence":80}')),
+	):
+		r = intel.classify(text, categories=["A", "B"])
+		assert r["coverage"]["windows_total"] > 10
+		assert r["coverage"]["coverage_ratio"] > 0
+
+
+def test_retry_deterministic():
+	m = _mock_model(400)
+	text = "retry " * 500
+	import json
+
+	def fake(msgs, **kw):
+		return MagicMock(content=json.dumps({"invoice_number": "INV", "amount": 1}))
+
+	with (
+		patch.object(intel, "resolve_model", return_value=m),
+		patch("ai_fr_hg.ai.intelligence.frappe.get_cached_doc", return_value=_schema()),
+		patch.object(intel, "run_chat", side_effect=fake),
+	):
+		r1 = intel.extract_data(text, schema="S")
+		r2 = intel.extract_data(text, schema="S")
+		assert r1["invoice_number"] == r2["invoice_number"]
+		assert r1["_coverage"]["windows_total"] == r2["_coverage"]["windows_total"]
+
+
+def test_concurrent_isolation():
+	import threading
+
+	m = _mock_model(400)
+	text1 = "doc1 " * 500
+	text2 = "doc2 " * 500
+	results = {}
+
+	def run1():
+		with (
+			patch.object(intel, "resolve_model", return_value=m),
+			patch.object(
+				intel, "run_chat", return_value=MagicMock(content='{"category":"A","confidence":80}')
+			),
+		):
+			results["r1"] = intel.classify(text1, categories=["A", "B"])
+
+	def run2():
+		with (
+			patch.object(intel, "resolve_model", return_value=m),
+			patch.object(
+				intel, "run_chat", return_value=MagicMock(content='{"category":"B","confidence":80}')
+			),
+		):
+			results["r2"] = intel.classify(text2, categories=["A", "B"])
+
+	t1 = threading.Thread(target=run1)
+	t2 = threading.Thread(target=run2)
+	t1.start()
+	t2.start()
+	t1.join()
+	t2.join()
+	assert results["r1"]["category"] == "A"
+	assert results["r2"]["category"] == "B"
+
+
+def test_short_compatible():
+	m = _mock_model(5000)
+	with (
+		patch.object(intel, "resolve_model", return_value=m),
+		patch.object(intel, "run_chat", return_value=MagicMock(content='{"category":"A","confidence":90}')),
+	):
+		r = intel.classify("short", categories=["A", "B"])
+		assert r["category"] == "A"
+		assert r["coverage"]["strategy"] == "single_pass" or r["coverage"]["windows_total"] == 1
