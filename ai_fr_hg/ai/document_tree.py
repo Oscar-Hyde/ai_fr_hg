@@ -27,8 +27,9 @@ import binascii
 import hashlib
 import json
 import re
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Any, Iterator
+from typing import Any
 
 import frappe
 from frappe import _
@@ -161,7 +162,9 @@ def _audit(action: str, message: str, *, details: dict | None = None, reference:
 		message=message,
 		details=details,
 		reference_doctype=(
-			"File" if reference and (reference == _HOME or reference.startswith(f"{_HOME}/")) else "AI Document"
+			"File"
+			if reference and (reference == _HOME or reference.startswith(f"{_HOME}/"))
+			else "AI Document"
 		),
 		reference_name=reference,
 		raise_on_error=True,
@@ -171,8 +174,9 @@ def _audit(action: str, message: str, *, details: dict | None = None, reference:
 def _lock(doctype: str, name: str, expected_modified: str | None = None) -> Any:
 	if doctype not in {"AI Document", "File"}:
 		raise ValueError("Unsupported lock DocType")
-	rows = frappe.db.sql(
-		f"select modified from `tab{doctype}` where name=%s for update",  # nosemgrep: trusted table set above
+	# SQL values remain parameterized; only this two-value allowlisted identifier is interpolated.
+	rows = frappe.db.sql(  # nosemgrep
+		f"select modified from `tab{doctype}` where name=%s for update",
 		(name,),
 		as_dict=True,
 	)
@@ -193,12 +197,15 @@ def _lock_names(doctype: str, names: list[str]) -> None:
 		raise ValueError("Unsupported lock DocType")
 	for batch in _chunks(sorted({name for name in names if name})):
 		placeholders = ", ".join(["%s"] * len(batch))
-		rows = frappe.db.sql(
-			f"select name from `tab{doctype}` where name in ({placeholders}) order by name for update",  # nosemgrep
+		# The table is allowlisted above and placeholder count derives only from this bounded batch.
+		rows = frappe.db.sql(  # nosemgrep
+			f"select name from `tab{doctype}` where name in ({placeholders}) order by name for update",
 			tuple(batch),
 		)
 		if len(rows) != len(batch):
-			frappe.throw(_("The selected subtree changed. Refresh and try again."), frappe.TimestampMismatchError)
+			frappe.throw(
+				_("The selected subtree changed. Refresh and try again."), frappe.TimestampMismatchError
+			)
 
 
 def _lock_subtree(folders: list[str], documents: list, files: list | None = None) -> None:
@@ -274,6 +281,7 @@ def _subtree_state(folders: list[str], documents: list, files: list | None = Non
 	]
 	file_rows = _rows_by_name("File", file_names, file_fields)
 	document_rows = _rows_by_name("AI Document", document_names, document_fields)
+
 	def state_value(row, field: str) -> str:
 		value = row.get(field)
 		return "" if value is None else str(value)
@@ -291,7 +299,9 @@ def _subtree_state(folders: list[str], documents: list, files: list | None = Non
 	return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
-def _check_subtree_state(expected: str | None, folders: list[str], documents: list, files: list | None = None) -> None:
+def _check_subtree_state(
+	expected: str | None, folders: list[str], documents: list, files: list | None = None
+) -> None:
 	if expected and expected != _subtree_state(folders, documents, files):
 		frappe.throw(
 			_("The selected subtree changed after this operation was queued. Refresh and try again."),
@@ -402,7 +412,7 @@ def _paged_file_rows(filters: dict[str, Any]) -> Iterator:
 		rows = frappe.get_all(
 			"File",
 			filters=filters,
-			fields=_FILE_PERMISSION_FIELDS + ["creation"],
+			fields=[*_FILE_PERMISSION_FIELDS, "creation"],
 			order_by="creation asc, name asc",
 			limit_start=offset,
 			limit_page_length=400,
@@ -424,9 +434,7 @@ def _source_files_for_documents(documents: list) -> list:
 	"""
 	file_documents = [row for row in documents if row.source_type == "File"]
 	stable_names = [row.source_file_record for row in file_documents if row.source_file_record]
-	stable_by_name = {
-		row.name: row for row in _rows_by_name("File", stable_names, _FILE_PERMISSION_FIELDS)
-	}
+	stable_by_name = {row.name: row for row in _rows_by_name("File", stable_names, _FILE_PERMISSION_FIELDS)}
 
 	legacy_documents = [row for row in file_documents if not row.source_file_record]
 	legacy_by_document = {}
@@ -488,15 +496,17 @@ def _source_files_for_documents(documents: list) -> list:
 		else:
 			if document.name in ambiguous_documents:
 				raise DocumentFetchError(
-					_("More than one File is attached as the source of AI Document {0}.").format(document.name)
+					_("More than one File is attached as the source of AI Document {0}.").format(
+						document.name
+					)
 				)
 			file_row = legacy_by_document.get(document.name)
 			if not file_row:
 				if document.source_file in ambiguous_urls:
 					raise DocumentFetchError(
-						_("More than one File record uses {0}; backfill the exact File identity first.").format(
-							document.source_file
-						)
+						_(
+							"More than one File record uses {0}; backfill the exact File identity first."
+						).format(document.source_file)
 					)
 				file_row = legacy_fallbacks.get(document.source_file)
 		if not file_row:
@@ -604,11 +614,17 @@ def _permission_row(doctype: str, row):
 	return row
 
 
+def _permission_allowed(doctype: str, permission: str, *, doc=None) -> bool:
+	"""Read a permission result for UI hints; mutation services always re-enforce it."""
+	# This is intentionally a boolean capability query, not an ignored enforcement call.
+	return bool(frappe.has_permission(doctype, permission, doc=doc))  # nosemgrep
+
+
 def _folder_node(row) -> dict:
 	permission_doc = _permission_row("File", row)
-	can_write = bool(frappe.has_permission("File", "write", doc=permission_doc))
-	can_create_folder = bool(frappe.has_permission("File", "create") and can_write)
-	can_create_document = bool(frappe.has_permission("AI Document", "create") and can_write)
+	can_write = _permission_allowed("File", "write", doc=permission_doc)
+	can_create_folder = _permission_allowed("File", "create") and can_write
+	can_create_document = _permission_allowed("AI Document", "create") and can_write
 	return {
 		"value": row.name,
 		"title": row.file_name or row.name.rsplit("/", 1)[-1],
@@ -618,10 +634,8 @@ def _folder_node(row) -> dict:
 		"modified": str(row.modified),
 		"can_read": True,
 		"can_write": can_write,
-		"can_delete": row.name != _HOME and bool(
-			frappe.has_permission("File", "delete", doc=permission_doc)
-		),
-		"can_copy": bool(frappe.has_permission("File", "create")),
+		"can_delete": row.name != _HOME and _permission_allowed("File", "delete", doc=permission_doc),
+		"can_copy": _permission_allowed("File", "create"),
 		"can_create_folder": can_create_folder,
 		"can_create_document": can_create_document,
 		"can_create_child": can_create_folder or can_create_document,
@@ -643,9 +657,9 @@ def _document_node(row, readable_folders: set[str]) -> dict | None:
 		"knowledge_base": row.knowledge_base,
 		"modified": str(row.modified),
 		"can_read": True,
-		"can_write": bool(frappe.has_permission("AI Document", "write", doc=permission_doc)),
-		"can_copy": bool(frappe.has_permission("AI Document", "create", doc=permission_doc)),
-		"can_delete": bool(frappe.has_permission("AI Document", "delete", doc=permission_doc)),
+		"can_write": _permission_allowed("AI Document", "write", doc=permission_doc),
+		"can_copy": _permission_allowed("AI Document", "create", doc=permission_doc),
+		"can_delete": _permission_allowed("AI Document", "delete", doc=permission_doc),
 	}
 
 
@@ -837,8 +851,8 @@ def get_children(
 	if parent is None:
 		root = _folder(_HOME, "read")
 		can_write_root = _can_folder(_HOME, "write")
-		can_create_folder = bool(frappe.has_permission("File", "create") and can_write_root)
-		can_create_document = bool(frappe.has_permission("AI Document", "create") and can_write_root)
+		can_create_folder = _permission_allowed("File", "create") and can_write_root
+		can_create_document = _permission_allowed("AI Document", "create") and can_write_root
 		return [
 			{
 				"value": ROOT_LABEL,
@@ -955,7 +969,10 @@ def rename_document(document: str, new_name: str, *, expected_modified: str | No
 			or doc.get("source_file_record") != snapshot_source_record
 			or doc.source_file != snapshot_source_url
 		):
-			frappe.throw(_("The document source or location changed. Refresh and try again."), frappe.TimestampMismatchError)
+			frappe.throw(
+				_("The document source or location changed. Refresh and try again."),
+				frappe.TimestampMismatchError,
+			)
 		_folder(snapshot_folder, "write")
 		if _document_collision(doc.folder or _HOME, new_name, exclude=doc.name):
 			frappe.throw(
@@ -973,7 +990,12 @@ def rename_document(document: str, new_name: str, *, expected_modified: str | No
 			details={"old": old_name, "new": new_name, "folder": doc.folder},
 			reference=doc.name,
 		)
-		return {"node": document_node_value(doc.name), "name": doc.name, "title": new_name, "modified": str(doc.modified)}
+		return {
+			"node": document_node_value(doc.name),
+			"name": doc.name,
+			"title": new_name,
+			"modified": str(doc.modified),
+		}
 
 
 def rename_folder(folder: str, new_name: str, *, expected_modified: str | None = None) -> dict:
@@ -1044,12 +1066,20 @@ def move_document(
 			or doc.get("source_file_record") != snapshot_source_record
 			or doc.source_file != snapshot_source_url
 		):
-			frappe.throw(_("The document source or location changed. Refresh and try again."), frappe.TimestampMismatchError)
+			frappe.throw(
+				_("The document source or location changed. Refresh and try again."),
+				frappe.TimestampMismatchError,
+			)
 		_check_write_access(target_folder, user=frappe.session.user)
 		old_folder = doc.folder or _HOME
 		_folder(old_folder, "write")
 		if old_folder == target_folder:
-			return {"node": document_node_value(doc.name), "name": doc.name, "folder": target_folder, "unchanged": True}
+			return {
+				"node": document_node_value(doc.name),
+				"name": doc.name,
+				"folder": target_folder,
+				"unchanged": True,
+			}
 		if _document_collision(target_folder, doc.organization_name, exclude=doc.name):
 			frappe.throw(
 				_("A document named {0} already exists in the destination.").format(
@@ -1063,7 +1093,10 @@ def move_document(
 		if doc.source_type == "File":
 			file_doc = frappe.get_doc("File", source_file_name)
 			if (file_doc.folder or _HOME) != snapshot_source_folder:
-				frappe.throw(_("The source file location changed. Refresh and try again."), frappe.TimestampMismatchError)
+				frappe.throw(
+					_("The source file location changed. Refresh and try again."),
+					frappe.TimestampMismatchError,
+				)
 			new_file_record = file_doc.name
 			_check_permission("File", "write", doc=file_doc, user=frappe.session.user)
 			remaining_reference = frappe.db.get_value(
@@ -1088,10 +1121,7 @@ def move_document(
 				# identity moves; the physical bytes remain deduplicated by File. If
 				# the shared File was attached to the moving identity, transfer native
 				# attachment ownership to a deterministic remaining source identity.
-				if (
-					file_doc.attached_to_doctype == "AI Document"
-					and file_doc.attached_to_name == doc.name
-				):
+				if file_doc.attached_to_doctype == "AI Document" and file_doc.attached_to_name == doc.name:
 					frappe.db.set_value(
 						"File",
 						file_doc.name,
@@ -1321,9 +1351,14 @@ def copy_document(
 			or source.get("source_file_record") != snapshot_source_record
 			or source.source_file != snapshot_source_url
 		):
-			frappe.throw(_("The document source or location changed. Refresh and try again."), frappe.TimestampMismatchError)
+			frappe.throw(
+				_("The document source or location changed. Refresh and try again."),
+				frappe.TimestampMismatchError,
+			)
 		if not frappe.has_permission("AI Document", "create", doc=source, user=frappe.session.user):
-			frappe.throw(_("You do not have permission to create this document copy."), frappe.PermissionError)
+			frappe.throw(
+				_("You do not have permission to create this document copy."), frappe.PermissionError
+			)
 		_folder(source.folder or _HOME, "read")
 		_check_write_access(target_folder, user=frappe.session.user)
 		source_file_doc = None
@@ -1439,7 +1474,9 @@ def copy_folder(
 	_preflight_document_copies(documents)
 	_folder(folder.rsplit("/", 1)[0], "read")
 	_check_write_access(target_folder, user=frappe.session.user)
-	should_enqueue = (len(folders) + len(documents) > BACKGROUND_THRESHOLD) if enqueue is None else bool(enqueue)
+	should_enqueue = (
+		(len(folders) + len(documents) > BACKGROUND_THRESHOLD) if enqueue is None else bool(enqueue)
+	)
 	if should_enqueue:
 		with _atomic("queue_copy_folder"):
 			_lock_names("File", [folder, target_folder])
@@ -1454,7 +1491,12 @@ def copy_folder(
 			_audit(
 				"AI Document Tree Folder Copy Queued",
 				_("Recursive copy of {0} was queued.").format(folder),
-				details={"source": folder, "target": target_folder, "job_id": job_id, "items": len(folders) + len(documents)},
+				details={
+					"source": folder,
+					"target": target_folder,
+					"job_id": job_id,
+					"items": len(folders) + len(documents),
+				},
 				reference=folder,
 			)
 			frappe.enqueue(
@@ -1599,7 +1641,10 @@ def delete_document(document: str, *, expected_modified: str | None = None) -> d
 			or doc.source_file != snapshot_source_url
 			or attachment_state() != snapshot_attachments
 		):
-			frappe.throw(_("The document source, location, or attachments changed. Refresh and try again."), frappe.TimestampMismatchError)
+			frappe.throw(
+				_("The document source, location, or attachments changed. Refresh and try again."),
+				frappe.TimestampMismatchError,
+			)
 		_folder(snapshot_folder, "write")
 		source_file_record = doc.get("source_file_record")
 		folder = doc.folder or _HOME
@@ -1607,9 +1652,7 @@ def delete_document(document: str, *, expected_modified: str | None = None) -> d
 		# ``delete_doc`` may remove Files attached to this AI Document according to
 		# framework policy; unrelated/shared Files are protected by link checks.
 		frappe.delete_doc("AI Document", doc.name, ignore_permissions=False)
-		source_file_retained = bool(
-			source_file_record and frappe.db.exists("File", source_file_record)
-		)
+		source_file_retained = bool(source_file_record and frappe.db.exists("File", source_file_record))
 		_audit(
 			"AI Document Tree Document Deleted",
 			_("Document {0} was deleted using the framework attachment policy.").format(document),
@@ -1832,7 +1875,12 @@ def delete_folder(
 		_audit(
 			"AI Document Tree Folder Deleted",
 			_("Folder {0} and its authorized subtree were deleted.").format(folder),
-			details={"folder": folder, "folders": len(folders), "documents": len(documents), "files": len(files)},
+			details={
+				"folder": folder,
+				"folders": len(folders),
+				"documents": len(documents),
+				"files": len(files),
+			},
 			# The File row no longer exists; retain its identity in details rather
 			# than inserting a broken Dynamic Link into the audit log.
 			reference=None,
@@ -1940,7 +1988,9 @@ def _prune_nested_nodes(nodes: list[str]) -> list[str]:
 
 	result = []
 	for node, node_type, name in parsed:
-		if node_type == "folder" and any(name.startswith(parent + "/") for parent in folders if parent != name):
+		if node_type == "folder" and any(
+			name.startswith(parent + "/") for parent in folders if parent != name
+		):
 			continue
 		if node_type == "document":
 			folder = document_folders.get(name, _HOME)
@@ -2124,7 +2174,9 @@ def bulk_delete_nodes(
 			for row in documents
 		)
 		if has_nested_folders or has_nested_documents or files:
-			frappe.throw(_("A selected folder is not empty. Confirm recursive deletion first."), FolderNotEmptyError)
+			frappe.throw(
+				_("A selected folder is not empty. Confirm recursive deletion first."), FolderNotEmptyError
+			)
 	should_enqueue = work_count > BACKGROUND_THRESHOLD if enqueue is None else bool(enqueue)
 	if should_enqueue:
 		with _atomic("queue_bulk_delete"):
@@ -2182,7 +2234,9 @@ def bulk_delete_nodes(
 
 
 # ---------------------------------------------------------------------------
-# Background workers restore and re-check the initiating user's authority
+# Background workers restore and re-check the initiating user's authority.
+# Successful jobs rely on Frappe's native worker transaction commit; failures
+# are rolled back by the framework.
 # ---------------------------------------------------------------------------
 
 
@@ -2190,12 +2244,14 @@ def bulk_delete_nodes(
 def _as_user(user: str):
 	previous = frappe.session.user
 	if user != previous:
-		frappe.set_user(user)
+		# Security-reviewed worker boundary: enqueue captures the requester and
+		# every called service rechecks that user's document permissions.
+		frappe.set_user(user)  # nosemgrep
 	try:
 		yield
 	finally:
 		if frappe.session.user != previous:
-			frappe.set_user(previous)
+			frappe.set_user(previous)  # nosemgrep
 
 
 def _copy_folder_job(
@@ -2215,7 +2271,6 @@ def _copy_folder_job(
 			enqueue=False,
 			_expected_subtree_state=expected_subtree_state,
 		)
-		frappe.db.commit()
 		return result
 
 
@@ -2236,7 +2291,6 @@ def _move_folder_job(
 			_expected_subtree_state=expected_subtree_state,
 		)
 		_progress(2, 2, _("Moving folder subtree"))
-		frappe.db.commit()
 		return result
 
 
@@ -2254,7 +2308,6 @@ def _delete_folder_job(
 			enqueue=False,
 			_expected_subtree_state=expected_subtree_state,
 		)
-		frappe.db.commit()
 		return result
 
 
@@ -2266,7 +2319,6 @@ def _bulk_move_job(nodes: list[str], target_folder: str, expected_bulk_state: st
 			enqueue=False,
 			_expected_bulk_state=expected_bulk_state,
 		)
-		frappe.db.commit()
 		return result
 
 
@@ -2278,5 +2330,4 @@ def _bulk_delete_job(nodes: list[str], recursive: bool, expected_bulk_state: str
 			enqueue=False,
 			_expected_bulk_state=expected_bulk_state,
 		)
-		frappe.db.commit()
 		return result

@@ -92,7 +92,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Model Type",
-   "options": "Chat\nCompletion\nEmbedding\nVision\nReranker",
+   "options": "Chat\nCompletion\nEmbedding\nVision",
    "reqd": 1
   },
   {
@@ -346,15 +346,19 @@
   },
   {
    "collapsible": 1,
+   "description": "Reserved for schema compatibility until provider-backed model lifecycle management is implemented.",
    "fieldname": "versions_sec",
    "fieldtype": "Section Break",
-   "label": "Versions"
+   "hidden": 1,
+   "label": "Versions (Unsupported)"
   },
   {
    "fieldname": "versions",
    "fieldtype": "Table",
-   "label": "Versions",
-   "options": "AI Model Version"
+   "hidden": 1,
+   "label": "Versions (Unsupported)",
+   "options": "AI Model Version",
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,

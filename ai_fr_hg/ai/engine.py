@@ -277,7 +277,9 @@ def _complete_chat(
 			on_token(delta)
 
 		try:
-			result = _complete_via_stream(provider, messages, model=model, options=options, tools=tools, on_token=emit)
+			result = _complete_via_stream(
+				provider, messages, model=model, options=options, tools=tools, on_token=emit
+			)
 			if streamed:
 				result.raw["streamed"] = True
 				return result
@@ -287,7 +289,9 @@ def _complete_chat(
 	return provider.chat(messages, model=model, options=options, tools=tools, json_schema=json_schema)
 
 
-def _complete_via_stream(provider, messages, *, model: str, options: dict, tools: list[dict] | None, on_token) -> CompletionResult:
+def _complete_via_stream(
+	provider, messages, *, model: str, options: dict, tools: list[dict] | None, on_token
+) -> CompletionResult:
 	started = time.monotonic()
 	parts: list[str] = []
 	for fragment in provider.stream_chat(messages, model=model, options=options, tools=tools):

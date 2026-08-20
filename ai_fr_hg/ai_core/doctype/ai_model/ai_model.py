@@ -38,7 +38,7 @@ class AIModel(Document):
 		max_tokens: DF.Int
 		model_label: DF.Data
 		model_name: DF.Data
-		model_type: DF.Literal["Chat", "Completion", "Embedding", "Vision", "Reranker"]
+		model_type: DF.Literal["Chat", "Completion", "Embedding", "Vision"]
 		num_batch: DF.Int
 		num_ctx_override: DF.Int
 		num_threads: DF.Int
@@ -64,9 +64,21 @@ class AIModel(Document):
 	# end: auto-generated types
 
 	def validate(self):
+		self.validate_supported_type()
 		self.validate_defaults()
 		self.validate_generation()
 		self.validate_embedding()
+
+	def validate_supported_type(self):
+		"""Do not expose model roles without an executable engine contract."""
+		supported = {"Chat", "Completion", "Embedding", "Vision"}
+		if self.model_type not in supported:
+			frappe.throw(
+				_("Model Type {0} is not supported by the current execution engine.").format(
+					self.model_type or _("(empty)")
+				),
+				frappe.ValidationError,
+			)
 
 	def validate_defaults(self):
 		"""Only one model per type may be the default."""

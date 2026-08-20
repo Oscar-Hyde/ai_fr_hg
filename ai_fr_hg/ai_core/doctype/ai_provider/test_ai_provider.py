@@ -92,11 +92,15 @@ class TestProviderAPI(AIPlatformTestCase):
 		):
 			_pull_model_job(self.provider.name, "test-pull-model", "Administrator")
 
-		self.assertEqual([item.kwargs["action"] for item in audit.call_args_list], ["Model Pull Started", "Model Pulled"])
+		self.assertEqual(
+			[item.kwargs["action"] for item in audit.call_args_list], ["Model Pull Started", "Model Pulled"]
+		)
 		self.assertTrue(all(item.kwargs["raise_on_error"] for item in audit.call_args_list))
 		self.assertEqual(commit.call_count, 2)
 
-		failing_adapter = SimpleNamespace(pull_model=lambda model: (_ for _ in ()).throw(RuntimeError("pull failed")))
+		failing_adapter = SimpleNamespace(
+			pull_model=lambda model: (_ for _ in ()).throw(RuntimeError("pull failed"))
+		)
 		with (
 			patch("ai_fr_hg.ai.providers.get_provider", return_value=failing_adapter),
 			patch("ai_fr_hg.ai.logging.write_audit_log") as failed_audit,

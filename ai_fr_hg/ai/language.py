@@ -1,6 +1,9 @@
 # Copyright (c) 2026, Ai Fr Hg and contributors
 # For license information, please see license.txt
 
+# Non-Latin confusables are intentional language vocabulary.
+# ruff: noqa: RUF001
+
 """Detect the written language(s) of extracted document text.
 
 No extra packages: script counts plus a few high-signal function words.
@@ -89,7 +92,25 @@ _WORD_HINTS: dict[str, frozenset[str]] = {
 	"es": frozenset({"el", "la", "los", "las", "de", "y", "en", "que", "un", "una", "por", "con"}),
 	"it": frozenset({"il", "lo", "la", "di", "e", "che", "un", "una", "per", "con", "non", "sono"}),
 	"ar": frozenset(
-		{"في", "من", "على", "إلى", "ان", "أن", "هذا", "هذه", "التي", "الذي", "كان", "لا", "ما", "عن", "مع", "هو", "هي"}
+		{
+			"في",
+			"من",
+			"على",
+			"إلى",
+			"ان",
+			"أن",
+			"هذا",
+			"هذه",
+			"التي",
+			"الذي",
+			"كان",
+			"لا",
+			"ما",
+			"عن",
+			"مع",
+			"هو",
+			"هي",
+		}
 	),
 	"he": frozenset({"של", "את", "על", "לא", "כי", "זה", "זאת", "עם", "מן", "הוא", "היא", "הם", "או", "גם"}),
 }

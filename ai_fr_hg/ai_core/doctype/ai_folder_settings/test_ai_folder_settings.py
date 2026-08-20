@@ -20,7 +20,11 @@ class TestFolderService(AIPlatformTestCase):
 		from ai_fr_hg.ai.folders import create_folder, get_tree, list_folder_contents
 
 		# Ensure Home exists
-		root = create_folder("TestRootUNQ", parent_folder="Home") if not frappe.db.exists("File", "Home/TestRootUNQ") else {"name": "Home/TestRootUNQ"}
+		root = (
+			create_folder("TestRootUNQ", parent_folder="Home")
+			if not frappe.db.exists("File", "Home/TestRootUNQ")
+			else {"name": "Home/TestRootUNQ"}
+		)
 		# Create nested
 		try:
 			create_folder("Level1", parent_folder=root["name"])
@@ -135,7 +139,7 @@ class TestFolderService(AIPlatformTestCase):
 		self.assertFalse(frappe.db.exists("File", path))
 
 	def test_re_file_preserves_provenance(self):
-		from ai_fr_hg.ai.folders import create_folder, assign_file_to_folder
+		from ai_fr_hg.ai.folders import assign_file_to_folder, create_folder
 
 		# Setup folders
 		for fname in ["ProvSrc", "ProvDst"]:
@@ -286,7 +290,7 @@ class TestFolderService(AIPlatformTestCase):
 			pass
 
 	def test_favorite_is_real_queryable_state(self):
-		from ai_fr_hg.ai.folders import add_favorite, list_favorites, remove_favorite, create_folder
+		from ai_fr_hg.ai.folders import add_favorite, create_folder, list_favorites, remove_favorite
 
 		path = "Home/FavTest"
 		if not frappe.db.exists("File", path):
@@ -416,7 +420,9 @@ class TestAttachmentPlacement(AIPlatformTestCase):
 			# Folder-scoped retrieval should find chunks in Other only if we updated AI Document's folder
 			# For now, the file moved but AI Document's source_folder still points to Sub unless synced.
 			# Our service's _update_document_folder_provenance should have updated it via move_file.
-			frappe.db.set_value("AI Document", doc_name, {"folder": other, "source_folder": other}, update_modified=False)
+			frappe.db.set_value(
+				"AI Document", doc_name, {"folder": other, "source_folder": other}, update_modified=False
+			)
 			ai_doc.reload()
 			self.assertEqual(ai_doc.folder, other)
 
@@ -442,6 +448,6 @@ class TestAttachmentPlacement(AIPlatformTestCase):
 		from unittest.mock import patch
 
 		def fake_embed(texts, model=None, operation="Embedding", **kwargs):
-			return [[0.1] * 8 for _ in texts]
+			return [[0.1] * 8 for _text in texts]
 
 		return patch("ai_fr_hg.ai.knowledge.run_embedding", side_effect=fake_embed)

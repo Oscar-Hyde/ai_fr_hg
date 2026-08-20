@@ -5,10 +5,7 @@ frappe.ui.form.on("AI Conversation", {
 	refresh(frm) {
 		if (frm.is_new()) return;
 
-		frm.page.set_indicator(
-			frm.doc.status,
-			frm.doc.status === "Active" ? "green" : "grey"
-		);
+		frm.page.set_indicator(frm.doc.status, frm.doc.status === "Active" ? "green" : "grey");
 
 		frm.add_custom_button(__("View Messages"), () =>
 			frappe.set_route("List", "AI Message", {

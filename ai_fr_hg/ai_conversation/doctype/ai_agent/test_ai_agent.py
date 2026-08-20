@@ -204,7 +204,10 @@ class TestAgentRuntime(AIPlatformTestCase):
 		from ai_fr_hg.ai.agent import LANGUAGE_INSTRUCTIONS, build_system_prompt
 
 		agent = frappe.get_doc("AI Agent", "Test Agent")
-		prompt = build_system_prompt(agent, context="[Contract | language=Bulgarian]\nТекст")
+		prompt = build_system_prompt(
+			agent,
+			context="[Contract | language=Bulgarian]\nТекст",  # noqa: RUF001 - intentional fixture
+		)
 		self.assertIn(LANGUAGE_INSTRUCTIONS, prompt)
 
 	def test_attached_documents_are_retrieved_when_agent_skips_knowledge(self):

@@ -7,12 +7,7 @@ frappe.query_reports["Skill Summary"] = {
 			fieldname: "skill_type",
 			label: __("Skill Type"),
 			fieldtype: "Select",
-			options: [
-				"",
-				"Procedural",
-				"Formatting",
-				"Workflow",
-			],
+			options: ["", "Procedural", "Formatting", "Workflow"],
 		},
 		{
 			fieldname: "enabled",

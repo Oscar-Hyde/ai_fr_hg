@@ -44,4 +44,7 @@ class AIFolderSettings(Document):
 	def before_save(self):
 		# Ensure the user can write the underlying File folder
 		if not frappe.has_permission("File", "write", doc=frappe.get_doc("File", self.folder)):
-			frappe.throw(_("You cannot edit settings for folder '{0}' without write permission.").format(self.folder), frappe.PermissionError)
+			frappe.throw(
+				_("You cannot edit settings for folder '{0}' without write permission.").format(self.folder),
+				frappe.PermissionError,
+			)

@@ -45,9 +45,7 @@ frappe.listview_settings["AI Translation"] = {
 			frappe.set_route("List", "AI Translation Glossary")
 		);
 		listview.page.add_inner_button(__("Needs Review"), () =>
-			listview.filter_area.add([
-				["AI Translation", "status", "=", "Needs Review", false],
-			])
+			listview.filter_area.add([["AI Translation", "status", "=", "Needs Review", false]])
 		);
 	},
 };

@@ -18,7 +18,8 @@
 	if (!frappe.listview_settings) frappe.listview_settings = {};
 	// Prevent double-wrapping when Desk is revisited and Frappe re-executes
 	// this doctype_list_js module from cache.
-	if (frappe.listview_settings["File"] && frappe.listview_settings["File"].__ai_folder_extended) return;
+	if (frappe.listview_settings["File"] && frappe.listview_settings["File"].__ai_folder_extended)
+		return;
 
 	function selected_names(listview) {
 		try {
@@ -32,7 +33,9 @@
 		const names = selected_names(listview);
 		if (!names.length || (singular && names.length !== 1)) {
 			frappe.msgprint(
-				singular ? __("Select exactly one file or folder.") : __("Select at least one file or folder.")
+				singular
+					? __("Select exactly one file or folder.")
+					: __("Select at least one file or folder.")
 			);
 			return null;
 		}
@@ -109,7 +112,9 @@
 
 				if (result.status === "Queued") {
 					frappe.show_alert({
-						message: __("Bulk move queued. Progress will be recorded in the audit trail."),
+						message: __(
+							"Bulk move queued. Progress will be recorded in the audit trail."
+						),
 						indicator: "blue",
 					});
 					return result;
@@ -117,7 +122,9 @@
 				if (result.errors?.length) {
 					frappe.msgprint({
 						title: __("Move completed with errors"),
-						message: result.errors.map((entry) => `${entry.file}: ${entry.error}`).join("<br>"),
+						message: result.errors
+							.map((entry) => `${entry.file}: ${entry.error}`)
+							.join("<br>"),
 						indicator: "orange",
 					});
 				}
@@ -214,133 +221,155 @@
 				if (listview.__ai_folder_menu_added) return;
 				listview.__ai_folder_menu_added = true;
 
-			listview.page.add_actions_menu_item(__("Move to Folder…"), async () => {
-				const names = selected_or_message(listview);
-				if (!names) return;
-				const target = await select_destination(listview.current_folder || "Home");
-				if (!target) return;
-				const result = await frappe.xcall("ai_fr_hg.api.folders.bulk_move", {
-					file_names: names,
-					target_folder: target,
-					enqueue: names.length > 20 ? 1 : 0,
+				listview.page.add_actions_menu_item(__("Move to Folder…"), async () => {
+					const names = selected_or_message(listview);
+					if (!names) return;
+					const target = await select_destination(listview.current_folder || "Home");
+					if (!target) return;
+					const result = await frappe.xcall("ai_fr_hg.api.folders.bulk_move", {
+						file_names: names,
+						target_folder: target,
+						enqueue: names.length > 20 ? 1 : 0,
+					});
+					frappe.show_alert({
+						message:
+							result.status === "Queued"
+								? __("Bulk move queued.")
+								: __("{0} item(s) moved.", [result.moved?.length || 0]),
+						indicator: result.status === "Queued" ? "blue" : "green",
+					});
+					listview.refresh();
 				});
-				frappe.show_alert({
-					message:
-						result.status === "Queued"
-							? __("Bulk move queued.")
-							: __("{0} item(s) moved.", [result.moved?.length || 0]),
-					indicator: result.status === "Queued" ? "blue" : "green",
-				});
-				listview.refresh();
-			});
 
-			listview.page.add_actions_menu_item(__("Copy Files to Folder…"), async () => {
-				const names = selected_or_message(listview);
-				if (!names) return;
-				const target = await select_destination(listview.current_folder || "Home");
-				if (!target) return;
+				listview.page.add_actions_menu_item(__("Copy Files to Folder…"), async () => {
+					const names = selected_or_message(listview);
+					if (!names) return;
+					const target = await select_destination(listview.current_folder || "Home");
+					if (!target) return;
 
-				const details = await Promise.all(names.map(item_info));
-				const files = details.filter((item) => !item.is_folder);
-				if (!files.length) {
-					frappe.msgprint(__("Only files can be copied. Folders are moved instead."));
-					return;
-				}
-				const errors = [];
-				for (const file of files) {
-					try {
-						await frappe.xcall("ai_fr_hg.api.folders.copy_file", {
-							file_name: file.name,
-							target_folder: target,
-						});
-					} catch (error) {
-						errors.push(`${file.file_name}: ${error.message}`);
-					}
-				}
-				if (errors.length) {
-					frappe.msgprint({ title: __("Copy completed with errors"), message: errors.join("<br>"), indicator: "orange" });
-				} else {
-					frappe.show_alert({ message: __("{0} file(s) copied.", [files.length]), indicator: "green" });
-				}
-				listview.refresh();
-			});
-
-			listview.page.add_actions_menu_item(__("Rename…"), async () => {
-				const names = selected_or_message(listview, true);
-				if (!names) return;
-				const item = await item_info(names[0]);
-				frappe.prompt(
-					[
-						{
-							fieldname: "new_name",
-							fieldtype: "Data",
-							label: __("New Name"),
-							default: item.file_name,
-							reqd: 1,
-						},
-					],
-					async (values) => {
-						await frappe.xcall(
-							item.is_folder
-								? "ai_fr_hg.api.folders.rename_folder"
-								: "ai_fr_hg.api.folders.rename_file",
-							item.is_folder
-								? { folder_name: item.name, new_name: values.new_name }
-								: { file_name: item.name, new_name: values.new_name }
+					const details = await Promise.all(names.map(item_info));
+					const files = details.filter((item) => !item.is_folder);
+					if (!files.length) {
+						frappe.msgprint(
+							__("Only files can be copied. Folders are moved instead.")
 						);
-						listview.refresh();
-					},
-					__("Rename"),
-					__("Save")
-				);
-			});
+						return;
+					}
+					const errors = [];
+					for (const file of files) {
+						try {
+							await frappe.xcall("ai_fr_hg.api.folders.copy_file", {
+								file_name: file.name,
+								target_folder: target,
+							});
+						} catch (error) {
+							errors.push(`${file.file_name}: ${error.message}`);
+						}
+					}
+					if (errors.length) {
+						frappe.msgprint({
+							title: __("Copy completed with errors"),
+							message: errors.join("<br>"),
+							indicator: "orange",
+						});
+					} else {
+						frappe.show_alert({
+							message: __("{0} file(s) copied.", [files.length]),
+							indicator: "green",
+						});
+					}
+					listview.refresh();
+				});
 
-			listview.page.add_actions_menu_item(__("Delete…"), async () => {
-				const names = selected_or_message(listview);
-				if (!names) return;
-				frappe.confirm(
-					__(
-						"Delete {0} selected item(s)? Non-empty folders are deleted recursively. This cannot be undone.",
-						[names.length]
-					),
-					async () => {
-						const details = await Promise.all(names.map(item_info));
-						for (const item of details) {
+				listview.page.add_actions_menu_item(__("Rename…"), async () => {
+					const names = selected_or_message(listview, true);
+					if (!names) return;
+					const item = await item_info(names[0]);
+					frappe.prompt(
+						[
+							{
+								fieldname: "new_name",
+								fieldtype: "Data",
+								label: __("New Name"),
+								default: item.file_name,
+								reqd: 1,
+							},
+						],
+						async (values) => {
 							await frappe.xcall(
 								item.is_folder
-									? "ai_fr_hg.api.folders.delete_folder"
-									: "ai_fr_hg.api.folders.delete_file",
-								item.is_folder ? { folder_name: item.name, recursive: 1 } : { file_name: item.name }
+									? "ai_fr_hg.api.folders.rename_folder"
+									: "ai_fr_hg.api.folders.rename_file",
+								item.is_folder
+									? { folder_name: item.name, new_name: values.new_name }
+									: { file_name: item.name, new_name: values.new_name }
 							);
+							listview.refresh();
+						},
+						__("Rename"),
+						__("Save")
+					);
+				});
+
+				listview.page.add_actions_menu_item(__("Delete…"), async () => {
+					const names = selected_or_message(listview);
+					if (!names) return;
+					frappe.confirm(
+						__(
+							"Delete {0} selected item(s)? Non-empty folders are deleted recursively. This cannot be undone.",
+							[names.length]
+						),
+						async () => {
+							const details = await Promise.all(names.map(item_info));
+							for (const item of details) {
+								await frappe.xcall(
+									item.is_folder
+										? "ai_fr_hg.api.folders.delete_folder"
+										: "ai_fr_hg.api.folders.delete_file",
+									item.is_folder
+										? { folder_name: item.name, recursive: 1 }
+										: { file_name: item.name }
+								);
+							}
+							listview.refresh();
 						}
-						listview.refresh();
+					);
+				});
+
+				listview.page.add_actions_menu_item(__("Add Folder to Favorites"), async () => {
+					const names = selected_or_message(listview, true);
+					if (!names) return;
+					const item = await item_info(names[0]);
+					if (!item.is_folder) {
+						frappe.msgprint(__("Only folders can be added to favorites."));
+						return;
+					}
+					await frappe.xcall("ai_fr_hg.api.folders.add_favorite", { folder: item.name });
+					frappe.show_alert({
+						message: __("Folder added to favorites."),
+						indicator: "green",
+					});
+				});
+
+				listview.page.add_actions_menu_item(
+					__("Remove Folder from Favorites"),
+					async () => {
+						const names = selected_or_message(listview, true);
+						if (!names) return;
+						const item = await item_info(names[0]);
+						if (!item.is_folder) {
+							frappe.msgprint(__("Only folders can be removed from favorites."));
+							return;
+						}
+						await frappe.xcall("ai_fr_hg.api.folders.remove_favorite", {
+							folder: item.name,
+						});
+						frappe.show_alert({
+							message: __("Folder removed from favorites."),
+							indicator: "green",
+						});
 					}
 				);
-			});
-
-			listview.page.add_actions_menu_item(__("Add Folder to Favorites"), async () => {
-				const names = selected_or_message(listview, true);
-				if (!names) return;
-				const item = await item_info(names[0]);
-				if (!item.is_folder) {
-					frappe.msgprint(__("Only folders can be added to favorites."));
-					return;
-				}
-				await frappe.xcall("ai_fr_hg.api.folders.add_favorite", { folder: item.name });
-				frappe.show_alert({ message: __("Folder added to favorites."), indicator: "green" });
-			});
-
-			listview.page.add_actions_menu_item(__("Remove Folder from Favorites"), async () => {
-				const names = selected_or_message(listview, true);
-				if (!names) return;
-				const item = await item_info(names[0]);
-				if (!item.is_folder) {
-					frappe.msgprint(__("Only folders can be removed from favorites."));
-					return;
-				}
-				await frappe.xcall("ai_fr_hg.api.folders.remove_favorite", { folder: item.name });
-				frappe.show_alert({ message: __("Folder removed from favorites."), indicator: "green" });
-			});
 			},
 		};
 		return true;

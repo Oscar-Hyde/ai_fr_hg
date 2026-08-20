@@ -30,7 +30,9 @@ def execute():
 
 		create_default_folders()
 	except Exception:
-		frappe.log_error(title="Folder organization patch: default folders failed", message=frappe.get_traceback())
+		frappe.log_error(
+			title="Folder organization patch: default folders failed", message=frappe.get_traceback()
+		)
 
 	# Backfill folder provenance for existing AI Documents where source_file points to a File
 	try:
@@ -47,6 +49,11 @@ def execute():
 			if file_name:
 				folder = frappe.db.get_value("File", file_name, "folder")
 				if folder and frappe.db.exists("File", folder):
-					frappe.db.set_value("AI Document", row.name, {"folder": folder, "source_folder": folder}, update_modified=False)
+					frappe.db.set_value(
+						"AI Document",
+						row.name,
+						{"folder": folder, "source_folder": folder},
+						update_modified=False,
+					)
 	except Exception:
 		frappe.log_error(title="Folder organization patch: backfill failed", message=frappe.get_traceback())

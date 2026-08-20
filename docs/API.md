@@ -182,7 +182,7 @@ Translate an extracted document into a stored, reviewable `AI Translation`.
 | `glossary` | string | An `AI Translation Glossary` to enforce. |
 | `tone` | string | `Neutral`, `Formal`, `Informal`, `Technical` or `Legal`. |
 | `domain` | string | Subject domain hint, e.g. `construction contracts`. |
-| `preserve_formatting` | bool | Default true. |
+| `preserve_formatting` | bool | Preserve extracted-text blocks/separators; does not reconstruct the source file. |
 | `index_output` | bool | Also store the result as a searchable document. |
 | `background` | bool | Default true; false translates in the request. |
 

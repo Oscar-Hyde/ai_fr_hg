@@ -37,7 +37,9 @@ function apply_direction(frm) {
 }
 
 function segment_rows(frm, only_flagged) {
-	const rows = (frm.doc.segments || []).slice().sort((a, b) => a.segment_index - b.segment_index);
+	const rows = (frm.doc.segments || [])
+		.slice()
+		.sort((a, b) => a.segment_index - b.segment_index);
 	return only_flagged ? rows.filter((row) => ["Flagged", "Failed"].includes(row.status)) : rows;
 }
 
@@ -65,7 +67,10 @@ function render_review(frm, only_flagged) {
 			const issues = (row.issues || "")
 				.split("\n")
 				.filter(Boolean)
-				.map((issue) => `<div class="text-danger small">• ${frappe.utils.escape_html(issue)}</div>`)
+				.map(
+					(issue) =>
+						`<div class="text-danger small">• ${frappe.utils.escape_html(issue)}</div>`
+				)
 				.join("");
 			return `
 			<div class="ai-translation-segment" data-index="${row.segment_index}"
@@ -74,17 +79,17 @@ function render_review(frm, only_flagged) {
 				}-400);border-radius:6px;padding:10px;margin-bottom:10px">
 				<div class="d-flex justify-content-between text-muted small" style="margin-bottom:6px">
 					<span>#${row.segment_index} · ${frappe.utils.escape_html(row.kind || "paragraph")}${
-						row.page_number ? ` · ${__("page")} ${row.page_number}` : ""
-					}${row.reused ? ` · ${__("reused")}` : ""}</span>
+				row.page_number ? ` · ${__("page")} ${row.page_number}` : ""
+			}${row.reused ? ` · ${__("reused")}` : ""}</span>
 					<span>${frappe.utils.escape_html(row.status || "")} · ${Math.round(row.quality_score || 0)}%</span>
 				</div>
 				<div class="row">
 					<div class="col-sm-6" dir="${source_dir}" style="white-space:pre-wrap">${frappe.utils.escape_html(
-						row.source_text || ""
-					)}</div>
+				row.source_text || ""
+			)}</div>
 					<div class="col-sm-6" dir="${target_dir}" style="white-space:pre-wrap">${frappe.utils.escape_html(
-						row.translated_text || ""
-					)}</div>
+				row.translated_text || ""
+			)}</div>
 				</div>
 				${issues}
 				<div style="margin-top:6px">
@@ -107,7 +112,9 @@ function render_review(frm, only_flagged) {
 				fieldtype: "Small Text",
 				fieldname: "instructions",
 				label: __("Instruction for this segment (optional)"),
-				description: __("For example: keep the clause numbering, or use the formal register."),
+				description: __(
+					"For example: keep the clause numbering, or use the formal register."
+				),
 			},
 			async (values) => {
 				frappe.dom.freeze(__("Re-translating..."));
@@ -158,7 +165,10 @@ frappe.ui.form.on("AI Translation", {
 			frm.dashboard.add_indicator(__("{0} reused", [frm.doc.memory_hits]), "green");
 		}
 		frm.dashboard.add_indicator(
-			__("{0} → {1}", [label_for(frm.doc.source_language), label_for(frm.doc.target_language)]),
+			__("{0} → {1}", [
+				label_for(frm.doc.source_language),
+				label_for(frm.doc.target_language),
+			]),
 			"gray"
 		);
 
@@ -185,7 +195,11 @@ frappe.ui.form.on("AI Translation", {
 		}
 
 		if ((frm.doc.segments || []).length) {
-			frm.add_custom_button(__("Review Segments"), () => render_review(frm, false), __("Review"));
+			frm.add_custom_button(
+				__("Review Segments"),
+				() => render_review(frm, false),
+				__("Review")
+			);
 			if (frm.doc.flagged_segments) {
 				frm.add_custom_button(
 					__("Review Flagged Only"),
@@ -252,7 +266,9 @@ frappe.ui.form.on("AI Translation", {
 
 		if (frm.doc.status === "Failed" && frm.doc.error_message) {
 			frm.dashboard.set_headline(
-				`<span class="text-danger">${frappe.utils.escape_html(frm.doc.error_message)}</span>`
+				`<span class="text-danger">${frappe.utils.escape_html(
+					frm.doc.error_message
+				)}</span>`
 			);
 		}
 	},

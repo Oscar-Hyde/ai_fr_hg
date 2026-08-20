@@ -7,13 +7,7 @@ frappe.query_reports["Memory Usage"] = {
 			fieldname: "memory_type",
 			label: __("Memory Type"),
 			fieldtype: "Select",
-			options: [
-				"",
-				"Fact",
-				"Preference",
-				"Instruction",
-				"Feedback",
-			],
+			options: ["", "Fact", "Preference", "Instruction", "Feedback"],
 		},
 		{
 			fieldname: "status",
@@ -36,7 +30,9 @@ frappe.query_reports["Memory Usage"] = {
 	formatter(value, row, column, data, default_formatter) {
 		value = default_formatter(value, row, column, data);
 		if (column.fieldname === "Status") {
-			value = `<span class="indicator ${data.Status === "Active" ? "green" : "grey"}">${value}</span>`;
+			value = `<span class="indicator ${
+				data.Status === "Active" ? "green" : "grey"
+			}">${value}</span>`;
 		}
 		return value;
 	},

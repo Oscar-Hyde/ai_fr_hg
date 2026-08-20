@@ -12,9 +12,6 @@ frappe.ui.form.on("AI Task", {
 			Completed: "green",
 			Failed: "red",
 		};
-		frm.page.set_indicator(
-			__(frm.doc.status),
-			colors[frm.doc.status] || "grey"
-		);
+		frm.page.set_indicator(__(frm.doc.status), colors[frm.doc.status] || "grey");
 	},
 });

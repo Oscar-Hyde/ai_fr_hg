@@ -253,7 +253,8 @@ def get_tabs() -> list:
 @frappe.whitelist()
 def get_default_folder(doctype: str | None = None, docname: str | None = None) -> dict:
 	"""Return the default folder for the native uploader's current context."""
-	from ai_fr_hg.ai.folders import get_breadcrumbs, get_default_folder as service_default
+	from ai_fr_hg.ai.folders import get_breadcrumbs
+	from ai_fr_hg.ai.folders import get_default_folder as service_default
 
 	folder = service_default(user=frappe.session.user, doctype=doctype, docname=docname)
 	return {"folder": folder, "breadcrumbs": get_breadcrumbs(folder) if folder else []}

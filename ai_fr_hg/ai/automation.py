@@ -73,7 +73,9 @@ def handle_document_event(doc, method: str | None = None) -> None:
 			try:
 				trigger_rule(rule_name, doc)
 			except Exception:
-				frappe.log_error(title=f"AI Automation Rule failed: {rule_name}", message=frappe.get_traceback())
+				frappe.log_error(
+					title=f"AI Automation Rule failed: {rule_name}", message=frappe.get_traceback()
+				)
 	except Exception:
 		# Absolute last resort: Desk must never see an exception from this hook.
 		try:

@@ -185,8 +185,7 @@ permission_query_conditions = {
 }
 
 has_permission = {
-	doctype: "ai_fr_hg.utils.permissions.has_document_permission"
-	for doctype in permission_query_conditions
+	doctype: "ai_fr_hg.utils.permissions.has_document_permission" for doctype in permission_query_conditions
 }
 
 # Document Events

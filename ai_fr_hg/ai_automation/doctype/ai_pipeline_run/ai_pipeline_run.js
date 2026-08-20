@@ -12,10 +12,7 @@ frappe.ui.form.on("AI Pipeline Run", {
 			Failed: "red",
 			Cancelled: "orange",
 		};
-		frm.page.set_indicator(
-			__(frm.doc.status),
-			colors[frm.doc.status] || "grey"
-		);
+		frm.page.set_indicator(__(frm.doc.status), colors[frm.doc.status] || "grey");
 
 		frm.add_custom_button(__("Pipeline"), () =>
 			frappe.set_route("Form", "AI Pipeline", frm.doc.pipeline)
@@ -31,7 +28,13 @@ frappe.ui.form.on("AI Pipeline Run", {
 								`<div class="row mb-1">
 									<div class="col-sm-4">${frappe.utils.escape_html(s.step_name)}</div>
 									<div class="col-sm-2">
-										<span class="indicator ${s.status === "Success" ? "green" : s.status === "Failed" ? "red" : "grey"}">
+										<span class="indicator ${
+											s.status === "Success"
+												? "green"
+												: s.status === "Failed"
+												? "red"
+												: "grey"
+										}">
 											${__(s.status)}
 										</span>
 									</div>

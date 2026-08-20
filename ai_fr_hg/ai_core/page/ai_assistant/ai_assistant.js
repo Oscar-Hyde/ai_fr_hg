@@ -85,7 +85,9 @@ class AIAssistant {
 						<div class="ai-empty-state">
 							<div class="ai-empty-icon">${frappe.utils.icon("message", "lg")}</div>
 							<h4>${__("Local AI Assistant")}</h4>
-							<p class="text-muted">${__("Everything runs on this machine. Select a knowledge base below or attach a file when you want grounded answers — general chat stays fast.")}</p>
+							<p class="text-muted">${__(
+								"Everything runs on this machine. Select a knowledge base below or attach a file when you want grounded answers — general chat stays fast."
+							)}</p>
 							<div class="ai-suggestions"></div>
 						</div>
 					</div>
@@ -213,7 +215,8 @@ class AIAssistant {
 
 	on_chat_token(data) {
 		if (!data || data.turn_id !== this.stream_turn_id) return;
-		if (this.conversation && data.conversation && data.conversation !== this.conversation) return;
+		if (this.conversation && data.conversation && data.conversation !== this.conversation)
+			return;
 		this.append_stream_delta(data.delta || "");
 	}
 
@@ -416,7 +419,9 @@ class AIAssistant {
 			<div class="ai-empty-state">
 				<div class="ai-empty-icon">${frappe.utils.icon("message", "lg")}</div>
 				<h4>${__("Local AI Assistant")}</h4>
-				<p class="text-muted">${__("Select a knowledge base below or attach a file when you want grounded answers — general chat stays fast.")}</p>
+				<p class="text-muted">${__(
+					"Select a knowledge base below or attach a file when you want grounded answers — general chat stays fast."
+				)}</p>
 				<div class="ai-suggestions"></div>
 			</div>
 		`);
@@ -743,7 +748,10 @@ class AIAssistant {
 							.catch((error) => {
 								frappe.msgprint({
 									title: __("Upload could not be ingested"),
-									message: error?.message || error?._server_messages || __("The uploaded file could not be read."),
+									message:
+										error?.message ||
+										error?._server_messages ||
+										__("The uploaded file could not be read."),
 									indicator: "red",
 								});
 								return null;
@@ -755,10 +763,10 @@ class AIAssistant {
 							result.document,
 						]);
 						frappe.show_alert({
-						message: __(
-							"Processing {0}. Your next question will use this file even if indexing is still running.",
-							[values.title]
-						),
+							message: __(
+								"Processing {0}. Your next question will use this file even if indexing is still running.",
+								[values.title]
+							),
 							indicator: "blue",
 						});
 						me.$input

@@ -122,7 +122,12 @@ def search(
 		search_type=search_type,
 		folder=folder,
 	)
-	return {"query": query, "count": len(results), "results": [r.as_dict() for r in results], "folder": folder}
+	return {
+		"query": query,
+		"count": len(results),
+		"results": [r.as_dict() for r in results],
+		"folder": folder,
+	}
 
 
 @frappe.whitelist()
@@ -161,9 +166,13 @@ def ask(
 			from ai_fr_hg.ai.folders import _normalize_folder_path
 
 			norm = _normalize_folder_path(folder)
-			folder_docs = frappe.get_all("AI Document", filters={"folder": ["like", f"{norm}%"]}, pluck="name")
+			folder_docs = frappe.get_all(
+				"AI Document", filters={"folder": ["like", f"{norm}%"]}, pluck="name"
+			)
 			if not folder_docs:
-				folder_docs = frappe.get_all("AI Document", filters={"source_folder": ["like", f"{norm}%"]}, pluck="name")
+				folder_docs = frappe.get_all(
+					"AI Document", filters={"source_folder": ["like", f"{norm}%"]}, pluck="name"
+				)
 			if folder_docs:
 				documents = folder_docs
 		except Exception:

@@ -325,8 +325,6 @@ def after_install() -> None:
 	print("")
 
 
-
-
 def ensure_site_file_directories() -> None:
 	"""Ensure Frappe's native public/private upload roots exist.
 
@@ -337,6 +335,7 @@ def ensure_site_file_directories() -> None:
 	"""
 	for parts in (("public", "files"), ("private", "files")):
 		Path(frappe.get_site_path(*parts)).mkdir(parents=True, exist_ok=True)
+
 
 def create_default_folders() -> None:
 	"""Create a coherent, navigable folder structure (File & Folder §11, operational)."""

@@ -26,17 +26,14 @@ frappe.ui.form.on("AI Skill", {
 			});
 		} else {
 			frm.add_custom_button(__("Enable"), () => {
-				frappe.confirm(
-					__("Re-enable this skill?"),
-					async () => {
-						await frm.call("enable");
-						frappe.show_alert({
-							message: __("Skill enabled"),
-							indicator: "green",
-						});
-						frm.reload_doc();
-					}
-				);
+				frappe.confirm(__("Re-enable this skill?"), async () => {
+					await frm.call("enable");
+					frappe.show_alert({
+						message: __("Skill enabled"),
+						indicator: "green",
+					});
+					frm.reload_doc();
+				});
 			}).addClass("btn-primary");
 		}
 

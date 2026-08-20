@@ -67,7 +67,8 @@ against Frappe users, roles, and agents before the candidate is accepted.
 
 `validate_candidate()` confirms the record is learnable: non-empty content, a
 valid type, a recorded teaching user and source. Document and tool sources must
-also reference an originating record, so the audit story is always complete.
+also reference an originating record. This provides provenance on covered
+paths; OPS-05 tracks remaining end-to-end execution/audit links.
 
 ### 4. Test against existing data
 

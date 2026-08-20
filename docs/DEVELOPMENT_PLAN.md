@@ -5,6 +5,12 @@
 **Planning branch:** `arena/01a01a6c-ai-fr-hg`
 **Audience:** product owner, technical lead, Frappe developers, reviewers, operators, and security reviewers
 
+> This file is the audit baseline and required-state backlog. Current ownership,
+> phase assignment, and closure evidence are controlled in
+> [`GAP_REGISTER.md`](GAP_REGISTER.md); accepted support-boundary choices are in
+> [`ARCHITECTURE_DECISIONS.md`](ARCHITECTURE_DECISIONS.md). Historical observations
+> below remain unchanged so a finding is never erased after closure.
+
 ---
 
 ## 1. Executive assessment

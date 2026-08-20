@@ -92,7 +92,15 @@ def index_document(document: str, force: bool = False, embed: bool = True) -> di
 	existing_rows = frappe.get_all(
 		"AI Document Chunk",
 		filters={"document": document},
-		fields=["name", "checksum", "chunk_index", "embedding", "embedding_model", "embedding_dimensions", "embedding_format"],
+		fields=[
+			"name",
+			"checksum",
+			"chunk_index",
+			"embedding",
+			"embedding_model",
+			"embedding_dimensions",
+			"embedding_format",
+		],
 	)
 	# A document can legitimately contain identical chunk text at different
 	# positions. Chunk index is therefore part of the identity; checksum alone
@@ -126,7 +134,10 @@ def index_document(document: str, force: bool = False, embed: bool = True) -> di
 			not row.embedding
 			or (bool(model) and row.embedding_model != model)
 			or not row.embedding_format
-			or (expected_embedding_dimensions and cint(row.embedding_dimensions) != expected_embedding_dimensions)
+			or (
+				expected_embedding_dimensions
+				and cint(row.embedding_dimensions) != expected_embedding_dimensions
+			)
 		)
 	]
 

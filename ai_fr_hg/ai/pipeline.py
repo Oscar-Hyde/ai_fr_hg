@@ -21,7 +21,6 @@ from frappe.utils import cint, now_datetime
 
 from ai_fr_hg.ai.exceptions import PipelineApprovalRequired, PipelineError, PipelineStepRecordedError
 
-
 _PIPELINE_METHOD_MARKER = "_ai_pipeline_step_method"
 MAX_NESTED_PIPELINE_DEPTH = 10
 MAX_PIPELINE_DEPENDENCY_EDGES = 1000
@@ -369,12 +368,14 @@ def _execute_run(run_doc) -> dict:
 def _as_user(user: str):
 	previous = frappe.session.user
 	if previous != user:
-		frappe.set_user(user)
+		# Security-reviewed worker boundary: the run stores its triggering user
+		# and each pipeline operation rechecks authority under this context.
+		frappe.set_user(user)  # nosemgrep
 	try:
 		yield
 	finally:
 		if frappe.session.user != previous:
-			frappe.set_user(previous)
+			frappe.set_user(previous)  # nosemgrep
 
 
 def _is_standalone_background_run(run: str) -> bool:
@@ -457,7 +458,7 @@ def _is_cancelled(run: str) -> bool:
 
 def _wait_for_retry(run: str, seconds: int) -> bool:
 	"""Back off in short intervals so cancellation does not wait for the full delay."""
-	for _ in range(max(seconds, 0) * 10):
+	for _retry_tick in range(max(seconds, 0) * 10):
 		if _is_cancelled(run):
 			return True
 		time.sleep(0.1)
@@ -645,9 +646,7 @@ def execute_step(step, context: dict, run_doc):
 				)
 			)
 		if outcome.get("status") != "Success":
-			raise PipelineStepRecordedError(
-				outcome.get("error") or _("Tool {0} failed.").format(step.tool)
-			)
+			raise PipelineStepRecordedError(outcome.get("error") or _("Tool {0} failed.").format(step.tool))
 		return outcome
 
 	if step_type == "Pipeline":

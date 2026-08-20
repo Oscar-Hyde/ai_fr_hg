@@ -51,10 +51,13 @@ class TestPatternExtraction(UnitTestCase):
 
 		self.assertEqual(_by_type(entities, "email")[0]["value"], "john.doe@example.com")
 		# Both URL spellings are captured.
-		self.assertEqual({entity["value"] for entity in _by_type(entities, "url")}, {
-			"https://example.com/docs",
-			"www.example.org/page",
-		})
+		self.assertEqual(
+			{entity["value"] for entity in _by_type(entities, "url")},
+			{
+				"https://example.com/docs",
+				"www.example.org/page",
+			},
+		)
 		self.assertEqual(_by_type(entities, "ip")[0]["value"], "192.168.10.42")
 		self.assertEqual(_by_type(entities, "identifier")[0]["normalized_value"], "inv-2024-0817")
 

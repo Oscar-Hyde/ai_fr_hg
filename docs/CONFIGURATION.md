@@ -1,8 +1,9 @@
 # Configuration
 
-All configuration lives in **AI Platform Settings** (`/app/ai-platform-settings`),
-a Single DocType organised into seven tabs. This is the only place a human
-needs to intervene — everything else is automatic.
+Application configuration lives in **AI Platform Settings**
+(`/app/ai-platform-settings`), a Single DocType organised into seven tabs.
+Supported background paths automate routine work, but approvals, reviews,
+failures, and the limitations below still require users or operators.
 
 ---
 
@@ -50,9 +51,10 @@ hostname pointed at a private IP still passes, and `localhost` aliases behave
 correctly. Resolution is cached; the cache clears when settings or a provider
 are saved.
 
-This is what makes the platform safe to run in an air-gapped or regulated
-environment: it is not a promise in documentation, it is enforced in code on
-every request.
+This is an application-layer guard, not the network security boundary. SEC-04
+tracks proxy bypass, DNS rebinding, redirects, IPv4/IPv6, and connection-level
+validation. Use host firewall and egress policy for an air-gapped or regulated
+deployment until that finding closes.
 
 ---
 
@@ -88,14 +90,15 @@ search again.
 | Auto Process Documents | on | Ingest and index on upload with no further action. |
 | Auto Embed on Ingest | on | Embed immediately rather than waiting for the hourly backfill. |
 | Max Document Size (MB) | 50 | Rejected above this, before any parsing work. |
-| OCR Enabled | **off** | Requires `pytesseract` and the Tesseract binary. Off on a fresh install so missing OCR packages do not surprise the pipeline. |
+| OCR Enabled | **off** | Image-file OCR fallback only; requires `pytesseract` and Tesseract. It does not OCR scanned PDFs. |
 | Processing Queue | long | Which Frappe queue handles ingestion. |
 | Auto Pattern Scan | **off** | Hourly background extraction of high-precision pattern entities (emails, URLs, phones, IPs, hashes, dates, identifiers, money) from indexed documents into `AI Pattern Entity` rows. Reads only already-extracted content; manual **Extract Patterns** on the AI Document form works regardless. |
 | Max Pattern Entities | 500 | Upper bound of distinct entities stored per document. The scan samples at most 1 MB of extracted text (head and tail) with linear-time guards. |
 
-Knowledge bases override chunk size, overlap, top K, threshold and embedding
-model individually, so a base of short policy notes and a base of long
-contracts can each be tuned appropriately.
+Knowledge-base chunk size, overlap, and embedding model affect ingestion.
+Although top K and threshold fields also exist, their complete per-KB retrieval
+precedence is not yet enforced (RET-04); treat platform/search-request values as
+the effective retrieval controls until Phase 2 closes that finding.
 
 ### Default agent retrieval
 
@@ -142,7 +145,7 @@ Arabic / English / Hebrew translation. Full guide:
 | Segments per Model Call | 6 | Batch size. Larger batches mean fewer round trips but a longer prompt. |
 | Run Quality Checks | on | Score every segment locally: placeholders, script, length, glossary, refusals, repetition. |
 | Repair Flagged Segments | on | One stricter retry per flagged segment, kept only when it scores better. |
-| Use Translation Memory | on | Reuse identical segments already translated in the same knowledge base. |
+| Use Translation Memory | on | **Do not enable in production yet.** SEC-01/TRN-01 track mandatory KB scope and policy-safe identity on every caller. |
 | Back-Translation Samples | 0 | Verify this many segments by translating them back and comparing embeddings. Costs extra model calls. |
 | Index Translations as Documents | off | Default for new translations: store the result as its own searchable document. |
 
@@ -159,12 +162,14 @@ Arabic / English / Hebrew translation. Full guide:
 Finer control comes from **AI Resource Policy** records, which apply to a role
 or a single user:
 
-- Requests per hour, tokens per day, documents per day, concurrent requests
+- Requests per hour, tokens per day, and documents per day
 - Capability flags: tools, document upload, pipeline execution, model management
+- A declared concurrent-request value that is **not yet enforced** (GOV-01)
 
 Resolution order: a policy naming the user beats a policy naming one of their
 roles; among equals the lowest `priority` wins; if nothing matches, the global
-settings apply. Administrator bypasses all checks.
+settings apply. Administrator bypasses current checks. Quota reservation and
+distributed concurrency/rate enforcement remain Phase 6 work.
 
 Installation seeds a `Standard AI User` policy: 200 requests/hour,
 500k tokens/day, 100 documents/day, tools and uploads allowed, pipelines and
@@ -219,11 +224,10 @@ Cleanup runs weekly. Purge manually from the Operations dashboard when needed.
 ## Backup
 
 Auto Backup exports each enabled knowledge base to a private JSON file daily.
-Embeddings are excluded by default, since they can be regenerated and dominate
-the file size.
+That JSON is a content export, not a complete restore artifact: embeddings,
+metadata, policies, and several linked components are incomplete (OPS-04).
 
-For full disaster recovery use standard Frappe backups — all platform data
-lives in ordinary DocTypes and is included automatically:
+For site-level disaster recovery use standard Frappe database and file backups:
 
 ```bash
 bench --site your-site.local backup --with-files
@@ -246,14 +250,16 @@ a GPU brings that under 2 s. Use `phi3:mini` on constrained hardware.
 
 Ollama on a GPU host, Frappe elsewhere on the LAN. Point the provider at
 `http://10.0.0.x:11434` — the local-only guard permits RFC 1918 addresses.
-Set `OLLAMA_HOST=0.0.0.0` so the runtime accepts LAN connections, and raise
-Max Concurrent Requests on the provider to match the GPU's capacity.
+Set `OLLAMA_HOST=0.0.0.0` so the runtime accepts LAN connections. The provider
+Max Concurrent Requests field is not enforced until GOV-01 closes; enforce a
+capacity limit at the runtime/proxy meanwhile.
 
 ### High availability
 
-Register several providers with ascending `priority`. With failover enabled the
-engine tries the next reachable provider automatically, and the health monitor
-takes failed endpoints out of rotation.
+Registering providers with priorities enables retry/failover scaffolding, but
+PROV-01 remains open: the engine does not yet guarantee an equivalent model on
+the target provider. Do not rely on this as high availability until equivalent
+model selection and real failover tests pass.
 
 ### Air-gapped
 
@@ -268,7 +274,9 @@ ollama save llama3.1:8b > llama31-8b.tar
 ollama load < llama31-8b.tar
 ```
 
-Knowledge bases move the same way, as exported JSON.
+Current knowledge JSON can move extracted text for limited interchange, but it
+is not a complete backup/restore path. Use verified Frappe backups until OPS-04
+closes.
 
 ---
 

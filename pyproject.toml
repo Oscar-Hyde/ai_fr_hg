@@ -3,12 +3,12 @@ name = "ai_fr_hg"
 authors = [
     { name = "Ai Fr Hg", email = "oscarhyde2002@outlook.com"}
 ]
-description = "A complete, fully local enterprise AI platform for Frappe"
-requires-python = ">=3.14"
+description = "A technical-beta, local-first AI application targeting Frappe v17"
+requires-python = ">=3.14,<3.15"
 readme = "README.md"
 dynamic = ["version"]
 dependencies = [
-    # "frappe~=16.0.0" # Installed and managed by bench.
+    # Frappe 17.0.0-dev is installed and pinned by Bench/CI, not pip metadata.
     # The core platform depends only on `requests`, which Frappe already provides.
     # Everything else is optional and degrades gracefully - see [project.optional-dependencies].
 ]
@@ -26,8 +26,8 @@ documents = [
     "lxml>=5.0",            # Faster HTML/XML parsing
 ]
 
-# Optical character recognition for scanned documents and images.
-# Also needs the Tesseract binary: apt install tesseract-ocr
+# Optical character recognition fallback for image files only.
+# Scanned-PDF OCR is unsupported. Also needs: apt install tesseract-ocr
 ocr = [
     "Pillow>=10.0",
     "pytesseract>=0.3.10",

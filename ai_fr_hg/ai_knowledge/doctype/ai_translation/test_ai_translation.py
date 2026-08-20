@@ -3,7 +3,7 @@
 
 """Frappe integration coverage for Arabic / English / Hebrew translation."""
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, call, patch
 
 import frappe
 
@@ -33,6 +33,28 @@ class TranslationTestCase(AIPlatformTestCase):
 
 
 class TestDocumentTranslation(TranslationTestCase):
+	def test_worker_authority_is_restored_after_failure(self):
+		from ai_fr_hg.ai.translation import _translation_user
+
+		worker_frappe = MagicMock()
+		worker_frappe.session.user = "background-worker@example.com"
+		worker_frappe.db.get_value.return_value = 1
+		worker_frappe.set_user.side_effect = lambda user: setattr(worker_frappe.session, "user", user)
+
+		with (
+			patch("ai_fr_hg.ai.translation.frappe", worker_frappe),
+			self.assertRaisesRegex(RuntimeError, "provider failed"),
+		):
+			with _translation_user("requester@example.com"):
+				self.assertEqual(worker_frappe.session.user, "requester@example.com")
+				raise RuntimeError("provider failed")
+
+		self.assertEqual(worker_frappe.session.user, "background-worker@example.com")
+		self.assertEqual(
+			worker_frappe.set_user.call_args_list,
+			[call("requester@example.com"), call("background-worker@example.com")],
+		)
+
 	def test_translation_preserves_document_structure(self):
 		from ai_fr_hg.ai.translation import run_translation
 

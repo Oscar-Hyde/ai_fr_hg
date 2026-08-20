@@ -59,11 +59,13 @@
    "label": "Strict Schema"
   },
   {
-   "description": "Optional. Extracted data can be mapped onto this DocType.",
+   "description": "Reserved for schema compatibility. Extraction currently returns validated JSON and does not write target records.",
    "fieldname": "target_doctype",
    "fieldtype": "Link",
-   "label": "Target DocType",
-   "options": "DocType"
+   "hidden": 1,
+   "label": "Target DocType (Unsupported)",
+   "options": "DocType",
+   "read_only": 1
   },
   {
    "fieldname": "fields_sec",

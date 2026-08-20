@@ -137,47 +137,73 @@ frappe.ui.form.on("AI Document", {
 
 		// Folder organization actions use the same server-authoritative facade as
 		// Tree View; the form never resolves Files or writes provenance itself.
-		frm.add_custom_button(__("Move to Folder…"), async () => {
-			const target = await prompt_for_folder({
-				default_folder: frm.doc.folder || "Home",
-				title: __("Select Destination Folder"),
-			});
-			if (!target) return;
-			try {
-				await frappe.xcall("ai_fr_hg.api.document_tree.move_node", {
-					node: `document::${frm.doc.name}`,
-					target_folder: target,
-					expected_modified: frm.doc.modified,
+		frm.add_custom_button(
+			__("Move to Folder…"),
+			async () => {
+				const target = await prompt_for_folder({
+					default_folder: frm.doc.folder || "Home",
+					title: __("Select Destination Folder"),
 				});
-				frappe.show_alert({ message: __("Moved to {0}", [target]), indicator: "green" });
-				frm.reload_doc();
-			} catch (e) {
-				frappe.msgprint({ title: __("Move failed"), message: e.message, indicator: "red" });
-			}
-		}, __("Folder"));
+				if (!target) return;
+				try {
+					await frappe.xcall("ai_fr_hg.api.document_tree.move_node", {
+						node: `document::${frm.doc.name}`,
+						target_folder: target,
+						expected_modified: frm.doc.modified,
+					});
+					frappe.show_alert({
+						message: __("Moved to {0}", [target]),
+						indicator: "green",
+					});
+					frm.reload_doc();
+				} catch (e) {
+					frappe.msgprint({
+						title: __("Move failed"),
+						message: e.message,
+						indicator: "red",
+					});
+				}
+			},
+			__("Folder")
+		);
 
-		frm.add_custom_button(__("Open Document Tree"), () => {
-			frappe.set_route("Tree", "AI Document");
-		}, __("Folder"));
+		frm.add_custom_button(
+			__("Open Document Tree"),
+			() => {
+				frappe.set_route("Tree", "AI Document");
+			},
+			__("Folder")
+		);
 
-		frm.add_custom_button(__("Copy Document To…"), async () => {
-			const target = await prompt_for_folder({
-				default_folder: frm.doc.folder || "Home",
-				title: __("Select Destination Folder"),
-			});
-			if (!target) return;
-			try {
-				const copy = await frappe.xcall("ai_fr_hg.api.document_tree.copy_node", {
-					node: `document::${frm.doc.name}`,
-					target_folder: target,
-					expected_modified: frm.doc.modified,
+		frm.add_custom_button(
+			__("Copy Document To…"),
+			async () => {
+				const target = await prompt_for_folder({
+					default_folder: frm.doc.folder || "Home",
+					title: __("Select Destination Folder"),
 				});
-				frappe.show_alert({ message: __("Document copied to {0}", [target]), indicator: "green" });
-				frappe.set_route("Form", "AI Document", copy.name);
-			} catch (e) {
-				frappe.msgprint({ title: __("Copy failed"), message: e.message, indicator: "red" });
-			}
-		}, __("Folder"));
+				if (!target) return;
+				try {
+					const copy = await frappe.xcall("ai_fr_hg.api.document_tree.copy_node", {
+						node: `document::${frm.doc.name}`,
+						target_folder: target,
+						expected_modified: frm.doc.modified,
+					});
+					frappe.show_alert({
+						message: __("Document copied to {0}", [target]),
+						indicator: "green",
+					});
+					frappe.set_route("Form", "AI Document", copy.name);
+				} catch (e) {
+					frappe.msgprint({
+						title: __("Copy failed"),
+						message: e.message,
+						indicator: "red",
+					});
+				}
+			},
+			__("Folder")
+		);
 
 		if (frm.doc.status === "Indexed") {
 			frm.add_custom_button(__("Summarise"), async () => {
@@ -277,48 +303,48 @@ frappe.ui.form.on("AI Document", {
 				__("Intelligence")
 			);
 
-		frm.add_custom_button(
-			__("Extract Patterns"),
-			async () => {
-				frappe.dom.freeze(__("Scanning patterns..."));
-				try {
+			frm.add_custom_button(
+				__("Extract Patterns"),
+				async () => {
+					frappe.dom.freeze(__("Scanning patterns..."));
+					try {
+						const result = await frappe.xcall(
+							"ai_fr_hg.api.knowledge.scan_pattern_entities",
+							{ document: frm.doc.name }
+						);
+						frappe.dom.unfreeze();
+						frappe.show_alert({
+							message: __("Extracted {0} pattern entities", [result.total]),
+							indicator: "green",
+						});
+						frm.reload_doc();
+					} catch (error) {
+						frappe.dom.unfreeze();
+					}
+				},
+				__("Intelligence")
+			);
+
+			frm.add_custom_button(
+				__("View Patterns"),
+				async () => {
 					const result = await frappe.xcall(
-						"ai_fr_hg.api.knowledge.scan_pattern_entities",
+						"ai_fr_hg.api.knowledge.get_pattern_entities",
 						{ document: frm.doc.name }
 					);
-					frappe.dom.unfreeze();
-					frappe.show_alert({
-						message: __("Extracted {0} pattern entities", [result.total]),
-						indicator: "green",
-					});
-					frm.reload_doc();
-				} catch (error) {
-					frappe.dom.unfreeze();
-				}
-			},
-			__("Intelligence")
-		);
-
-		frm.add_custom_button(
-			__("View Patterns"),
-			async () => {
-				const result = await frappe.xcall(
-					"ai_fr_hg.api.knowledge.get_pattern_entities",
-					{ document: frm.doc.name }
-				);
-				if (!result.entities.length) {
-					frappe.msgprint({
-						title: __("Pattern Entities"),
-						message: __(
-							"No pattern entities yet. Use Extract Patterns to scan this document."
-						),
-						indicator: "blue",
-					});
-					return;
-				}
-				const groups = Object.keys(result.entity_counts)
-					.map(
-						(type) => `
+					if (!result.entities.length) {
+						frappe.msgprint({
+							title: __("Pattern Entities"),
+							message: __(
+								"No pattern entities yet. Use Extract Patterns to scan this document."
+							),
+							indicator: "blue",
+						});
+						return;
+					}
+					const groups = Object.keys(result.entity_counts)
+						.map(
+							(type) => `
 					<h5 style="margin:12px 0 4px">${type}
 						<span class="text-muted small">(${result.entity_counts[type]})</span>
 					</h5>
@@ -329,24 +355,26 @@ frappe.ui.form.on("AI Document", {
 						<div style="border-bottom:1px solid var(--border-color);padding:4px 0">
 							${frappe.utils.escape_html(entity.value)}
 							<span class="text-muted small">× ${entity.occurrences}</span>
-							${entity.context_quote
-								? `<div class="text-muted small" style="margin-top:2px">…${frappe.utils.escape_html(
-										entity.context_quote
-								  )}…</div>`
-								: ""}
+							${
+								entity.context_quote
+									? `<div class="text-muted small" style="margin-top:2px">…${frappe.utils.escape_html(
+											entity.context_quote
+									  )}…</div>`
+									: ""
+							}
 						</div>`
 						)
 						.join("")}`
-					)
-					.join("");
-				frappe.msgprint({
-					title: __("Pattern Entities"),
-					wide: true,
-					message: groups,
-				});
-			},
-			__("View")
-		);
+						)
+						.join("");
+					frappe.msgprint({
+						title: __("Pattern Entities"),
+						wide: true,
+						message: groups,
+					});
+				},
+				__("View")
+			);
 
 			frm.add_custom_button(
 				__("Translate…"),
@@ -361,10 +389,10 @@ frappe.ui.form.on("AI Document", {
 						source_document: frm.doc.name,
 					}),
 				__("View")
-		);
+			);
 
-		frm.add_custom_button(
-			__("View Chunks"),
+			frm.add_custom_button(
+				__("View Chunks"),
 				async () => {
 					const chunks = await frappe.xcall(
 						"ai_fr_hg.api.knowledge.get_document_chunks",

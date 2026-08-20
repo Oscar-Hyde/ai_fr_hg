@@ -30,7 +30,9 @@ frappe.ui.form.on("AI Execution Log", {
 
 		if (frm.doc.error_message) {
 			frm.dashboard.add_section(
-				`<div class="alert alert-danger small">${frappe.utils.escape_html(frm.doc.error_message)}</div>`
+				`<div class="alert alert-danger small">${frappe.utils.escape_html(
+					frm.doc.error_message
+				)}</div>`
 			);
 		}
 

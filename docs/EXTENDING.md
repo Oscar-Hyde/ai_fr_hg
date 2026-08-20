@@ -101,7 +101,7 @@ dotted path in the **Adapter Path** field.
 | Member | Purpose |
 | --- | --- |
 | `provider_type` | Must match the value used in the hook and the DocType field. |
-| `supports_streaming` / `supports_tools` / `supports_embeddings` / `supports_model_pull` | Advertised capabilities; the platform will not call what you do not support. |
+| `supports_streaming` / `supports_tools` / `supports_embeddings` / `supports_model_pull` | Adapter declarations used by some paths. Complete effective capability enforcement remains open under PROV-02; adapters must also reject unsupported calls themselves. |
 | `chat(...) -> CompletionResult` | Required. Tool calls go in `CompletionResult.tool_calls` as `{"id", "name", "arguments": dict}`. |
 | `embed(texts, model, options) -> list[list[float]]` | Required for search. |
 | `list_models() -> list[ModelInfo]` | Powers automatic discovery. |

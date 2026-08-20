@@ -17,12 +17,8 @@ class TestLearningLoop(AIPlatformTestCase):
 	def setUpClass(cls):
 		super().setUpClass()
 		# Cache the original values so tearDownClass can restore them.
-		cls._original_learning = frappe.db.get_single_value(
-			"AI Platform Settings", "learning_enabled"
-		)
-		cls._original_approval = frappe.db.get_single_value(
-			"AI Platform Settings", "require_memory_approval"
-		)
+		cls._original_learning = frappe.db.get_single_value("AI Platform Settings", "learning_enabled")
+		cls._original_approval = frappe.db.get_single_value("AI Platform Settings", "require_memory_approval")
 		# Enable the learning loop for all tests in this class.
 		frappe.db.set_single_value("AI Platform Settings", "learning_enabled", 1)
 		frappe.db.set_single_value("AI Platform Settings", "require_memory_approval", 1)
@@ -31,12 +27,8 @@ class TestLearningLoop(AIPlatformTestCase):
 	@classmethod
 	def tearDownClass(cls):
 		# Restore original values so other test classes are not affected.
-		frappe.db.set_single_value(
-			"AI Platform Settings", "learning_enabled", cls._original_learning
-		)
-		frappe.db.set_single_value(
-			"AI Platform Settings", "require_memory_approval", cls._original_approval
-		)
+		frappe.db.set_single_value("AI Platform Settings", "learning_enabled", cls._original_learning)
+		frappe.db.set_single_value("AI Platform Settings", "require_memory_approval", cls._original_approval)
 		frappe.clear_cache()
 		super().tearDownClass()
 

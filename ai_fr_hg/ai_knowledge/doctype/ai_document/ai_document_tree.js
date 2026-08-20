@@ -25,7 +25,8 @@ frappe.provide("frappe.treeview_settings");
 	// Node payload (server-authored; Tree View only keeps `value` on root)
 	// ------------------------------------------------------------------
 
-	const data = (node) => (node.is_root ? { ...(node.data || {}), ...root_capabilities } : node.data || {});
+	const data = (node) =>
+		node.is_root ? { ...(node.data || {}), ...root_capabilities } : node.data || {};
 	const node_type = (node) => (node.is_root ? "root" : data(node).node_type);
 	const folder_for = (node) => {
 		if (node.is_root) return "Home";
@@ -74,7 +75,13 @@ frappe.provide("frappe.treeview_settings");
 	}
 
 	function confirm_action(message) {
-		return new Promise((resolve) => frappe.confirm(message, () => resolve(true), () => resolve(false)));
+		return new Promise((resolve) =>
+			frappe.confirm(
+				message,
+				() => resolve(true),
+				() => resolve(false)
+			)
+		);
 	}
 
 	// ------------------------------------------------------------------
@@ -87,7 +94,10 @@ frappe.provide("frappe.treeview_settings");
 
 	function notify_result(result) {
 		if (result?.status === "Queued") {
-			frappe.show_alert({ message: __("Operation queued: {0}", [result.job_id]), indicator: "blue" }, 8);
+			frappe.show_alert(
+				{ message: __("Operation queued: {0}", [result.job_id]), indicator: "blue" },
+				8
+			);
 		} else {
 			frappe.show_alert({ message: __("Tree updated"), indicator: "green" });
 		}
@@ -207,11 +217,15 @@ frappe.provide("frappe.treeview_settings");
 			? __(
 					"Delete this folder? Non-empty folders require an explicit recursive deletion and every descendant will be permission checked."
 			  )
-			: __("Delete this AI Document? Native Frappe attachment and retention policy will be applied.");
+			: __(
+					"Delete this AI Document? Native Frappe attachment and retention policy will be applied."
+			  );
 		if (!(await confirm_action(message))) return;
 		let recursive = false;
 		if (is_folder) {
-			recursive = await confirm_action(__("Also delete all folders and AI Documents in this subtree?"));
+			recursive = await confirm_action(
+				__("Also delete all folders and AI Documents in this subtree?")
+			);
 		}
 		refresh_tree(
 			await call("delete_node", {
@@ -225,7 +239,8 @@ frappe.provide("frappe.treeview_settings");
 	function actions_for(node) {
 		if (node_type(node) === "page") return [];
 		const actions = [];
-		if (!node.is_root && data(node).can_read) actions.push({ label: __("Open"), action: () => open_node(node) });
+		if (!node.is_root && data(node).can_read)
+			actions.push({ label: __("Open"), action: () => open_node(node) });
 		if ((node.is_root || node_type(node) === "folder") && data(node).can_create_child) {
 			actions.push({ label: __("Add"), action: () => add_child(node) });
 		}
@@ -233,8 +248,10 @@ frappe.provide("frappe.treeview_settings");
 			actions.push({ label: __("Rename"), action: () => rename(node) });
 			actions.push({ label: __("Move"), action: () => move(node) });
 		}
-		if (!node.is_root && data(node).can_copy) actions.push({ label: __("Copy"), action: () => copy(node) });
-		if (!node.is_root && data(node).can_delete) actions.push({ label: __("Delete"), action: () => remove(node) });
+		if (!node.is_root && data(node).can_copy)
+			actions.push({ label: __("Copy"), action: () => copy(node) });
+		if (!node.is_root && data(node).can_delete)
+			actions.push({ label: __("Delete"), action: () => remove(node) });
 		return actions;
 	}
 
@@ -242,7 +259,9 @@ frappe.provide("frappe.treeview_settings");
 		const actions = actions_for(node);
 		if (!actions.length) return;
 		const dialog = new frappe.ui.Dialog({
-			title: frappe.utils.escape_html(String(data(node).title || node.title || node.label || "")),
+			title: frappe.utils.escape_html(
+				String(data(node).title || node.title || node.label || "")
+			),
 			fields: [
 				{
 					fieldtype: "Select",
@@ -269,7 +288,10 @@ frappe.provide("frappe.treeview_settings");
 		} catch (_e) {
 			return;
 		}
-		const paths = folder === "Home" ? ["Home"] : folder.split("/").map((_, i, all) => all.slice(0, i + 1).join("/"));
+		const paths =
+			folder === "Home"
+				? ["Home"]
+				: folder.split("/").map((_, i, all) => all.slice(0, i + 1).join("/"));
 		try {
 			location_wrapper.empty().append(`<span class="text-muted">${__("Location")}: </span>`);
 		} catch (_e) {
@@ -318,7 +340,10 @@ frappe.provide("frappe.treeview_settings");
 			count = 0;
 		}
 		try {
-			view.page.set_indicator(count ? __("{0} selected", [count]) : "", count ? "blue" : "gray");
+			view.page.set_indicator(
+				count ? __("{0} selected", [count]) : "",
+				count ? "blue" : "gray"
+			);
 		} catch (_e) {
 			// page may be destroyed when returning to Desk
 		}
@@ -343,7 +368,11 @@ frappe.provide("frappe.treeview_settings");
 		if ([...selected.values()].some((item) => !item.can_delete)) {
 			return frappe.msgprint(__("Your selection contains an item you cannot delete."));
 		}
-		if (!(await confirm_action(__("Delete all selected items atomically? Folder descendants will be included.")))) {
+		if (
+			!(await confirm_action(
+				__("Delete all selected items atomically? Folder descendants will be included.")
+			))
+		) {
 			return;
 		}
 		refresh_tree(
@@ -368,7 +397,8 @@ frappe.provide("frappe.treeview_settings");
 		try {
 			Object.values(view.tree.nodes).forEach((node) => {
 				// Never invoke deep retrieval. Only reveal branches already fetched.
-				if (node.expandable && node.loaded && !node.expanded) view.tree.expand_node(node, false);
+				if (node.expandable && node.loaded && !node.expanded)
+					view.tree.expand_node(node, false);
 			});
 		} catch (_e) {
 			// ignore
@@ -403,12 +433,17 @@ frappe.provide("frappe.treeview_settings");
 			},
 		],
 		get_label(node) {
-			if (node.is_root) return `<strong>${frappe.utils.escape_html(__("AI Documents"))}</strong>`;
+			if (node.is_root)
+				return `<strong>${frappe.utils.escape_html(__("AI Documents"))}</strong>`;
 			const d = data(node);
-			const title = frappe.utils.escape_html(String(d.title || node.title || node.label || ""));
+			const title = frappe.utils.escape_html(
+				String(d.title || node.title || node.label || "")
+			);
 			if (d.node_type === "document") {
 				const status = d.status
-					? ` <span class="indicator-pill gray">${frappe.utils.escape_html(__(d.status))}</span>`
+					? ` <span class="indicator-pill gray">${frappe.utils.escape_html(
+							__(d.status)
+					  )}</span>`
 					: "";
 				return `<span class="ai-document-tree-document">${title}${status}</span>`;
 			}
@@ -420,7 +455,9 @@ frappe.provide("frappe.treeview_settings");
 		},
 		onrender(node) {
 			if (node.is_root || !["folder", "document"].includes(node_type(node))) return;
-			const checkbox = $('<input type="checkbox" class="ai-document-tree-select" aria-label="Select item">');
+			const checkbox = $(
+				'<input type="checkbox" class="ai-document-tree-select" aria-label="Select item">'
+			);
 			checkbox.prop("checked", selected.has(data(node).value));
 			checkbox.on("click", (event) => {
 				event.stopPropagation();
@@ -437,12 +474,14 @@ frappe.provide("frappe.treeview_settings");
 		toolbar: [
 			{
 				label: __("Open"),
-				condition: (node) => !node.is_root && node_type(node) !== "page" && data(node).can_read,
+				condition: (node) =>
+					!node.is_root && node_type(node) !== "page" && data(node).can_read,
 				click: open_node,
 			},
 			{
 				label: __("Add"),
-				condition: (node) => (node.is_root || node_type(node) === "folder") && data(node).can_create_child,
+				condition: (node) =>
+					(node.is_root || node_type(node) === "folder") && data(node).can_create_child,
 				click: add_child,
 			},
 			{
@@ -459,7 +498,8 @@ frappe.provide("frappe.treeview_settings");
 			},
 			{
 				label: __("Copy"),
-				condition: (node) => !node.is_root && node_type(node) !== "page" && data(node).can_copy,
+				condition: (node) =>
+					!node.is_root && node_type(node) !== "page" && data(node).can_copy,
 				click: copy,
 				btnClass: "hidden-xs",
 			},
@@ -558,13 +598,17 @@ frappe.provide("frappe.treeview_settings");
 			addOnce(__("Collapse All"), collapse_loaded, __("Tree"));
 			addOnce(__("Move Selected"), bulk_move, __("Bulk Actions"));
 			addOnce(__("Delete Selected"), bulk_delete, __("Bulk Actions"));
-			addOnce(__("Refresh"), () => {
-				try {
-					treeview.make_tree();
-				} catch (_e) {
-					// ignore
-				}
-			}, null);
+			addOnce(
+				__("Refresh"),
+				() => {
+					try {
+						treeview.make_tree();
+					} catch (_e) {
+						// ignore
+					}
+				},
+				null
+			);
 			update_location({ is_root: true, data: { value: ROOT } });
 		},
 		menu_items: [
