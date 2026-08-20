@@ -119,7 +119,7 @@ class TestControlledBaseline(TestCase):
 		self.assertIn("semgrep==1.173.0", workflow)
 		self.assertIn("--no-suppress-errors", workflow)
 		self.assertIn("pip-audit==2.10.1", workflow)
-		self.assertIn('if group != "all"', workflow)
+		self.assertIn("docs/phase-reports/export_optional_requirements.py", workflow)
 		self.assertIn('--requirement "$AUDIT_REQUIREMENTS"', workflow)
 		self.assertIn("--progress-spinner off", workflow)
 		self.assertNotIn("--skip-editable", workflow)
