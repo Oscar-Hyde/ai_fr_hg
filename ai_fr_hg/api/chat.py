@@ -218,6 +218,7 @@ def archive_conversation(conversation: str) -> dict:
 def rename_conversation(conversation: str, title: str) -> dict:
 	"""Rename a conversation."""
 	from ai_fr_hg.utils import api_validation
+
 	title = api_validation.bounded_text(title, label="Title", max_length=140, required=True)
 	doc = frappe.get_doc("AI Conversation", conversation)
 	doc.check_permission("write")
@@ -249,6 +250,7 @@ def restore_conversation(conversation: str) -> dict:
 def get_messages(conversation: str, limit: int = 50, offset: int = 0) -> dict:
 	"""Paginated messages for a conversation (CHAT-05)."""
 	from frappe.utils import cint
+
 	doc = frappe.get_doc("AI Conversation", conversation)
 	doc.check_permission("read")
 	limit = max(1, min(cint(limit) or 50, 200))
@@ -256,7 +258,25 @@ def get_messages(conversation: str, limit: int = 50, offset: int = 0) -> dict:
 	messages = frappe.get_all(
 		"AI Message",
 		filters={"conversation": conversation},
-		fields=["name","role","content","reasoning","citations","learned_context","sequence","creation","model","tool","tool_arguments","tool_result","total_tokens","duration_ms","feedback","status","error_message"],
+		fields=[
+			"name",
+			"role",
+			"content",
+			"reasoning",
+			"citations",
+			"learned_context",
+			"sequence",
+			"creation",
+			"model",
+			"tool",
+			"tool_arguments",
+			"tool_result",
+			"total_tokens",
+			"duration_ms",
+			"feedback",
+			"status",
+			"error_message",
+		],
 		order_by="sequence asc, creation asc",
 		limit_page_length=limit,
 		limit_start=offset,
@@ -264,22 +284,35 @@ def get_messages(conversation: str, limit: int = 50, offset: int = 0) -> dict:
 	for m in messages:
 		if m.citations:
 			try:
-				import json; m.citations = json.loads(m.citations)
-			except: m.citations = []
+				import json
+
+				m.citations = json.loads(m.citations)
+			except Exception:
+				m.citations = []
 		if m.learned_context:
 			try:
-				import json; m.learned_context = json.loads(m.learned_context)
-			except: m.learned_context = {}
-	return {"messages": messages, "limit": limit, "offset": offset, "has_more": len(messages)==limit}
+				import json
+
+				m.learned_context = json.loads(m.learned_context)
+			except Exception:
+				m.learned_context = {}
+	return {"messages": messages, "limit": limit, "offset": offset, "has_more": len(messages) == limit}
 
 
 @frappe.whitelist()
 def export_conversation(conversation: str) -> dict:
 	"""Export conversation as JSON for download (CHAT-05)."""
 	import json
+
 	doc = frappe.get_doc("AI Conversation", conversation)
 	doc.check_permission("read")
-	messages = frappe.get_all("AI Message", filters={"conversation": conversation}, fields=["role","content","sequence","creation","citations","status"], order_by="sequence asc", limit_page_length=0)
+	messages = frappe.get_all(
+		"AI Message",
+		filters={"conversation": conversation},
+		fields=["role", "content", "sequence", "creation", "citations", "status"],
+		order_by="sequence asc",
+		limit_page_length=0,
+	)
 	return {"conversation": doc.as_dict(), "messages": messages}
 
 
@@ -289,11 +322,24 @@ def cancel_turn(conversation: str, turn_id: str | None = None) -> dict:
 	doc = frappe.get_doc("AI Conversation", conversation)
 	doc.check_permission("write")
 	# Find latest non-terminal message
-	names = frappe.get_all("AI Message", filters={"conversation": conversation, "status": ["in", ["Streaming","Pending","Draft"]]}, fields=["name"], order_by="sequence desc", limit_page_length=1)
+	names = frappe.get_all(
+		"AI Message",
+		filters={"conversation": conversation, "status": ["in", ["Streaming", "Pending", "Draft"]]},
+		fields=["name"],
+		order_by="sequence desc",
+		limit_page_length=1,
+	)
 	if not names:
 		return {"status": "no_active_turn"}
-	frappe.db.set_value("AI Message", names[0].name, {"status": "Failed", "error_message": "Cancelled by user"})
-	frappe.publish_realtime("ai_turn_cancelled", {"conversation": conversation, "turn_id": turn_id}, doctype="AI Conversation", docname=conversation)
+	frappe.db.set_value(
+		"AI Message", names[0].name, {"status": "Failed", "error_message": "Cancelled by user"}
+	)
+	frappe.publish_realtime(
+		"ai_turn_cancelled",
+		{"conversation": conversation, "turn_id": turn_id},
+		doctype="AI Conversation",
+		docname=conversation,
+	)
 	return {"status": "cancelled", "message": names[0].name}
 
 

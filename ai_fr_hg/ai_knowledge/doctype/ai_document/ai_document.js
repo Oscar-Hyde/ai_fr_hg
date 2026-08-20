@@ -115,48 +115,91 @@ async function open_translation_dialog(frm) {
 	dialog.show();
 }
 
-
 async function renderWarnings(frm) {
-    // ING-05 UI states: loading, empty, partial, failure, permission, retry, realtime
-    const $area = frm.fields_dict.extraction_warnings ? frm.fields_dict.extraction_warnings.$wrapper : null;
-    if (!$area) return;
-    $area.html(`<div class="text-muted small">${__("Loading warnings...")}</div>`);
-    try {
-        const res = await frappe.xcall("ai_fr_hg.api.knowledge.get_document_warnings", {document: frm.doc.name});
-        const warnings = res.warnings || [];
-        if (!warnings.length) {
-            $area.html(`<div class="text-muted small">${__("No extraction warnings — clean extraction.")}</div>`);
-            frm.dashboard.clear_headline();
-            return;
-        }
-        // partial state: warnings + Indexed
-        const isPartial = res.status === "Indexed" && warnings.length;
-        const header = isPartial ? __("Partial extraction — warnings present") : __("Extraction warnings");
-        const html = `<div style="border:1px solid var(--border-color);border-radius:4px;padding:8px">
-            <b>${header} (${warnings.length})</b> <span class="indicator ${isPartial ? "orange" : "red"}">${isPartial ? __("Partial") : __("Review")}</span>
+	// ING-05 UI states: loading, empty, partial, failure, permission, retry, realtime
+	const $area = frm.fields_dict.extraction_warnings
+		? frm.fields_dict.extraction_warnings.$wrapper
+		: null;
+	if (!$area) return;
+	$area.html(`<div class="text-muted small">${__("Loading warnings...")}</div>`);
+	try {
+		const res = await frappe.xcall("ai_fr_hg.api.knowledge.get_document_warnings", {
+			document: frm.doc.name,
+		});
+		const warnings = res.warnings || [];
+		if (!warnings.length) {
+			$area.html(
+				`<div class="text-muted small">${__(
+					"No extraction warnings — clean extraction."
+				)}</div>`
+			);
+			frm.dashboard.clear_headline();
+			return;
+		}
+		// partial state: warnings + Indexed
+		const isPartial = res.status === "Indexed" && warnings.length;
+		const header = isPartial
+			? __("Partial extraction — warnings present")
+			: __("Extraction warnings");
+		const html = `<div style="border:1px solid var(--border-color);border-radius:4px;padding:8px">
+            <b>${header} (${warnings.length})</b> <span class="indicator ${
+			isPartial ? "orange" : "red"
+		}">${isPartial ? __("Partial") : __("Review")}</span>
             <div style="max-height:240px;overflow:auto;margin-top:8px">
-            ${warnings.map(w=>`<div style="border-bottom:1px solid var(--border-color);padding:4px 0">
-                <b>${frappe.utils.escape_html(w.code||w.category||"warning")}</b> <span class="text-muted small">[${frappe.utils.escape_html(w.reader||"")} ${frappe.utils.escape_html(w.location||"")}]</span>
-                <div>${frappe.utils.escape_html(w.message||JSON.stringify(w))}</div>
-                ${w.details && Object.keys(w.details).length ? `<div class="text-muted small">${frappe.utils.escape_html(JSON.stringify(w.details))}</div>` : ""}
-                <div class="text-muted small">${frappe.utils.escape_html(w.timestamp||"")} · ${frappe.utils.escape_html(w.stage||"")}</div>
-            </div>`).join("")}
+            ${warnings
+				.map(
+					(w) => `<div style="border-bottom:1px solid var(--border-color);padding:4px 0">
+                <b>${frappe.utils.escape_html(
+					w.code || w.category || "warning"
+				)}</b> <span class="text-muted small">[${frappe.utils.escape_html(
+						w.reader || ""
+					)} ${frappe.utils.escape_html(w.location || "")}]</span>
+                <div>${frappe.utils.escape_html(w.message || JSON.stringify(w))}</div>
+                ${
+					w.details && Object.keys(w.details).length
+						? `<div class="text-muted small">${frappe.utils.escape_html(
+								JSON.stringify(w.details)
+						  )}</div>`
+						: ""
+				}
+                <div class="text-muted small">${frappe.utils.escape_html(
+					w.timestamp || ""
+				)} · ${frappe.utils.escape_html(w.stage || "")}</div>
+            </div>`
+				)
+				.join("")}
             </div>
-            <button class="btn btn-xs btn-default" style="margin-top:8px" onclick="cur_frm.call('reprocess').then(()=>cur_frm.reload_doc())">${__("Retry Processing")}</button>
+            <button class="btn btn-xs btn-default" style="margin-top:8px" onclick="cur_frm.call('reprocess').then(()=>cur_frm.reload_doc())">${__(
+				"Retry Processing"
+			)}</button>
         </div>`;
-        $area.html(html);
-        frm.dashboard.set_headline(`<span class="text-warning">${frappe.utils.escape_html(header)}: ${warnings.length} — ${__("partial extraction will still be indexed")}</span>`);
-        // realtime fallback: poll every 30s while Queued/Extracting
-        if (["Queued","Extracting","Chunking","Embedding"].includes(res.status)) {
-            setTimeout(()=>renderWarnings(frm), 30000);
-        }
-    } catch(e) {
-        if ((e.message||"").includes("Permission")) {
-            $area.html(`<div class="text-muted small text-danger">${__("You do not have permission to view warnings.")}</div>`);
-        } else {
-            $area.html(`<div class="text-muted small">${__("Warnings unavailable — retry.")} <button class="btn btn-xs btn-default" onclick="cur_frm.reload_doc()">${__("Retry")}</button></div>`);
-        }
-    }
+		$area.html(html);
+		frm.dashboard.set_headline(
+			`<span class="text-warning">${frappe.utils.escape_html(header)}: ${
+				warnings.length
+			} — ${__("partial extraction will still be indexed")}</span>`
+		);
+		// realtime fallback: poll every 30s while Queued/Extracting
+		if (["Queued", "Extracting", "Chunking", "Embedding"].includes(res.status)) {
+			setTimeout(() => renderWarnings(frm), 30000);
+		}
+	} catch (e) {
+		if ((e.message || "").includes("Permission")) {
+			$area.html(
+				`<div class="text-muted small text-danger">${__(
+					"You do not have permission to view warnings."
+				)}</div>`
+			);
+		} else {
+			$area.html(
+				`<div class="text-muted small">${__(
+					"Warnings unavailable — retry."
+				)} <button class="btn btn-xs btn-default" onclick="cur_frm.reload_doc()">${__(
+					"Retry"
+				)}</button></div>`
+			);
+		}
+	}
 }
 
 frappe.ui.form.on("AI Document", {
@@ -166,7 +209,9 @@ frappe.ui.form.on("AI Document", {
 		frm.page.set_indicator(frm.doc.status, frappe.ai.status_color(frm.doc.status));
 		renderWarnings(frm);
 		// realtime: update warnings when processing completes
-		frappe.realtime.on("ai_document_processed", (data)=>{ if(data.document===frm.doc.name) renderWarnings(frm); });
+		frappe.realtime.on("ai_document_processed", (data) => {
+			if (data.document === frm.doc.name) renderWarnings(frm);
+		});
 
 		// The source folder is a native Link field and a standard list filter.
 		// Deep navigation and breadcrumbs are provided by Frappe's FileView.

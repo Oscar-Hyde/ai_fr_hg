@@ -289,13 +289,21 @@ def extract_document_data(document: str, schema: str, save: bool = True) -> dict
 	except Exception as e:
 		# INT-02: distinguish validation failure from provider failure; never persist invalid output
 		from ai_fr_hg.ai.validation import ValidationError as _VE
+
 		if isinstance(e, _VE):
 			# Persist provenance for observability without persisting invalid data
 			try:
-				doc.db_set("extracted_data", frappe.as_json({"_validation_error": str(e), "errors": e.errors, "provenance": e.provenance}))
+				doc.db_set(
+					"extracted_data",
+					frappe.as_json(
+						{"_validation_error": str(e), "errors": e.errors, "provenance": e.provenance}
+					),
+				)
 			except Exception:
 				pass
-			frappe.throw(_("Validation failed: {0}").format(e.errors[0]["message"] if e.errors else str(e)), exc=e)
+			frappe.throw(
+				_("Validation failed: {0}").format(e.errors[0]["message"] if e.errors else str(e)), exc=e
+			)
 		raise
 
 	if cint(save):
@@ -345,23 +353,24 @@ def get_document_chunks(document: str, limit: int = 100) -> list:
 
 
 @frappe.whitelist()
-
 @frappe.whitelist()
 def get_document_warnings(document: str) -> dict:
-    """Return durable extraction warnings (ING-05) via canonical service.
-    Respects AI Document read permission; background workers persist via same ingestion path.
-    """
-    doc = frappe.get_doc("AI Document", document)
-    doc.check_permission("read")
-    raw = doc.get("extraction_warnings") or "[]"
-    try:
-        import json
-        warnings = json.loads(raw) if isinstance(raw, str) else raw
-        if not isinstance(warnings, list):
-            warnings = []
-    except Exception:
-        warnings = []
-    return {"document": document, "warnings": warnings, "status": doc.status, "reader_used": doc.reader_used}
+	"""Return durable extraction warnings (ING-05) via canonical service.
+	Respects AI Document read permission; background workers persist via same ingestion path.
+	"""
+	doc = frappe.get_doc("AI Document", document)
+	doc.check_permission("read")
+	raw = doc.get("extraction_warnings") or "[]"
+	try:
+		import json
+
+		warnings = json.loads(raw) if isinstance(raw, str) else raw
+		if not isinstance(warnings, list):
+			warnings = []
+	except Exception:
+		warnings = []
+	return {"document": document, "warnings": warnings, "status": doc.status, "reader_used": doc.reader_used}
+
 
 def scan_pattern_entities(document: str) -> dict:
 	"""Extract high-precision pattern entities from a document's stored content.

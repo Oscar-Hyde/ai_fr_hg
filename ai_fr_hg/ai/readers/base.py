@@ -24,15 +24,17 @@ class ReadResult:
 	def character_count(self) -> int:
 		return len(self.text)
 
-	
-from datetime import datetime, timezone
+
 import json as _json
+from datetime import datetime, timezone
+
 
 @dataclass
 class StructuredWarning:
 	"""Canonical warning contract for ING-05.
 	category/type, severity, source_file, reader, location, message, details, timestamp, stage
 	"""
+
 	code: str  # e.g. truncated, encrypted, missing_dependency, archive_member, parse_partial
 	category: str  # e.g. truncation, encryption, format, archive, nested_content
 	severity: str  # info | warning | error
@@ -41,22 +43,36 @@ class StructuredWarning:
 	location: str | None  # page/sheet/slide/member/index
 	message: str  # human-readable
 	details: dict  # machine-readable
-	timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+	timestamp: str = field(default_factory=lambda: datetime.now(datetime.UTC).isoformat())
 	stage: str = "extraction"  # extraction | chunking | embedding
 
 	def as_dict(self) -> dict:
-		return {k: v for k,v in self.__dict__.items() if v is not None}
+		return {k: v for k, v in self.__dict__.items() if v is not None}
 
-def coerce_warnings(raw: list, reader: str = "", source_file: str = "", stage: str = "extraction") -> list[dict]:
+
+def coerce_warnings(
+	raw: list, reader: str = "", source_file: str = "", stage: str = "extraction"
+) -> list[dict]:
 	"""Coerce legacy string warnings into structured objects (backward compat)."""
-	out=[]
+	out = []
 	for w in raw or []:
 		if isinstance(w, dict):
 			out.append(w)
 		else:
-			out.append(StructuredWarning(code="legacy", category="general", severity="warning", reader=reader, source_file=source_file, location=None, message=str(w), details={}, stage=stage).as_dict())
+			out.append(
+				StructuredWarning(
+					code="legacy",
+					category="general",
+					severity="warning",
+					reader=reader,
+					source_file=source_file,
+					location=None,
+					message=str(w),
+					details={},
+					stage=stage,
+				).as_dict()
+			)
 	return out
-
 
 	@property
 	def word_count(self) -> int:

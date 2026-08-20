@@ -309,7 +309,7 @@ def run_agent_turn(
 			if documents is None:
 				documents = []
 			if doc_name not in documents:
-				documents = list(documents) + [doc_name]
+				documents = [*documents, doc_name]
 	# Attached files and folder-scoped asks are this turn's source of truth
 	# even when the agent does not auto-retrieve from its knowledge bases
 	# (the seeded General Assistant keeps use_knowledge off so empty-site
@@ -382,8 +382,17 @@ def run_agent_turn(
 	# the agent defines a fallback_answer, return it without calling the model.
 	if not (context or "").strip() and agent_doc.strict_grounding and agent_doc.fallback_answer:
 		if save_messages and conversation:
-			user_message = save_message(conversation, role="User", content=prompt, agent=agent_doc.name, model=model_doc.name)
-			assistant_message = save_message(conversation, role="Assistant", content=agent_doc.fallback_answer, agent=agent_doc.name, model=model_doc.name, status="Completed")
+			user_message = save_message(
+				conversation, role="User", content=prompt, agent=agent_doc.name, model=model_doc.name
+			)
+			assistant_message = save_message(
+				conversation,
+				role="Assistant",
+				content=agent_doc.fallback_answer,
+				agent=agent_doc.name,
+				model=model_doc.name,
+				status="Completed",
+			)
 			update_conversation_stats(conversation, None)
 		return {
 			"answer": agent_doc.fallback_answer,
