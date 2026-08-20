@@ -16,7 +16,7 @@ class TestSearchTelemetry(AIPlatformTestCase):
 		self.settings = frappe.get_doc("AI Platform Settings")
 		self.previous_patterns = self.settings.redact_patterns
 		self.previous_flag = cint(
-			frappe.db.get_value("AI Platform Settings", "AI Platform Settings", "log_search_queries") or 1
+			frappe.db.get_single_value("AI Platform Settings", "log_search_queries", cache=False) or 1
 		)
 
 	def tearDown(self):
