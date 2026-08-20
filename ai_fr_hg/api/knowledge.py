@@ -341,7 +341,6 @@ def get_document_chunks(document: str, limit: int = 100) -> list:
 
 
 @frappe.whitelist()
-@frappe.whitelist()
 def get_document_warnings(document: str) -> dict:
 	"""Return durable extraction warnings (ING-05) via canonical service.
 	Respects AI Document read permission; background workers persist via same ingestion path.

@@ -1,7 +1,11 @@
 # Copyright (c) 2026, Ai Fr Hg and contributors
 # For license information, please see license.txt
 
-"""Whitelisted chat and conversation endpoints."""
+"""Whitelisted chat and conversation endpoints.
+
+Thin transport/RPC facade. Conversation authorization, history, sequencing,
+cancellation, and configuration live in ``ai.conversation`` / ``ai.agent``.
+"""
 
 import json
 
@@ -45,16 +49,16 @@ def send_message(
 		documents, label=_("Documents"), max_items=api_validation.MAX_DOCUMENTS_PER_TURN
 	)
 	documents = _coerce_documents(documents)
+	turn_id = api_validation.bounded_text(turn_id, label=_("Turn"), max_length=64) if turn_id else None
 
 	if not conversation:
-		conversation_doc = create_conversation(agent=agent, knowledge_bases=knowledge_bases)
+		conversation_doc = create_conversation(agent=agent, knowledge_bases=knowledge_bases or None)
 		conversation = conversation_doc.name
 	else:
-		frappe.get_doc("AI Conversation", conversation).check_permission("write")
+		from ai_fr_hg.ai.conversation import require_conversation
 
-	# A budget of 0 (the default) waits for the local model. A positive value
-	# is only for sites sitting behind a reverse proxy that would otherwise
-	# return a bare 504.
+		require_conversation(conversation, "write")
+
 	turn_id = (turn_id or "").strip() or frappe.generate_hash(length=12)
 	want_stream = should_stream_completion(
 		requested=bool(cint(stream)),
@@ -73,13 +77,14 @@ def send_message(
 			message,
 			agent=agent,
 			conversation=conversation,
-			knowledge_bases=knowledge_bases,
+			knowledge_bases=knowledge_bases or None,
 			model=model,
 			documents=documents or None,
 			extra_context=extra_context or None,
 			on_token=on_token if want_stream else None,
+			turn_id=turn_id,
 		)
-	result["turn_id"] = turn_id
+	result["turn_id"] = result.get("turn_id") or turn_id
 	result["streamed"] = bool(result.pop("_streamed", False))
 	return result
 
@@ -105,8 +110,6 @@ def _get_turn_budget() -> int:
 	from ai_fr_hg.ai.settings import coerce_turn_budget
 
 	configured = frappe.db.get_single_value("AI Platform Settings", "max_turn_seconds")
-	# `None` means the column predates this setting (site not yet migrated).
-	# Local-first default is unbounded so a slow first token is not cut off.
 	return coerce_turn_budget(configured)
 
 
@@ -118,229 +121,148 @@ def start_conversation(
 ) -> dict:
 	"""Create a new conversation."""
 	from ai_fr_hg.ai.agent import create_conversation
+	from ai_fr_hg.utils import api_validation
 
-	if isinstance(knowledge_bases, str):
-		try:
-			knowledge_bases = json.loads(knowledge_bases)
-		except ValueError:
-			knowledge_bases = [knowledge_bases]
-
-	doc = create_conversation(agent=agent, title=title, knowledge_bases=knowledge_bases)
+	knowledge_bases = api_validation.bounded_list(
+		knowledge_bases, label=_("Knowledge bases"), max_items=api_validation.MAX_KNOWLEDGE_BASES_PER_REQUEST
+	)
+	if title:
+		title = api_validation.bounded_text(title, label=_("Title"), max_length=140)
+	doc = create_conversation(agent=agent, title=title, knowledge_bases=knowledge_bases or None)
 	return {"conversation": doc.name, "title": doc.title, "agent": doc.agent}
 
 
 @frappe.whitelist()
-def get_conversation(conversation: str) -> dict:
-	"""Return a conversation with its full message history."""
-	doc = frappe.get_doc("AI Conversation", conversation)
-	doc.check_permission("read")
+def get_conversation(conversation: str, limit: int = 100, offset: int = 0) -> dict:
+	"""Return a conversation with a bounded, paginated message history."""
+	from ai_fr_hg.ai.conversation import get_conversation_payload
+	from ai_fr_hg.utils import api_validation
 
-	messages = frappe.get_all(
-		"AI Message",
-		filters={"conversation": conversation},
-		fields=[
-			"name",
-			"role",
-			"content",
-			"reasoning",
-			"citations",
-			"learned_context",
-			"sequence",
-			"creation",
-			"model",
-			"tool",
-			"tool_arguments",
-			"tool_result",
-			"total_tokens",
-			"duration_ms",
-			"feedback",
-			"status",
-			"error_message",
-		],
-		order_by="sequence asc, creation asc",
-		limit_page_length=0,
-	)
-	for message in messages:
-		if message.citations:
-			try:
-				message.citations = json.loads(message.citations)
-			except ValueError:
-				message.citations = []
-		if message.learned_context:
-			try:
-				message.learned_context = json.loads(message.learned_context)
-			except ValueError:
-				message.learned_context = {}
-
-	return {
-		"conversation": doc.as_dict(),
-		"messages": messages,
-	}
+	conversation = api_validation.valid_identifier(conversation, label=_("Conversation"), required=True)
+	return get_conversation_payload(conversation, limit=limit, offset=offset)
 
 
 @frappe.whitelist()
-def list_conversations(limit: int = 50, include_archived: bool = False) -> list:
-	"""List the current user's conversations, most recent first."""
-	filters = {"user": frappe.session.user}
-	if not include_archived:
-		filters["status"] = "Active"
+def list_conversations(limit: int = 50, offset: int = 0, include_archived: bool = False) -> dict | list:
+	"""List conversations the caller may read, most recent first."""
+	from ai_fr_hg.ai.conversation import list_conversations as _list
 
-	return frappe.get_list(
-		"AI Conversation",
-		filters=filters,
-		fields=["name", "title", "agent", "message_count", "last_message_on", "pinned", "status"],
-		order_by="pinned desc, last_message_on desc, creation desc",
-		limit_page_length=cint(limit) or 50,
-	)
+	payload = _list(limit=limit, offset=offset, include_archived=include_archived)
+	# Keep the historical list shape for callers that ignore pagination keys.
+	return payload
 
 
 @frappe.whitelist()
 def delete_conversation(conversation: str) -> dict:
-	"""Delete a conversation and every message in it."""
-	doc = frappe.get_doc("AI Conversation", conversation)
-	doc.check_permission("delete")
+	from ai_fr_hg.ai.conversation import delete_conversation as _delete
+	from ai_fr_hg.utils import api_validation
 
-	frappe.db.delete("AI Message", {"conversation": conversation})
-	frappe.delete_doc("AI Conversation", conversation)
-	return {"status": "deleted", "conversation": conversation}
+	conversation = api_validation.valid_identifier(conversation, label=_("Conversation"), required=True)
+	return _delete(conversation)
 
 
 @frappe.whitelist()
 def archive_conversation(conversation: str) -> dict:
-	"""Archive a conversation without deleting it."""
-	doc = frappe.get_doc("AI Conversation", conversation)
-	doc.check_permission("write")
-	doc.db_set("status", "Archived")
-	return {"status": "archived", "conversation": conversation}
+	from ai_fr_hg.ai.conversation import archive_conversation as _archive
+	from ai_fr_hg.utils import api_validation
+
+	conversation = api_validation.valid_identifier(conversation, label=_("Conversation"), required=True)
+	return _archive(conversation)
 
 
 @frappe.whitelist()
 def rename_conversation(conversation: str, title: str) -> dict:
-	"""Rename a conversation."""
+	from ai_fr_hg.ai.conversation import rename_conversation as _rename
 	from ai_fr_hg.utils import api_validation
 
-	title = api_validation.bounded_text(title, label="Title", max_length=140, required=True)
-	doc = frappe.get_doc("AI Conversation", conversation)
-	doc.check_permission("write")
-	doc.db_set("title", title[:140])
-	return {"status": "renamed", "title": title}
+	conversation = api_validation.valid_identifier(conversation, label=_("Conversation"), required=True)
+	return _rename(conversation, title)
 
 
 @frappe.whitelist()
 def pin_conversation(conversation: str, pinned: int | bool = True) -> dict:
-	"""Pin or unpin a conversation."""
-	doc = frappe.get_doc("AI Conversation", conversation)
-	doc.check_permission("write")
-	doc.db_set("pinned", 1 if pinned and int(pinned) else 0)
-	return {"status": "pinned" if doc.pinned else "unpinned", "pinned": int(doc.pinned)}
+	from ai_fr_hg.ai.conversation import pin_conversation as _pin
+	from ai_fr_hg.utils import api_validation
+
+	conversation = api_validation.valid_identifier(conversation, label=_("Conversation"), required=True)
+	return _pin(conversation, pinned)
 
 
 @frappe.whitelist()
 def restore_conversation(conversation: str) -> dict:
-	"""Restore an archived conversation to Active."""
-	doc = frappe.get_doc("AI Conversation", conversation)
-	doc.check_permission("write")
-	if doc.status != "Archived":
-		return {"status": "active", "conversation": conversation}
-	doc.db_set("status", "Active")
-	return {"status": "restored", "conversation": conversation}
+	from ai_fr_hg.ai.conversation import restore_conversation as _restore
+	from ai_fr_hg.utils import api_validation
+
+	conversation = api_validation.valid_identifier(conversation, label=_("Conversation"), required=True)
+	return _restore(conversation)
 
 
 @frappe.whitelist()
 def get_messages(conversation: str, limit: int = 50, offset: int = 0) -> dict:
-	"""Paginated messages for a conversation (CHAT-05)."""
-	from frappe.utils import cint
+	from ai_fr_hg.ai.conversation import get_messages as _get
+	from ai_fr_hg.utils import api_validation
 
-	doc = frappe.get_doc("AI Conversation", conversation)
-	doc.check_permission("read")
-	limit = max(1, min(cint(limit) or 50, 200))
-	offset = max(0, cint(offset) or 0)
-	messages = frappe.get_all(
-		"AI Message",
-		filters={"conversation": conversation},
-		fields=[
-			"name",
-			"role",
-			"content",
-			"reasoning",
-			"citations",
-			"learned_context",
-			"sequence",
-			"creation",
-			"model",
-			"tool",
-			"tool_arguments",
-			"tool_result",
-			"total_tokens",
-			"duration_ms",
-			"feedback",
-			"status",
-			"error_message",
-		],
-		order_by="sequence asc, creation asc",
-		limit_page_length=limit,
-		limit_start=offset,
-	)
-	for m in messages:
-		if m.citations:
-			try:
-				import json
-
-				m.citations = json.loads(m.citations)
-			except Exception:
-				m.citations = []
-		if m.learned_context:
-			try:
-				import json
-
-				m.learned_context = json.loads(m.learned_context)
-			except Exception:
-				m.learned_context = {}
-	return {"messages": messages, "limit": limit, "offset": offset, "has_more": len(messages) == limit}
+	conversation = api_validation.valid_identifier(conversation, label=_("Conversation"), required=True)
+	return _get(conversation, limit=limit, offset=offset)
 
 
 @frappe.whitelist()
 def export_conversation(conversation: str) -> dict:
-	"""Export conversation as JSON for download (CHAT-05)."""
-	import json
+	from ai_fr_hg.ai.conversation import export_conversation as _export
+	from ai_fr_hg.utils import api_validation
 
-	doc = frappe.get_doc("AI Conversation", conversation)
-	doc.check_permission("read")
-	messages = frappe.get_all(
-		"AI Message",
-		filters={"conversation": conversation},
-		fields=["role", "content", "sequence", "creation", "citations", "status"],
-		order_by="sequence asc",
-		limit_page_length=0,
-	)
-	return {"conversation": doc.as_dict(), "messages": messages}
+	conversation = api_validation.valid_identifier(conversation, label=_("Conversation"), required=True)
+	return _export(conversation)
 
 
 @frappe.whitelist()
 def cancel_turn(conversation: str, turn_id: str | None = None) -> dict:
-	"""Cooperative cancellation: mark the latest Streaming/Pending message as Failed/Cancelled."""
-	doc = frappe.get_doc("AI Conversation", conversation)
-	doc.check_permission("write")
-	# Find latest non-terminal message
-	names = frappe.get_all(
-		"AI Message",
-		filters={"conversation": conversation, "status": ["in", ["Streaming", "Pending", "Draft"]]},
-		fields=["name"],
-		order_by="sequence desc",
-		limit_page_length=1,
+	from ai_fr_hg.ai.conversation import cancel_turn as _cancel
+	from ai_fr_hg.utils import api_validation
+
+	conversation = api_validation.valid_identifier(conversation, label=_("Conversation"), required=True)
+	if turn_id:
+		turn_id = api_validation.bounded_text(turn_id, label=_("Turn"), max_length=64)
+	return _cancel(conversation, turn_id)
+
+
+@frappe.whitelist()
+def get_turn_status(conversation: str, turn_id: str) -> dict:
+	from ai_fr_hg.ai.conversation import get_turn_status as _status
+	from ai_fr_hg.utils import api_validation
+
+	conversation = api_validation.valid_identifier(conversation, label=_("Conversation"), required=True)
+	return _status(conversation, turn_id)
+
+
+@frappe.whitelist()
+def update_conversation_config(
+	conversation: str,
+	agent: str | None = None,
+	model: str | None = None,
+	knowledge_bases: str | list | None = None,
+	context_document: str | None = None,
+) -> dict:
+	from ai_fr_hg.ai.conversation import update_conversation_config as _update
+	from ai_fr_hg.utils import api_validation
+
+	conversation = api_validation.valid_identifier(conversation, label=_("Conversation"), required=True)
+	knowledge_bases = (
+		api_validation.bounded_list(
+			knowledge_bases,
+			label=_("Knowledge bases"),
+			max_items=api_validation.MAX_KNOWLEDGE_BASES_PER_REQUEST,
+		)
+		if knowledge_bases is not None
+		else None
 	)
-	if not names:
-		return {"status": "no_active_turn"}
-	frappe.db.set_value(
-		"AI Message", names[0].name, {"status": "Failed", "error_message": "Cancelled by user"}
+	return _update(
+		conversation,
+		agent=agent,
+		model=model,
+		knowledge_bases=knowledge_bases,
+		context_document=context_document,
 	)
-	frappe.publish_realtime(
-		"ai_turn_cancelled",
-		{"conversation": conversation, "turn_id": turn_id},
-		doctype="AI Conversation",
-		docname=conversation,
-	)
-	return {"status": "cancelled", "message": names[0].name}
 
 
 @frappe.whitelist()
@@ -352,7 +274,21 @@ def submit_feedback(
 ) -> dict:
 	"""Record an outcome and feed it through the governed Learning Loop."""
 	from ai_fr_hg.ai.learning import record_feedback
+	from ai_fr_hg.utils import api_validation
 
+	message = api_validation.valid_identifier(message, label=_("Message"), required=True)
+	feedback = api_validation.enum_choice(
+		feedback, allowed=("", "Positive", "Negative"), label=_("Feedback"), default=""
+	)
+	if correction:
+		correction = api_validation.bounded_text(correction, label=_("Correction"), max_length=4000)
+	if reason:
+		reason = api_validation.enum_choice(
+			reason,
+			allowed=("", "Correction", "Missing Information", "Incorrect Information"),
+			label=_("Reason"),
+			default="",
+		)
 	result = record_feedback(message, feedback, correction=correction, reason=reason)
 	return {"status": "recorded", **result}
 
@@ -360,17 +296,19 @@ def submit_feedback(
 @frappe.whitelist()
 def summarize_conversation(conversation: str) -> dict:
 	"""Generate and store a summary of a conversation."""
+	from ai_fr_hg.ai.conversation import require_conversation
 	from ai_fr_hg.ai.intelligence import summarize
+	from ai_fr_hg.utils import api_validation
 
-	doc = frappe.get_doc("AI Conversation", conversation)
-	doc.check_permission("write")
+	conversation = api_validation.valid_identifier(conversation, label=_("Conversation"), required=True)
+	doc = require_conversation(conversation, "write")
 
 	messages = frappe.get_all(
 		"AI Message",
 		filters={"conversation": conversation, "role": ["in", ["User", "Assistant"]]},
 		fields=["role", "content"],
 		order_by="sequence asc",
-		limit_page_length=0,
+		limit=500,
 	)
 	if not messages:
 		frappe.throw(_("This conversation has no messages to summarise."))
@@ -398,6 +336,7 @@ def get_chat_context() -> dict:
 		filters={"enabled": 1},
 		fields=["name", "agent_name", "description", "model", "is_default", "greeting", "use_knowledge"],
 		order_by="is_default desc, agent_name asc",
+		limit=200,
 	):
 		allowed = frappe.get_all("AI Agent Role", filters={"parent": agent.name}, pluck="role")
 		if allowed and frappe.session.user != "Administrator" and not roles.intersection(allowed):
@@ -411,6 +350,7 @@ def get_chat_context() -> dict:
 		filters={"enabled": 1, "model_type": ["in", ["Chat", "Vision"]]},
 		fields=["name", "model_label", "model_type", "status", "provider", "is_default"],
 		order_by="is_default desc, model_label asc",
+		limit=200,
 	)
 
 	return {
@@ -421,6 +361,7 @@ def get_chat_context() -> dict:
 			filters={"name": ["in", accessible or [""]], "enabled": 1},
 			fields=["name", "knowledge_base_name", "document_count", "chunk_count"],
 			order_by="knowledge_base_name asc",
+			limit=200,
 		),
 		"settings": {
 			"streaming_enabled": frappe.db.get_single_value("AI Platform Settings", "streaming_enabled"),

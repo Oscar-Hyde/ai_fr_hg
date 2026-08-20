@@ -36,7 +36,8 @@ class AIMessage(Document):
 		reasoning: DF.LongText | None
 		role: DF.Literal["System", "User", "Assistant", "Tool"]
 		sequence: DF.Int
-		status: DF.Literal["Draft", "Pending", "Streaming", "Completed", "Failed"]
+		status: DF.Literal["Draft", "Pending", "Streaming", "Completed", "Failed", "Cancelled"]
+		turn_id: DF.Data | None
 		tool: DF.Link | None
 		tool_arguments: DF.Code | None
 		tool_call_id: DF.Data | None
@@ -46,12 +47,12 @@ class AIMessage(Document):
 	# end: auto-generated types
 
 	def before_insert(self):
+		if self.sequence and getattr(self.flags, "sequence_allocated", False):
+			return
 		if not self.sequence:
-			last = frappe.db.sql(
-				"select coalesce(max(sequence), 0) from `tabAI Message` where conversation = %s",
-				(self.conversation,),
-			)[0][0]
-			self.sequence = cint(last) + 1
+			from ai_fr_hg.ai.conversation import allocate_sequence
+
+			self.sequence = allocate_sequence(self.conversation)
 
 	def after_insert(self):
 		frappe.publish_realtime(

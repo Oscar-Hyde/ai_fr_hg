@@ -104,11 +104,18 @@ terminate with a `504`.
 | Method | Purpose |
 | --- | --- |
 | `start_conversation(agent, title, knowledge_bases)` | Create an empty conversation. |
-| `get_conversation(conversation)` | Full history with parsed citations. |
-| `list_conversations(limit, include_archived)` | The user's conversations, pinned first. |
+| `get_conversation(conversation, limit, offset)` | Configuration plus a bounded message page (`limit`/`offset`, max 100). |
+| `list_conversations(limit, offset, include_archived)` | Permission-aware list, pinned first. Returns `{conversations, limit, offset, has_more}`. |
+| `get_messages(conversation, limit, offset)` | Paginated messages. |
 | `rename_conversation(conversation, title)` | Rename. |
+| `pin_conversation(conversation, pinned)` | Pin or unpin. |
 | `archive_conversation(conversation)` | Archive without deleting. |
+| `restore_conversation(conversation)` | Restore an archived conversation. |
+| `export_conversation(conversation)` | JSON export of title/agent/messages. |
 | `delete_conversation(conversation)` | Delete the conversation and its messages. |
+| `cancel_turn(conversation, turn_id)` | Cooperative cancel of the in-flight turn (same `turn_id` as streaming). |
+| `get_turn_status(conversation, turn_id)` | Reconnect payload for one turn. |
+| `update_conversation_config(conversation, agent, model, knowledge_bases, context_document)` | Persist selectors so reload restores them. |
 | `submit_feedback(message, feedback, correction, reason)` | Rate an answer; optional correction/reason enters the governed learning loop. |
 | `summarize_conversation(conversation)` | Generate and store a summary. |
 | `get_chat_context()` | Bootstrap payload: agents, models, knowledge bases, settings. |
@@ -124,6 +131,7 @@ Ingest a previously uploaded file. Processing is queued by default.
 | Parameter | Type | Notes |
 | --- | --- | --- |
 | `file_url` | string | Required. From Frappe's file upload. |
+| `file_record` | string | Stable File name. Required when the URL is ambiguous. |
 | `knowledge_base` | string | Required. |
 | `title` | string | Defaults to the filename. |
 | `extraction_schema` | string | Run structured extraction after indexing. |

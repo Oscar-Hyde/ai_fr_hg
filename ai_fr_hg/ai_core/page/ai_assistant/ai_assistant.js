@@ -8,12 +8,17 @@
  */
 
 function relative_time(value) {
+	if (frappe.ai && frappe.ai.relative_time) return frappe.ai.relative_time(value);
 	if (!value) return "";
 	try {
 		return frappe.datetime.comment_when(value);
 	} catch (error) {
 		return "";
 	}
+}
+
+function assistant_ui() {
+	return (frappe.ai && frappe.ai.ui) || {};
 }
 
 frappe.pages["ai-assistant"].on_page_load = function (wrapper) {
@@ -27,7 +32,7 @@ frappe.pages["ai-assistant"].on_page_load = function (wrapper) {
 };
 
 frappe.pages["ai-assistant"].on_page_show = function (wrapper) {
-	wrapper.assistant && wrapper.assistant.refresh_conversations();
+	wrapper.assistant && wrapper.assistant.on_show();
 };
 
 class AIAssistant {
@@ -35,29 +40,50 @@ class AIAssistant {
 		this.page = page;
 		this.wrapper = wrapper;
 		this.conversation = null;
+		this.conversation_doc = null;
 		this.context = {};
 		this.sending = false;
+		this.cancelling = false;
 		this.selected_kbs = [];
-		// Documents uploaded in this session but not yet asked about. The next
-		// send grounds retrieval on them so "summarise what I just uploaded"
-		// actually works instead of finding nothing mid-index.
 		this.pending_documents = [];
+		this.include_archived = false;
+		this.messages_offset = 0;
+		this.messages_has_more = false;
+		this.stream_turn_id = null;
+		this.realtime = null;
 
 		this.make();
 		this.load_context();
+	}
+
+	on_show() {
 		this.bind_realtime();
-		// CHAT-03: restore conversation from route /app/ai-assistant/<name> or ?conversation=
-		setTimeout(() => {
-			try {
-				const route = frappe.get_route && frappe.get_route();
-				const name = route && route[2];
-				if (name && name.startsWith("AICONV")) this.open_conversation(name);
-				const q = new URLSearchParams(window.location.search).get("conversation");
-				if (q) this.open_conversation(q);
-			} catch (e) {
-				console.debug(e);
-			}
-		}, 400);
+		this.restore_route();
+		this.refresh_conversations();
+		this.recover_active_turn();
+	}
+
+	on_hide() {
+		if (this.realtime) this.realtime.unsubscribeAll();
+	}
+
+	ui() {
+		return assistant_ui();
+	}
+
+	restore_route() {
+		const parsed = this.ui().parseAssistantRoute
+			? this.ui().parseAssistantRoute({
+					route: frappe.get_route && frappe.get_route(),
+					routeOptions: frappe.route_options,
+					search: window.location.search,
+					hash: window.location.hash,
+			  })
+			: { conversation: null };
+		frappe.route_options = null;
+		if (parsed && parsed.conversation && parsed.conversation !== this.conversation) {
+			this.open_conversation(parsed.conversation);
+		}
 	}
 
 	make() {
@@ -73,6 +99,10 @@ class AIAssistant {
 					<div class="ai-sidebar-search">
 						<input type="text" class="form-control input-sm ai-search-conv"
 							placeholder="${__("Search conversations")}">
+						<label class="ai-archived-toggle small">
+							<input type="checkbox" class="ai-include-archived">
+							${__("Archived")}
+						</label>
 					</div>
 					<div class="ai-conversation-list"></div>
 				</aside>
@@ -82,6 +112,7 @@ class AIAssistant {
 						<div class="ai-header-left">
 							<span class="ai-conversation-title">${__("New Conversation")}</span>
 							<span class="ai-conversation-meta text-muted"></span>
+							<div class="ai-focused-document"></div>
 						</div>
 						<div class="ai-header-right">
 							<div class="ai-agent-select"></div>
@@ -106,6 +137,7 @@ class AIAssistant {
 
 					<footer class="ai-composer">
 						<div class="ai-composer-kbs"></div>
+						<div class="ai-pending-files"></div>
 						<div class="ai-composer-input">
 							<textarea class="form-control ai-input" rows="1"
 								placeholder="${__("Ask anything, or attach a document...")}"></textarea>
@@ -113,6 +145,10 @@ class AIAssistant {
 								<button class="btn btn-default btn-sm ai-attach"
 									title="${__("Attach a document")}">
 									${frappe.utils.icon("attachment", "sm")}
+								</button>
+								<button class="btn btn-danger btn-sm ai-stop hidden"
+									title="${__("Stop generation")}">
+									${__("Stop")}
 								</button>
 								<button class="btn btn-primary btn-sm ai-send" disabled>
 									${frappe.utils.icon("right", "sm")}
@@ -143,6 +179,7 @@ class AIAssistant {
 		this.$messages = this.page.main.find(".ai-messages");
 		this.$input = this.page.main.find(".ai-input");
 		this.$send = this.page.main.find(".ai-send");
+		this.$stop = this.page.main.find(".ai-stop");
 		this.$context = this.page.main.find(".ai-context-panel");
 		this.$title = this.page.main.find(".ai-conversation-title");
 		this.$meta = this.page.main.find(".ai-conversation-meta");
@@ -178,9 +215,13 @@ class AIAssistant {
 			.find(".ai-close-context")
 			.on("click", () => this.$context.addClass("hidden"));
 		this.page.main.find(".ai-attach").on("click", () => this.attach_document());
+		this.$stop.on("click", () => this.stop_generation());
+		this.page.main.find(".ai-include-archived").on("change", (event) => {
+			this.include_archived = !!event.target.checked;
+			this.refresh_conversations();
+		});
 
 		this.$input.on("input", function () {
-			// Auto-grow the composer up to a sensible ceiling.
 			this.style.height = "auto";
 			this.style.height = Math.min(this.scrollHeight, 200) + "px";
 			me.$send.prop("disabled", !this.value.trim() || me.sending);
@@ -218,16 +259,37 @@ class AIAssistant {
 				$(this).closest(".ai-message").find(".ai-bubble").text()
 			);
 		});
+
+		this.$messages.on("click", ".ai-load-more", () => this.load_older_messages());
+
+		$(this.wrapper).on("hide", () => this.on_hide());
 	}
 
 	bind_realtime() {
-		frappe.realtime.on("ai_document_processed", (data) => {
+		if (this.realtime && this.realtime.size) return;
+		const hooks = {
+			on: (event, fn) => frappe.realtime.on(event, fn),
+			off: (event, fn) => {
+				if (frappe.realtime && typeof frappe.realtime.off === "function") {
+					frappe.realtime.off(event, fn);
+				}
+			},
+		};
+		this.realtime = this.ui().createRealtimeSession
+			? this.ui().createRealtimeSession(hooks)
+			: { subscribe() {}, unsubscribeAll() {}, size: 0 };
+		this.realtime.subscribe("ai_document_processed", (data) => {
 			frappe.show_alert({
 				message: __("Document {0} is indexed and searchable.", [data.document]),
 				indicator: "green",
 			});
+			(this.pending_documents || []).forEach((item) => {
+				if (item.document === data.document) item.status = "Indexed";
+			});
+			this.render_pending_files();
 		});
-		frappe.realtime.on("ai_fr_hg:chat_token", (data) => this.on_chat_token(data));
+		this.realtime.subscribe("ai_fr_hg:chat_token", (data) => this.on_chat_token(data));
+		this.realtime.subscribe("ai_turn_cancelled", (data) => this.on_turn_cancelled(data));
 	}
 
 	on_chat_token(data) {
@@ -235,6 +297,12 @@ class AIAssistant {
 		if (this.conversation && data.conversation && data.conversation !== this.conversation)
 			return;
 		this.append_stream_delta(data.delta || "");
+	}
+
+	on_turn_cancelled(data) {
+		if (!data || (data.turn_id && data.turn_id !== this.stream_turn_id)) return;
+		this.cancelling = true;
+		frappe.show_alert({ message: __("Cancelled"), indicator: "orange" });
 	}
 
 	append_stream_delta(delta) {
@@ -263,6 +331,13 @@ class AIAssistant {
 			this.$stream_wrap = null;
 		}
 		this.stream_text = "";
+	}
+
+	set_sending(value) {
+		this.sending = !!value;
+		this.$send.prop("disabled", this.sending || !this.$input.val().trim());
+		this.$stop.toggleClass("hidden", !this.sending);
+		this.$input.prop("disabled", this.sending && this.cancelling);
 	}
 
 	async load_context() {
@@ -361,6 +436,36 @@ class AIAssistant {
 		});
 	}
 
+	apply_conversation_configuration(doc) {
+		this.conversation_doc = doc || {};
+		if (doc.agent && this.agent_control) {
+			this.agent_control.set_value(doc.agent);
+			this.selected_agent = doc.agent;
+		}
+		if (this.model_control) {
+			this.model_control.set_value(doc.model || "");
+			this.selected_model = doc.model || "";
+		}
+		const kbs = (doc.knowledge_bases || []).map((row) => row.knowledge_base).filter(Boolean);
+		this.page.main.find(".ai-kb-chip").each(function () {
+			const $chip = $(this);
+			$chip.toggleClass("active", kbs.includes($chip.data("kb")));
+		});
+		if (kbs.length) this.selected_kbs = kbs;
+		this.render_focused_document(doc.context_document);
+		this.$title.data("pinned", doc.pinned ? 1 : 0);
+	}
+
+	render_focused_document(name) {
+		const $wrap = this.page.main.find(".ai-focused-document").empty();
+		if (!name) return;
+		$wrap.append(
+			`<span class="ai-focus-chip">${__("Focused")}: ${frappe.utils.escape_html(
+				name
+			)}</span>`
+		);
+	}
+
 	render_suggestions() {
 		const suggestions = [
 			__("Summarise the documents I uploaded this week"),
@@ -379,9 +484,12 @@ class AIAssistant {
 
 	async refresh_conversations() {
 		try {
-			this.conversations = await frappe.xcall("ai_fr_hg.api.chat.list_conversations", {
-				limit: 100,
+			const payload = await frappe.xcall("ai_fr_hg.api.chat.list_conversations", {
+				limit: 50,
+				include_archived: this.include_archived ? 1 : 0,
 			});
+			this.conversations = payload.conversations || payload || [];
+			this.list_has_more = !!payload.has_more;
 		} catch (error) {
 			this.conversations = [];
 		}
@@ -403,8 +511,9 @@ class AIAssistant {
 				.map((conv) => {
 					const active = conv.name === this.conversation ? " active" : "";
 					const when = relative_time(conv.last_message_on);
+					const archived = conv.status === "Archived" ? " archived" : "";
 					return `
-						<div class="ai-conversation-item${active}" data-name="${conv.name}">
+						<div class="ai-conversation-item${active}${archived}" data-name="${conv.name}">
 							<div class="ai-conv-title">
 								${conv.pinned ? frappe.utils.icon("pin", "xs") : ""}
 								${frappe.utils.escape_html(conv.title || __("Untitled"))}
@@ -430,8 +539,10 @@ class AIAssistant {
 
 	new_conversation() {
 		this.conversation = null;
+		this.conversation_doc = null;
 		this.$title.text(__("New Conversation"));
 		this.$meta.text("");
+		this.render_focused_document(null);
 		this.$messages.html(`
 			<div class="ai-empty-state">
 				<div class="ai-empty-icon">${frappe.utils.icon("message", "lg")}</div>
@@ -445,6 +556,7 @@ class AIAssistant {
 		this.render_suggestions();
 		this.$sidebar.find(".ai-conversation-item").removeClass("active");
 		this.$input.focus();
+		if (frappe.set_route) frappe.set_route("ai-assistant");
 	}
 
 	async open_conversation(name) {
@@ -455,40 +567,107 @@ class AIAssistant {
 
 		const data = await frappe.xcall("ai_fr_hg.api.chat.get_conversation", {
 			conversation: name,
+			limit: 100,
+			offset: 0,
 		});
 
+		this.apply_conversation_configuration(data.conversation);
 		this.$title.text(data.conversation.title || __("Untitled"));
 		this.$meta.text(
-			`${data.messages.length} ${__("messages")} · ${
+			`${data.total || data.messages.length} ${__("messages")} · ${
 				data.conversation.total_tokens || 0
 			} ${__("tokens")}`
 		);
 
+		this.messages_offset = 0;
+		this.messages_has_more = !!data.has_more;
 		this.$messages.empty();
+		if (this.messages_has_more) {
+			this.$messages.append(
+				`<button class="btn btn-xs btn-default ai-load-more">${__(
+					"Load earlier messages"
+				)}</button>`
+			);
+		}
 		data.messages.forEach((message) => this.append_message(message));
 		this.scroll_to_bottom();
+		if (frappe.set_route) frappe.set_route("ai-assistant", name);
+		this.recover_active_turn(data.messages);
 	}
 
-	append_message(message) {
+	async load_older_messages() {
+		if (!this.conversation || !this.messages_has_more) return;
+		const offset = this.$messages.find(".ai-message").length;
+		const res = await frappe.xcall("ai_fr_hg.api.chat.get_messages", {
+			conversation: this.conversation,
+			offset,
+			limit: 50,
+		});
+		this.messages_has_more = !!res.has_more;
+		const $anchor = this.$messages.find(".ai-load-more");
+		(res.messages || []).reverse().forEach((message) => {
+			const $el = this.build_message_element(message);
+			$anchor.after($el);
+		});
+		if (!this.messages_has_more) $anchor.remove();
+	}
+
+	async recover_active_turn(messages) {
+		const rows = messages || [];
+		const streaming = [...rows]
+			.reverse()
+			.find((row) => row.status === "Streaming" && row.turn_id);
+		if (!streaming) return;
+		this.stream_turn_id = streaming.turn_id;
+		this.set_sending(true);
+		try {
+			const status = await frappe.xcall("ai_fr_hg.api.chat.get_turn_status", {
+				conversation: this.conversation,
+				turn_id: streaming.turn_id,
+			});
+			if (status.status === "Streaming") {
+				this.append_stream_delta(status.content || "");
+				return;
+			}
+			this.set_sending(false);
+			this.clear_stream_bubble();
+			this.open_conversation(this.conversation);
+		} catch (error) {
+			this.set_sending(false);
+		}
+	}
+
+	build_message_element(message) {
 		if (message.role === "Tool") {
-			this.append_tool_message(message);
-			return;
+			let args = message.tool_arguments;
+			try {
+				args = JSON.stringify(JSON.parse(args || "{}"));
+			} catch (error) {
+				// leave as-is
+			}
+			return $(`
+				<div class="ai-tool-call">
+					${frappe.utils.icon("tool", "xs")}
+					<code>${frappe.utils.escape_html(message.tool || "tool")}</code>
+					<span class="text-muted small">${frappe.utils.escape_html((args || "").slice(0, 160))}</span>
+				</div>
+			`);
 		}
 
 		const isUser = message.role === "User";
 		const rendered = isUser
 			? frappe.utils.escape_html(message.content || "").replace(/\n/g, "<br>")
 			: frappe.markdown(message.content || "");
-
-		// A turn that ran out of time still produces an answer, but it is an
-		// explanation rather than a result - style it so that is obvious.
 		const timedOut = message.timed_out || message.status === "Failed";
+		const cancelled = message.status === "Cancelled";
 
 		const $el = $(`
-			<div class="ai-message ai-message-${message.role.toLowerCase()}">
+			<div class="ai-message ai-message-${(message.role || "assistant").toLowerCase()}">
 				<div class="ai-avatar">${isUser ? frappe.utils.icon("user", "sm") : "AI"}</div>
 				<div class="ai-body">
-					<div class="ai-bubble${timedOut ? " ai-bubble-warning" : ""}">${rendered}</div>
+					<div class="ai-bubble${timedOut ? " ai-bubble-warning" : ""}${
+			cancelled ? " ai-bubble-cancelled" : ""
+		}">${rendered}</div>
 					<div class="ai-message-footer"></div>
 				</div>
 			</div>
@@ -516,6 +695,7 @@ class AIAssistant {
 			if (message.model) meta.push(message.model);
 			if (message.total_tokens) meta.push(`${message.total_tokens} ${__("tokens")}`);
 			if (message.duration_ms) meta.push(`${(message.duration_ms / 1000).toFixed(1)}s`);
+			if (cancelled) meta.push(__("Cancelled"));
 
 			$footer.append(`
 				<div class="ai-message-actions">
@@ -534,25 +714,16 @@ class AIAssistant {
 				</div>
 			`);
 		}
+		return $el;
+	}
 
+	append_message(message) {
 		this.$messages.find(".ai-empty-state").remove();
-		this.$messages.append($el);
+		this.$messages.append(this.build_message_element(message));
 	}
 
 	append_tool_message(message) {
-		let args = message.tool_arguments;
-		try {
-			args = JSON.stringify(JSON.parse(args || "{}"));
-		} catch (error) {
-			// leave as-is
-		}
-		this.$messages.append(`
-			<div class="ai-tool-call">
-				${frappe.utils.icon("tool", "xs")}
-				<code>${frappe.utils.escape_html(message.tool || "tool")}</code>
-				<span class="text-muted small">${frappe.utils.escape_html((args || "").slice(0, 160))}</span>
-			</div>
-		`);
+		this.$messages.append(this.build_message_element({ ...message, role: "Tool" }));
 	}
 
 	render_context(citations) {
@@ -567,7 +738,7 @@ class AIAssistant {
 				<div class="ai-context-item">
 					<div class="ai-context-item-header">
 						<strong>[${index + 1}] ${frappe.utils.escape_html(cite.document_title)}</strong>
-						<span class="ai-score">${(cite.score * 100).toFixed(0)}%</span>
+						<span class="ai-score">${((cite.score || 0) * 100).toFixed(0)}%</span>
 					</div>
 					${
 						cite.heading
@@ -586,34 +757,40 @@ class AIAssistant {
 	}
 
 	get_error_message(error, fallback) {
-		// A gateway timeout is produced by the proxy, not the app, so it
-		// carries no server_messages and would otherwise surface as a bare
-		// "The request failed." Name it, and say what to do about it.
-		const status = error?.status || error?.responseJSON?.status || error?.xhr?.status;
-		if (status === 504 || status === 502 || status === 408) {
-			return __(
-				"The model did not answer in time and the connection timed out. Local models are slowest on their first run — try again, or pick a smaller model."
-			);
-		}
+		const ui = this.ui();
+		if (ui.normalizeRpcError) return ui.normalizeRpcError(error, fallback);
+		return error?.message || fallback || __("The request failed.");
+	}
 
-		return (
-			error?.message ||
-			error?.exc?.server_messages ||
-			error?.server_messages ||
-			error?.responseJSON?.exception ||
-			fallback ||
-			__("The request failed.")
-		);
+	render_pending_files() {
+		const $wrap = this.page.main.find(".ai-pending-files").empty();
+		(this.pending_documents || []).forEach((item, index) => {
+			const title = item.title || item.document;
+			const status = item.status ? ` · ${frappe.utils.escape_html(item.status)}` : "";
+			const $chip = $(`
+				<span class="ai-file-chip" data-index="${index}">
+					${frappe.utils.escape_html(title)}${status}
+					<button type="button" class="ai-file-remove" aria-label="${__("Remove")}">&times;</button>
+				</span>
+			`);
+			$chip.find(".ai-file-remove").on("click", () => {
+				this.pending_documents.splice(index, 1);
+				this.render_pending_files();
+			});
+			$wrap.append($chip);
+		});
 	}
 
 	async send() {
 		const message = (this.$input.val() || "").trim();
 		if (!message || this.sending) return;
 
-		this.sending = true;
-		this.stream_turn_id = frappe.utils.get_random(12);
+		this.stream_turn_id =
+			(frappe.utils.get_random && frappe.utils.get_random(12)) || `${Date.now()}`;
+		this.cancelling = false;
 		this.clear_stream_bubble();
-		this.$send.prop("disabled", true);
+		this.set_sending(true);
+		this.last_user_prompt = message;
 		this.$input.val("").css("height", "auto");
 
 		this.append_message({ role: "User", content: message, name: "pending" });
@@ -633,16 +810,19 @@ class AIAssistant {
 		this.$messages.append($thinking);
 		this.scroll_to_bottom();
 
+		const snapshot = (this.pending_documents || []).slice();
+		const uploaded = snapshot.map((item) => item.document).filter(Boolean);
+		this.pending_documents = [];
+		this.render_pending_files();
+
 		try {
-			const uploaded = this.pending_documents.length ? this.pending_documents : null;
-			this.pending_documents = [];
 			const response = await this.call_send_message({
 				message,
 				conversation: this.conversation,
 				agent: this.selected_agent,
 				model: this.selected_model || null,
 				knowledge_bases: this.selected_kbs.length ? this.selected_kbs : null,
-				documents: uploaded,
+				documents: uploaded.length ? uploaded : null,
 				stream: this.context?.settings?.streaming_enabled ? 1 : 0,
 				turn_id: this.stream_turn_id,
 			});
@@ -669,12 +849,21 @@ class AIAssistant {
 				total_tokens: response.total_tokens,
 				duration_ms: response.duration_ms,
 				timed_out: response.timed_out,
+				status: response.cancelled
+					? "Cancelled"
+					: response.timed_out
+					? "Failed"
+					: "Completed",
 			});
 
 			if (isNew) this.refresh_conversations();
+			if (this.conversation && frappe.set_route)
+				frappe.set_route("ai-assistant", this.conversation);
 		} catch (error) {
 			$thinking.remove();
 			this.clear_stream_bubble();
+			this.pending_documents = snapshot.concat(this.pending_documents || []);
+			this.render_pending_files();
 			this.$messages.append(`
 				<div class="ai-message ai-message-error">
 					<div class="ai-avatar">!</div>
@@ -686,17 +875,14 @@ class AIAssistant {
 				</div>
 			`);
 		} finally {
-			this.sending = false;
-			this.$send.prop("disabled", !this.$input.val().trim());
+			this.cancelling = false;
+			this.set_sending(false);
 			this.scroll_to_bottom();
 			this.$input.focus();
 		}
 	}
 
 	call_send_message(args) {
-		// Do not impose a browser timeout on unbounded local turns. A
-		// configured Max Turn Duration still gets a small client cushion so a
-		// dead socket is noticed after the server has already saved an answer.
 		const budget = Number(this.context?.settings?.max_turn_seconds || 0);
 		const options = {
 			method: "ai_fr_hg.api.chat.send_message",
@@ -740,15 +926,10 @@ class AIAssistant {
 						fieldname: "correction",
 						label: __("Correction (optional)"),
 					},
-					{
-						fieldtype: "Small Text",
-						fieldname: "comment",
-						label: __("Additional comment"),
-					},
 				],
 				primary_action_label: __("Send feedback"),
 				primary_action: async (vals) => {
-					await frappe.xcall("ai_fr_hg.api.chat.submit_feedback", {
+					const result = await frappe.xcall("ai_fr_hg.api.chat.submit_feedback", {
 						message,
 						feedback: value,
 						reason: vals.reason,
@@ -760,6 +941,19 @@ class AIAssistant {
 						.find(".ai-feedback")
 						.removeClass("active");
 					$button.addClass("active");
+					if (result && result.learning_status === "Disabled") {
+						frappe.show_alert({
+							message: __(
+								"Rating saved. Learning is disabled, so no candidate was created."
+							),
+							indicator: "blue",
+						});
+					} else if (result && result.learning_status === "Not Permitted") {
+						frappe.show_alert({
+							message: __("Rating saved. Teaching is not permitted for your role."),
+							indicator: "blue",
+						});
+					}
 				},
 			});
 			d.show();
@@ -776,9 +970,6 @@ class AIAssistant {
 			frappe.msgprint(__("Create a knowledge base before uploading documents."));
 			return;
 		}
-		// FileUploader is extended once globally with the canonical in-dialog
-		// folder selector, so Assistant uploads use the same native flow as every
-		// other attachment entry point.
 		new frappe.ui.FileUploader({
 			on_success(file) {
 				frappe.prompt(
@@ -802,6 +993,7 @@ class AIAssistant {
 						const result = await frappe
 							.xcall("ai_fr_hg.api.knowledge.upload_document", {
 								file_url: file.file_url,
+								file_record: file.name,
 								knowledge_base: values.knowledge_base,
 								title: values.title,
 							})
@@ -817,11 +1009,15 @@ class AIAssistant {
 								return null;
 							});
 						if (!result) return;
-						// Remember this upload so the next send waits for its
-						// indexing and answers from that file specifically.
 						me.pending_documents = (me.pending_documents || []).concat([
-							result.document,
+							{
+								document: result.document,
+								title: values.title,
+								file_record: file.name,
+								status: result.status,
+							},
 						]);
+						me.render_pending_files();
 						frappe.show_alert({
 							message: __(
 								"Processing {0}. Your next question will use this file even if indexing is still running.",
@@ -829,9 +1025,15 @@ class AIAssistant {
 							),
 							indicator: "blue",
 						});
-						me.$input
-							.val(__("Summarise the document I just uploaded: {0}", [values.title]))
-							.trigger("input");
+						if (!me.$input.val()) {
+							me.$input
+								.val(
+									__("Summarise the document I just uploaded: {0}", [
+										values.title,
+									])
+								)
+								.trigger("input");
+						}
 					},
 					__("Add to Knowledge Base"),
 					__("Upload")
@@ -897,17 +1099,17 @@ class AIAssistant {
 		this.$messages.scrollTop(this.$messages[0].scrollHeight);
 	}
 
-	// -- CHAT-05/07 additions: pin, rename, restore, export, stop, retry, pagination
 	async pin_toggle() {
 		if (!this.conversation) return;
 		const isPinned = this.$title.data("pinned");
-		await frappe.xcall("ai_fr_hg.api.chat.pin_conversation", {
+		const result = await frappe.xcall("ai_fr_hg.api.chat.pin_conversation", {
 			conversation: this.conversation,
 			pinned: isPinned ? 0 : 1,
 		});
+		this.$title.data("pinned", result.pinned);
 		this.refresh_conversations();
-		this.open_conversation(this.conversation);
 	}
+
 	async rename_conversation() {
 		if (!this.conversation) return;
 		frappe.prompt(
@@ -930,6 +1132,7 @@ class AIAssistant {
 			__("Rename")
 		);
 	}
+
 	async restore_conversation() {
 		if (!this.conversation) return;
 		await frappe.xcall("ai_fr_hg.api.chat.restore_conversation", {
@@ -937,6 +1140,7 @@ class AIAssistant {
 		});
 		this.refresh_conversations();
 	}
+
 	async export_conversation() {
 		if (!this.conversation) return;
 		const data = await frappe.xcall("ai_fr_hg.api.chat.export_conversation", {
@@ -950,29 +1154,23 @@ class AIAssistant {
 		a.click();
 		URL.revokeObjectURL(url);
 	}
+
 	async stop_generation() {
-		if (!this.conversation || !this.sending) return;
-		await frappe.xcall("ai_fr_hg.api.chat.cancel_turn", { conversation: this.conversation });
-		this.sending = false;
-		this.$send.prop("disabled", false);
-		frappe.show_alert({ message: __("Cancelled"), indicator: "orange" });
+		if (!this.stream_turn_id) return;
+		this.cancelling = true;
+		await frappe.xcall("ai_fr_hg.api.chat.cancel_turn", {
+			conversation: this.conversation,
+			turn_id: this.stream_turn_id,
+		});
 	}
+
 	async retry_last() {
-		if (!this.conversation) return;
-		const last = this.$messages.find(".ai-message-user").last().text();
+		const last =
+			this.last_user_prompt ||
+			this.$messages.find(".ai-message-user .ai-bubble").last().text();
 		if (last) {
-			this.$input.val(last.trim());
+			this.$input.val(last.trim()).trigger("input");
 			this.send();
 		}
-	}
-	async load_more_messages() {
-		if (!this.conversation) return;
-		const offset = this.$messages.find(".ai-message").length;
-		const res = await frappe.xcall("ai_fr_hg.api.chat.get_messages", {
-			conversation: this.conversation,
-			offset,
-			limit: 50,
-		});
-		res.messages.forEach((m) => this.append_message(m));
 	}
 }

@@ -2,10 +2,10 @@
 
 A feature-rich, local-first enterprise AI platform, built as a native Frappe app.
 
-> **Project status:** technical beta, not production-ready. Phases 0–2 closed
-> isolation, API bounds, connection-level provider transport, and retrieval
-> correctness on the pinned Frappe v17 bench. Conversation concurrency,
-> ingestion/translation cancellation, automation state machines, governance
+> **Project status:** technical beta, not production-ready. Phases 0–3 closed
+> isolation, API bounds, connection-level provider transport, retrieval
+> correctness, and conversation/turn contracts on the pinned Frappe v17 bench.
+> Ingestion/translation cancellation, automation state machines, governance
 > enforcement, browser E2E, load, upgrade, and restore qualification remain.
 > See the [audited project status](docs/PROJECT_STATUS.md), [controlled gap register](docs/GAP_REGISTER.md),
 > and [completion roadmap](docs/DEVELOPMENT_PLAN.md) before any deployment.
@@ -32,7 +32,7 @@ explicit human or operator concerns.
 | **Document intelligence** | 36 registered extensions through one pipeline: extract → chunk → embed → index. Text-layer PDFs, Office/OpenDocument files, RFC `.eml`, text/code, and images (vision or optional image OCR). Scanned-PDF OCR and Outlook `.msg` are not supported. Extraction returns JSON; it does not create target DocType records. |
 | **Translation** | Arabic ⇄ English ⇄ Hebrew text translation. Segmentation preserves extracted-text structure, not the original PDF/Office/image binary. Translation memory requires an authorized knowledge-base scope and includes policy identity. Progress, cancellation, glossary/KB parity, and worker restoration remain Phase 4. |
 | **Knowledge & search** | Hybrid retrieval (dense vectors + keyword, fused with RRF) scans every eligible chunk, groups mixed embedding models, and applies per-KB top-k, threshold and weight. A configurable brute-force ceiling flags large corpora as degraded without dropping results. Reranking is not implemented. |
-| **Conversational AI** | Multi-session chat with retrieval grounding, inline citations and tool calling. Turn cancellation, concurrent ordering, reconnect, latest-history, and trace-link completion remain open. |
+| **Conversational AI** | Multi-session chat with retrieval grounding, inline/footnote citations, tool calling, latest-N history, turn identity, cooperative cancel/reconnect, and conversation rename/pin/archive/export. Browser E2E remains Phase 7. |
 | **Automation** | Main-path declarative pipelines and event rules on Frappe workers. Delete snapshots, atomic schedule claims, resumable approvals, and several task/trigger contracts remain open. |
 | **Governance** | Quota checks, capability gates, prompt redaction, write-tool approvals, and audit records exist. Distributed concurrency/rate enforcement, quota reservations, and complete trace linkage remain open. |
 | **Extensibility** | Three hooks — `ai_providers`, `ai_document_readers`, `ai_tools` — let any app add runtimes, formats and tools without touching this one. |

@@ -11,6 +11,7 @@
   "conversation",
   "role",
   "sequence",
+  "turn_id",
   "status",
   "msg_cb",
   "model",
@@ -66,6 +67,12 @@
    "fieldname": "sequence",
    "fieldtype": "Int",
    "label": "Sequence"
+  },
+  {
+   "fieldname": "turn_id",
+   "fieldtype": "Data",
+   "label": "Turn ID",
+   "search_index": 1
   },
   {
    "default": "Completed",
