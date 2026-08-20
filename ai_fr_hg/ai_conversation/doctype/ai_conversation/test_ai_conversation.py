@@ -3,6 +3,7 @@
 
 """Phase 3 conversation contracts: history, sequencing, config, actions, cancel."""
 
+from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
 
 import frappe
@@ -62,6 +63,51 @@ class TestConversationHistory(AIPlatformTestCase):
 		)
 		sequences = [row.sequence for row in rows]
 		self.assertEqual(sequences, sorted(sequences))
+		self.assertEqual(len(sequences), len(set(sequences)))
+
+	def test_100_concurrent_sends_preserve_order_and_uniqueness(self):
+		"""Exercise CHAT-02 with real worker connections, not sequential calls.
+
+		Each worker opens its own Frappe connection and commits one message. The
+		conversation-row FOR UPDATE allocator must serialize the 100 competing
+		transactions, while the unique (conversation, sequence) index remains the
+		database-level backstop.
+		"""
+		from ai_fr_hg.ai.agent import save_message
+
+		conversation = self._conversation()
+		frappe.db.commit()  # make the locked parent visible to every worker
+		site = frappe.local.site
+
+		def send(index):
+			frappe.init(site=site)
+			frappe.connect()
+			frappe.set_user("Administrator")
+			try:
+				message = save_message(
+					conversation.name,
+					role="User",
+					content=f"concurrent-{index}",
+					turn_id=f"concurrent-turn-{index}",
+				)
+				frappe.db.commit()
+				return message.name
+			finally:
+				frappe.destroy()
+
+		with ThreadPoolExecutor(max_workers=100) as pool:
+			names = list(pool.map(send, range(100)))
+
+		rows = frappe.get_all(
+			"AI Message",
+			filters={"conversation": conversation.name, "name": ["in", names]},
+			fields=["sequence"],
+			order_by="sequence asc",
+		)
+		sequences = [row.sequence for row in rows]
+		self.assertEqual(len(names), 100)
+		self.assertEqual(len(rows), 100)
+		self.assertEqual(sequences, list(range(1, 101)))
 		self.assertEqual(len(sequences), len(set(sequences)))
 
 	def test_duplicate_sequence_is_rejected_when_index_exists(self):
