@@ -16,10 +16,7 @@ def main() -> int:
 	metadata = tomllib.loads(pyproject.read_text())
 	groups = metadata["project"]["optional-dependencies"]
 	requirements = {
-		requirement.strip()
-		for group, entries in groups.items()
-		if group != "all"
-		for requirement in entries
+		requirement.strip() for group, entries in groups.items() if group != "all" for requirement in entries
 	}
 	if not requirements or "" in requirements:
 		raise SystemExit("Concrete optional dependency declarations are missing or empty")
