@@ -76,7 +76,7 @@ class TestConversationHistory(AIPlatformTestCase):
 		from ai_fr_hg.ai.agent import save_message
 
 		conversation = self._conversation()
-		frappe.db.commit()  # make the locked parent visible to every worker
+		frappe.db.commit()  # nosemgrep: required to make the test parent visible to worker transactions
 		site = frappe.local.site
 
 		def send(index):
@@ -90,7 +90,7 @@ class TestConversationHistory(AIPlatformTestCase):
 					content=f"concurrent-{index}",
 					turn_id=f"concurrent-turn-{index}",
 				)
-				frappe.db.commit()
+				frappe.db.commit()  # nosemgrep: each worker must commit its competing transaction
 				return message.name
 			finally:
 				frappe.destroy()
