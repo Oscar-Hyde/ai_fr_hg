@@ -32,7 +32,7 @@ No parallel permission, pagination, realtime, or File system was introduced.
 ## Frappe v17 integration
 
 - DocType field `AI Message.turn_id`; status already included `Cancelled`.
-- Idempotent patch `v0_0_17_conversation_turn_identity` (MariaDB unique index + turn_id index; duplicate sequences renumbered).
+- Idempotent patch `v0_0_17_conversation_turn_identity` (MariaDB unique index + turn_id index; duplicate sequences renumbered). A two-argument `_index_exists()` call shipped in this patch aborted the first real-bench execution on 2026-08-20; fixed with behavioral regressions in `ai_fr_hg/tests/test_patch_regressions.py` (see `PHASE_4.md` "Deploy regression found and fixed").
 - Conversation row `SELECT ... FOR UPDATE` for sequence allocation.
 - `frappe.get_list`/`get_all` with `limit`/`offset`/`start`.
 - Native `frappe.publish_realtime` for tokens and `ai_turn_cancelled`.
