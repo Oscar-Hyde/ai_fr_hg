@@ -31,6 +31,8 @@ def _schema():
 		name = "S"
 		strict = True
 		enabled = 1
+		model = None
+		instructions = ""
 
 		def get(self, k, d=None):
 			if k == "extraction_fields":
@@ -69,7 +71,7 @@ def test_long_every_window():
 
 def test_tail_affects_result():
 	m = _mock_model(400)
-	base = "neutral. " * 100
+	base = "neutral. " * 500
 	tail_fact = "CLASS_TAIL_B "
 	text = base + tail_fact * 20
 
@@ -141,8 +143,13 @@ def test_extract_validates_every_window():
 
 def test_no_prefix_only():
 	import pathlib
-
-	src = pathlib.Path("ai_fr_hg/ai/intelligence.py").read_text()
+	for _p in ["ai_fr_hg/ai/intelligence.py", "apps/ai_fr_hg/ai_fr_hg/ai/intelligence.py", "/home/frappe/frappe-bench/apps/ai_fr_hg/ai_fr_hg/ai/intelligence.py"]:
+		_pp = pathlib.Path(_p)
+		if _pp.exists():
+			src = _pp.read_text()
+			break
+	else:
+		raise AssertionError("intelligence.py not found")
 	# ensure no text[:budget] in classify/extract_data/compare paths
 	for name in ["def classify", "def extract_data", "def compare_documents"]:
 		section = src.split(name)[1].split("\ndef ")[0]
@@ -197,7 +204,7 @@ def test_conflicting_values_deterministic():
 
 def test_classification_tie():
 	m = _mock_model(400)
-	text = "tie " * 500
+	text = "tie " * 2000
 
 	# Alternate categories to force tie
 	def fake(msgs, **kw):
