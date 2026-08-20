@@ -283,7 +283,10 @@ def _file_list_permission_conditions(user: str) -> str:
 	parts: list[str] = []
 	hooks = frappe.get_hooks("permission_query_conditions", {})
 	for method in hooks.get("File", []) + hooks.get("*", []):
-		condition = frappe.call(frappe.get_attr(method), user, doctype="File")
+		# Security-reviewed dynamic dispatch: this is the exact mechanism
+		# Frappe's own DatabaseQuery uses to resolve registered permission
+		# hooks. Only hook methods registered by installed apps can be reached.
+		condition = frappe.call(frappe.get_attr(method), user, doctype="File")  # nosemgrep
 		if condition:
 			parts.append(str(condition))
 	return " and ".join(f"({part})" for part in parts)

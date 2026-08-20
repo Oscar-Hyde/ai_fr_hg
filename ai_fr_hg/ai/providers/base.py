@@ -196,9 +196,13 @@ class BaseProvider:
 				stream=stream,
 			)
 		except netguard.AddressPolicyViolation as exc:
-			raise LocalOnlyViolation(_("Provider {0} was not called: {1}").format(self.name, exc)) from exc
+			raise LocalOnlyViolation(
+				_("Provider {0} was not called: {1}").format(self.name, str(exc))
+			) from exc
 		except netguard.TransportGuardError as exc:
-			raise ProviderError(_("Provider {0} request was refused: {1}").format(self.name, exc)) from exc
+			raise ProviderError(
+				_("Provider {0} request was refused: {1}").format(self.name, str(exc))
+			) from exc
 		except requests.exceptions.ConnectTimeout as exc:
 			raise ProviderTimeoutError(
 				_("Provider {0} timed out while connecting to {1}.").format(self.name, url)
