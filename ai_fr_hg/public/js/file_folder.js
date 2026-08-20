@@ -76,7 +76,6 @@
 			return frappe.xcall("ai_fr_hg.api.folders.get_file_info", { file_name });
 		},
 
-
 		/**
 		 * Use Frappe's standard Dialog and Link control for native list/form bulk
 		 * actions.  The uploader itself receives the richer, inline tree select.

@@ -108,7 +108,10 @@
 					const message = "A required Desk bundle could not be loaded. " + rebuild;
 					if (window.frappe?.msgprint) {
 						window.frappe.msgprint({
-							title: typeof __ === "function" ? __("Desk assets failed to load") : "Desk assets failed to load",
+							title:
+								typeof __ === "function"
+									? __("Desk assets failed to load")
+									: "Desk assets failed to load",
 							message,
 							indicator: "red",
 						});
