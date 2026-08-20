@@ -62,6 +62,7 @@ from ai_fr_hg.ai.translation_utils import (
 	decode_separator,
 	is_supported,
 	language_label,
+	memory_fingerprint,
 	normalise_language,
 	normalise_source_text,
 	parse_batch_response,
@@ -70,7 +71,6 @@ from ai_fr_hg.ai.translation_utils import (
 	reassemble,
 	resolve_glossary,
 	restore_placeholders,
-	segment_fingerprint,
 	segment_text,
 	strip_model_preamble,
 	summarise_issues,
@@ -240,30 +240,45 @@ def load_glossary(glossary: str | None, source_language: str, target_language: s
 # ---------------------------------------------------------------------------
 
 
+def authorized_memory_scope(knowledge_base: str | None) -> str | None:
+	"""Return a KB name the current user may use for translation memory.
+
+	No knowledge base is never global memory: it is no memory.
+	"""
+	scope = (knowledge_base or "").strip()
+	if not scope:
+		return None
+	from ai_fr_hg.utils.permissions import _knowledge_base_access
+
+	if not _knowledge_base_access(scope, frappe.session.user, write=False):
+		return None
+	return scope
+
+
 def _memory_lookup(fingerprints: list[str], knowledge_base: str | None) -> dict[str, str]:
 	"""Previously approved translations for these exact source segments.
 
-	Scoped to one knowledge base so reuse can never surface text from a corpus
-	the requesting user cannot read.
+	Requires an authorized knowledge-base scope. An empty or unauthorized
+	scope returns no memory, never every corpus.
 	"""
-	if not fingerprints:
+	scope = authorized_memory_scope(knowledge_base)
+	if not scope or not fingerprints:
 		return {}
 	filters: dict = {
 		"fingerprint": ["in", fingerprints],
 		"translated_text": ["!=", ""],
 		"status": ["in", ["Translated", "Reviewed", "Reused"]],
 	}
-	if knowledge_base:
-		parents = frappe.get_all(
-			"AI Translation",
-			filters={"knowledge_base": knowledge_base, "status": ["in", ["Completed", "Needs Review"]]},
-			pluck="name",
-			limit_page_length=500,
-			order_by="modified desc",
-		)
-		if not parents:
-			return {}
-		filters["parent"] = ["in", parents]
+	parents = frappe.get_all(
+		"AI Translation",
+		filters={"knowledge_base": scope, "status": ["in", ["Completed", "Needs Review"]]},
+		pluck="name",
+		limit_page_length=500,
+		order_by="modified desc",
+	)
+	if not parents:
+		return {}
+	filters["parent"] = ["in", parents]
 
 	rows = frappe.get_all(
 		"AI Translation Segment",
@@ -374,7 +389,15 @@ def translate_text(
 	memory_hits = 0
 	if options.use_translation_memory and pending:
 		fingerprints = {
-			segment.index: segment_fingerprint(segment.source, detected, options.target_language)
+			segment.index: memory_fingerprint(
+				segment.source,
+				detected,
+				options.target_language,
+				knowledge_base=options.knowledge_base,
+				glossary=options.glossary,
+				tone=options.tone,
+				domain=options.domain,
+			)
 			for segment in pending
 		}
 		memory = _memory_lookup(sorted(set(fingerprints.values())), options.knowledge_base)
@@ -928,8 +951,14 @@ def _persist_outcome(doc, outcome: TranslationOutcome) -> None:
 	doc.set("segments", [])
 	for segment in outcome.segments:
 		row = segment.as_dict()
-		row["fingerprint"] = segment_fingerprint(
-			segment.source, outcome.source_language, outcome.target_language
+		row["fingerprint"] = memory_fingerprint(
+			segment.source,
+			outcome.source_language,
+			outcome.target_language,
+			knowledge_base=doc.knowledge_base,
+			glossary=doc.glossary,
+			tone=doc.tone,
+			domain=doc.domain,
 		)
 		doc.append("segments", row)
 

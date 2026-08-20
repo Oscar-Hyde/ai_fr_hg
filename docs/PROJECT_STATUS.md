@@ -1,6 +1,6 @@
 # AI Fr HG — audited project status
 
-**Status date:** 2026-08-19
+**Status date:** 2026-08-20
 **App version:** `0.0.1`
 **Framework baseline:** pinned Frappe `17.0.0-dev`, Python `>=3.14,<3.15`, Node 24, MariaDB 11.8
 **Release qualification:** not production-ready; upstream stable Frappe v17 does not yet exist
@@ -86,7 +86,7 @@ Green tests prove the covered paths. They do not cover browser behavior, real ru
 | Operations | **PARTIAL** | Readiness, health, usage snapshot, failures, approvals, and queues are visible. SLOs, charts, job detail, stale-state reconciliation, and timer lifecycle remain. |
 | Backup/import/export | **PARTIAL — restore work required** | Text JSON round-trip exists. Exported embeddings are ignored by import; component completeness, streaming, format version, retention, and restore drills remain. |
 | Encryption | **INTENTIONALLY UNSUPPORTED** | The dormant compatibility field is hidden/read-only, reset to 0, and rejected server-side. Use deployment-layer encrypted storage/database/backups. |
-| CI/release | **BLOCKED** | Workflows now define pinned-v17 Server/Linter/Frontend static/Dependency audit checks, but hosted jobs still require account billing/spending remediation and `main` is unprotected. |
+| CI/release | **BLOCKED** | Hosted Server is green on `main` (run `32325110514`). Quality fails on Semgrep Cloud + editable pip-audit. Branch protection is not active; the Arena GitHub App cannot write workflows or administer protection. |
 | Frontend validation | **PARTIAL** | JavaScript parses and pages are implemented, but there are no JS unit, browser E2E, accessibility, or responsive tests. |
 
 ---

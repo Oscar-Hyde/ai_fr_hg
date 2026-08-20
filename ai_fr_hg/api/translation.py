@@ -16,6 +16,7 @@ from frappe.utils import cint
 
 from ai_fr_hg.ai.translation import (
 	MAX_INLINE_CHARACTERS,
+	authorized_memory_scope,
 	create_translation,
 	enqueue_translation,
 	index_translation,
@@ -52,8 +53,13 @@ def translate(
 	glossary: str | None = None,
 	tone: str = "Neutral",
 	domain: str = "",
+	knowledge_base: str | None = None,
 ) -> dict:
-	"""Translate a bounded piece of text inline and return the result."""
+	"""Translate a bounded piece of text inline and return the result.
+
+	Translation memory is used only when `knowledge_base` is an authorized
+	scope. Omitting it does not search every corpus.
+	"""
 	frappe.has_permission("AI Translation", "create", throw=True)
 
 	if len(text or "") > MAX_INLINE_CHARACTERS:
@@ -63,6 +69,10 @@ def translate(
 			)
 		)
 
+	scope = authorized_memory_scope(knowledge_base)
+	if knowledge_base and not scope:
+		frappe.throw(_("You cannot use translation memory from that knowledge base."), frappe.PermissionError)
+
 	outcome = translate_text(
 		text,
 		target_language,
@@ -71,6 +81,7 @@ def translate(
 		glossary=glossary,
 		tone=tone,
 		domain=domain,
+		knowledge_base=scope,
 	)
 	return outcome.as_dict()
 
