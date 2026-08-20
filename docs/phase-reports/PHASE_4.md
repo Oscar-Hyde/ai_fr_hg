@@ -41,4 +41,4 @@ INT-04 is already closed and reconciled in `PHASE_3_VERIFICATION.md`. ING-01–0
 
 ## Runtime gate
 
-This increment is not closed until the hosted Frappe v17 bench proves fresh install, migration, cancellation persistence, requeue recovery, worker failure handling, and the full suite. Browser/E2E evidence remains required by Phase 7 where applicable.
+Hosted Frappe v17 verification for this increment passed: Server run `32398794487` completed in 3m02s and Quality run `32398794523` passed. The integration test covers migration-loaded fields, cancellation persistence, and requeue recovery. ING-06 remains `IN PROGRESS` because worker-failure recovery and reconnect/browser evidence are still outstanding; those are not being inferred from a green full-suite run.
