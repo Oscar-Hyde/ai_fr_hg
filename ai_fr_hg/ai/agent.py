@@ -226,14 +226,21 @@ def get_agent_knowledge_base_weights(agent_doc, conversation_doc=None) -> dict[s
 
 
 def get_conversation_history(conversation: str, limit: int = HISTORY_LIMIT) -> list[ChatMessage]:
-	"""Load the recent turns of a conversation as chat messages."""
+	"""Load the most recent turns of a conversation as chat messages.
+
+	Selects the latest ``limit`` messages in descending order and then
+	reverses them so the prompt receives chronological history. This keeps
+	tool-call groups intact and ensures a 100+ message conversation retains
+	the latest context rather than the opening turns.
+	"""
 	rows = frappe.get_all(
 		"AI Message",
 		filters={"conversation": conversation, "status": ["in", ["Completed", "Draft"]]},
 		fields=["role", "content", "tool_call_id", "tool_arguments", "tool_result", "tool"],
-		order_by="sequence asc, creation asc",
+		order_by="sequence desc, creation desc",
 		limit_page_length=limit,
 	)
+	rows = list(reversed(rows))
 
 	messages = []
 	for row in rows:
@@ -547,7 +554,15 @@ def run_agent_turn(
 
 
 def save_message(conversation: str, role: str, content: str, **kwargs):
-	"""Append a message to a conversation with the next sequence number."""
+	"""Append a message to a conversation with the next sequence number.
+
+	Uses ``SELECT ... FOR UPDATE`` on the conversation row so concurrent
+	``save_message`` calls serialize and never allocate duplicate sequences
+	(CHAT-02). The caller is already inside a DB transaction; the row lock
+	ensures atomic ``max(sequence)+1`` allocation.
+	"""
+	# Serialize sequence allocation on the conversation row.
+	frappe.db.sql("select name from `tabAI Conversation` where name = %s for update", (conversation,))
 	sequence = (
 		frappe.db.sql(
 			"select coalesce(max(sequence), 0) from `tabAI Message` where conversation = %s",
