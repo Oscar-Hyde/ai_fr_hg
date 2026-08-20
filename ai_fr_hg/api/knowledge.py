@@ -333,6 +333,24 @@ def get_document_chunks(document: str, limit: int = 100) -> list:
 
 
 @frappe.whitelist()
+
+@frappe.whitelist()
+def get_document_warnings(document: str) -> dict:
+    """Return durable extraction warnings (ING-05) via canonical service.
+    Respects AI Document read permission; background workers persist via same ingestion path.
+    """
+    doc = frappe.get_doc("AI Document", document)
+    doc.check_permission("read")
+    raw = doc.get("extraction_warnings") or "[]"
+    try:
+        import json
+        warnings = json.loads(raw) if isinstance(raw, str) else raw
+        if not isinstance(warnings, list):
+            warnings = []
+    except Exception:
+        warnings = []
+    return {"document": document, "warnings": warnings, "status": doc.status, "reader_used": doc.reader_used}
+
 def scan_pattern_entities(document: str) -> dict:
 	"""Extract high-precision pattern entities from a document's stored content.
 

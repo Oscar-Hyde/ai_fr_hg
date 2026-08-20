@@ -20,3 +20,4 @@ ai_fr_hg.patches.v0_0_13_translation_support
 ai_fr_hg.patches.v0_0_14_disable_unsupported_controls
 ai_fr_hg.patches.v0_0_15_folder_truthfulness
 ai_fr_hg.patches.v0_0_16_retrieval_indexes
+ai_fr_hg.patches.v0_0_15_extraction_warnings
