@@ -108,17 +108,24 @@ def search(
 ) -> dict:
 	"""Search the knowledge base and return ranked passages (folder-scoped if provided)."""
 	from ai_fr_hg.ai.knowledge import retrieve
+	from ai_fr_hg.utils import api_validation
 
-	if isinstance(knowledge_bases, str):
-		try:
-			knowledge_bases = json.loads(knowledge_bases)
-		except ValueError:
-			knowledge_bases = [knowledge_bases]
+	query = api_validation.bounded_text(query, label=_("Query"), max_length=4_000, required=True)
+	knowledge_bases = api_validation.bounded_list(
+		knowledge_bases, label=_("Knowledge bases"), max_items=api_validation.MAX_KNOWLEDGE_BASES_PER_REQUEST
+	)
+	top_k = api_validation.bounded_integer(
+		top_k, label=_("top_k"), default=10, maximum=api_validation.MAX_TOP_K
+	)
+	search_type = api_validation.enum_choice(
+		search_type, allowed=("Hybrid", "Semantic", "Keyword"), label=_("Search type")
+	)
+	folder = api_validation.valid_identifier(folder, label=_("Folder")) if folder else None
 
 	results = retrieve(
 		query,
 		knowledge_bases=knowledge_bases,
-		top_k=cint(top_k) or 10,
+		top_k=top_k,
 		search_type=search_type,
 		folder=folder,
 	)
@@ -150,14 +157,17 @@ def ask(
 	from ai_fr_hg.ai.deadline import turn_budget
 	from ai_fr_hg.ai.ingestion import prepare_documents_for_turn
 	from ai_fr_hg.api.chat import _coerce_documents, _get_turn_budget
+	from ai_fr_hg.utils import api_validation
 
-	if isinstance(knowledge_bases, str):
-		try:
-			knowledge_bases = json.loads(knowledge_bases)
-		except ValueError:
-			knowledge_bases = [knowledge_bases]
-
+	question = api_validation.bounded_text(question, label=_("Question"), max_length=32_000, required=True)
+	knowledge_bases = api_validation.bounded_list(
+		knowledge_bases, label=_("Knowledge bases"), max_items=api_validation.MAX_KNOWLEDGE_BASES_PER_REQUEST
+	)
+	documents = api_validation.bounded_list(
+		documents, label=_("Documents"), max_items=api_validation.MAX_DOCUMENTS_PER_TURN
+	)
 	documents = _coerce_documents(documents)
+	folder = api_validation.valid_identifier(folder, label=_("Folder")) if folder else None
 
 	# Folder-scoped ask: if folder is provided and no explicit documents, resolve folder documents
 	folder_docs = None
@@ -285,6 +295,12 @@ def compare(document_a: str, document_b: str, instructions: str = "") -> dict:
 @frappe.whitelist()
 def get_document_chunks(document: str, limit: int = 100) -> list:
 	"""List a document's chunks with their embedding status."""
+	from ai_fr_hg.utils import api_validation
+
+	document = api_validation.valid_identifier(document, label=_("Document"), required=True)
+	limit = api_validation.bounded_integer(
+		limit, label=_("limit"), default=100, maximum=api_validation.MAX_CHUNK_ENTITY_PAGE
+	)
 	frappe.has_permission("AI Document", "read", doc=document, throw=True)
 
 	return frappe.get_all(
@@ -330,6 +346,12 @@ def scan_pattern_entities(document: str) -> dict:
 @frappe.whitelist()
 def get_pattern_entities(document: str, entity_type: str | None = None, limit: int = 200) -> dict:
 	"""List a document's pattern entities, grouped and counted by type."""
+	from ai_fr_hg.utils import api_validation
+
+	document = api_validation.valid_identifier(document, label=_("Document"), required=True)
+	limit = api_validation.bounded_integer(
+		limit, label=_("limit"), default=200, maximum=api_validation.MAX_CHUNK_ENTITY_PAGE
+	)
 	frappe.has_permission("AI Document", "read", doc=document, throw=True)
 
 	filters = {"document": document}

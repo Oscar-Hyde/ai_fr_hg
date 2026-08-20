@@ -73,7 +73,15 @@ class TestSearchTelemetry(IntegrationTestCase):
 		content = "SENTENCE. " * 300  # far beyond the snippet budget
 		self.log_search(
 			"plain query",
-			[{"chunk": "CHUNK-2", "document": "DOC-2", "document_title": "Long", "content": content, "score": 0.5}],
+			[
+				{
+					"chunk": "CHUNK-2",
+					"document": "DOC-2",
+					"document_title": "Long",
+					"content": content,
+					"score": 0.5,
+				}
+			],
 		)
 		stored = json.loads(self.newest_query_row().results)
 		self.assertLessEqual(len(stored[0]["snippet"]), 200)

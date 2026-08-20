@@ -40,13 +40,18 @@ def get_children(
 	search: str | None = None,
 	limit: int = service.DEFAULT_PAGE_LENGTH,
 ):
+	from ai_fr_hg.utils import api_validation
+
+	search = api_validation.bounded_text(search, label=_("Search"), max_length=200) or None
 	return service.get_children(
 		doctype=doctype,
 		parent=parent,
 		is_root=is_root,
 		knowledge_base=knowledge_base,
 		search=search,
-		limit=limit,
+		limit=api_validation.bounded_integer(
+			limit, label=_("limit"), default=service.DEFAULT_PAGE_LENGTH, maximum=500
+		),
 	)
 
 
