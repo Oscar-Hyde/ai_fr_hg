@@ -434,6 +434,29 @@ three of them would have made a *permission* test pass vacuously:
 - `get_meta` had no `.fields` and `frappe.model.get_permitted_fields` did not
   exist, so field-level policy could not run at all.
 
+Later rounds of the re-audit found five more, each of which had silently
+prevented an entire area from being tested:
+
+- `frappe.cache()` was a stub answering `None`, so every path in
+  `ai/limits.py` took its "backend unavailable" branch and admission control
+  (GOV-01/02/03) could not run at all. Now backed by `fakeredis[lua]`, which
+  executes the real Lua scripts; the suites skip rather than pass when it is
+  absent.
+- `frappe.get_roles` did not exist although `bench.roles` did, so any code
+  branching on roles raised `AttributeError`.
+- `frappe.clear_document_cache` did not exist, making the whole task module
+  unreachable.
+- Filter comparisons used raw Python operators, so a datetime filter against
+  a string-stored column raised `TypeError` — the harness being *stricter*
+  than MariaDB and rejecting valid code.
+- `get_value` silently dropped `for_update`. It still ignores it, but now
+  records `(doctype, for_update)` so a test can assert the claim path asked
+  for the lock.
+
+That last one is the shape of the boundary. A test can prove the lock was
+requested, and prove the code handles losing the race; it cannot prove two
+workers will not both win it.
+
 **Non-claims.** fakebench proves nothing about SQL correctness, transactions,
 InnoDB isolation levels, index behaviour, deadlocks, concurrency, `bench
 migrate`, or browser behaviour. CHAT-09 is the standing illustration: the
