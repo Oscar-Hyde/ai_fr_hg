@@ -206,6 +206,21 @@ def pattern_entity_query(user: str) -> str:
 	)
 
 
+def entity_relationship_query(user: str) -> str:
+	# Relationships carry the same denormalized knowledge base as pattern
+	# entities, so they ride the document's row-level access without a join.
+	if _is_manager(user):
+		return ""
+	return (
+		"`tabAI Entity Relationship`.`knowledge_base` in ("
+		"select kb.name from `tabAI Knowledge Base` kb "
+		"where kb.is_public = 1 or exists ("
+		"select 1 from `tabAI Knowledge Base Role` kb_role "
+		"where kb_role.parent = kb.name and kb_role.parenttype = 'AI Knowledge Base' "
+		f"and kb_role.role in ({_role_sql(user)})))"
+	)
+
+
 def agent_query(user: str) -> str:
 	if _is_manager(user):
 		return ""
@@ -464,7 +479,7 @@ def has_document_permission(
 		return _knowledge_base_access(doc.knowledge_base, user, write=not _is_read(permission_type))
 	if doc.doctype == "AI Document Chunk":
 		return _is_read(permission_type) and _knowledge_base_access(doc.knowledge_base, user)
-	if doc.doctype == "AI Pattern Entity":
+	if doc.doctype in {"AI Pattern Entity", "AI Entity Relationship"}:
 		# Machine-written analysis rows: readable exactly like their document's
 		# knowledge base, mutable only by the scan service and managers.
 		return _is_read(permission_type) and _knowledge_base_access(doc.knowledge_base, user)

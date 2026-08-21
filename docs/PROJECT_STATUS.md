@@ -1,6 +1,6 @@
 # AI Fr HG — audited project status
 
-**Status date:** 2026-08-21 (Phase 6 part A)
+**Status date:** 2026-08-21 (Phase 6 part A; Part 1 File Intelligence directive executed)
 **App version:** `0.0.1`
 **Framework baseline:** pinned Frappe `17.0.0-dev`, Python `>=3.14,<3.15`, Node 24, MariaDB 11.8
 **Release qualification:** not production-ready; upstream stable Frappe v17 does not yet exist
@@ -28,8 +28,8 @@ The previous version of this document described nearly every module as READY or 
 
 | Measure | Value |
 | --- | ---: |
-| DocTypes | 47 |
-| Whitelisted methods | 118 |
+| DocTypes | 49 |
+| Whitelisted methods | 139 |
 | Custom Desk pages | 4 |
 | Workspaces | 5 |
 | Reports | 3 |
@@ -45,6 +45,39 @@ The supplied `site1.local` run passed:
 - 19 other-category tests.
 
 Green tests prove the covered paths. They do not cover browser behavior, real runtimes, optional parsers/OCR, large-corpus retrieval, concurrency/load, hostile network inputs, or release upgrades.
+
+---
+
+## Part 1 File Intelligence directive (2026-08-21)
+
+The *Enterprise Production Completion and Implementation Proposal*, Part 1
+(§6–§12) was executed as a directive rather than an assessment. All 15 derived
+findings (`P1-01`…`P1-15`) are closed in
+[`GAP_REGISTER.md`](GAP_REGISTER.md).
+
+| Area | Before | After |
+| --- | --- | --- |
+| §8 extraction result contract | 4 of 6 elements | 6 of 6 (`extracted_on`, `versions`) |
+| Registered extensions | 37 | 83 |
+| Spreadsheet formulas | silently discarded | preserved; uncached values warned |
+| PPTX embedded content | dropped | recorded as `embedded_objects` |
+| Email | no threading, names only | thread reconstruction + attachment content |
+| Source code | flat plain text | 40+ languages; Python parsed via `ast` |
+| Archives | unsupported | recursive, bounded, safety-tested |
+| §11 semantic entities | absent | person/org/location/concept, grounded |
+| §11 relationships | absent | `AI Entity Relationship`, evidence mandatory |
+| Provenance immutability | Desk-only `read_only` | enforced in `validate()` |
+
+Three decisions were recorded rather than resolved silently: **ADR-011**
+(semantic extraction is model-inferred and mechanically grounded), **ADR-012**
+(legacy OLE `.doc`/`.xls`/`.ppt` stay unsupported — no real parser exists), and
+**ADR-013** (an archive is one document, preserving ADR-003's rule that native
+`File` is the only folder authority).
+
+**Verification.** 284 offline tests and 22 Node contracts pass; `ruff` 0.14.10
+check and format are clean; the Frappe semgrep ruleset reports nothing. Bench
+persistence, real-runtime OCR, and browser paths remain Phase 7 scope — the
+offline suite proves the contracts, not the deployed system.
 
 ---
 

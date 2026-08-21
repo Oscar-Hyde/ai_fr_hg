@@ -1,9 +1,9 @@
 # Controlled audit gap register
 
-**Register date:** 2026-08-19 (last updated 2026-08-21, Phase 6 part A)
+**Register date:** 2026-08-19 (last updated 2026-08-21, Part 1 File Intelligence execution)
 **Authoritative finding source:** [`DEVELOPMENT_PLAN.md`](DEVELOPMENT_PLAN.md)
 **Change control:** update a row only with its implementation evidence and phase review.
-**Count:** 80 findings (CHAT-09 added 2026-08-21 from the CHAT-02 reopening).
+**Count:** 95 findings — 80 audit findings plus 15 Part 1 directive findings (P1-01…P1-15) added 2026-08-21.
 
 Status meanings:
 
@@ -98,6 +98,29 @@ A closed row is not permission to weaken the audit's cross-cutting requirements.
 | LEARN-03 | Stored memory embeddings are unused | 6 | Learning + Retrieval | OPEN | Hybrid recall grouped by embedding model with lexical fallback. | Paraphrase/mixed-model/fallback tests. |
 | LEARN-04 | Skills are not relevance ranked | 6 | Learning | OPEN | Rank by request with priority/conflict/version rules. | Relevance, conflict, scope, prompt-budget tests. |
 | LEARN-05 | Learning lifecycle maintenance is incomplete | 6 | Learning + Jobs | OPEN | Merge/supersede/archive/review/re-embed lifecycle. | Transition, provenance, scheduler, model-change, permission tests. |
+
+## Part 1 File Intelligence directive (2026-08-21)
+
+Findings raised by the *Enterprise Production Completion and Implementation Proposal*, Part 1 §6–§12, and executed in the same pass. Evidence is offline unit coverage (`ai_fr_hg/tests/test_part1_file_intelligence.py`, 55 tests) plus Node contracts; bench-dependent persistence and browser paths remain Phase 7 scope.
+
+| ID | Finding | Clause | Owner | Status | Disposition | Required acceptance evidence |
+| --- | --- | --- | --- | --- | --- | --- |
+| P1-01 | Extraction evidence lacks a processing timestamp | §8, §12 | Ingestion | CLOSED — IMPLEMENTED | `ExtractionEvidence.extracted_on`, UTC ISO-8601, set by `build_evidence`. | `test_evidence_contains_all_six_required_elements`, `test_timestamp_is_iso_utc`. |
+| P1-02 | Extraction evidence lacks version information | §8, §12 | Ingestion | CLOSED — IMPLEMENTED | `versions` triple (app, reader, parsing library) via `BaseReader.version` + `library_version()`; never raises. Patch `v0_0_23` marks pre-existing rows `pre-0.0.2`. | `test_versions_identify_the_parsing_library`, `test_version_reporting_never_raises`, JS `Part 1 evidence version provenance`. |
+| P1-03 | XLSX/ODS formulas were silently discarded | §6.2, §8 | Readers | CLOSED — IMPLEMENTED | Second `data_only=False` pass captures formulas into `structure`; uncached values cross-checked and warned. | `test_formulas_are_preserved_in_structure`, `test_uncached_formula_values_are_reported_not_hidden`. |
+| P1-04 | PPTX embedded content was dropped | §6.2 | Readers | CLOSED — IMPLEMENTED | Pictures/charts/OLE/media recorded as `embedded_objects`, bounded at 200. | `test_pictures_are_recorded_as_embedded_objects`. |
+| P1-05 | Email threading headers were absent | §6.2 | Readers | CLOSED — IMPLEMENTED | `In-Reply-To`/`References` captured plus a normalized `thread` block (root, chain, is_reply). | `test_conversation_relationship_is_reconstructable`, `test_root_message_has_no_reply_chain`. |
+| P1-06 | OCR had no confidence tracking | §6.2, §11 | Readers | CLOSED — IMPLEMENTED | `image_to_data` yields per-word confidence; mean/min/low-count in metadata, sub-threshold warning. Vision output marked non-transcription. | Requires a Tesseract runtime → Phase 7 real-runtime matrix; contract asserted offline. |
+| P1-07 | Extraction provenance was client-side read-only only | §10 | Knowledge | CLOSED — IMPLEMENTED | `validate_extraction_provenance` enforces immutability server-side; `allow_extraction_provenance()` authorizes the canonical pipeline. | Bench persistence test → Phase 7; guard is unit-visible. |
+| P1-08 | Source code was read as anonymous plain text | §6.2 | Readers | CLOSED — IMPLEMENTED | `CodeReader`: 40+ languages; Python parsed with stdlib `ast`; others line-scanned and declared `heuristic`; indentation preserved. | `test_python_structure_is_parsed_exactly`, `test_indentation_is_preserved`, `test_non_python_declares_heuristic_fidelity`. |
+| P1-09 | Archives were entirely unsupported | §6.2 | Readers + Security | CLOSED — IMPLEMENTED | `ArchiveReader` + `ArchiveBudget` (ADR-013): recursive zip/tar/gz/bz2/xz, cumulative depth/member/byte ceilings, per-member reader dispatch, containment tree in `structure`. | Traversal, absolute-path, bomb, corrupt, symlink, depth, budget, and per-member-failure tests (13). |
+| P1-10 | People/organizations/locations/concepts absent | §11 | Intelligence | CLOSED — IMPLEMENTED | `ai.semantic` via the governed engine path (ADR-011); mechanical grounding, confidence floor, opt-in. | `test_hallucinated_entities_are_rejected`, `test_low_confidence_entities_are_rejected`, `test_all_four_semantic_kinds_are_supported`. |
+| P1-11 | Relationships had no data model | §11 | Intelligence | CLOSED — IMPLEMENTED | `AI Entity Relationship` DocType, closed predicate vocabulary, mandatory verbatim evidence quote, KB-scoped permission query. | `test_relationship_requires_grounded_evidence`, `test_relationship_predicates_are_normalized`, isolation contract tests. |
+| P1-12 | Entity confidence field absent | §11 | Intelligence | CLOSED — IMPLEMENTED | `extraction_method`/`confidence`/`model_used` on `AI Pattern Entity`; deterministic rows carry no invented confidence. | `test_pattern_rows_cannot_carry_semantic_types`; patch `v0_0_23` backfill. |
+| P1-13 | Legacy DOC/XLS/PPT unsupported | §6.2 | Readers | CLOSED — SCOPED | ADR-012: no OLE2 parser exists; registering the extensions would be "declared only". Unsupported message stays actionable. | `test_builtin_registry_covers_the_supported_families`. |
+| P1-14 | Email attachment bytes discarded | §6.2 | Readers | CLOSED — IMPLEMENTED | Attachment content extracted through each format's own reader, bounded (20 parts, 10 MB each, 100k chars); unsupported/failed parts recorded, nested email refused. | `test_attachment_content_is_extracted_not_just_named`, `test_unsupported_attachment_is_recorded_not_dropped`, `test_attached_source_code_keeps_indentation`. |
+| P1-15 | Non-Python source structure is heuristic | §6.2 | Readers | CLOSED — SCOPED | Declared via `structure_fidelity: heuristic`; a real parse needs `tree-sitter`, a new dependency. | `test_non_python_declares_heuristic_fidelity`. |
+
 
 ## Control totals
 

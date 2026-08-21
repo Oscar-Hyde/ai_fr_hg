@@ -189,7 +189,9 @@ but nothing is persisted.
 | `get_document_warnings(document)` | Durable extraction warnings (ING-05). Read access. |
 | `get_document_evidence(document)` | Durable detection/structure/provenance JSON from `ai.extraction`. Read access. Bounded; no full text. |
 | `scan_pattern_entities(document)` | `{document, total, created, updated, removed, by_type}` — high-precision regex scan of the document's stored content into `AI Pattern Entity` rows. Requires write access, like the other intelligence actions. |
-| `get_pattern_entities(document, entity_type, limit)` | `{document, entities, entity_counts}` — occurrences-ordered rows with provenance quotes, grouped counts per type. Read access. |
+| `get_pattern_entities(document, entity_type, limit)` | `{document, entities, entity_counts}` — occurrences-ordered rows with provenance quotes, grouped counts per type. Each row carries `extraction_method` (`pattern`/`semantic`), `confidence`, and `model_used` so an inferred entity is never mistaken for an exact match. Read access. |
+| `scan_semantic_entities(document, model=None)` | `{document, entities, created, updated, removed, relationships, rejected, model}` — semantic person/organization/location/concept extraction plus relationships, through the governed model path (ADR-011). Every value must be locatable verbatim in the source; ungrounded, low-confidence, and malformed results are discarded and counted in `rejected`. Requires write access and `semantic_entities_enabled`; raises if disabled. |
+| `get_entity_relationships(document, limit)` | `{document, relationships, total}` — confidence-ordered relationships with the mandatory verbatim `evidence_quote` and its offset. Read access. |
 | `get_knowledge_overview()` | Counters, recent documents, failed documents. |
 | `get_search_facets()` | Permission-aware pattern-entity type counts for Explorer filters. |
 | `get_supported_formats()` | Extensions, grouped by reader. |

@@ -172,12 +172,27 @@ class EmailReader(BaseReader):
 		}
 
 		body = ""
-		attachments = []
+		attachments: list[str] = []
+		attachment_parts: list[tuple[str, bytes]] = []
+		warnings: list[str] = []
 		if message.is_multipart():
 			for part in message.walk():
 				disposition = part.get_content_disposition()
 				if disposition == "attachment":
-					attachments.append(part.get_filename())
+					name = part.get_filename()
+					attachments.append(name)
+					if name and len(attachment_parts) < self.MAX_ATTACHMENTS:
+						try:
+							payload = part.get_payload(decode=True) or b""
+						except Exception:
+							payload = b""
+						if payload and len(payload) <= self.MAX_ATTACHMENT_BYTES:
+							attachment_parts.append((name, payload))
+						elif payload:
+							warnings.append(
+								f"Attachment '{name}' is larger than "
+								f"{self.MAX_ATTACHMENT_BYTES} bytes and was not read."
+							)
 					continue
 				if part.get_content_type() == "text/plain":
 					body += part.get_content()
@@ -188,6 +203,12 @@ class EmailReader(BaseReader):
 
 		header_block = "\n".join(f"{key}: {value}" for key, value in headers.items() if value)
 		embedded = [{"kind": "attachment", "name": name, "location": "email"} for name in attachments if name]
+
+		# Read attachment *content*, not just its filename. Preserving only the
+		# name satisfies "preserve attachments" nominally while losing the
+		# information the attachment actually carries.
+		attachment_text, attachment_structure, attachment_warnings = self._read_attachments(attachment_parts)
+		warnings.extend(attachment_warnings)
 
 		# Normalized conversation identity, so downstream consumers do not each
 		# re-parse RFC 5322 threading headers.
@@ -204,13 +225,78 @@ class EmailReader(BaseReader):
 			"is_reply": bool(in_reply_to or references),
 		}
 
+		text = self.clean(f"{header_block}\n\n{body}")
+		if attachment_text:
+			# Attachment text is appended verbatim after the cleaned message so
+			# an attached source file keeps its indentation.
+			text = f"{text}\n\n{attachment_text}"
+
 		return ReadResult(
-			text=self.clean(f"{header_block}\n\n{body}"),
+			text=text,
 			page_count=1,
-			metadata={"format": "email", "attachments": attachments, "thread": thread, **headers},
+			metadata={
+				"format": "email",
+				"attachments": attachments,
+				"attachments_read": len(attachment_structure),
+				"thread": thread,
+				**headers,
+			},
+			warnings=warnings,
 			embedded_objects=embedded,
-			structure=[{"kind": "headers"}, {"kind": "body"}] + [{"kind": "attachment"} for _ in embedded],
+			structure=[{"kind": "headers"}, {"kind": "body"}]
+			+ [{"kind": "attachment"} for _ in embedded]
+			+ attachment_structure,
 		)
+
+	#: Bounds mirroring the archive policy: an email is a container too.
+	MAX_ATTACHMENTS = 20
+	MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
+	MAX_ATTACHMENT_TEXT = 100_000
+
+	def _read_attachments(self, parts: list[tuple[str, bytes]]) -> tuple[str, list[dict], list[str]]:
+		"""Extract text from attachments using each format's own reader.
+
+		A failing or unsupported attachment is recorded and skipped; it must
+		never fail the message that carried it.
+		"""
+		from ai_fr_hg.ai.readers import get_reader
+
+		blocks: list[str] = []
+		structure: list[dict] = []
+		warnings: list[str] = []
+
+		for name, payload in parts:
+			entry: dict = {"kind": "attachment_content", "name": name[:200], "bytes": len(payload)}
+			reader = get_reader(name)
+			if reader is None:
+				entry["skipped_reason"] = "unsupported_format"
+				structure.append(entry)
+				continue
+			# Guard against an attached archive recursing back into email.
+			if isinstance(reader, EmailReader):
+				entry["skipped_reason"] = "nested_email"
+				structure.append(entry)
+				continue
+			try:
+				result = reader.read(payload, name)
+			except Exception as exc:
+				entry["skipped_reason"] = "read_failed"
+				entry["error"] = str(exc)[:300]
+				warnings.append(f"Attachment '{name}' could not be read: {str(exc)[:160]}")
+				structure.append(entry)
+				continue
+			attachment_text = (result.text or "").strip()
+			if len(attachment_text) > self.MAX_ATTACHMENT_TEXT:
+				attachment_text = attachment_text[: self.MAX_ATTACHMENT_TEXT]
+				warnings.append(f"Attachment '{name}' text was truncated.")
+			entry["read"] = True
+			entry["reader"] = reader.label
+			entry["characters"] = len(attachment_text)
+			structure.append(entry)
+			if attachment_text:
+				blocks.append(f"[Attachment: {name}]\n{attachment_text}")
+
+		return "\n\n".join(blocks), structure, warnings
 
 	@staticmethod
 	def _message_ids(raw: str | None) -> list[str]:

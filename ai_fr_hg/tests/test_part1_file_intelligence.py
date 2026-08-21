@@ -233,6 +233,55 @@ class TestEmailThreading(TestCase):
 		self.assertEqual(thread["root_message_id"], "<a1@example.com>")
 		self.assertTrue(thread["is_reply"])
 
+	def test_attachment_content_is_extracted_not_just_named(self):
+		from email.message import EmailMessage
+
+		message = EmailMessage()
+		message["From"] = "a@x.com"
+		message["To"] = "b@x.com"
+		message["Subject"] = "Report"
+		message.set_content("See attached.")
+		message.add_attachment(
+			b"# Findings\nRevenue up 20%",
+			maintype="text",
+			subtype="markdown",
+			filename="notes.md",
+		)
+		result = EmailReader().read(message.as_bytes(), "m.eml")
+		self.assertIn("Revenue up 20%", result.text)
+		self.assertEqual(result.metadata["attachments_read"], 1)
+
+	def test_unsupported_attachment_is_recorded_not_dropped(self):
+		from email.message import EmailMessage
+
+		message = EmailMessage()
+		message["From"] = "a@x.com"
+		message["Subject"] = "Blob"
+		message.set_content("body")
+		message.add_attachment(
+			b"\x00\x01", maintype="application", subtype="octet-stream", filename="blob.bin"
+		)
+		result = EmailReader().read(message.as_bytes(), "m.eml")
+		skipped = [block for block in result.structure if block.get("skipped_reason") == "unsupported_format"]
+		self.assertEqual(len(skipped), 1)
+		self.assertEqual(skipped[0]["name"], "blob.bin")
+
+	def test_attached_source_code_keeps_indentation(self):
+		from email.message import EmailMessage
+
+		message = EmailMessage()
+		message["From"] = "a@x.com"
+		message["Subject"] = "Code"
+		message.set_content("body")
+		message.add_attachment(
+			b"def run():\n    return 42\n",
+			maintype="text",
+			subtype="x-python",
+			filename="job.py",
+		)
+		result = EmailReader().read(message.as_bytes(), "m.eml")
+		self.assertIn("    return 42", result.text)
+
 	def test_root_message_has_no_reply_chain(self):
 		root = (
 			b"From: alice@example.com\nTo: bob@example.com\nSubject: Budget\n"
@@ -427,7 +476,39 @@ class TestArchiveProcessing(TestCase):
 
 
 def _install_frappe_stub() -> None:
-	"""Minimal frappe stub so `ai.semantic` imports without a bench."""
+	"""Provide the `frappe` surface `ai.semantic` needs, without a bench.
+
+	Other suites in this package install a blanket `MagicMock` as `frappe`,
+	which makes `frappe.utils.flt` return a mock and breaks numeric
+	comparisons. Rather than depend on module import order, this installs a
+	real `flt`/`cint` whenever the ambient module cannot supply working ones,
+	and always restores what was there afterwards.
+	"""
+	import frappe
+
+	def _flt(value):
+		try:
+			return float(value)
+		except (TypeError, ValueError):
+			return 0.0
+
+	utils = sys.modules.get("frappe.utils")
+	needs_real_utils = True
+	if utils is not None:
+		try:
+			needs_real_utils = not isinstance(utils.flt("1.5"), float)
+		except Exception:
+			needs_real_utils = True
+	if needs_real_utils:
+		replacement = types.ModuleType("frappe.utils")
+		replacement.flt = _flt
+		replacement.cint = int
+		sys.modules["frappe.utils"] = replacement
+		sys.modules["frappe"].utils = replacement
+
+
+def _ensure_frappe_module() -> None:
+	"""Install a minimal `frappe` only when none exists at all."""
 	if "frappe" in sys.modules:
 		return
 	stub = types.ModuleType("frappe")
@@ -437,19 +518,8 @@ def _install_frappe_stub() -> None:
 
 	stub.throw = _throw
 	stub._ = lambda value: value
-	utils = types.ModuleType("frappe.utils")
-	utils.cint = int
-
-	def _flt(value):
-		try:
-			return float(value)
-		except (TypeError, ValueError):
-			return 0.0
-
-	utils.flt = _flt
-	stub.utils = utils
+	stub.get_hooks = lambda *args, **kwargs: {}
 	sys.modules["frappe"] = stub
-	sys.modules["frappe.utils"] = utils
 
 
 class TestSemanticGrounding(TestCase):
@@ -459,8 +529,8 @@ class TestSemanticGrounding(TestCase):
 		"Dr. Alice Novak works for Cyberdyne Systems in Sofia. Cyberdyne Systems is part of the Skynet Group."
 	)
 
-	@classmethod
-	def setUpClass(cls):
+	def setUp(self):
+		_ensure_frappe_module()
 		_install_frappe_stub()
 
 	def _parse(self, payload, floor=50.0):
@@ -571,8 +641,8 @@ class TestSemanticGrounding(TestCase):
 class TestSemanticTypeSeparation(TestCase):
 	"""A deterministic row may never claim a semantic type."""
 
-	@classmethod
-	def setUpClass(cls):
+	def setUp(self):
+		_ensure_frappe_module()
 		_install_frappe_stub()
 
 	def test_pattern_rows_cannot_carry_semantic_types(self):
@@ -586,3 +656,52 @@ class TestSemanticTypeSeparation(TestCase):
 
 		self.assertEqual(persistable_pattern_type("email", method="pattern"), "email")
 		self.assertEqual(persistable_pattern_type("email", method="semantic"), "email")
+
+
+# ---------------------------------------------------------------------------
+# Isolation — semantic rows must not leak across knowledge bases
+# ---------------------------------------------------------------------------
+
+
+class TestRelationshipIsolationContract(TestCase):
+	"""AI Entity Relationship must ride the same row-level access as its document."""
+
+	def test_permission_query_is_registered(self):
+		import re
+		from pathlib import Path
+
+		hooks = (Path(__file__).resolve().parents[1] / "hooks.py").read_text()
+		self.assertIn(
+			'"AI Entity Relationship": "ai_fr_hg.utils.permissions.entity_relationship_query"', hooks
+		)
+		# has_permission is derived from permission_query_conditions, so
+		# registering the query also registers the document-level check.
+		self.assertTrue(
+			re.search(
+				r"has_permission\s*=\s*\{\s*doctype:.*for doctype in permission_query_conditions", hooks, re.S
+			)
+		)
+
+	def test_permission_query_scopes_by_knowledge_base(self):
+		from pathlib import Path
+
+		source = (Path(__file__).resolve().parents[1] / "utils" / "permissions.py").read_text()
+		self.assertIn("def entity_relationship_query", source)
+		self.assertIn("`tabAI Entity Relationship`.`knowledge_base` in (", source)
+		# Analysis rows are read-only for non-managers, like pattern entities.
+		self.assertIn('if doc.doctype in {"AI Pattern Entity", "AI Entity Relationship"}:', source)
+
+	def test_relationship_doctype_denormalizes_knowledge_base(self):
+		import json
+		from pathlib import Path
+
+		meta = json.loads(
+			(
+				Path(__file__).resolve().parents[1]
+				/ "ai_knowledge/doctype/ai_entity_relationship/ai_entity_relationship.json"
+			).read_text()
+		)
+		field = next(f for f in meta["fields"] if f["fieldname"] == "knowledge_base")
+		self.assertEqual(field["options"], "AI Knowledge Base")
+		self.assertEqual(field.get("reqd"), 1)
+		self.assertEqual(field.get("read_only"), 1)

@@ -102,9 +102,13 @@ def get_readers() -> dict[str, type[BaseReader]]:
 	readers = dict(BUILTIN_READERS)
 	try:
 		import frappe
-	except ImportError:
+
+		hooks = frappe.get_hooks("ai_document_readers") or {}
+	except (ImportError, AttributeError):
+		# No bench (or no hook registry yet): the built-in registry is complete
+		# on its own, so reader lookup must still work.
 		return readers
-	for extension, dotted_path in (frappe.get_hooks("ai_document_readers") or {}).items():
+	for extension, dotted_path in hooks.items():
 		if isinstance(dotted_path, list):
 			dotted_path = dotted_path[-1]
 		try:

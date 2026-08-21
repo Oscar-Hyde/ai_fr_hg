@@ -157,7 +157,11 @@ class TestControlledBaseline(TestCase):
 		translation = (ROOT / "docs/TRANSLATION.md").read_text()
 		project = (ROOT / "pyproject.toml").read_text()
 
-		self.assertIn("37 registered extensions", readme)
+		# The advertised extension count must match the real registry, so the
+		# README cannot drift from what a parser actually backs.
+		from ai_fr_hg.ai.readers import BUILTIN_READERS
+
+		self.assertIn(f"{len(BUILTIN_READERS)} registered extensions", readme)
 		self.assertIn("PostgreSQL is not currently supported", readme)
 		self.assertIn("scanned-pdf ocr", readme.lower())
 		self.assertIn("not supported", readme.lower())
@@ -166,6 +170,9 @@ class TestControlledBaseline(TestCase):
 		self.assertRegex(translation, r"does not\s+reconstruct")
 		self.assertNotIn("A complete, fully local", project)
 		self.assertNotIn("36 registered", readme)
+		self.assertNotIn("37 registered", readme)
+		# ADR-012: legacy OLE formats stay declared-unsupported.
+		self.assertIn("`.doc`/`.xls`/`.ppt`", readme)
 		self.assertNotIn("37 ingestible", translation)
 		self.assertNotIn("Translation-memory isolation hardening remains open", readme)
 		self.assertNotIn("Connection-level network hardening is still tracked", readme)
