@@ -369,3 +369,69 @@ class TestPhase6SourceContracts(TestCase):
 		self.assertEqual(flags["supports_tools"].get("default"), "1")
 		self.assertEqual(flags["supports_json_mode"].get("default"), "1")
 		self.assertEqual(flags["supports_streaming"].get("default"), "1")
+
+
+# ---------------------------------------------------------------------------
+# CHAT-02 regression — source contracts for the reopened finding
+# ---------------------------------------------------------------------------
+
+
+class TestChat02SequenceAllocatorContract(TestCase):
+	def setUp(self):
+		from pathlib import Path
+
+		self.app = Path(__file__).resolve().parents[1]
+
+	def test_allocator_never_reads_a_maximum_through_a_snapshot(self):
+		source = (self.app / "ai/conversation.py").read_text()
+		function = source.split("def allocate_sequence")[1].split("\ndef ")[0]
+		# Assert against the executable body only; the docstring deliberately
+		# names both rejected designs and would match either pattern.
+		body = function.split('"""', 2)[2]
+
+		# A plain `select max(sequence)` is served from the REPEATABLE READ
+		# snapshot and reissues an already-committed sequence.
+		self.assertNotIn("max(sequence)", body.replace("(select max(sequence)", ""))
+		# `max(...) for update` triggers MariaDB 1020 via the MAX optimizer.
+		self.assertNotIn("for update", body)
+		# The allocation must be a DML current read on the parent row.
+		self.assertIn("update `tabAI Conversation`", body)
+		self.assertIn("message_sequence_counter", body)
+
+	def test_sequence_constraints_are_schema_owned_not_patch_owned(self):
+		# Frappe skips historical patches on a fresh install, so a constraint
+		# defined only in a patch never exists on a new site. The DocType hook
+		# is what Frappe runs for both fresh installs and migrations.
+		controller = (self.app / "ai_conversation/doctype/ai_message/ai_message.py").read_text()
+		self.assertIn("def on_doctype_update", controller)
+		self.assertIn("ensure_sequence_constraints", controller)
+
+		owner = (self.app / "ai/conversation_indexes.py").read_text()
+		self.assertIn("ADD UNIQUE INDEX", owner)
+		self.assertIn("def ensure_sequence_constraints", owner)
+		# The failure must never be downgraded to a log line again.
+		self.assertIn("raise RuntimeError", owner)
+
+		patch = (self.app / "patches/v0_0_17_conversation_turn_identity.py").read_text()
+		self.assertIn("ensure_sequence_constraints", patch)
+		# One implementation; the patch and the hook both delegate to it.
+		self.assertNotIn("ADD UNIQUE INDEX", patch)
+		self.assertNotIn("ADD UNIQUE INDEX", controller)
+
+	def test_missing_unique_index_is_a_failure_not_a_skip(self):
+		test_source = (
+			self.app / "ai_conversation/doctype/ai_conversation/test_ai_conversation.py"
+		).read_text()
+		self.assertNotIn("unique_conversation_sequence index is not present on this site", test_source)
+		self.assertIn("test_duplicate_sequence_is_rejected_by_the_database", test_source)
+
+	def test_counter_field_exists_on_the_conversation(self):
+		import json
+
+		meta = json.loads(
+			(self.app / "ai_conversation/doctype/ai_conversation/ai_conversation.json").read_text()
+		)
+		field = next((f for f in meta["fields"] if f["fieldname"] == "message_sequence_counter"), None)
+		self.assertIsNotNone(field)
+		self.assertEqual(field["fieldtype"], "Int")
+		self.assertTrue(field.get("read_only"))

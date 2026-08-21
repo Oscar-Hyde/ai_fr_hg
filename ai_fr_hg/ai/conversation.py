@@ -83,35 +83,55 @@ def raise_if_cancelled(turn_id: str | None, partial: str = "") -> None:
 
 
 def allocate_sequence(conversation: str) -> int:
-	"""Reserve the next sequence under a conversation row lock (CHAT-02).
+	"""Reserve the next message sequence atomically (CHAT-02).
 
-	Both statements below are **locking** reads, and the second one is the
-	whole point of this docstring.
+	Two earlier designs failed on a real bench, and both failures are worth
+	recording because they look correct in review:
 
-	InnoDB's default isolation level is REPEATABLE READ, under which a plain
-	``SELECT`` is served from the transaction's consistent snapshot. That
-	snapshot is established at the transaction's *first* read — for a Frappe
-	worker, somewhere inside ``frappe.connect()``, long before this function
-	runs. So an ordinary ``select max(sequence)`` here would return the value
-	as of transaction start, not as of lock acquisition.
+	1. ``select ... for update`` on the conversation row, then a plain
+	   ``select max(sequence)``. The lock serialized the writers correctly,
+	   but InnoDB's default REPEATABLE READ serves a plain ``SELECT`` from the
+	   transaction's consistent snapshot — established at the transaction's
+	   first read, inside ``frappe.connect()``, long before the lock. Each
+	   serialized writer therefore read a *stale* maximum and reissued a
+	   sequence another writer had already committed. A 100-worker run
+	   produced ``[1, 1, 2, ... 99]``.
+	2. Making that aggregate a locking read (``max(sequence) ... for update``).
+	   MariaDB resolves ``MAX()`` on an indexed column with a single index-entry
+	   lookup, and that optimization combined with a locking read raises
+	   ``1020 Record has changed since last read``.
 
-	The effect was subtle and real: the ``for update`` on the conversation row
-	correctly serialized competing writers, then each one read a *stale* max
-	and handed out a sequence another writer had already committed. A real
-	100-worker bench run produced ``[1, 1, 2, ... 99]``.
+	The fix avoids reading a maximum at all. An ``UPDATE`` is always a *current*
+	read in InnoDB: it takes an exclusive row lock and sees the latest committed
+	value regardless of the transaction's snapshot. Incrementing a counter on
+	the parent conversation row is therefore both the lock and the allocation,
+	in one statement that cannot interleave.
 
-	``for update`` on the aggregate makes it a current read, so it observes
-	every transaction that committed before this one acquired the lock.
+	``greatest(...)`` re-seeds the counter from the real messages, so a
+	conversation created before this field existed, or one whose messages were
+	inserted with explicit sequences, self-heals on its next allocation instead
+	of handing out a colliding value.
 	"""
 	frappe.db.sql(
-		"select name from `tabAI Conversation` where name = %s for update",
+		"""
+		update `tabAI Conversation`
+		set message_sequence_counter = greatest(
+			coalesce(message_sequence_counter, 0),
+			coalesce(
+				(select max(sequence) from `tabAI Message` where conversation = %(conversation)s), 0
+			)
+		) + 1
+		where name = %(conversation)s
+		""",
+		{"conversation": conversation},
+	)
+	allocated = frappe.db.sql(
+		"select message_sequence_counter from `tabAI Conversation` where name = %s",
 		(conversation,),
 	)
-	last = frappe.db.sql(
-		"select coalesce(max(sequence), 0) from `tabAI Message` where conversation = %s for update",
-		(conversation,),
-	)[0][0]
-	return cint(last) + 1
+	if not allocated:
+		frappe.throw(_("Conversation {0} does not exist.").format(conversation))
+	return cint(allocated[0][0])
 
 
 def save_message(conversation: str, role: str, content: str, **kwargs):

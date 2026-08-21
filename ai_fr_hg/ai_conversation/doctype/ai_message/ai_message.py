@@ -95,3 +95,15 @@ def has_permission(doc, ptype: str | None = None, user: str | None = None) -> bo
 		as_dict=True,
 	)
 	return bool(conversation and user in {conversation.user, conversation.owner})
+
+
+def on_doctype_update() -> None:
+	"""Frappe calls this for every DocType on `bench migrate` and on install.
+
+	Using it — rather than a one-off patch — is what makes the CHAT-02 unique
+	index a property of the schema instead of a property of one site's upgrade
+	history. The logic itself lives in `ai.conversation_indexes`.
+	"""
+	from ai_fr_hg.ai.conversation_indexes import ensure_sequence_constraints
+
+	ensure_sequence_constraints()
