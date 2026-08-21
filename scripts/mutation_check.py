@@ -237,6 +237,28 @@ MUTATIONS: list[Mutation] = [
 		breaks="Evidence must record when extraction ran.",
 	),
 	# -- formula preservation (§6.2) --------------------------------------
+	# -- search telemetry redaction (SEC-07) ------------------------------
+	Mutation(
+		name="search-query-stored-unredacted",
+		path="ai_fr_hg/ai/retrieval.py",
+		old='"query": redact(str(query or ""))[:1000],',
+		new='"query": str(query or "")[:1000],',
+		breaks="The raw user query is persisted, bypassing operator redaction patterns.",
+	),
+	Mutation(
+		name="search-telemetry-control-ignored",
+		path="ai_fr_hg/ai/retrieval.py",
+		old="if enabled is not None and not cint(enabled):\n\t\t\treturn",
+		new="if False:\n\t\t\treturn",
+		breaks="Telemetry is written even when the operator disabled search logging.",
+	),
+	Mutation(
+		name="search-snippet-unbounded",
+		path="ai_fr_hg/ai/retrieval.py",
+		old='"snippet": redact(str(item.get("content") or ""))[:200],',
+		new='"snippet": redact(str(item.get("content") or "")),',
+		breaks="Full document content is copied into the telemetry row.",
+	),
 	# -- generic tool permissions (SEC-02 / SEC-03) -----------------------
 	Mutation(
 		name="count-bypasses-row-permissions",

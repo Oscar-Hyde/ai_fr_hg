@@ -1251,3 +1251,123 @@ class TestGenericToolPermissionEnforcement(TestCase):
 		)
 
 		self.assertEqual(cleaned, {"title": "ok"})
+
+
+class TestSearchTelemetryRedaction(TestCase):
+	"""SEC-07 re-audit: `redact` — the mechanism the row rests on — had no test.
+
+	The claim is "query and bounded result snippets pass canonical redaction;
+	full content never stored; `log_search_queries` control". Each clause is
+	checked here by running `_log_search_job` and inspecting the row that
+	reaches the database.
+	"""
+
+	def _bench(self, *, patterns="", enabled=1):
+		bench = install(FakeBench())
+		bench.register_doctype(
+			"AI Platform Settings", ["redact_patterns", "log_search_queries"], is_single=True
+		)
+		bench.db.singles["AI Platform Settings"] = {
+			"redact_patterns": patterns,
+			"log_search_queries": enabled,
+		}
+		bench.register_doctype(
+			"AI Search Query",
+			[
+				"query",
+				"knowledge_base",
+				"user",
+				"search_type",
+				"result_count",
+				"top_score",
+				"duration_ms",
+				"results",
+			],
+		)
+		logging_module = import_app("ai_fr_hg.ai.logging")
+		logging_module.clear_pattern_cache()
+		return bench, import_app("ai_fr_hg.ai.retrieval")
+
+	def _rows(self, bench):
+		return list(bench.db.tables["AI Search Query"].values())
+
+	def _log(self, retrieval, *, query="q", results=None):
+		retrieval._log_search_job(
+			query=query,
+			targets=["KB-1"],
+			search_type="hybrid",
+			results=results or [],
+			result_count=len(results or []),
+			top_score=0.9,
+			duration_ms=12,
+			user="alice@example.com",
+		)
+
+	def test_configured_patterns_redact_the_stored_query(self):
+		bench, retrieval = self._bench(patterns=r"\d{3}-\d{2}-\d{4}")
+
+		self._log(retrieval, query="lookup 123-45-6789 now")
+
+		stored = self._rows(bench)[0]["query"]
+		self.assertNotIn("123-45-6789", stored)
+		self.assertIn("[REDACTED]", stored)
+
+	def test_result_snippets_are_redacted_and_bounded(self):
+		bench, retrieval = self._bench(patterns=r"SECRET-\w+")
+		results = [
+			{
+				"chunk": "CH-1",
+				"document": "DOC-1",
+				"document_title": "SECRET-title",
+				"score": 0.9,
+				"content": "SECRET-body " + ("x" * 5000),
+			}
+		]
+
+		self._log(retrieval, results=results)
+
+		telemetry = json.loads(self._rows(bench)[0]["results"])
+		self.assertNotIn("SECRET-body", telemetry[0]["snippet"])
+		self.assertNotIn("SECRET-title", telemetry[0]["title"])
+		# Bounded: the full passage is never persisted.
+		self.assertLessEqual(len(telemetry[0]["snippet"]), 200)
+
+	def test_only_the_first_ten_results_are_recorded(self):
+		bench, retrieval = self._bench()
+		results = [
+			{"chunk": f"CH-{i}", "document": "DOC", "document_title": "t", "score": 0.5, "content": "c"}
+			for i in range(50)
+		]
+
+		self._log(retrieval, results=results)
+
+		self.assertEqual(len(json.loads(self._rows(bench)[0]["results"])), 10)
+
+	def test_disabling_the_control_stops_telemetry_entirely(self):
+		"""The operator switch unhidden by VER-05 must actually govern writes."""
+		bench, retrieval = self._bench(enabled=0)
+
+		self._log(retrieval, query="sensitive")
+
+		self.assertEqual(self._rows(bench), [])
+
+	def test_logging_failure_never_breaks_the_search(self):
+		bench, retrieval = self._bench()
+		bench.db.fail_next_write = True
+
+		self._log(retrieval, query="q")
+
+		self.assertEqual(self._rows(bench), [])
+
+	def test_redact_bounds_output_and_survives_invalid_patterns(self):
+		self._bench(patterns="[unclosed\n\nvalid[0-9]+")
+		logging_module = import_app("ai_fr_hg.ai.logging")
+		logging_module.clear_pattern_cache()
+
+		# An uncompilable line is skipped rather than disabling redaction.
+		self.assertEqual(logging_module.redact("valid123"), "[REDACTED]")
+		self.assertEqual(logging_module.redact(None), "")
+		self.assertEqual(
+			len(logging_module.redact("y" * (logging_module.MAX_STORED_CHARACTERS + 500))),
+			logging_module.MAX_STORED_CHARACTERS,
+		)
