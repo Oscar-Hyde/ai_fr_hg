@@ -368,6 +368,20 @@ The Assistant upload call omits `file_record`, while other upload surfaces pass 
 
 ---
 
+### CHAT-10 — Prompt preview was simulated in the browser, not rendered by the server
+
+*Added 2026-08-21 by the CLOSED-claim re-audit (VER-08 reachability sweep).*
+
+`AI Prompt Template` exposes a whitelisted `preview()` that calls `render_prompt_template`, applying Frappe's sandboxed Jinja environment, substituting variable defaults and raising when a required variable is unset. Nothing called it. The "Preview Prompt" Desk button instead concatenated `frm.doc.system_prompt` and `frm.doc.user_prompt` client-side and listed variable names as literal `{{ name }}` placeholders.
+
+**Impact:** the operator previewed the *unrendered* template. Variables were never substituted, so the preview did not show what the model would receive; a required-variable error could not surface at preview time; and any future server-side rendering rule would be invisible. The feature appeared complete — button, dialog, server method, tests — while the two halves were never connected.
+
+**Disposition:** Full Integration. The button now calls `frm.call("preview")` and renders the returned `system_prompt`, `user_prompt`, `model` and `output_format`.
+
+**Residual:** the rendered output is asserted only against the server's return contract (`ai/intelligence.py:902`). Browser verification of the dialog belongs to Phase 7.
+
+---
+
 ## 5.4 Ingestion and document intelligence
 
 ### ING-01 — `AI Document` source type `Folder` is non-functional
@@ -681,6 +695,23 @@ The tab query is `is_private = 0`, not Frappe sharing membership.
 The app replaces `frappe.ui.FileUploader`, `frappe.file_manager.paste`, `FileView.prototype.file_menu_items`, `frappe.require`, socket initialization, and realtime methods.
 
 **Required revision:** Minimize patches, prefer supported hooks/subclass extension points, version-gate any unavoidable patch, and add browser smoke tests against the exact Frappe v17 version. The Desk guard should not suppress missing core bundle failures; deployment should fix asset hashes, and the UI should show a recoverable diagnostic.
+
+---
+
+### FILE-08 — Eleven folder-browser endpoints remain published with no caller
+
+*Added 2026-08-21 by the CLOSED-claim re-audit (VER-08 reachability sweep).*
+
+FILE-05 replaced the eager, bounded, depth-6 custom folder picker with Frappe's native lazy Link control. That was the correct fix — it uses a framework capability instead of a custom mechanism — but it removed the only callers of the API that backed the old picker. `get_tree`, `list_folder_contents`, `get_tabs`, `get_recents`, `list_favorites`, `get_folder_info`, `move_file`, `move_folder`, `search`, `add_favorite` and `remove_favorite` remain `@frappe.whitelist()` and are therefore callable by any authenticated session.
+
+**Impact:** this is not dead code — it is a live, unexercised surface. No UI drives it, so no UI test can demonstrate its behaviour, and a regression in its permission handling would be invisible. Each endpoint was confirmed to scope to the session user (directly or through its service), but authorization being present in source is weaker evidence than authorization observed under a real session.
+
+**Disposition required — one of:**
+
+* **Full Integration.** Build the folder-browser UI these endpoints were written for, giving them callers and behavioural tests.
+* **Removal.** Delete the endpoints and their services, keeping only what the native Link picker needs.
+
+Deferring is not a disposition. Until it is resolved this row stays OPEN, with the static authorization assertion recorded as partial evidence.
 
 ---
 

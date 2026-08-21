@@ -95,9 +95,12 @@ class TestControlledBaseline(TestCase):
 		audit_ids = AUDIT_ID_PATTERN.findall(audit)
 		registered_ids = REGISTER_ID_PATTERN.findall(register)
 
-		# 79 original findings plus CHAT-09, amended into the baseline on
-		# 2026-08-21 when the CHAT-02 reopening exposed it.
-		self.assertEqual(len(audit_ids), 80)
+		# 79 original findings, plus CHAT-09 (amended in on 2026-08-21 when the
+		# CHAT-02 reopening exposed it), plus CHAT-10 and FILE-08 (amended in
+		# on 2026-08-21 by the CLOSED-claim re-audit: a Desk button that faked
+		# its server call, and eleven endpoints left published without a
+		# caller when FILE-05 removed the custom picker).
+		self.assertEqual(len(audit_ids), 82)
 		self.assertEqual(len(audit_ids), len(set(audit_ids)))
 		self.assertEqual(len(registered_ids), len(set(registered_ids)))
 		self.assertEqual(set(audit_ids), set(registered_ids))

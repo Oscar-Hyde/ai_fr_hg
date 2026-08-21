@@ -46,10 +46,17 @@ class AIConversation(Document):
 
 	@frappe.whitelist()
 	def send(self, message: str) -> dict:
-		"""Send a message in this conversation."""
-		from ai_fr_hg.ai.agent import run_agent_turn
+		"""Send a message in this conversation.
 
-		return run_agent_turn(message, agent=self.agent, conversation=self.name)
+		Delegates to the chat facade rather than calling `run_agent_turn`
+		directly. This method used to reach the agent itself, which skipped the
+		facade's message bounding (`MAX_CHAT_MESSAGE_CHARS`) and its explicit
+		`require_conversation(..., "write")` check — a second, weaker route to
+		the same operation (§21).
+		"""
+		from ai_fr_hg.api.chat import send_message
+
+		return send_message(message, conversation=self.name, agent=self.agent)
 
 	@frappe.whitelist()
 	def generate_summary(self) -> dict:

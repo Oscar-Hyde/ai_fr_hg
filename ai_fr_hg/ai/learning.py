@@ -946,11 +946,16 @@ def observe_feedback(
 
 
 # ---------------------------------------------------------------------------
-# Whitelisted actions (used by Desk buttons)
+# Domain entry point for feedback
+#
+# Deliberately NOT whitelisted. The only supported transport is
+# `ai_fr_hg.api.chat.submit_feedback`, which bounds the correction text and
+# constrains the reason before delegating here. Whitelisting this function too
+# published a second, unvalidated route to the same write (§21: API endpoints
+# authorize and delegate; domain logic is reached through the facade).
 # ---------------------------------------------------------------------------
 
 
-@frappe.whitelist()
 def record_feedback(
 	message: str,
 	feedback: str,

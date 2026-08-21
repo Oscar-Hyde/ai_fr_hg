@@ -237,6 +237,28 @@ MUTATIONS: list[Mutation] = [
 		breaks="Evidence must record when extraction ran.",
 	),
 	# -- formula preservation (§6.2) --------------------------------------
+	# -- facade integrity (§21: one governed route per operation) ---------
+	Mutation(
+		name="domain-feedback-rewhitelisted",
+		path="ai_fr_hg/ai/learning.py",
+		old="def record_feedback(",
+		new="@frappe.whitelist()\ndef record_feedback(",
+		breaks="Re-publishing the domain writer bypasses the facade's bounded_text limit.",
+	),
+	Mutation(
+		name="conversation-send-bypasses-facade",
+		path="ai_fr_hg/ai_conversation/doctype/ai_conversation/ai_conversation.py",
+		old="from ai_fr_hg.api.chat import send_message\n\n\t\treturn send_message(message, conversation=self.name, agent=self.agent)",
+		new="from ai_fr_hg.ai.agent import run_agent_turn\n\n\t\treturn run_agent_turn(message, agent=self.agent, conversation=self.name)",
+		breaks="Calling the agent directly skips message bounding and the write check.",
+	),
+	Mutation(
+		name="folder-endpoint-impersonates-user",
+		path="ai_fr_hg/api/folders.py",
+		old="return service_tabs(user=frappe.session.user)",
+		new='return service_tabs(user="Administrator")',
+		breaks="A published endpoint must act as the caller, never a fixed identity.",
+	),
 	# -- schema and wiring integrity (real-bench failure classes) ---------
 	Mutation(
 		name="hook-target-typo",
