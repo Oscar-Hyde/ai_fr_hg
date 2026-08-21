@@ -155,6 +155,53 @@ class TestIngestionProgressCancellation(AIPlatformTestCase):
 		]
 		self.assertEqual(called.count(document.name), 1)
 
+	def test_live_heartbeat_is_not_reaped_or_requeued(self):
+		"""ING-06: a worker still refreshing heartbeat must not be treated as dead."""
+		from ai_fr_hg.ai.ingestion import process_pending_documents
+
+		document = self.make_document("Live Worker Document", "heartbeat current")
+		document.db_set(
+			{
+				"status": "Extracting",
+				"processing_heartbeat": frappe.utils.now_datetime(),
+				"processing_requested_by": frappe.session.user,
+				"retry_count": 0,
+			},
+			update_modified=False,
+		)
+
+		with patch("ai_fr_hg.ai.ingestion.enqueue_processing") as enqueue:
+			process_pending_documents()
+
+		document.reload()
+		self.assertEqual(document.status, "Extracting")
+		self.assertNotEqual(document.error_type, "StaleWorker")
+		called = [
+			call.args[0] if call.args else call.kwargs.get("document_name") for call in enqueue.call_args_list
+		]
+		self.assertEqual(called.count(document.name), 0)
+
+	def test_in_flight_enqueue_does_not_start_a_second_job(self):
+		"""ING-06: recovery never duplicates while status is still in-flight."""
+		from ai_fr_hg.ai.ingestion import enqueue_processing
+
+		document = self.make_document("In Flight No Duplicate", "still extracting")
+		document.db_set(
+			{
+				"status": "Chunking",
+				"processing_job_id": f"ai-document::{document.name}",
+				"processing_requested_by": frappe.session.user,
+				"processing_heartbeat": frappe.utils.now_datetime(),
+			},
+			update_modified=False,
+		)
+		with patch("ai_fr_hg.ai.ingestion.frappe.enqueue") as enqueue:
+			result = enqueue_processing(document.name, requested_by=frappe.session.user)
+		self.assertEqual(result["status"], "Chunking")
+		enqueue.assert_not_called()
+		document.reload()
+		self.assertEqual(document.status, "Chunking")
+
 
 class TestIndexing(AIPlatformTestCase):
 	def test_document_is_chunked_and_embedded(self):

@@ -23,7 +23,7 @@ Prior green code baseline for stale-worker/cancel status: `5b256d1` Server [3245
 | ID | Finding | Status | Evidence on this branch | Remaining |
 | --- | --- | --- | --- | --- |
 | ING-01–05 | Folder/`.msg`/OCR claims, ZIP bombs, warnings | CLOSED earlier | Register + prior Server | — |
-| ING-06 | Progress/cancel/stale worker | IN PROGRESS | Cancel before/mid extract; unauthorized cancel denied; stale heartbeat → `Failed(StaleWorker)` then one `enqueue_processing` | Live RQ process death and Desk reconnect remain Phase 7 |
+| ING-06 | Progress/cancel/stale worker | IN PROGRESS | Cancel before/mid extract; unauthorized cancel denied; dead heartbeat → `Failed(StaleWorker)` + one enqueue; live heartbeat not reaped; in-flight enqueue is a no-op | OS-level RQ kill and Desk reconnect remain Phase 7 |
 | INT-01–04 | Extraction mapping / schema / coverage | CLOSED earlier | Register | — |
 | TRN-01–02, 06 | Memory policy, index default, text-structure | CLOSED earlier | Register | — |
 | TRN-03 | Worker `as_user` | CLOSED — IMPLEMENTED | Disabled requester + restore-after-failure | — |
