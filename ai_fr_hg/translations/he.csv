@@ -1,1 +1,901 @@
-
+'{0}' is not a folder.,'{0}' אינו תיקייה.
+(empty),(ריק)
+A bulk request cannot contain more than 500 selected nodes,בקשה קבוצתית לא יכולה להכיל יותר מ-500 צמתים שנבחרו
+A chat model is registered,מודל צ׳אט רשום
+A conflicting candidate cannot be approved automatically.,אי אפשר לאשר אוטומטית מועמד בהתנגשות.
+A conflicting process deadline is already active; tool execution was refused.,יש כבר דדליין תהליך בהתנגשות; הרצת הכלי סורבה.
+A cron schedule is required for a scheduled pipeline.,תזמון Cron נדרש לצינור מתוזמן.
+A cycle exists in the parent Pipeline Run chain.,קיים מעגל בשרשרת הרצות הצינור האב.
+A decided candidate cannot be processed again.,אי אפשר לעבד שוב מועמד שכבר הוכרעה גורלו.
+A default chat model is selected,מודל צ׳אט ברירת מחדל נבחר
+A DocType is required.,נדרש DocType.
+A document named {0} already exists in the destination.,מסמך בשם {0} כבר קיים ביעד.
+A document named {0} already exists in this folder.,מסמך בשם {0} כבר קיים בתיקייה הזאת.
+A document named {0} already exists in {1}.,מסמך בשם {0} כבר קיים ב-{1}.
+A File identity (file_name) or file URL is required.,נדרש מזהה קובץ (file_name) או כתובת URL של קובץ.
+A file in this folder is still used by a document outside the selected subtree.,קובץ בתיקייה הזאת עדיין בשימוש של מסמך מחוץ לעץ המשנה שנבחר.
+A filter list supports at most {0} values.,רשימת מסננים תומכת ב-{0} ערכים לכל היותר.
+A filter value supports at most {0} characters.,ערך מסנן תומך ב-{0} תווים לכל היותר.
+A folder cannot be copied into itself or its descendant.,אי אפשר להעתיק תיקייה לתוך עצמה או לצאצא שלה.
+A folder cannot be moved into itself or its descendant.,אי אפשר להעביר תיקייה לתוך עצמה או לצאצא שלה.
+A folder cannot be used as a document source file.,אי אפשר להשתמש בתיקייה כקובץ מקור של מסמך.
+A knowledge base exists,קיים בסיס ידע
+A local model pull was requested for {0} on {1}.,בוקשה משיכת מודל מקומית עבור {0} ב-{1}.
+A model name is required.,נדרש שם מודל.
+A new knowledge candidate must start in Draft status.,מועמד ידע חדש חייב להתחיל בסטטוס טיוטה.
+A pipeline is required for a Pipeline task.,צינור נדרש למשימת Pipeline.
+A pipeline needs at least one step.,צינור זקוק לפחות לשלב אחד.
+"A policy applies to either a role or a user, not both.","מדיניות חלה על תפקיד או על משתמש, לא על שניהם."
+A policy must apply to either a role or a user.,מדיניות חייבת לחול על תפקיד או על משתמש.
+A provider is configured,ספק מוגדר
+A provider is reachable,ספק בהישג יד
+A query supports at most {0} filter keys.,שאילתה תומכת ב-{0} מפתחות מסנן לכל היותר.
+A selected folder is not empty. Confirm recursive deletion first.,תיקייה שנבחרה אינה ריקה. אשר קודם מחיקה רקורסיבית.
+A source file is required when Source Type is File.,קובץ מקור נדרש כאשר סוג המקור הוא קובץ.
+A source URL is required when Source Type is URL.,כתובת URL של מקור נדרשת כאשר סוג המקור הוא URL.
+A source URL is required.,כתובת URL של מקור נדרשת.
+A stable Source File record is required for file-backed documents.,רשומת קובץ מקור יציבה נדרשת עבור מסמכים מבוססי קובץ.
+A valid AI Provider is required.,נדרש ספק בינה מלאכותית תקף.
+A valid authenticated processing user is required.,נדרש משתמש מעבד תקף ומאומת.
+A valid enabled translation requester is required.,נדרש מבקש תרגום תקף ומופעל.
+Accept this translation as reviewed?,לקבל את התרגום הזה כנבדק?
+Access,גישה
+Access Control,בקרת גישה
+Access Policy,מדיניות גישה
+Action,פעולה
+Actions,פעולות
+Active,פעיל
+Adapter,מתאם
+Adapter for {0} must derive from BaseProvider.,המתאם ל-{0} חייב לרשת מ-BaseProvider.
+Add,הוסף
+Add Folder to Favorites,הוסף תיקייה למועדפים
+Add Text,הוסף טקסט
+Add Text to Knowledge Base,הוסף טקסט לבסיס הידע
+Add to Knowledge Base,הוסף לבסיס הידע
+Add to {0},הוסף אל {0}
+Additional Allowed Hosts,מארחים מותרים נוספים
+Additional fields that generic AI document tools must never expose. One per line: a bare fieldname applies to every DocType; 'Doctype.fieldname' scopes the entry to one DocType. Password fields and common credential field names are always denied.,שדות נוספים שכלים גנריים של מסמכי בינה מלאכותית לעולם אסור להם לחשוף. שורה לכל אחד: שם שדה חשוף חל על כל DocType; הצורה 'Doctype.fieldname' מגבילה את הרשומה ל-DocType יחיד. שדות סיסמה ושמות שדות אישורים נפוצים תמיד נדחים.
+Advanced Parameters,פרמטרים מתקדמים
+Agent,סוכן
+Agent Name,שם הסוכן
+Agent Response,תגובת הסוכן
+Agents,סוכנים
+Agents & Tools,סוכנים וכלים
+AI Agent {0} is disabled.,סוכן הבינה המלאכותית {0} מושבת.
+AI Answer,תשובת בינה מלאכותית
+AI Assistant,עוזר בינה מלאכותית
+AI Automation,אוטומציית בינה מלאכותית
+AI Control Center,מרכז בקרה של הבינה המלאכותית
+AI Document,מסמך בינה מלאכותית
+AI document ingestion failed: {0},קליטת מסמך בינה מלאכותית נכשלה: {0}
+AI Document {0} does not exist.,מסמך בינה מלאכותית {0} לא קיים.
+AI Documents,מסמכי בינה מלאכותית
+AI Error,שגיאת בינה מלאכותית
+AI Knowledge,ידע בינה מלאכותית
+AI Learning,למידת בינה מלאכותית
+AI Model Manager,מנהל מודלי הבינה המלאכותית
+AI Model {0} is disabled.,מודל בינה מלאכותית {0} מושבת.
+AI Operations,תפעול בינה מלאכותית
+AI Provider Offline: {0},ספק בינה מלאכותית לא מקוון: {0}
+AI Provider {0} does not exist.,ספק בינה מלאכותית {0} לא קיים.
+AI Provider {0} has no Custom Adapter Path set.,לספק בינה מלאכותית {0} לא הוגדר נתיב מתאם מותאם.
+AI Provider {0} is disabled.,ספק בינה מלאכותית {0} מושבת.
+AI Tasks,משימות בינה מלאכותית
+AI Workspace,סביבת עבודה של הבינה המלאכותית
+Alert on Provider Offline,התראה כשהספק לא מקוון
+Alert Recipients,נמעני התראה
+All Documents,כל המסמכים
+All entities,כל הישויות
+All Logs,כל היומנים
+All providers,כל הספקים
+Allow Document Upload,אפשר העלאת מסמכים
+Allow Learning (Teach & Recall),אפשר למידה (הוראה וזכירה)
+Allow Model Management,אפשר ניהול מודלים
+Allow non-manager users with knowledge-base write grants to fetch URL sources from Additional Allowed Hosts. Redirects and response sizes remain guarded.,אפשר למשתמשים לא-מנהלים בעלי הרשאות כתיבה לבסיס ידע להביא מקורות URL מ״מארחים מותרים נוספים״. הפניות מחדש וגודלי תגובה נשארים מוגנים.
+Allow Pipeline Execution,אפשר הרצת צינורות
+Allow Tool Execution,אפשר הרצת כלים
+Allow User URL Ingestion,אפשר קליטת URL על ידי משתמש
+Allowed Models,מודלים מותרים
+Allowed Roles,תפקידים מותרים
+Allowed Values,ערכים מותרים
+Also delete all folders and AI Documents in this subtree?,למחוק גם את כל התיקיות ומסמכי הבינה המלאכותית בעץ המשנה הזה?
+An agent is configured,סוכן מוגדר
+An embedding model is registered,מודל הטבעה רשום
+An update action needs a document name.,פעולת עדכון דורשת שם מסמך.
+Answer Only From Knowledge,ענה רק מתוך הידע
+Answer with AI,ענה עם בינה מלאכותית
+API Key,מפתח API
+Application-Level Document Encryption (Unsupported),הצפנת מסמכים ברמת האפליקציה (לא נתמך)
+Application-level document encryption is not supported.,הצפנת מסמכים ברמת האפליקציה אינה נתמכת.
+Applied Skills,כישרונות שהוחלו
+Applies to Role,חל על תפקיד
+Applies to User,חל על משתמש
+Approval notes are required when overriding a conflict.,הערות אישור נדרשות בעת עקיפת התנגשות.
+Approval Required,נדרש אישור
+Approve,אשר
+Approve and Run,אשר והרץ
+Approve Conflicting Candidate,אשר מועמד בהתנגשות
+Approved,אושר
+Approved At,אושר ב
+Approved By,אושר על ידי
+Approved On,אושר בתאריך
+Arabic,ערבית
+Archive,העבר לארכיון
+Archive Conversation,העבר שיחה לארכיון
+Archive this memory so it no longer influences AI answers?,להעביר את הזיכרון הזה לארכיון כך שלא ישפיע יותר על תשובות הבינה המלאכותית?
+Archived,בארכיון
+Archived documents cannot be processed.,מסמכים בארכיון לא ניתנים לעיבוד.
+Argument {0} for tool {1} is not an allowed value.,הארגומנט {0} לכלי {1} אינו ערך מותר.
+Argument {0} for tool {1} must be {2}.,הארגומנט {0} לכלי {1} חייב להיות {2}.
+Arguments,ארגומנטים
+Array,מערך
+Ask About This,שאל על זה
+Ask about {0},שאל על {0}
+Assistant,עוזר
+Audit,ביקורת
+Audit Log Retention (days),שמירת יומן ביקורת (ימים)
+Audit Logs,יומני ביקורת
+Auto Embed After Extraction,הטבע אוטומטית לאחר חילוץ
+Auto Pattern Scan,סריקת תבניות אוטומטית
+Auto Process Uploaded Documents,עבד אוטומטית מסמכים שהועלו
+Automation,אוטומציה
+Automation Rules,כללי אוטומציה
+Available,זמין
+Available Models,מודלים זמינים
+Average Latency (ms),השהיה ממוצעת (מ״ש)
+Back-Translation Samples,דגימות תרגום חוזר
+Base URL,כתובת URL בסיסית
+Batch Size,גודל אצווה
+Behaviour,התנהגות
+Blocks any provider endpoint that is not a loopback/private address.,חוסם כל נקודת קצה של ספק שאינה כתובת מקומית/פרטית.
+Boolean,בוליאני
+"Bounded quote around the first occurrence, for citation re-anchoring.","ציטוט תחום סביב המופע הראשון, לצורך עיגון מחדש של ציטוט."
+Builtin,מובנה
+Can Write,יכול לכתוב
+Cancel Requested,בוקש ביטול
+Cancelled,בוטל
+Cancelled by user,בוטל על ידי המשתמש
+Canonical parent in Frappe's native File folder hierarchy. Home represents the tree root.,האב הקנוני בהיררכיית תיקיות הקבצים המקורית של Frappe. Home מייצג את שורש העץ.
+Capabilities,יכולות
+Case Sensitive,מבחין בין אותיות רישיות
+Category,קטגוריה
+Character offset of the first match within the scanned text window.,היסט תו של ההתאמה הראשונה בתוך חלון הטקסט הנסרק.
+Characters,תווים
+Characters carried from one chunk to the next so no fact is split across a boundary. Must be smaller than Chunk Size.,תווים שמועברים ממקטע אחד למקטע הבא כך שאף עובדה לא תפוצל בין גבולות. חייב להיות קטן מ״גודל מקטע״.
+Chat,צ׳אט
+Chat Correction,תיקון צ׳אט
+"Chat with your local models, search your knowledge, and run AI tasks.","שוחח עם המודלים המקומיים שלך, חפש בידע שלך והרץ משימות בינה מלאכותית."
+Checked On,נבדק בתאריך
+Checksum,סכום ביקורת
+Checksum of the document source when this row was written. Rescans refresh it.,סכום ביקורת של מקור המסמך בזמן שהשורה הזאת נכתבה. סריקות מחדש מרעננות אותו.
+Chunk,מקטע
+Chunk Index,אינדקס מקטע
+Chunk Overlap,חפיפת מקטעים
+Chunk Overlap (characters),חפיפת מקטעים (תווים)
+Chunk Size,גודל מקטע
+Chunk Size (characters),גודל מקטע (תווים)
+Chunking,פיצול למקטעים
+Chunks,מקטעים
+Citation Mode,מצב ציטוט
+Citations,ציטוטים
+Classification,סיווג
+Classification Confidence,ביטחון סיווג
+Classify,סווג
+Close,סגור
+Color,צבע
+Compare,השווה
+Comparison,השוואה
+Complete brute-force vector evaluation is used for every eligible chunk. Corpora larger than this ceiling are still scanned completely but are flagged as degraded relative to the published latency envelope (1k/10k interactive; 100k complete but possibly slow).,הערכה וקטורית מלאה בכוח גס משמשת לכל מקטע כשיר. קורפוסים גדולים מהתקרה הזאת עדיין נסרקים במלואם אבל מסומנים כמוחלשים ביחס למעטפת ההשהיה שפורסמה (1k/10k אינטראקטיבי; 100k מלא אך אולי איטי).
+Completed,הושלם
+Completed On,הושלם בתאריך
+Completion,השלמה
+Completion Tokens,טוקנים של השלמה
+Condition,תנאי
+Confidence,ביטחון
+Configuration,תצורה
+Conflict,התנגשות
+Conflict Test,בדיקת התנגשות
+Conflicts / Overlaps,התנגשויות / חפיפות
+Conflicts Summary,סיכום התנגשויות
+Consecutive Failures,כשלים רצופים
+Content,תוכן
+Context,הקשר
+Context Override,עקיפת הקשר
+Context Quote,ציטוט הקשר
+Context Used,הקשר שנעשה בו שימוש
+Context Window,חלון הקשר
+Continue,המשך
+Conversation,שיחה
+Conversation is required.,נדרשת שיחה.
+Conversation {0} created.,השיחה {0} נוצרה.
+Conversations,שיחות
+Copied,הועתק
+Copied From,הועתק מ
+Copied On,הועתק בתאריך
+Copy,העתק
+Correction,תיקון
+Created,נוצר
+Critical,קריטי
+Cron Schedule,תזמון Cron
+Custom,מותאם
+Custom Adapter Path,נתיב מתאם מותאם
+Custom Method,מתודה מותאמת
+Data,נתונים
+Date,תאריך
+Default,ברירת מחדל
+Default Agent,סוכן ברירת מחדל
+Default Chat Model,מודל צ׳אט ברירת מחדל
+Default Embedding Model,מודל הטבעה ברירת מחדל
+Default for new translations: store the finished text as its own searchable AI Document.,ברירת מחדל לתרגומים חדשים: שמור את הטקסט המוגמר כמסמך בינה מלאכותית נפרד לחיפוש.
+Default for Type,ברירת מחדל לסוג
+Default Glossary,מילון ברירת מחדל
+Default Provider,ספק ברירת מחדל
+Default System Prompt,פרומפט מערכת ברירת מחדל
+Default Target Language,שפת יעד ברירת מחדל
+Default Translation Model,מודל תרגום ברירת מחדל
+Default Vision Model,מודל ראייה ברירת מחדל
+Degraded,מוחלש
+Delete,מחק
+Delete Conversation,מחק שיחה
+Delete Selected,מחק את הנבחרים
+Denormalised path of the folder for fast filtering and provenance.,נתיב לא מנורמל של התיקייה לסינון מהיר ולתיעוד מקוריות.
+Denormalized from the document so knowledge-base row permissions apply without a join.,לא מנורמל מהמסמך כדי שהרשאות שורה של בסיס ידע יחולו בלי צירוף.
+Description,תיאור
+Details,פרטים
+"Detected written language(s) as ISO 639-1 codes (en, ar, he, or en,ar,he when mixed). Filled when text is extracted; you can correct it.","שפה/שפות כתובות שזוהו כקודי ISO 639-1 (en, ar, he או en,ar,he כשמעורב). ממולא בעת חילוץ הטקסט; ניתן לתקן אותו."
+"Deterministic canonical identity for this type, used for deduplication.","זהות קנונית דטרמיניסטית לסוג הזה, בשימוש להסרת כפילויות."
+Digest,תמצית
+Dimensions,מימדים
+Discover Models,גלה מודלים
+DocType Action,פעולת DocType
+DocType Query,שאילתת DocType
+DocType Record,רשומת DocType
+Document,מסמך
+Document Chunks,מקטעי מסמך
+Document Ingest,קליטת מסמכים
+Document Intelligence,אינטליגנציית מסמכים
+Document Type,סוג מסמך
+Documents,מסמכים
+Documents Processed,מסמכים שעובדו
+Domain,דומיין
+Dotted path to a class deriving from ai_fr_hg.ai.providers.base.BaseProvider,נתיב מנוקד למחלקה שיורשת מ-ai_fr_hg.ai.providers.base.BaseProvider
+Dotted path to a whitelisted python callable.,נתיב מנוקד לפונקציה ניתנת להפעלה של Python מהרשימה הלבנה.
+Draft,טיוטה
+Due Date,תאריך יעד
+Duration (ms),משך (מ״ש)
+"Each row is one concept in English, Arabic and Hebrew. The direction being translated decides which column is the source and which is the required output.","כל שורה היא מושג אחד באנגלית, בערבית ובעברית. כיוון התרגום קובע איזו עמודה היא המקור ואיזו היא הפלט הנדרש."
+Embed,הטבע
+Embedded Chunks,מקטעים מוטבעים
+Embedded On,הוטבע בתאריך
+Embedding,הטבעה
+Embedding Dimensions,מימדי הטבעה
+Embedding Format,פורמט הטבעה
+Embedding Model,מודל הטבעה
+Embedding Vector,וקטור הטבעה
+Enable AI Platform,אפשר פלטפורמת בינה מלאכותית
+Enable Health Checks,אפשר בדיקות תקינות
+Enable Hybrid Search,אפשר חיפוש היברידי
+Enable Learning Loop,אפשר לולאת למידה
+Enable OCR Fallback,אפשר גיבוי OCR
+Enable Scheduled Knowledge Backup,אפשר גיבוי ידע מתוזמן
+Enable Streaming,אפשר הזרמה
+Enable Tool Calling,אפשר קריאת כלים
+Enable Translation,אפשר תרגום
+Enabled,מופעל
+Engine,מנוע
+English,אנגלית
+Entity Type,סוג ישות
+Error,שגיאה
+Error Message,הודעת שגיאה
+Error Type,סוג שגיאה
+Event,אירוע
+Execution,הרצה
+Execution Log,יומן הרצה
+Execution Log Retention (days),שמירת יומן הרצה (ימים)
+Execution Logs,יומני הרצה
+Explicit Teaching,לימוד מפורש
+Export,ייצא
+Extra Headers,כותרות נוספות
+Extract,חלץ
+Extract Data,חלץ נתונים
+Extract Text,חלץ טקסט
+Extracted Data,נתונים שחולצו
+Extracted Text,טקסט שחולץ
+Extracting,מחלץ
+Extraction,חילוץ
+Extraction Instructions,הוראות חילוץ
+Extraction Schema,סכימת חילוץ
+Extraction Schemas,סכימות חילוץ
+Extraction Warnings,אזהרות חילוץ
+Fact,עובדה
+Failed,נכשל
+Failures,כשלים
+Fallback Answer,תשובת גיבוי
+Family,משפחה
+Favorite Folders,תיקיות מועדפות
+Feedback,משוב
+Feedback Comment,הערת משוב
+Feedback Reason,סיבת משוב
+Field Allowlist,רשימת שדות מותרים
+Field Name,שם שדה
+Field on the triggering document used as input. Defaults to the whole document.,שדה במסמך המפעיל שמשמש כקלט. ברירת המחדל היא המסמך כולו.
+Field on the triggering document where the result is written.,שדה במסמך המפעיל שאליו נכתבת התוצאה.
+Fields,שדות
+File,קובץ
+File Size (bytes),גודל קובץ (בתים)
+Files,קבצים
+Fingerprint,טביעת אצבע
+Finished At,הסתיים ב
+First Offset,היסט ראשון
+Flagged,מסומן
+Flagged Segments,מקטעים מסומנים
+Focused Document,מסמך במיקוד
+Folder,תיקייה
+Folder Intelligence,אינטליגנציית תיקיות
+Folder Organization,ארגון תיקיות
+Follows the folder's privacy setting at creation.,עוקב אחר הגדרת הפרטיות של התיקייה בעת יצירה.
+Footnote,הערת שוליים
+Formal,רשמי
+Format,פורמט
+Formatting,עיצוב
+Free-form tag for folder-level knowledge tagging and filtered retrieval.,תג חופשי לתיוג ידע ברמת התיקייה ולאחזור מסונן.
+General,כללי
+Generated JSON Schema,סכימת JSON שנוצרה
+Generated Schema,סכימה שנוצרה
+Generation,יצירה
+Generation Defaults,ברירות מחדל ליצירה
+Global,גלובלי
+Glossary,מילון
+Glossary Name,שם מילון
+Governance,ממשל
+GPU Layers,שכבות GPU
+Greeting,ברכה
+Handler Method,מתודת מטפל
+Hard execution deadline. Tools fail closed if the runtime cannot enforce it.,דדליין הרצה קשיח. כלים נכשלים סגור אם זמן הריצה לא יכול לאכוף אותו.
+Heading,כותרת
+Health,תקינות
+Health Check,בדיקת תקינות
+Health Check Interval (minutes),מרווח בדיקת תקינות (דקות)
+Health Log Retention (days),שמירת יומן תקינות (ימים)
+Hebrew,עברית
+Helpful,מועיל
+High,גבוה
+How much source text is translated as one unit.,כמה טקסט מקור מתורגם כיחידה אחת.
+Hybrid,היברידי
+"Identifier used by the runtime, e.g. llama3.1:8b","מזהה בשימוש זמן הריצה, לדוגמה llama3.1:8b"
+Idle,בהמתנה
+"If set, retrieval scoped to this folder can be constrained to a knowledge base.","אם מוגדר, ניתן להגביל אחזור המוגבל לתיקייה הזאת לבסיס ידע."
+Image-file OCR fallback only. Requires Tesseract and the optional ocr extra; scanned-PDF OCR is not supported.,גיבוי OCR לקבצי תמונה בלבד. דורש Tesseract ואת ה-extra האופציונלי ocr; OCR ל-PDF סרוק אינו נתמך.
+Immutable source identity retained for provenance without changing source-document deletion policy.,זהות מקור בלתי משתנה שנשמרת לתיעוד מקוריות מבלי לשנות את מדיניות מחיקת מסמך המקור.
+In Progress,בביצוע
+Incorrect Information,מידע שגוי
+Index Statistics,סטטיסטיקות אינדקס
+Index Status,סטטוס אינדקס
+Index the finished translation as its own searchable AI Document.,אנדקס את התרגום המוגמר כמסמך בינה מלאכותית נפרד לחיפוש.
+Index Translation as Document,אנדקס תרגום כמסמך
+Index Translations as Documents,אנדקס תרגומים כמסמכים
+Indexed,מאונדקס
+Indexed On,אונדקס בתאריך
+Indexing,מאנדקס
+Info,מידע
+Informal,לא רשמי
+Ingest Document,קלוט מסמך
+"Ingest, index and interrogate your documents. Everything stays on this machine.","קלוט, אנדקס ותחקר את המסמכים שלך. הכול נשאר במכונה הזאת."
+Ingestion,קליטה
+Inline,בשורה
+Input,קלט
+Input / Output,קלט / פלט
+Input Data,נתוני קלט
+Input Key,מפתח קלט
+Instruction,הוראה
+Instructions,הוראות
+Integer,מספר שלם
+Intelligence,אינטליגנציה
+Internal,פנימי
+Invalid tree continuation token.,אסימון המשך עץ לא תקף.
+IP Address,כתובת IP
+Is Private,פרטי
+Issue Summary,סיכום בעיה
+Issues,בעיות
+Jinja template. Variables declared below are available in the render context.,תבנית Jinja. המשתנים המוצהרים למטה זמינים בהקשר הרינדור.
+Job ID,מזהה עבודה
+JSON Schema,סכימת JSON
+Keep Alive,השאר בחיים
+Keep As Is,השאר כפי שהוא
+Keep this term exactly as written in every language.,השאר את המונח הזה בדיוק כפי שנכתב בכל שפה.
+Keys here become the pipeline's starting context.,מפתחות כאן הופכים להקשר ההתחלתי של הצינור.
+Keyword,מילת מפתח
+Kind,סוג
+Knowledge,ידע
+Knowledge Base,בסיס ידע
+Knowledge Base Scope,היקף בסיס ידע
+Knowledge Bases,בסיסי ידע
+Knowledge Candidates,מועמדי ידע
+Knowledge Content,תוכן ידע
+Knowledge Explorer,מפעל הידע
+Knowledge Tag,תג ידע
+Label,תווית
+Language,שפה
+Last Checked,נבדק לאחרונה
+Last Error,שגיאה אחרונה
+Last Health Check,בדיקת תקינות אחרונה
+Last Indexed On,אונדקס לאחרונה ב
+Last Message,הודעה אחרונה
+Last Operation,פעולה אחרונה
+Last Operation By,פעולה אחרונה על ידי
+Last Operation On,פעולה אחרונה בתאריך
+Last Run,הרצה אחרונה
+Last Used On,שימוש אחרון בתאריך
+Latency (ms),השהיה (מ״ש)
+Learned Context,הקשר נלמד
+Learning,למידה
+Learning Activity,פעילות למידה
+Leave empty to allow every enabled model.,השאר ריק כדי לאפשר כל מודל מופעל.
+Leave empty to detect the language of the extracted text automatically.,השאר ריק כדי לזהות אוטומטית את שפת הטקסט שחולץ.
+Leave empty to use the default chat model.,השאר ריק כדי להשתמש במודל הצ׳אט ברירת המחדל.
+Leave empty to use the platform's default translation or chat model.,השאר ריק כדי להשתמש במודל התרגום או הצ׳אט ברירת המחדל של הפלטפורמה.
+Legal,משפטי
+Limits,מגבלות
+Loading...,טוען...
+Log Prompts,יומן פרומפטים
+Log Responses,יומן תשובות
+Log Search Queries,יומן שאילתות חיפוש
+Low,נמוך
+Lower values are preferred during automatic failover.,ערכים נמוכים מועדפים בזמן גיבוי כשל אוטומטי.
+Manual,ידני
+Markdown,Markdown
+Max Concurrent Requests,מקסימום בקשות במקביל
+Max Context Characters,מקסימום תווי הקשר
+Max Document Size (MB),גודל מסמך מרבי (MB)
+Max Documents / Day,מקסימום מסמכים / יום
+Max Memory Context Characters,מקסימום תווי הקשר של זיכרון
+Max Pattern Entities per Document,מקסימום ישויות תבנית למסמך
+Max Requests / Hour,מקסימום בקשות / שעה
+Max Requests / User / Hour,מקסימום בקשות / משתמש / שעה
+Max Retries,מקסימום ניסיונות חוזרים
+Max Runtime (s),מקסימום זמן ריצה (שניות)
+Max Tokens,מקסימום טוקנים
+Max Tokens / Day,מקסימום טוקנים / יום
+Max Tokens / User / Day,מקסימום טוקנים / משתמש / יום
+Max Tool Iterations,מקסימום איטרציות כלים
+Max Turn Duration (s),משך תור מרבי (שניות)
+Medium,בינוני
+Memories,זיכרונות
+Memories Recalled Per Turn,זיכרונות שנזכרו לתור
+Memory,זיכרון
+Memory Reuse,שימוש חוזר בזיכרון
+Memory Usage,שימוש בזיכרון
+Message,הודעה
+Messages,הודעות
+Metadata,מטא-נתונים
+Metrics,מטריקות
+MIME Type,סוג MIME
+Minimum cosine score from 0 to 1. Values such as 25 are treated as 25%.,ציון קוסינוס מינימלי מ-0 עד 1. ערכים כמו 25 מטופלים כ-25%.
+"Minimum cosine similarity a passage needs to be considered relevant. Use 0–1, or 1–100 as a percentage (25 becomes 0.25). 0 returns everything; 1 only exact matches.","דמיון קוסינוס מינימלי שקטע צריך כדי להיחשב רלוונטי. השתמש ב-0–1, או 1–100 כאחוז (25 הופך ל-0.25). 0 מחזיר הכול; 1 רק התאמות מדויקות."
+Missing,חסר
+Missing Information,מידע חסר
+Model,מודל
+Model Manager,מנהל מודלים
+Model Name Prefix,קידומת שם מודל
+Model Type,סוג מודל
+Model Used,מודל שנעשה בו שימוש
+Models,מודלים
+Monitoring,ניטור
+Move,העבר
+Must be a Chat or Vision model (for example qwen2.5:0.5b). Embedding models such as all-minilm belong in Default Embedding Model.,חייב להיות מודל צ׳אט או ראייה (לדוגמה qwen2.5:0.5b). מודלי הטבעה כמו all-minilm שייכים ל״מודל הטבעה ברירת מחדל״.
+Must be a Vision model (for example llava:7b). Leave empty if you have none that fit this machine.,חייב להיות מודל ראייה (לדוגמה llava:7b). השאר ריק אם אין לך כזה שמתאים למכונה הזאת.
+Must be an Embedding model (nomic-embed-text or all-minilm). Do not put a chat model here.,חייב להיות מודל הטבעה (nomic-embed-text או all-minilm). אל תשים כאן מודל צ׳אט.
+My Conversations,השיחות שלי
+Native File folder this settings record extends (is_folder=1).,תיקיית קבצים מקורית שרשומת ההגדרות הזאת מרחיבה (is_folder=1).
+Needs Review,דורש עיון
+Negative,שלילי
+Neutral,ניטרלי
+New Conversation,שיחה חדשה
+Newline separated hostnames permitted in strict local-only mode.,שמות מארח מופרדים בשורות חדשות מותרים במצב מקומי-בלבד נוקשה.
+Newline separated regular expressions redacted before logging.,ביטויים רגולריים מופרדים בשורות חדשות שמוסתרים לפני הרישום ליומן.
+Next,הבא
+No,לא
+No adapter is registered for provider type {0}.,לא רשום מתאם עבור סוג הספק {0}.
+No Agent,אין סוכן
+No AI agent is configured yet.,עדיין לא מוגדר סוכן בינה מלאכותית.
+No AI Agent is configured. Create one in the AI Administration workspace.,לא מוגדר סוכן בינה מלאכותית. צור אחד במרחב העבודה של ניהול הבינה המלאכותית.
+No AI Provider is configured. Create one in the AI Administration workspace.,לא מוגדר ספק בינה מלאכותית. צור אחד במרחב העבודה של ניהול הבינה המלאכותית.
+No conversations yet,עדיין אין שיחות
+no details,אין פרטים
+No document reader is registered for .{0}. Supported extensions: {1},לא רשום קורא מסמכים עבור .{0}. סיומות נתמכות: {1}
+No document supplied to the Embed step.,לא סופק מסמך לשלב ההטבעה.
+No document supplied to the Extract Text step.,לא סופק מסמך לשלב חילוץ הטקסט.
+No documents yet.,עדיין אין מסמכים.
+"No embedding model is set, so semantic search is unavailable for this knowledge base.","לא הוגדר מודל הטבעה, ולכן חיפוש סמנטי אינו זמין לבסיס הידע הזה."
+No enabled {0} model is available. Register one in the AI Models workspace.,אין מודל {0} מופעל זמין. רשום אחד במרחב העבודה של מודלי הבינה המלאכותית.
+No extraction warnings — clean extraction.,אין אזהרות חילוץ — חילוץ נקי.
+No longer present,כבר לא קיים
+No Model,אין מודל
+No models registered yet. Start your runtime and click Discover Models.,עדיין לא נרשמו מודלים. הפעל את זמן הריצה שלך ולחץ על גלה מודלים.
+No models registered.,אין מודלים רשומים.
+No originating record is required for this source type.,לא נדרשת רשומת מקור לסוג המקור הזה.
+No pattern entities yet. Use Extract Patterns to scan this document.,עדיין אין ישויות תבנית. השתמש בחלץ תבניות כדי לסרוק את המסמך הזה.
+No Provider,אין ספק
+No providers configured.,אין ספקים מוגדרים.
+No recent failures.,אין כשלים אחרונים.
+No segments are flagged.,אין מקטעים מסומנים.
+No segments yet.,עדיין אין מקטעים.
+No source file is attached.,לא מצורף קובץ מקור.
+No sources for this answer.,אין מקורות לתשובה הזאת.
+No usage recorded yet.,עדיין לא נרשם שימוש.
+No valid target knowledge base could be determined.,לא ניתן היה לקבוע בסיס ידע יעד תקף.
+nodes must be a valid JSON array,nodes חייב להיות מערך JSON תקף
+nodes must be an array of tree node identifiers,nodes חייב להיות מערך של מזהי צמתי עץ
+Non-manager URL ingestion is limited to hosts in Additional Allowed Hosts.,קליטת URL על ידי לא-מנהלים מוגבלת למארחים ב״מארחים מותרים נוספים״.
+None,ללא
+None yet.,עדיין כלום.
+Normalized case-folded SHA-256 location-local identity used for collation-independent cross-database collision enforcement.,"זהות מקומית-מיקום מנורמלת ומקופלת-רישיות של SHA-256, בשימוש לאכיפת אי-התנגשות בין בסיסי נתונים באופן בלתי תלוי בסידור."
+Normalized Value,ערך מנורמל
+not embedded,לא מוטבע
+Not Helpful,לא מועיל
+Not Tested,לא נבדק
+Notes,הערות
+Number,מספר
+Number of passages retrieved for every query. More passages give the model more evidence but use more context window.,מספר הקטעים שאוחזרו לכל שאילתה. יותר קטעים נותנים למודל יותר ראיות אך צורכים יותר חלון הקשר.
+Object,אובייקט
+Occurrences,מופעים
+Offline,לא מקוון
+On,בעת
+On Error,בעת שגיאה
+Online,מקוון
+Open,פתוח
+Operation,פעולה
+Operations Dashboard,לוח בקרה תפעולי
+"Optional budget for one interactive chat turn, including retries, failover and tool calls. 0 (the default) waits for the model with no extra cutoff. Set a value only when a reverse proxy would otherwise return 504, and keep it below that proxy timeout.","תקציב אופציונלי לתור צ׳אט אינטראקטיבי אחד, כולל ניסיונות חוזרים, גיבוי כשל וקריאות כלים. 0 (ברירת המחדל) ממתין למודל ללא חתך נוסף. הגדר ערך רק כאשר פרוקסי הפוך אחרת יחזיר 504, ושמור אותו מתחת לפסק הזמן של הפרוקסי."
+Optional color for UI (e.g. #4A90E2).,צבע אופציונלי לממשק (לדוגמה #4A90E2).
+"Optional comma or line separated list of fieldnames this DocType Query tool may return. When set, results are restricted to these fields in addition to the caller's own readable, non-sensitive fields. It never grants access.","רשימה אופציונלית של שמות שדות מופרדים בפסיקים או שורות שכלי שאילתת ה-DocType הזה רשאי להחזיר. כאשר מוגדר, התוצאות מוגבלות לשדות האלה בנוסף לשדות הקריאים והלא-רגישים של הקורא. זה לעולם לא מעניק גישה."
+Optional safe-eval expression. `doc` is available. Example: doc.status == 'Open',ביטוי safe-eval אופציונלי. `doc` זמין. דוגמה: doc.status == 'Open'
+"Optional source context supplied by the teaching user. It is retained as unverified context, not authoritative attribution.","הקשר מקור אופציונלי שהמשתמש המלמד מספק. הוא נשמר כהקשר לא מאומת, לא כייחוס סמכותי."
+Optional: the knowledge base this terminology belongs to.,אופציונלי: בסיס הידע שאליו שייכת הטרמינולוגיה הזאת.
+Organization Name,שם ארגון
+Organization Name Key,מפתח שם ארגון
+Organization Revision,גרסת ארגון
+Output,פלט
+Output & Processing,פלט ועיבוד
+Output Format,פורמט פלט
+Output Key,מפתח פלט
+Page,עמוד
+Page Number,מספר עמוד
+Pages,עמודים
+Parameter,פרמטר
+Parameter Size,גודל פרמטר
+Parameters,פרמטרים
+Parent Pipeline Run,הרצת צינור אב
+Passed,עבר
+Pattern Entities,ישויות תבנית
+Pattern Match,התאמת תבנית
+Payload,מטען
+Pending,ממתין
+Pending Approval,ממתין לאישור
+"Periodically extract high-precision pattern entities (emails, URLs, phones, IPs, hashes, dates, identifiers, money) from indexed documents into AI Pattern Entity rows. Reads only already-extracted content; off by default.","חלץ מעת לעת ישויות תבנית ברמת דיוק גבוהה (דוא״ל, כתובות URL, טלפונים, כתובות IP, גיבובים, תאריכים, מזהים, כסף) ממסמכים מאונדקסים לתוך שורות ״ישות תבנית של בינה מלאכותית״. קורא רק תוכן שכבר חולץ; כבוי כברירת מחדל."
+Pinned,מוצמד
+Pipeline,צינור
+Pipeline Name,שם צינור
+Pipeline Run,הרצת צינור
+Pipeline Runs,הרצות צינור
+Pipelines,צינורות
+"Pipelines, event-driven rules and agents that run without human intervention.","צינורות, כללים מונחי אירועים וסוכנים שרצים ללא התערבות אדם."
+Platform Defaults,ברירות מחדל של הפלטפורמה
+Platform Settings,הגדרות פלטפורמה
+Policy Name,שם מדיניות
+Positive,חיובי
+Preference,העדפה
+Preferred Model,מודל מועדף
+"Preserve extracted-text blocks, spacing, and separators. This does not reconstruct the original PDF, Office, or image file.","שמר בלוקי טקסט שחולצו, ריווח ומפרידים. זה לא משחזר את קובץ ה-PDF, Office או התמונה המקורי."
+Preserve Extracted-Text Structure,שמר את מבנה הטקסט שחולץ
+Priority,עדיפות
+Procedural,פרוצדורלי
+Processing Duration (ms),משך עיבוד (מ״ש)
+Processing Heartbeat,פעימת לב של עיבוד
+Processing Job ID,מזהה עבודת עיבוד
+Processing Progress,התקדמות עיבוד
+Processing Queue,תור עיבוד
+Processing Requested By,עיבוד בוקש על ידי
+Processing Requested On,עיבוד בוקש בתאריך
+Processing Status,סטטוס עיבוד
+Prompt,פרומפט
+Prompt Template,תבנית פרומפט
+Prompt Templates,תבניות פרומפט
+Prompt Tokens,טוקני פרומפט
+Provenance,מקוריות
+Provider,ספק
+Provider Name,שם ספק
+Provider Type,סוג ספק
+Providers,ספקים
+Pulled On,נמשך בתאריך
+Quality,איכות
+Quality Score,ציון איכות
+Quantization,קוונטיזציה
+Query,שאילתה
+Question,שאלה
+Queue,תור
+Queue Time (ms),זמן תור (מ״ש)
+Queued,בתור
+Rate Limit / Minute,מגבלת קצב / דקה
+Read Only,קריאה בלבד
+Reader Used,קורא שנעשה בו שימוש
+"Real-time health, usage and configuration of the local AI platform.","תקינות, שימוש ותצורה בזמן אמת של פלטפורמת הבינה המלאכותית המקומית."
+Reasoning,הסקה
+"Record search telemetry (query text, result identifiers, scores and bounded snippets). Values are passed through the configured redaction patterns before persistence; full result content is never stored. Rows are removed by the scheduled retention cleanup.","רשום טלמטריית חיפוש (טקסט שאילתה, מזהי תוצאה, ציונים וקטעים תחומים). ערכים מועברים דרך תבניות ההשחרה שהוגדרו לפני השמירה; תוכן תוצאה מלא לעולם לא נשמר. שורות מוסרות על ידי ניקוי השמירה המתוזמן."
+Redaction Patterns,תבניות עריכה סמויה
+Reference,הפניה
+Reference DocType,DocType הפניה
+Reference Document Type,סוג מסמך הפניה
+Reference Name,שם הפניה
+Reference to a resource or approval policy governing access to this folder (informational; actual permission uses Frappe sharing).,הפניה למדיניות משאב או אישור שמנהלת את הגישה לתיקייה הזאת (למידע; ההרשאה בפועל משתמשת בשיתוף של Frappe).
+Refresh,רענן
+Register,רישום
+Rejected,נדחה
+Rejected At,נדחה ב
+Rejected By,נדחה על ידי
+Rename,שנה שם
+Repair Flagged Segments,תקן מקטעים מסומנים
+Repeat Penalty,עונש חזרה
+Report,דוח
+Reports,דוחות
+Request Payload,מטען בקשה
+Request Timeout (s),פסק זמן לבקשה (שניות)
+Requested At,בוקש ב
+Requested By,בוקש על ידי
+Requested On,בוקש בתאריך
+Requests,בקשות
+Require Approval for Learned Knowledge,דרוש אישור לידע נלמד
+Require Approval for Write Tools,דרוש אישור לכלי כתיבה
+Required,נדרש
+Requires Approval,דורש אישור
+Rerank,דירוג מחדש
+Reserved for schema compatibility until provider-backed model lifecycle management is implemented.,שמור לתאימות סכימה עד להטמעת ניהול מחזור חיים של מודלים מגובי ספק.
+Reserved for schema compatibility. Application-level document encryption is not supported; use encrypted storage and database controls.,שמור לתאימות סכימה. הצפנת מסמכים ברמת האפליקציה אינה נתמכת; השתמש באחסון מוצפן ובבקרות מסד נתונים.
+Reserved for schema compatibility. Extraction currently returns validated JSON and does not write target records.,שמור לתאימות סכימה. חילוץ כרגע מחזיר JSON מאומת ואינו כותב רשומות יעד.
+Resource Control,בקרת משאבים
+Resource Policies,מדיניות משאבים
+Response,תגובה
+Response Format,פורמט תגובה
+Response Payload,מטען תגובה
+Restrict to Roles,הגבל לתפקידים
+Result,תוצאה
+Result Data,נתוני תוצאה
+Result Mapping,מיפוי תוצאה
+Results,תוצאות
+Retries,ניסיונות חוזרים
+Retrieval,אחזור
+Retrieval Brute-Force Ceiling,תקרת אחזור בכוח גס
+Retrieval Top K,K העליון לאחזור
+Retry,נסה שוב
+Retry a failed segment once with a stricter prompt naming the defect.,נסה שוב מקטע שנכשל פעם אחת עם פרומפט נוקשה יותר שנוקב בשם הפגם.
+Reused,נעשה בו שימוש חוזר
+Reused From Memory,נעשה בו שימוש חוזר מהזיכרון
+Reviewed,נבדק
+Role,תפקיד
+Rule Name,שם כלל
+Rule Result,תוצאת הכלל
+Rule {0} has no categories configured.,לכלל {0} אין קטגוריות מוגדרות.
+Rules,כללים
+Run,הרץ
+Run Agent,הרץ סוכן
+Run Now,הרץ עכשיו
+Run Pipeline,הרץ צינור
+Run Quality Checks,הרץ בדיקות איכות
+Run {0} started.,ההרצה {0} החלה.
+Running,רץ
+Running rule...,מריץ כלל...
+Runs,הרצות
+Runtime Model Name,שם מודל בזמן ריצה
+Save,שמור
+Scan,סרוק
+Scheduled,מתוזמן
+Schema Name,שם סכימה
+Scope,היקף
+Scope Value,ערך היקף
+Score,ציון
+Search,חיפוש
+Search Queries,שאילתות חיפוש
+Search Type,סוג חיפוש
+Security,אבטחה
+Segment Size (characters),גודל מקטע (תווים)
+Segments,מקטעים
+Segments per Model Call,מקטעים לקריאת מודל
+Segments reused from the translation memory.,מקטעים שנעשה בהם שימוש חוזר מזיכרון התרגום.
+Select,בחר
+Semantic,סמנטי
+Separator,מפריד
+Sequence,רצף
+Series,סדרה
+Server Method,מתודת שרת
+Service Health Logs,יומני תקינות שירות
+Severity,חומרה
+Shared destination folder used as the default for non-attachment uploads and platform output. Must be a full File folder name (e.g. Home/AI Platform). Only applied when the uploading user has write access to the folder; otherwise the shared uploads folder is used.,תיקיית יעד משותפת שמשמשת כברירת מחדל להעלאות שאינן קבצים מצורפים ולפלט הפלטפורמה. חייב להיות שם תיקיית קבצים מלא (לדוגמה Home/AI Platform). מוחל רק כאשר למשתמש שמעלה יש גישת כתיבה לתיקייה; אחרת נעשה שימוש בתיקיית ההעלאות המשותפת.
+Shown to the model. Be explicit about when to use this tool.,מוצג למודל. היה מפורש לגבי מתי להשתמש בכלי הזה.
+Similarity Threshold,סף דמיון
+Size (bytes),גודל (בתים)
+Skill Name,שם כישרון
+Skill Summary,סיכום כישרון
+Skills,כישרונות
+Skipped,דולג
+"Snake case identifier exposed to the model, e.g. search_knowledge_base","מזהה בסגנון snake_case שמוצג למודל, לדוגמה search_knowledge_base"
+Source,מקור
+Source Candidate,מועמד מקור
+Source Characters,תווי מקור
+Source Checksum,סכום ביקורת של מקור
+Source Context,הקשר מקור
+Source DocType,DocType מקור
+Source Document,מסמך מקור
+Source Field,שדה מקור
+Source File,קובץ מקור
+Source File Record,רשומת קובץ מקור
+Source Folder Path,נתיב תיקיית מקור
+Source Language,שפת מקור
+Source Name,שם מקור
+Source Text,טקסט מקור
+Source Type,סוג מקור
+Source URL,כתובת URL של מקור
+Stable display name within the parent folder. Tree operations enforce uniqueness without conflating it with the document ID or checksum.,שם תצוגה יציב בתוך תיקיית האב. פעולות עץ אוכפות ייחודיות מבלי לערבב אותו עם מזהה המסמך או סכום הביקורת.
+Stable File record identity for file-backed documents; source_file remains the canonical attachment URL.,זהות רשומת קובץ יציבה למסמכים מבוססי קובץ; source_file נשאר כתובת ה-URL הקנונית של הקובץ המצורף.
+Stale,מיושן
+Start Conversation,התחל שיחה
+Started At,החל ב
+Statistics,סטטיסטיקות
+Status,סטטוס
+Step,שלב
+Step Log,יומן שלב
+Step Logs,יומני שלב
+Steps,שלבים
+Stop,עצור
+Stop Sequences,רצפי עצירה
+Storage & Retention,אחסון ושמירה
+Storage Folder,תיקיית אחסון
+Streaming,הזרמה
+Strict Local Only Mode,מצב מקומי-בלבד נוקשה
+Strict Schema,סכימה נוקשה
+String,מחרוזת
+Structured Extraction,חילוץ מובנה
+Structured Output,פלט מובנה
+Structured warnings from extraction (ING-05): persisted via canonical reader manager. Empty array means clean extraction; partial extraction stores warnings while status remains Indexed.,אזהרות מובנות מחילוץ (ING-05): נשמרות דרך מנהל הקוראים הקנוני. מערך ריק פירושו חילוץ נקי; חילוץ חלקי שומר אזהרות בעוד הסטטוס נשאר ״מאונדקס״.
+Sub Pipeline,צינור משנה
+Subject,נושא
+"Subject domain, for example ""construction contracts"" or ""medical records"".","תחום הנושא, לדוגמה ""חוזי בנייה"" או ""רשומות רפואיות""."
+Success,הצלחה
+Successful,מוצלח
+Summarization,סיכום
+Summarize,סכם
+Summary,סיכום
+Supports JSON Mode,תומך במצב JSON
+Supports Streaming,תומך בהזרמה
+Supports Tool Calling,תומך בקריאת כלים
+Supports Vision,תומך בראייה
+System,מערכת
+System Prompt,פרומפט מערכת
+System Prompt Override,עקיפת פרומפט מערכת
+System-generated source attribution. This value cannot be supplied by a model or client.,ייחוס מקור שנוצר על ידי המערכת. הערך הזה לא יכול להיות מסופק על ידי מודל או לקוח.
+Tag,תג
+Tags,תגים
+Target characters per chunk. Larger windows keep more context but reduce retrieval precision.,תווי יעד לכל מקטע. חלונות גדולים יותר שומרים יותר הקשר אך מפחיתים את דיוק האחזור.
+Target DocType,DocType יעד
+Target DocType (Unsupported),DocType יעד (לא נתמך)
+Target Field,שדה יעד
+Target Language,שפת יעד
+Target language for the Translate action.,שפת יעד לפעולת ״תרגם״.
+Target Report,דוח יעד
+Target Scope,היקף יעד
+Target Scope Value,ערך היקף יעד
+Task Type,סוג משימה
+Tasks,משימות
+"Teach the platform facts, preferences and procedures. Candidates are validated for provenance, tested for conflicts, approved by an AI Manager, and become persistent memories and skills that shape future answers.","לַמד את הפלטפורמה עובדות, העדפות ונהלים. מועמדים מאומתים למקוריות, נבדקים להתנגשויות, מאושרים בידי מנהל בינה מלאכותית, והופכים לזיכרונות וכישרונות מתמידים שמעצבים תשובות עתידיות."
+Teaching User,משתמש מלמד
+Technical,טכני
+Technical beta only. Disable until SEC-01/TRN-01 enforce authorized KB scope and policy-safe identity on every translation path.,בטא טכנית בלבד. השבת עד ש-SEC-01/TRN-01 יאכפו היקף בסיס ידע מורשה וזהות בטוחת-מדיניות בכל מסלול תרגום.
+Temperature,טמפרטורה
+Template Name,שם תבנית
+Terminology,טרמינולוגיה
+Terms,מונחים
+Test Automation Rule,בדוק כלל אוטומציה
+Test on a Document,בדוק על מסמך
+Testing Status,סטטוס בדיקה
+Text,טקסט
+Text Direction,כיוון טקסט
+The file extension leaves no room for a copy name.,סיומת הקובץ לא מותירה מקום לשם עותק.
+The selected item no longer exists.,הפריט שנבחר כבר לא קיים.
+The selected subtree changed after this operation was queued. Refresh and try again.,עץ המשנה שנבחר השתנה לאחר שהפעולה הזאת נכנסה לתור. רענן ונסה שוב.
+The selected subtree changed. Refresh and try again.,עץ המשנה שנבחר השתנה. רענן ונסה שוב.
+This item changed after the tree was loaded. Refresh and try again.,הפריט הזה השתנה לאחר שהעץ נטען. רענן ונסה שוב.
+Threads,שרשורים
+Times Recalled,פעמים נזכר
+Times Used,פעמים בשימוש
+Title,כותרת
+Token Count,ספירת טוקנים
+Tokens,טוקנים
+Tokens / Second,טוקנים / שנייה
+Tool,כלי
+Tool Call,קריאת כלי
+Tool Call ID,מזהה קריאת כלי
+Tool Invocations,קריאות כלים
+Tool Name,שם כלי
+Tool Result,תוצאת כלי
+Tool Sensitive Fields,שדות רגישים לכלי
+Tool Type,סוג כלי
+Tools,כלים
+Top K,K העליון
+Top P,P העליון
+Top Score,ציון עליון
+Total Characters,סך תווים
+Total Requests,סך בקשות
+Total Tokens,סך טוקנים
+Traceback,מעקב מחסנית
+Translate,תרגם
+Translated,תורגם
+Translated Characters,תווים מתורגמים
+Translated Document,מסמך מתורגם
+Translated Text,טקסט מתורגם
+Translating,מתרגם
+Translation,תרגום
+Translation Glossaries,מילוני תרגום
+Translation memory key for this source text and language pair.,מפתח זיכרון תרגום לטקסט המקור הזה ולזוג השפות.
+Translation Options,אפשרויות תרגום
+Translations,תרגומים
+Trigger,טריגר
+Triggered By,הופעל על ידי
+Turn,תור
+Turn ID,מזהה תור
+Type,סוג
+Unknown,לא ידוע
+Updated,עודכן
+Upload,העלה
+Upload Document,העלה מסמך
+Upper bound of distinct pattern entities stored per document scan. The scan itself samples at most 1 MB of extracted text (head and tail).,גבול עליון לישויות תבנית מובחנות שנשמרות לסריקת מסמך. הסריקה עצמה דוגמת לכל היותר 1 MB של טקסט שחולץ (ראש וזנב).
+Urgent,דחוף
+Usage,שימוש
+Usage Snapshots,תמונות שימוש
+Use Knowledge Retrieval,השתמש באחזור ידע
+Use Translation Memory,השתמש בזיכרון תרגום
+User,משתמש
+User Agent,סוכן משתמש
+User Prompt,פרומפט משתמש
+Validated,אומת
+Validation,אימות
+Validation Notes,הערות אימות
+Value,ערך
+Variable,משתנה
+Variables,משתנים
+Vector Norm,נורמת וקטור
+Verify SSL,אמת SSL
+Verify this many segments per document by translating them back and comparing embeddings. 0 disables it.,אמת את מספר המקטעים הזה למסמך על ידי תרגומם חזרה והשוואת ההטבעות. 0 משבית זאת.
+Version,גרסה
+Versions (Unsupported),גרסאות (לא נתמך)
+View,הצג
+Visible to all AI Users,נראה לכל משתמשי הבינה המלאכותית
+Vision,ראייה
+Warning,אזהרה
+Weight,משקל
+"When enabled, taught facts, preferences and instructions wait for an AI Manager to approve them before they affect future answers.","כאשר מופעל, עובדות, העדפות והוראות שנלמדו ממתינות למנהל בינה מלאכותית שיאשר אותן לפני שהן משפיעות על תשובות עתידיות."
+"Whitespace that follows this segment in the source, so the document reassembles exactly.","רווח שאחרי המקטע הזה במקור, כדי שהמסמך יורכב בחזרה בדיוק."
+Words,מילים
+Workflow,זרימת עבודה
+Yes,כן
+You are not permitted to use the agent {0}.,אינך רשאי להשתמש בסוכן {0}.
+You do not have permission for the complete folder subtree.,אין לך הרשאה לכל עץ המשנה של התיקייה.
+{0} failures,{0} כשלים
+{0} must be one of: {1}.,{0} חייב להיות אחד מ: {1}.
+{0} of {1} providers are online.,{0} מתוך {1} ספקים מקוונים.
+{0} passages,{0} קטעים
+"{0} points to {1}, which is outside the local network.","{0} מצביע על {1}, שנמצא מחוץ לרשת המקומית."
+{0} promoted to {1}.,{0} קודם ל-{1}.
+{0} rejected candidate {1}.,{0} דחה את המועמד {1}.
+{0} requests,{0} בקשות
+{0} result(s) found in {1} ms,נמצאו {0} תוצאות ב-{1} מ״ש
+{0} reused,{0} בשימוש חוזר
+{0} segments,{0} מקטעים
+{0} selected,{0} נבחרו
+{0} step(s) remaining,נותרו {0} שלבים
+{0} supports at most {1} bytes.,{0} תומך ב-{1} בתים לכל היותר.
+{0} supports at most {1} characters.,{0} תומך ב-{1} תווים לכל היותר.
+{0} supports at most {1} entries.,{0} תומך ב-{1} רשומות לכל היותר.
+{0} tokens,{0} טוקנים
+{0} → {1},{0} ← {1}
+{0}% embedded,{0}% מוטבע
+{0}% success ({1} runs),{0}% הצלחה ({1} הרצות)
+{0}: {1},{0}: {1}

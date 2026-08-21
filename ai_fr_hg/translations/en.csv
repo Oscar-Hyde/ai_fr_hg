@@ -1,1 +1,1756 @@
-
+#,#
+'{0}' is not a folder.,'{0}' is not a folder.
+(empty),(empty)
+A bulk request cannot contain more than 500 selected nodes,A bulk request cannot contain more than 500 selected nodes
+A chat model is registered,A chat model is registered
+A conflicting candidate cannot be approved automatically.,A conflicting candidate cannot be approved automatically.
+A conflicting process deadline is already active; tool execution was refused.,A conflicting process deadline is already active; tool execution was refused.
+A cron schedule is required for a scheduled pipeline.,A cron schedule is required for a scheduled pipeline.
+A cycle exists in the parent Pipeline Run chain.,A cycle exists in the parent Pipeline Run chain.
+A decided candidate cannot be processed again.,A decided candidate cannot be processed again.
+A default chat model is selected,A default chat model is selected
+A DocType is required.,A DocType is required.
+A document named {0} already exists in the destination.,A document named {0} already exists in the destination.
+A document named {0} already exists in this folder.,A document named {0} already exists in this folder.
+A document named {0} already exists in {1}.,A document named {0} already exists in {1}.
+A File identity (file_name) or file URL is required.,A File identity (file_name) or file URL is required.
+A file in this folder is still used by a document outside the selected subtree.,A file in this folder is still used by a document outside the selected subtree.
+A filter list supports at most {0} values.,A filter list supports at most {0} values.
+A filter value supports at most {0} characters.,A filter value supports at most {0} characters.
+A folder cannot be copied into itself or its descendant.,A folder cannot be copied into itself or its descendant.
+A folder cannot be moved into itself or its descendant.,A folder cannot be moved into itself or its descendant.
+A folder cannot be used as a document source file.,A folder cannot be used as a document source file.
+A knowledge base exists,A knowledge base exists
+A local model pull was requested for {0} on {1}.,A local model pull was requested for {0} on {1}.
+A model name is required.,A model name is required.
+A new knowledge candidate must start in Draft status.,A new knowledge candidate must start in Draft status.
+A pipeline is required for a Pipeline task.,A pipeline is required for a Pipeline task.
+A pipeline needs at least one step.,A pipeline needs at least one step.
+"A policy applies to either a role or a user, not both.","A policy applies to either a role or a user, not both."
+A policy must apply to either a role or a user.,A policy must apply to either a role or a user.
+A provider is configured,A provider is configured
+A provider is reachable,A provider is reachable
+A query supports at most {0} filter keys.,A query supports at most {0} filter keys.
+A selected folder is not empty. Confirm recursive deletion first.,A selected folder is not empty. Confirm recursive deletion first.
+A source file is required when Source Type is File.,A source file is required when Source Type is File.
+A source URL is required when Source Type is URL.,A source URL is required when Source Type is URL.
+A source URL is required.,A source URL is required.
+A stable Source File record is required for file-backed documents.,A stable Source File record is required for file-backed documents.
+A valid AI Provider is required.,A valid AI Provider is required.
+A valid authenticated processing user is required.,A valid authenticated processing user is required.
+A valid enabled translation requester is required.,A valid enabled translation requester is required.
+Accept this translation as reviewed?,Accept this translation as reviewed?
+Access,Access
+Access Control,Access Control
+Access Policy,Access Policy
+Action,Action
+Actions,Actions
+Active,Active
+Adapter,Adapter
+Adapter for {0} must derive from BaseProvider.,Adapter for {0} must derive from BaseProvider.
+Add,Add
+Add Folder to Favorites,Add Folder to Favorites
+Add Text,Add Text
+Add Text to Knowledge Base,Add Text to Knowledge Base
+Add to Knowledge Base,Add to Knowledge Base
+Add to {0},Add to {0}
+Additional Allowed Hosts,Additional Allowed Hosts
+Additional fields that generic AI document tools must never expose. One per line: a bare fieldname applies to every DocType; 'Doctype.fieldname' scopes the entry to one DocType. Password fields and common credential field names are always denied.,Additional fields that generic AI document tools must never expose. One per line: a bare fieldname applies to every DocType; 'Doctype.fieldname' scopes the entry to one DocType. Password fields and common credential field names are always denied.
+Advanced Parameters,Advanced Parameters
+after_insert,after_insert
+Agent,Agent
+Agent Name,Agent Name
+Agent Response,Agent Response
+Agents,Agents
+Agents & Tools,Agents & Tools
+AI,AI
+AI Agent {0} is disabled.,AI Agent {0} is disabled.
+AI Answer,AI Answer
+AI Assistant,AI Assistant
+AI Automation,AI Automation
+AI Control Center,AI Control Center
+AI Document,AI Document
+AI document ingestion failed: {0},AI document ingestion failed: {0}
+AI Document {0} does not exist.,AI Document {0} does not exist.
+AI Documents,AI Documents
+AI Error,AI Error
+AI Knowledge,AI Knowledge
+AI Learning,AI Learning
+AI Memory must be created by approving an AI Knowledge Candidate.,AI Memory must be created by approving an AI Knowledge Candidate.
+AI Model Manager,AI Model Manager
+AI Model {0} is disabled.,AI Model {0} is disabled.
+AI Operations,AI Operations
+AI Provider Offline: {0},AI Provider Offline: {0}
+AI Provider {0} does not exist.,AI Provider {0} does not exist.
+AI Provider {0} has no Custom Adapter Path set.,AI Provider {0} has no Custom Adapter Path set.
+AI Provider {0} is disabled.,AI Provider {0} is disabled.
+AI Skill must be created by approving an AI Knowledge Candidate.,AI Skill must be created by approving an AI Knowledge Candidate.
+AI Tasks,AI Tasks
+AI Workspace,AI Workspace
+AI-CAND-.YYYY.-,AI-CAND-.YYYY.-
+AI-MEM-.YYYY.-,AI-MEM-.YYYY.-
+AICONV-.YYYY.-,AICONV-.YYYY.-
+AIDOC-.YYYY.-,AIDOC-.YYYY.-
+AIRUN-.YYYY.-,AIRUN-.YYYY.-
+AITASK-.YYYY.-,AITASK-.YYYY.-
+AITRN-.YYYY.-,AITRN-.YYYY.-
+Alert on Provider Offline,Alert on Provider Offline
+Alert Recipients,Alert Recipients
+All Documents,All Documents
+All entities,All entities
+All Logs,All Logs
+All providers,All providers
+Allow Document Upload,Allow Document Upload
+Allow Learning (Teach & Recall),Allow Learning (Teach & Recall)
+Allow Model Management,Allow Model Management
+Allow non-manager users with knowledge-base write grants to fetch URL sources from Additional Allowed Hosts. Redirects and response sizes remain guarded.,Allow non-manager users with knowledge-base write grants to fetch URL sources from Additional Allowed Hosts. Redirects and response sizes remain guarded.
+Allow Pipeline Execution,Allow Pipeline Execution
+Allow Tool Execution,Allow Tool Execution
+Allow User URL Ingestion,Allow User URL Ingestion
+Allowed Models,Allowed Models
+Allowed Roles,Allowed Roles
+Allowed Values,Allowed Values
+Also delete all folders and AI Documents in this subtree?,Also delete all folders and AI Documents in this subtree?
+An agent is configured,An agent is configured
+An embedding model is registered,An embedding model is registered
+An update action needs a document name.,An update action needs a document name.
+Answer Only From Knowledge,Answer Only From Knowledge
+Answer Only From Knowledge requires Use Knowledge Retrieval to be enabled.,Answer Only From Knowledge requires Use Knowledge Retrieval to be enabled.
+Answer with AI,Answer with AI
+API,API
+API Key,API Key
+Application-Level Document Encryption (Unsupported),Application-Level Document Encryption (Unsupported)
+Application-level document encryption is not supported.,Application-level document encryption is not supported.
+Applied Skills,Applied Skills
+Applies to Role,Applies to Role
+Applies to User,Applies to User
+Approval notes are required when overriding a conflict.,Approval notes are required when overriding a conflict.
+Approval Required,Approval Required
+Approve,Approve
+Approve and Run,Approve and Run
+Approve Conflicting Candidate,Approve Conflicting Candidate
+Approved,Approved
+Approved At,Approved At
+Approved By,Approved By
+Approved On,Approved On
+ar,ar
+Arabic,Arabic
+Archive,Archive
+Archive Conversation,Archive Conversation
+Archive this memory so it no longer influences AI answers?,Archive this memory so it no longer influences AI answers?
+Archived,Archived
+Archived documents cannot be processed.,Archived documents cannot be processed.
+Argument {0} for tool {1} is not an allowed value.,Argument {0} for tool {1} is not an allowed value.
+Argument {0} for tool {1} must be {2}.,Argument {0} for tool {1} must be {2}.
+Arguments,Arguments
+Array,Array
+Ask,Ask
+Ask About This,Ask About This
+Ask about {0},Ask about {0}
+Ask AI,Ask AI
+"Ask anything, or attach a document...","Ask anything, or attach a document..."
+Assistant,Assistant
+Attach a document,Attach a document
+Audit,Audit
+Audit Log Retention (days),Audit Log Retention (days)
+Audit Logs,Audit Logs
+Auto detect,Auto detect
+Auto Embed After Extraction,Auto Embed After Extraction
+Auto Pattern Scan,Auto Pattern Scan
+Auto Process Uploaded Documents,Auto Process Uploaded Documents
+Automation,Automation
+Automation Rules,Automation Rules
+Automation rules cannot target the platform's own DocTypes; this would recurse.,Automation rules cannot target the platform's own DocTypes; this would recurse.
+Available,Available
+Available Models,Available Models
+Average Latency (ms),Average Latency (ms)
+Avg,Avg
+avg,avg
+Avg Latency,Avg Latency
+Back-Translation Samples,Back-Translation Samples
+Back-translation similarity is only {0}.,Back-translation similarity is only {0}.
+Background Queues,Background Queues
+Base URL,Base URL
+Base URL must include a hostname.,Base URL must include a hostname.
+Base URL must start with http:// or https://,Base URL must start with http:// or https://
+Base64 Float32,Base64 Float32
+Batch Size,Batch Size
+Behaviour,Behaviour
+blank,blank
+Blocks any provider endpoint that is not a loopback/private address.,Blocks any provider endpoint that is not a loopback/private address.
+Boolean,Boolean
+Both a DocType and a document name are required.,Both a DocType and a document name are required.
+"Bounded quote around the first occurrence, for citation re-anchoring.","Bounded quote around the first occurrence, for citation re-anchoring."
+Builtin,Builtin
+Bulk Actions,Bulk Actions
+Bulk deletion of {0} items completed.,Bulk deletion of {0} items completed.
+Bulk deletion of {0} items was queued.,Bulk deletion of {0} items was queued.
+Bulk move of {0} items completed.,Bulk move of {0} items completed.
+Bulk move of {0} items was queued.,Bulk move of {0} items was queued.
+Bulk move queued.,Bulk move queued.
+Bulk move queued. Progress will be recorded in the audit trail.,Bulk move queued. Progress will be recorded in the audit trail.
+Bulk operations only accept folder and document nodes.,Bulk operations only accept folder and document nodes.
+By Type,By Type
+Can Write,Can Write
+Cancel Processing,Cancel Processing
+Cancel Requested,Cancel Requested
+Cancellation requested,Cancellation requested
+Cancelled,Cancelled
+Cancelled by user,Cancelled by user
+Candidate created: {0},Candidate created: {0}
+Candidate has no content.,Candidate has no content.
+Candidate ID,Candidate ID
+"Candidate status can only be changed through Validate, Approve, or Reject.","Candidate status can only be changed through Validate, Approve, or Reject."
+Candidate test result: {0},Candidate test result: {0}
+Candidate type is invalid.,Candidate type is invalid.
+Candidate {0} ({1}) created for {2} scope.,Candidate {0} ({1}) created for {2} scope.
+Candidate {0} entered learning state {1}.,Candidate {0} entered learning state {1}.
+Candidate {0} failed validation.,Candidate {0} failed validation.
+Candidate {0} has already been decided ({1}).,Candidate {0} has already been decided ({1}).
+Candidates,Candidates
+"Cannot delete {0}: it is used by {1} model(s), including {2}.","Cannot delete {0}: it is used by {1} model(s), including {2}."
+Cannot delete {0}: {1} indexed chunks were embedded with it.,Cannot delete {0}: {1} indexed chunks were embedded with it.
+Cannot {0} a document in {1} status.,Cannot {0} a document in {1} status.
+Canonical parent in Frappe's native File folder hierarchy. Home represents the tree root.,Canonical parent in Frappe's native File folder hierarchy. Home represents the tree root.
+Capabilities,Capabilities
+Case Sensitive,Case Sensitive
+Category,Category
+Character offset of the first match within the scanned text window.,Character offset of the first match within the scanned text window.
+Characters,Characters
+Characters carried from one chunk to the next so no fact is split across a boundary. Must be smaller than Chunk Size.,Characters carried from one chunk to the next so no fact is split across a boundary. Must be smaller than Chunk Size.
+chars,chars
+Chat,Chat
+Chat completion failed.,Chat completion failed.
+Chat Correction,Chat Correction
+"Chat with your local models, search your knowledge, and run AI tasks.","Chat with your local models, search your knowledge, and run AI tasks."
+Checked On,Checked On
+Checksum,Checksum
+Checksum of the document source when this row was written. Rescans refresh it.,Checksum of the document source when this row was written. Rescans refresh it.
+Choose a target language: {0}.,Choose a target language: {0}.
+"Choose Arabic, English or Hebrew as the target language.","Choose Arabic, English or Hebrew as the target language."
+Choose where every selected upload in this batch will be stored.,Choose where every selected upload in this batch will be stored.
+Chunk,Chunk
+Chunk Index,Chunk Index
+Chunk Overlap,Chunk Overlap
+Chunk Overlap (characters),Chunk Overlap (characters)
+Chunk Overlap ({0}) must be smaller than Chunk Size ({1}).,Chunk Overlap ({0}) must be smaller than Chunk Size ({1}).
+Chunk Overlap adjusted to stay below Chunk Size.,Chunk Overlap adjusted to stay below Chunk Size.
+Chunk Overlap cannot be negative.,Chunk Overlap cannot be negative.
+Chunk Overlap must be smaller than Chunk Size - adjusted automatically.,Chunk Overlap must be smaller than Chunk Size - adjusted automatically.
+Chunk Overlap must be smaller than Chunk Size.,Chunk Overlap must be smaller than Chunk Size.
+Chunk Size,Chunk Size
+Chunk Size (characters),Chunk Size (characters)
+Chunk Size must be at least 100 characters.,Chunk Size must be at least 100 characters.
+Chunk {0},Chunk {0}
+Chunking,Chunking
+Chunks,Chunks
+chunks,chunks
+Citation Mode,Citation Mode
+Citations,Citations
+Classification,Classification
+Classification Confidence,Classification Confidence
+Classification needs at least one category.,Classification needs at least one category.
+Classify,Classify
+Close,Close
+code,code
+Collapse All,Collapse All
+Color,Color
+Compare,Compare
+Compare Documents,Compare Documents
+Compare with,Compare with
+Compare With...,Compare With...
+Comparing...,Comparing...
+Comparison,Comparison
+Complete brute-force vector evaluation is used for every eligible chunk. Corpora larger than this ceiling are still scanned completely but are flagged as degraded relative to the published latency envelope (1k/10k interactive; 100k complete but possibly slow).,Complete brute-force vector evaluation is used for every eligible chunk. Corpora larger than this ceiling are still scanned completely but are flagged as degraded relative to the published latency envelope (1k/10k interactive; 100k complete but possibly slow).
+Completed,Completed
+Completed On,Completed On
+Completion,Completion
+Completion Tokens,Completion Tokens
+Condition,Condition
+Condition has a syntax error: {0},Condition has a syntax error: {0}
+Confidence,Confidence
+Configuration,Configuration
+Conflict,Conflict
+Conflict Override Notes,Conflict Override Notes
+Conflict Test,Conflict Test
+Conflicts,Conflicts
+Conflicts / Overlaps,Conflicts / Overlaps
+Conflicts Summary,Conflicts Summary
+Connection Test,Connection Test
+Consecutive Failures,Consecutive Failures
+Contacting {0}...,Contacting {0}...
+Content,Content
+Content present.,Content present.
+Context,Context
+Context Override,Context Override
+Context Quote,Context Quote
+Context Used,Context Used
+Context Window,Context Window
+Context Window must be at least 512.,Context Window must be at least 512.
+Continue,Continue
+Conversation,Conversation
+Conversation is required.,Conversation is required.
+Conversation Summary,Conversation Summary
+Conversation {0} created.,Conversation {0} created.
+Conversations,Conversations
+Copied,Copied
+Copied From,Copied From
+Copied On,Copied On
+Copy,Copy
+Copy completed with errors,Copy completed with errors
+Copy Document To…,Copy Document To…
+Copy failed,Copy failed
+Copy Files to Folder…,Copy Files to Folder…
+Copy provenance can only be set by the document copy service.,Copy provenance can only be set by the document copy service.
+Copy provenance is immutable.,Copy provenance is immutable.
+Copy provenance requires both a source identity and timestamp.,Copy provenance requires both a source identity and timestamp.
+Copy Translation,Copy Translation
+Copying folder subtree,Copying folder subtree
+Corpus,Corpus
+Correction,Correction
+Correction (optional),Correction (optional)
+Could not create folder,Could not create folder
+"Could not detect the source language. Choose Arabic, English or Hebrew explicitly.","Could not detect the source language. Choose Arabic, English or Hebrew explicitly."
+Could not fetch {0}: {1},Could not fetch {0}: {1}
+Could not inspect document job {0},Could not inspect document job {0}
+Could not load custom adapter {0}: {1},Could not load custom adapter {0}: {1}
+Could not load custom pipeline method {0}.,Could not load custom pipeline method {0}.
+Could not load knowledge overview.,Could not load knowledge overview.
+Could not load the AI configuration.,Could not load the AI configuration.
+Could not load the operations dashboard.,Could not load the operations dashboard.
+Could not queue model installation.,Could not queue model installation.
+Could not reconcile AI document {0},Could not reconcile AI document {0}
+Could not resolve source host {0}.,Could not resolve source host {0}.
+Create,Create
+Create a knowledge base and upload documents.,Create a knowledge base and upload documents.
+Create a knowledge base before uploading documents.,Create a knowledge base before uploading documents.
+Create an Agent,Create an Agent
+Create an AI Agent to enable chat.,Create an AI Agent to enable chat.
+Create an AI Provider first.,Create an AI Provider first.
+Create an AI Provider pointing at your local runtime.,Create an AI Provider pointing at your local runtime.
+Create Folder,Create Folder
+Create inside the selected folder,Create inside the selected folder
+Create one,Create one
+Created,Created
+Created {0},Created {0}
+Critical,Critical
+Cron Schedule,Cron Schedule
+Custom,Custom
+custom,custom
+Custom Adapter Path,Custom Adapter Path
+Custom Method,Custom Method
+Custom pipeline method {0} has not been marked with @pipeline_step_method.,Custom pipeline method {0} has not been marked with @pipeline_step_method.
+Custom pipeline method {0} is not callable.,Custom pipeline method {0} is not callable.
+Custom pipeline method {0} is not registered in ai_pipeline_methods.,Custom pipeline method {0} is not registered in ai_pipeline_methods.
+Daily document limit reached ({0} documents).,Daily document limit reached ({0} documents).
+Daily token limit reached ({0} tokens).,Daily token limit reached ({0} tokens).
+Data,Data
+Date,Date
+date,date
+Days,Days
+Default,Default
+default,default
+Default Agent,Default Agent
+Default Chat Model,Default Chat Model
+Default Embedding Model,Default Embedding Model
+Default for new translations: store the finished text as its own searchable AI Document.,Default for new translations: store the finished text as its own searchable AI Document.
+Default for Type,Default for Type
+Default Glossary,Default Glossary
+Default model,Default model
+Default Provider,Default Provider
+Default System Prompt,Default System Prompt
+Default Target Language,Default Target Language
+Default Translation Model,Default Translation Model
+Default updated,Default updated
+Default Vision Model,Default Vision Model
+Degraded,Degraded
+Degraded retrieval,Degraded retrieval
+Delete,Delete
+Delete all selected items atomically? Folder descendants will be included.,Delete all selected items atomically? Folder descendants will be included.
+Delete Conversation,Delete Conversation
+Delete records older than (days),Delete records older than (days)
+Delete Selected,Delete Selected
+Delete this AI Document? Native Frappe attachment and retention policy will be applied.,Delete this AI Document? Native Frappe attachment and retention policy will be applied.
+Delete this conversation and all of its messages?,Delete this conversation and all of its messages?
+Delete this folder? Non-empty folders require an explicit recursive deletion and every descendant will be permission checked.,Delete this folder? Non-empty folders require an explicit recursive deletion and every descendant will be permission checked.
+Delete {0} selected item(s)? Non-empty folders are deleted recursively. This cannot be undone.,Delete {0} selected item(s)? Non-empty folders are deleted recursively. This cannot be undone.
+Deleted {0} records.,Deleted {0} records.
+Delete…,Delete…
+Deleting folder subtree,Deleting folder subtree
+Denormalised path of the folder for fast filtering and provenance.,Denormalised path of the folder for fast filtering and provenance.
+Denormalized from the document so knowledge-base row permissions apply without a join.,Denormalized from the document so knowledge-base row permissions apply without a join.
+Depth,Depth
+Description,Description
+Desk assets failed to load,Desk assets failed to load
+Destination Folder,Destination Folder
+Details,Details
+Detect automatically,Detect automatically
+"Detected written language(s) as ISO 639-1 codes (en, ar, he, or en,ar,he when mixed). Filled when text is extracted; you can correct it.","Detected written language(s) as ISO 639-1 codes (en, ar, he, or en,ar,he when mixed). Filled when text is extracted; you can correct it."
+"Deterministic canonical identity for this type, used for deduplication.","Deterministic canonical identity for this type, used for deduplication."
+Digest,Digest
+Dimensions,Dimensions
+Disable,Disable
+Disable this skill so it is no longer injected into prompts?,Disable this skill so it is no longer injected into prompts?
+Disabled,Disabled
+Discard existing chunks and process again?,Discard existing chunks and process again?
+Discover,Discover
+Discover Models,Discover Models
+Discovering models...,Discovering models...
+Discovery Complete,Discovery Complete
+Discovery Failed,Discovery Failed
+Discovery failed.,Discovery failed.
+docs,docs
+DocType Action,DocType Action
+DocType Query,DocType Query
+DocType Record,DocType Record
+Document,Document
+Document Chunks,Document Chunks
+Document copied to {0},Document copied to {0}
+Document embedding failed.,Document embedding failed.
+Document indexing did not complete successfully.,Document indexing did not complete successfully.
+Document Ingest,Document Ingest
+Document Intelligence,Document Intelligence
+Document is {0} bytes; the configured limit is {1} bytes.,Document is {0} bytes; the configured limit is {1} bytes.
+Document processing was cancelled.,Document processing was cancelled.
+Document source is empty.,Document source is empty.
+Document source URL,Document source URL
+Document text extraction failed.,Document text extraction failed.
+Document Tree,Document Tree
+Document Type,Document Type
+Document {0} has no extracted content to scan.,Document {0} has no extracted content to scan.
+Document {0} has no extracted text to index.,Document {0} has no extracted text to index.
+Document {0} has no extracted text yet. Process it before translating.,Document {0} has no extracted text yet. Process it before translating.
+Document {0} has no extracted text.,Document {0} has no extracted text.
+Document {0} is indexed and searchable.,Document {0} is indexed and searchable.
+Document {0} is queued under a different processing authority.,Document {0} is queued under a different processing authority.
+Document {0} must be explicitly reprocessed before it can be queued again.,Document {0} must be explicitly reprocessed before it can be queued again.
+Document {0} was copied to new identity {1}.,Document {0} was copied to new identity {1}.
+Document {0} was deleted using the framework attachment policy.,Document {0} was deleted using the framework attachment policy.
+Document {0} was moved from {1} to {2}.,Document {0} was moved from {1} to {2}.
+Document {0} was queued for canonical processing.,Document {0} was queued for canonical processing.
+Document {0} was renamed from {1} to {2}.,Document {0} was renamed from {1} to {2}.
+Documents,Documents
+Documents Indexed,Documents Indexed
+Documents Processed,Documents Processed
+Domain,Domain
+Dotted path to a class deriving from ai_fr_hg.ai.providers.base.BaseProvider,Dotted path to a class deriving from ai_fr_hg.ai.providers.base.BaseProvider
+Dotted path to a whitelisted python callable.,Dotted path to a whitelisted python callable.
+Download as Text,Download as Text
+Downloading {0}. This can take several minutes.,Downloading {0}. This can take several minutes.
+Draft,Draft
+Due Date,Due Date
+Duration (ms),Duration (ms)
+"Each row is one concept in English, Arabic and Hebrew. The direction being translated decides which column is the source and which is the required output.","Each row is one concept in English, Arabic and Hebrew. The direction being translated decides which column is the source and which is the required output."
+email,email
+Embed,Embed
+Embed Dims,Embed Dims
+Embed Model,Embed Model
+Embedded,Embedded
+embedded,embedded
+Embedded Chunks,Embedded Chunks
+Embedded On,Embedded On
+Embedding,Embedding
+Embedding Coverage,Embedding Coverage
+Embedding Dimensions,Embedding Dimensions
+Embedding Format,Embedding Format
+Embedding Model,Embedding Model
+Embedding Vector,Embedding Vector
+Embedding vector {0} contains invalid values.,Embedding vector {0} contains invalid values.
+Embedding vector {0} contains non-numeric values.,Embedding vector {0} contains non-numeric values.
+Embedding vector {0} has {1} dimensions; expected {2}.,Embedding vector {0} has {1} dimensions; expected {2}.
+Embedding vector {0} is empty or malformed.,Embedding vector {0} is empty or malformed.
+Embedding was requested for missing chunks: {0},Embedding was requested for missing chunks: {0}
+Embeddings returned {0} dimensions.,Embeddings returned {0} dimensions.
+en,en
+Enable,Enable
+Enable AI Platform,Enable AI Platform
+Enable Health Checks,Enable Health Checks
+Enable Hybrid Search,Enable Hybrid Search
+Enable Learning Loop,Enable Learning Loop
+Enable OCR Fallback,Enable OCR Fallback
+Enable Scheduled Knowledge Backup,Enable Scheduled Knowledge Backup
+Enable Streaming,Enable Streaming
+Enable the platform in AI Platform Settings.,Enable the platform in AI Platform Settings.
+Enable Tool Calling,Enable Tool Calling
+Enable Tool Calling is on but no tools are selected.,Enable Tool Calling is on but no tools are selected.
+Enable Translation,Enable Translation
+Enabled,Enabled
+Encrypted Office documents are not supported.,Encrypted Office documents are not supported.
+Endpoint,Endpoint
+Engine,Engine
+English,English
+"Enter to send, Shift+Enter for a new line","Enter to send, Shift+Enter for a new line"
+Entity Type,Entity Type
+Entity type,Entity type
+Entity value,Entity value
+Error,Error
+Error Message,Error Message
+Error Type,Error Type
+Event,Event
+Everything runs on this machine. Select a knowledge base below or attach a file when you want grounded answers — general chat stays fast.,Everything runs on this machine. Select a knowledge base below or attach a file when you want grounded answers — general chat stays fast.
+Execution,Execution
+Execution Log,Execution Log
+Execution Log Retention (days),Execution Log Retention (days)
+Execution Logs,Execution Logs
+Expand Loaded,Expand Loaded
+Explicit Teaching,Explicit Teaching
+Export,Export
+Export Conversation,Export Conversation
+Extra Headers,Extra Headers
+Extra Headers must be a JSON object.,Extra Headers must be a JSON object.
+Extra Headers must be valid JSON: {0},Extra Headers must be valid JSON: {0}
+Extract,Extract
+Extract Data,Extract Data
+extract data from,extract data from
+Extract Patterns,Extract Patterns
+Extract Structured Data,Extract Structured Data
+Extract Text,Extract Text
+Extracted Data,Extracted Data
+Extracted Text,Extracted Text
+Extracted text exceeds the processing character limit.,Extracted text exceeds the processing character limit.
+Extracted {0} pattern entities,Extracted {0} pattern entities
+Extracting,Extracting
+Extracting...,Extracting...
+Extraction,Extraction
+Extraction Instructions,Extraction Instructions
+Extraction Schema,Extraction Schema
+Extraction Schema {0} is disabled.,Extraction Schema {0} is disabled.
+Extraction Schemas,Extraction Schemas
+Extraction Warnings,Extraction Warnings
+Extraction warnings,Extraction warnings
+Fact,Fact
+Failed,Failed
+Failed Documents,Failed Documents
+Failures,Failures
+Failures (24h),Failures (24h)
+Fallback Answer,Fallback Answer
+Family,Family
+Favorite Folders,Favorite Folders
+Favorites,Favorites
+Feedback,Feedback
+Feedback can only be recorded for assistant messages.,Feedback can only be recorded for assistant messages.
+Feedback Comment,Feedback Comment
+Feedback must be Positive or Negative.,Feedback must be Positive or Negative.
+Feedback Reason,Feedback Reason
+Feedback reason is invalid.,Feedback reason is invalid.
+Field Allowlist,Field Allowlist
+Field Name,Field Name
+Field on the triggering document used as input. Defaults to the whole document.,Field on the triggering document used as input. Defaults to the whole document.
+Field on the triggering document where the result is written.,Field on the triggering document where the result is written.
+Fields,Fields
+File,File
+File record not found for {0}.,File record not found for {0}.
+File record {0} does not match {1}.,File record {0} does not match {1}.
+File record {0} was not found.,File record {0} was not found.
+File Size (bytes),File Size (bytes)
+File type,File type
+Files,Files
+"Filter values must be strings, numbers or booleans.","Filter values must be strings, numbers or booleans."
+Filters must be a JSON object.,Filters must be a JSON object.
+Fingerprint,Fingerprint
+Finished At,Finished At
+First Offset,First Offset
+"Fits machines with ~10 GB RAM, ~400 MB","Fits machines with ~10 GB RAM, ~400 MB"
+Flagged,Flagged
+Flagged Segments,Flagged Segments
+Focused,Focused
+Focused Document,Focused Document
+Folder,Folder
+Folder '{0}' does not exist.,Folder '{0}' does not exist.
+Folder '{0}' is already in your favorites.,Folder '{0}' is already in your favorites.
+Folder added to favorites.,Folder added to favorites.
+Folder assignment failed,Folder assignment failed
+Folder Intelligence,Folder Intelligence
+Folder is required.,Folder is required.
+Folder Name,Folder Name
+Folder Organization,Folder Organization
+Folder removed from favorites.,Folder removed from favorites.
+Folder selector unavailable,Folder selector unavailable
+Folder {0} and its authorized subtree were deleted.,Folder {0} and its authorized subtree were deleted.
+Folder {0} created.,Folder {0} created.
+Folder {0} was created in {1}.,Folder {0} was created in {1}.
+Folder {0} was moved to {1}.,Folder {0} was moved to {1}.
+Folder {0} was recursively copied to {1}.,Folder {0} was recursively copied to {1}.
+Folder {0} was renamed to {1}.,Folder {0} was renamed to {1}.
+Folder: {0},Folder: {0}
+Follows the folder's privacy setting at creation.,Follows the folder's privacy setting at creation.
+Footnote,Footnote
+For example llama3.1:8b or nomic-embed-text,For example llama3.1:8b or nomic-embed-text
+"For example: keep the clause numbering, or use the formal register.","For example: keep the clause numbering, or use the formal register."
+Formal,Formal
+Format,Format
+Formatting,Formatting
+Found {0} model(s) on {1}.,Found {0} model(s) on {1}.
+Found {0} model(s).,Found {0} model(s).
+Free-form tag for folder-level knowledge tagging and filtered retrieval.,Free-form tag for folder-level knowledge tagging and filtered retrieval.
+From Date,From Date
+General,General
+Generated JSON Schema,Generated JSON Schema
+Generated Schema,Generated Schema
+Generation,Generation
+Generation Defaults,Generation Defaults
+Global,Global
+Global scope is valid.,Global scope is valid.
+Glossaries,Glossaries
+Glossary,Glossary
+Glossary Name,Glossary Name
+Governance,Governance
+GPU Layers,GPU Layers
+Greeting,Greeting
+Handler Method,Handler Method
+Hard execution deadline. Tools fail closed if the runtime cannot enforce it.,Hard execution deadline. Tools fail closed if the runtime cannot enforce it.
+hash,hash
+he,he
+Heading,Heading
+heading,heading
+Health,Health
+Health Check,Health Check
+Health Check Interval (minutes),Health Check Interval (minutes)
+Health History,Health History
+Health Log Retention (days),Health Log Retention (days)
+Hebrew,Hebrew
+Helpful,Helpful
+High,High
+"Higher quality embeddings, ~670 MB","Higher quality embeddings, ~670 MB"
+Home,Home
+Hourly request limit reached ({0} requests). Try again later.,Hourly request limit reached ({0} requests). Try again later.
+How much source text is translated as one unit.,How much source text is translated as one unit.
+Hybrid,Hybrid
+"Idempotency key supports at most {0} characters from letters, numbers and . _ : -.","Idempotency key supports at most {0} characters from letters, numbers and . _ : -."
+identifier,identifier
+"Identifier used by the runtime, e.g. llama3.1:8b","Identifier used by the runtime, e.g. llama3.1:8b"
+Idle,Idle
+"If set, retrieval scoped to this folder can be constrained to a knowledge base.","If set, retrieval scoped to this folder can be constrained to a knowledge base."
+Image-file OCR fallback only. Requires Tesseract and the optional ocr extra; scanned-PDF OCR is not supported.,Image-file OCR fallback only. Requires Tesseract and the optional ocr extra; scanned-PDF OCR is not supported.
+Immutable source identity retained for provenance without changing source-document deletion policy.,Immutable source identity retained for provenance without changing source-document deletion policy.
+Imported {0} documents into knowledge base {1}.,Imported {0} documents into knowledge base {1}.
+Improve this answer,Improve this answer
+In Progress,In Progress
+Incorrect Information,Incorrect Information
+Index,Index
+Index as Document,Index as Document
+Index Statistics,Index Statistics
+Index Status,Index Status
+Index the finished translation as its own searchable AI Document.,Index the finished translation as its own searchable AI Document.
+Index the translation as its own document,Index the translation as its own document
+Index Translation as Document,Index Translation as Document
+Index Translations as Documents,Index Translations as Documents
+Indexed,Indexed
+Indexed On,Indexed On
+Indexing,Indexing
+Indexing...,Indexing...
+Info,Info
+Informal,Informal
+Ingest Document,Ingest Document
+"Ingest, index and interrogate your documents. Everything stays on this machine.","Ingest, index and interrogate your documents. Everything stays on this machine."
+Ingestion,Ingestion
+Inline,Inline
+Inline extraction for chat failed: {0},Inline extraction for chat failed: {0}
+Inline translation is limited to {0} characters. Translate the document instead.,Inline translation is limited to {0} characters. Translate the document instead.
+Input,Input
+Input / Output,Input / Output
+Input Data,Input Data
+Input Key,Input Key
+Input Preview,Input Preview
+Install,Install
+"Install an embedding model, e.g. `ollama pull nomic-embed-text`.","Install an embedding model, e.g. `ollama pull nomic-embed-text`."
+Install Failed,Install Failed
+Install failed: {0},Install failed: {0}
+Install Model,Install Model
+"Install these from the terminal with `ollama pull <name>`, or use Install Model above.","Install these from the terminal with `ollama pull <name>`, or use Install Model above."
+Instruction,Instruction
+Instruction for this segment (optional),Instruction for this segment (optional)
+Instructions,Instructions
+Integer,Integer
+Intelligence,Intelligence
+Internal,Internal
+Introduce yourself in one sentence.,Introduce yourself in one sentence.
+Invalid or inactive Pipeline Run execution context.,Invalid or inactive Pipeline Run execution context.
+Invalid redaction pattern {0}: {1},Invalid redaction pattern {0}: {1}
+Invalid tree continuation token.,Invalid tree continuation token.
+Invalid tree DocType.,Invalid tree DocType.
+Invocation {0} arguments must be a JSON object.,Invocation {0} arguments must be a JSON object.
+Invocation {0} contains invalid arguments.,Invocation {0} contains invalid arguments.
+Invocation {0} does not exist.,Invocation {0} does not exist.
+Invocation {0} is not pending approval.,Invocation {0} is not pending approval.
+ip,ip
+IP Address,IP Address
+Is Private,Is Private
+Issue Summary,Issue Summary
+Issues,Issues
+Jinja template. Variables declared below are available in the render context.,Jinja template. Variables declared below are available in the render context.
+Job ID,Job ID
+jobs,jobs
+JSON,JSON
+JSON Schema,JSON Schema
+JSON Schema is not valid JSON: {0},JSON Schema is not valid JSON: {0}
+JSON Schema must be a JSON object.,JSON Schema must be a JSON object.
+Keep Alive,Keep Alive
+Keep As Is,Keep As Is
+Keep this term exactly as written in every language.,Keep this term exactly as written in every language.
+Keys here become the pipeline's starting context.,Keys here become the pipeline's starting context.
+Keyword,Keyword
+keyword,keyword
+Kind,Kind
+Knowledge,Knowledge
+Knowledge Base,Knowledge Base
+Knowledge base,Knowledge base
+Knowledge Base Scope,Knowledge Base Scope
+Knowledge base {0} is listed more than once.,Knowledge base {0} is listed more than once.
+Knowledge Bases,Knowledge Bases
+Knowledge bases,Knowledge bases
+Knowledge Candidates,Knowledge Candidates
+Knowledge Content,Knowledge Content
+Knowledge Content cannot be empty.,Knowledge Content cannot be empty.
+Knowledge Explorer,Knowledge Explorer
+Knowledge export document row {0} must be a JSON object.,Knowledge export document row {0} must be a JSON object.
+Knowledge export document row {0} requires a title.,Knowledge export document row {0} requires a title.
+Knowledge export document row {0} requires text content.,Knowledge export document row {0} requires text content.
+"Knowledge retrieval is on but no knowledge base is selected, so every accessible base will be searched.","Knowledge retrieval is on but no knowledge base is selected, so every accessible base will be searched."
+Knowledge Tag,Knowledge Tag
+Label,Label
+Language,Language
+Last Checked,Last Checked
+Last Error,Last Error
+Last Health Check,Last Health Check
+Last Indexed On,Last Indexed On
+Last Message,Last Message
+Last Operation,Last Operation
+Last Operation By,Last Operation By
+Last Operation On,Last Operation On
+Last Run,Last Run
+Last Used,Last Used
+Last Used On,Last Used On
+Latency (ms),Latency (ms)
+Learned Context,Learned Context
+Learning,Learning
+Learning Activity,Learning Activity
+Leave empty to allow every enabled model.,Leave empty to allow every enabled model.
+Leave empty to detect the language of the extracted text automatically.,Leave empty to detect the language of the extracted text automatically.
+Leave empty to generate a collision-safe copy name.,Leave empty to generate a collision-safe copy name.
+Leave empty to use the default chat model.,Leave empty to use the default chat model.
+Leave empty to use the platform's default translation or chat model.,Leave empty to use the platform's default translation or chat model.
+Legal,Legal
+limit,limit
+Limits,Limits
+list,list
+List the open items that need my attention,List the open items that need my attention
+Llama.cpp,Llama.cpp
+LM Studio,LM Studio
+Load earlier messages,Load earlier messages
+Load more…,Load more…
+Loading warnings...,Loading warnings...
+Loading...,Loading...
+Local AI Assistant,Local AI Assistant
+Local models were reconciled for provider {0}.,Local models were reconciled for provider {0}.
+Local Only Mode,Local Only Mode
+Local Only Mode Disabled,Local Only Mode Disabled
+Location,Location
+Log Prompts,Log Prompts
+Log Responses,Log Responses
+Log retention days must be at least 1.,Log retention days must be at least 1.
+Log Search Queries,Log Search Queries
+Log Type,Log Type
+long,long
+Low,Low
+Lower values are preferred during automatic failover.,Lower values are preferred during automatic failover.
+Manage,Manage
+Manual,Manual
+Mark as Reviewed,Mark as Reviewed
+Markdown,Markdown
+marker,marker
+Max Concurrent Requests,Max Concurrent Requests
+Max Context Characters,Max Context Characters
+Max Document Size (MB),Max Document Size (MB)
+Max Documents / Day,Max Documents / Day
+Max Memory Context Characters,Max Memory Context Characters
+Max Pattern Entities per Document,Max Pattern Entities per Document
+Max Requests / Hour,Max Requests / Hour
+Max Requests / User / Hour,Max Requests / User / Hour
+Max Retries,Max Retries
+Max Runtime (s),Max Runtime (s)
+Max Tokens,Max Tokens
+Max Tokens / Day,Max Tokens / Day
+Max Tokens / User / Day,Max Tokens / User / Day
+Max Tokens cannot be negative.,Max Tokens cannot be negative.
+Max Tool Iterations,Max Tool Iterations
+Max Tool Iterations cannot exceed 10.,Max Tool Iterations cannot exceed 10.
+Max Turn Duration (s),Max Turn Duration (s)
+"Max Turn Duration must be at least 10 seconds, or 0 to disable it.","Max Turn Duration must be at least 10 seconds, or 0 to disable it."
+Maximum Runtime must be between 1 and 3600 seconds.,Maximum Runtime must be between 1 and 3600 seconds.
+Medium,Medium
+Memories,Memories
+Memories Recalled Per Turn,Memories Recalled Per Turn
+Memory,Memory
+Memory archived,Memory archived
+Memory content cannot be empty.,Memory content cannot be empty.
+Memory ID,Memory ID
+Memory Reuse,Memory Reuse
+Memory Type,Memory Type
+Memory Usage,Memory Usage
+Message,Message
+Messages,Messages
+messages,messages
+Metadata,Metadata
+Metadata refreshed,Metadata refreshed
+Method {0} is not whitelisted and cannot be used as a tool.,Method {0} is not whitelisted and cannot be used as a tool.
+Metrics,Metrics
+MIME Type,MIME Type
+Minimum cosine score from 0 to 1. Values such as 25 are treated as 25%.,Minimum cosine score from 0 to 1. Values such as 25 are treated as 25%.
+"Minimum cosine similarity a passage needs to be considered relevant. Use 0–1, or 1–100 as a percentage (25 becomes 0.25). 0 returns everything; 1 only exact matches.","Minimum cosine similarity a passage needs to be considered relevant. Use 0–1, or 1–100 as a percentage (25 becomes 0.25). 0 returns everything; 1 only exact matches."
+Minimum Usage Count,Minimum Usage Count
+Missing,Missing
+Missing Information,Missing Information
+Model,Model
+Model Discovery,Model Discovery
+Model Manager,Model Manager
+Model Name,Model Name
+Model Name Prefix,Model Name Prefix
+Model Not Permitted,Model Not Permitted
+Model Test,Model Test
+Model Test Failed,Model Test Failed
+Model Test: {0},Model Test: {0}
+Model Type,Model Type
+Model Type {0} is not supported by the current execution engine.,Model Type {0} is not supported by the current execution engine.
+Model Used,Model Used
+Models,Models
+models,models
+Models Available,Models Available
+money,money
+Monitoring,Monitoring
+More than one File is attached as the source of AI Document {0}.,More than one File is attached as the source of AI Document {0}.
+More than one File record uses {0}; backfill the exact File identity first.,More than one File record uses {0}; backfill the exact File identity first.
+Move,Move
+Move completed with errors,Move completed with errors
+Move Documents to Folder,Move Documents to Folder
+Move Documents to Folder…,Move Documents to Folder…
+Move failed,Move failed
+Move Selected,Move Selected
+Move Selected Items,Move Selected Items
+Move to Folder…,Move to Folder…
+Moved to {0},Moved to {0}
+Moving folder subtree,Moving folder subtree
+Must be a Chat or Vision model (for example qwen2.5:0.5b). Embedding models such as all-minilm belong in Default Embedding Model.,Must be a Chat or Vision model (for example qwen2.5:0.5b). Embedding models such as all-minilm belong in Default Embedding Model.
+Must be a Vision model (for example llava:7b). Leave empty if you have none that fit this machine.,Must be a Vision model (for example llava:7b). Leave empty if you have none that fit this machine.
+Must be an Embedding model (nomic-embed-text or all-minilm). Do not put a chat model here.,Must be an Embedding model (nomic-embed-text or all-minilm). Do not put a chat model here.
+My Conversations,My Conversations
+Native File folder this settings record extends (is_folder=1).,Native File folder this settings record extends (is_folder=1).
+Needs Review,Needs Review
+Needs Review ({0}),Needs Review ({0})
+Needs ~10 GB free RAM,Needs ~10 GB free RAM
+Needs ~11 GB free RAM — skip if Test says out of memory,Needs ~11 GB free RAM — skip if Test says out of memory
+Needs ~11 GB free RAM — too large for a 10 GB machine,Needs ~11 GB free RAM — too large for a 10 GB machine
+Needs ~16 GB free RAM,Needs ~16 GB free RAM
+Negative,Negative
+Nested pipeline dependencies cannot exceed {0} levels.,Nested pipeline dependencies cannot exceed {0} levels.
+Nested pipeline dependency cycle detected: {0}.,Nested pipeline dependency cycle detected: {0}.
+Nested pipeline dependency graph exceeds the {0}-edge validation limit.,Nested pipeline dependency graph exceeds the {0}-edge validation limit.
+Nested pipelines cannot exceed {0} levels.,Nested pipelines cannot exceed {0} levels.
+Neutral,Neutral
+New Conversation,New Conversation
+New Folder,New Folder
+New Knowledge Base,New Knowledge Base
+New Name,New Name
+Newline separated hostnames permitted in strict local-only mode.,Newline separated hostnames permitted in strict local-only mode.
+Newline separated regular expressions redacted before logging.,Newline separated regular expressions redacted before logging.
+Next,Next
+No,No
+No adapter is registered for provider type {0}.,No adapter is registered for provider type {0}.
+No Agent,No Agent
+No AI agent is configured yet.,No AI agent is configured yet.
+No AI Agent is configured. Create one in the AI Administration workspace.,No AI Agent is configured. Create one in the AI Administration workspace.
+No AI Provider is configured. Create one in the AI Administration workspace.,No AI Provider is configured. Create one in the AI Administration workspace.
+No conversations yet,No conversations yet
+no details,no details
+No document reader is registered for .{0}. Supported extensions: {1},No document reader is registered for .{0}. Supported extensions: {1}
+No document supplied to the Embed step.,No document supplied to the Embed step.
+No document supplied to the Extract Text step.,No document supplied to the Extract Text step.
+No documents yet.,No documents yet.
+"No embedding model is set, so semantic search is unavailable for this knowledge base.","No embedding model is set, so semantic search is unavailable for this knowledge base."
+No enabled {0} model is available. Register one in the AI Models workspace.,No enabled {0} model is available. Register one in the AI Models workspace.
+No extraction warnings — clean extraction.,No extraction warnings — clean extraction.
+No longer present,No longer present
+No Model,No Model
+No models registered yet. Start your runtime and click Discover Models.,No models registered yet. Start your runtime and click Discover Models.
+No models registered.,No models registered.
+No originating record is required for this source type.,No originating record is required for this source type.
+No pattern entities yet. Use Extract Patterns to scan this document.,No pattern entities yet. Use Extract Patterns to scan this document.
+No Provider,No Provider
+No providers configured.,No providers configured.
+No recent failures.,No recent failures.
+No segments are flagged.,No segments are flagged.
+No segments yet.,No segments yet.
+No source file is attached.,No source file is attached.
+No sources for this answer.,No sources for this answer.
+No usage recorded yet.,No usage recorded yet.
+No valid target knowledge base could be determined.,No valid target knowledge base could be determined.
+nodes must be a valid JSON array,nodes must be a valid JSON array
+nodes must be an array of tree node identifiers,nodes must be an array of tree node identifiers
+Non-manager URL ingestion is limited to hosts in Additional Allowed Hosts.,Non-manager URL ingestion is limited to hosts in Additional Allowed Hosts.
+None,None
+None yet.,None yet.
+Normalized case-folded SHA-256 location-local identity used for collation-independent cross-database collision enforcement.,Normalized case-folded SHA-256 location-local identity used for collation-independent cross-database collision enforcement.
+Normalized Value,Normalized Value
+not embedded,not embedded
+Not Helpful,Not Helpful
+Not helpful,Not helpful
+Not Permitted,Not Permitted
+Not permitted.,Not permitted.
+Not ready,Not ready
+Not Tested,Not Tested
+Notes,Notes
+Nothing awaiting approval.,Nothing awaiting approval.
+"Nothing matched. Try different words, or check that the documents are indexed.","Nothing matched. Try different words, or check that the documents are indexed."
+Number,Number
+Number of passages retrieved for every query. More passages give the model more evidence but use more context window.,Number of passages retrieved for every query. More passages give the model more evidence but use more context window.
+Object,Object
+Occurrences,Occurrences
+Office document contains too many archive members ({0}).,Office document contains too many archive members ({0}).
+Office document expands beyond the configured processing limit.,Office document expands beyond the configured processing limit.
+Offline,Offline
+Ollama,Ollama
+On,On
+On Error,On Error
+on_cancel,on_cancel
+on_submit,on_submit
+on_trash,on_trash
+on_update,on_update
+One or more requested chunks contain no readable text.,One or more requested chunks contain no readable text.
+Online,Online
+"Online. {0} model(s) available, {1} ms latency.","Online. {0} model(s) available, {1} ms latency."
+Only absolute HTTP and HTTPS source URLs are supported.,Only absolute HTTP and HTTPS source URLs are supported.
+"Only AI Managers may teach Global, Role, Agent, or another user's scope.","Only AI Managers may teach Global, Role, Agent, or another user's scope."
+Only failed or cancelled pipeline runs can be retried.,Only failed or cancelled pipeline runs can be retried.
+Only files can be copied. Folders are moved instead.,Only files can be copied. Folders are moved instead.
+Only folders can be added to favorites.,Only folders can be added to favorites.
+Only folders can be removed from favorites.,Only folders can be removed from favorites.
+Only Ollama providers support installing models from the Desk. Use your runtime's own tooling.,Only Ollama providers support installing models from the Desk. Use your runtime's own tooling.
+Only queued or running pipelines can be cancelled.,Only queued or running pipelines can be cancelled.
+Only the run owner or an AI Manager can perform this action.,Only the run owner or an AI Manager can perform this action.
+Open,Open
+Open a conversation first.,Open a conversation first.
+Open document,Open document
+Open Document Tree,Open Document Tree
+Open Files,Open Files
+Open in Assistant,Open in Assistant
+Open Settings,Open Settings
+OpenAI Compatible,OpenAI Compatible
+Operation,Operation
+Operation queued: {0},Operation queued: {0}
+Operations Dashboard,Operations Dashboard
+"Optional budget for one interactive chat turn, including retries, failover and tool calls. 0 (the default) waits for the model with no extra cutoff. Set a value only when a reverse proxy would otherwise return 504, and keep it below that proxy timeout.","Optional budget for one interactive chat turn, including retries, failover and tool calls. 0 (the default) waits for the model with no extra cutoff. Set a value only when a reverse proxy would otherwise return 504, and keep it below that proxy timeout."
+Optional color for UI (e.g. #4A90E2).,Optional color for UI (e.g. #4A90E2).
+"Optional comma or line separated list of fieldnames this DocType Query tool may return. When set, results are restricted to these fields in addition to the caller's own readable, non-sensitive fields. It never grants access.","Optional comma or line separated list of fieldnames this DocType Query tool may return. When set, results are restricted to these fields in addition to the caller's own readable, non-sensitive fields. It never grants access."
+Optional safe-eval expression. `doc` is available. Example: doc.status == 'Open',Optional safe-eval expression. `doc` is available. Example: doc.status == 'Open'
+"Optional source context supplied by the teaching user. It is retained as unverified context, not authoritative attribution.","Optional source context supplied by the teaching user. It is retained as unverified context, not authoritative attribution."
+"Optional, for example: construction contracts.","Optional, for example: construction contracts."
+Optional: the knowledge base this terminology belongs to.,Optional: the knowledge base this terminology belongs to.
+Organization Name,Organization Name
+Organization Name Key,Organization Name Key
+Organization Revision,Organization Revision
+Originating record exists and is readable by the teaching user.,Originating record exists and is readable by the teaching user.
+Output,Output
+Output & Processing,Output & Processing
+Output Format,Output Format
+Output Key,Output Key
+Output Preview,Output Preview
+Page,Page
+page,page
+Page Number,Page Number
+Pages,Pages
+paragraph,paragraph
+Parameter,Parameter
+Parameter Size,Parameter Size
+Parameters,Parameters
+Parent Pipeline Run,Parent Pipeline Run
+Partial,Partial
+partial extraction will still be indexed,partial extraction will still be indexed
+Partial extraction — warnings present,Partial extraction — warnings present
+Passed,Passed
+Pattern Entities,Pattern Entities
+Pattern Match,Pattern Match
+Payload,Payload
+Pending,Pending
+Pending Approval,Pending Approval
+Pending Approvals,Pending Approvals
+"Periodically extract high-precision pattern entities (emails, URLs, phones, IPs, hashes, dates, identifiers, money) from indexed documents into AI Pattern Entity rows. Reads only already-extracted content; off by default.","Periodically extract high-precision pattern entities (emails, URLs, phones, IPs, hashes, dates, identifiers, money) from indexed documents into AI Pattern Entity rows. Reads only already-extracted content; off by default."
+phone,phone
+Pick a Chat model such as qwen2.5:0.5b.,Pick a Chat model such as qwen2.5:0.5b.
+"Pick a Vision model, or leave this empty.","Pick a Vision model, or leave this empty."
+Pick an Embedding model such as nomic-embed-text.,Pick an Embedding model such as nomic-embed-text.
+Pin / Unpin,Pin / Unpin
+Pinned,Pinned
+Pipeline,Pipeline
+Pipeline input must be a JSON object.,Pipeline input must be a JSON object.
+Pipeline Name,Pipeline Name
+Pipeline Run,Pipeline Run
+Pipeline run cancelled.,Pipeline run cancelled.
+Pipeline run {0} entered state {1}.,Pipeline run {0} entered state {1}.
+Pipeline run {0} was cancelled by {1}.,Pipeline run {0} was cancelled by {1}.
+Pipeline Runs,Pipeline Runs
+Pipeline {0} is disabled.,Pipeline {0} is disabled.
+Pipelines,Pipelines
+"Pipelines, event-driven rules and agents that run without human intervention.","Pipelines, event-driven rules and agents that run without human intervention."
+Platform Defaults,Platform Defaults
+Platform enabled,Platform enabled
+Platform is fully configured and ready.,Platform is fully configured and ready.
+Platform is ready.,Platform is ready.
+Platform Settings,Platform Settings
+Please sign in to use the AI Assistant.,Please sign in to use the AI Assistant.
+Please sign in to use the Knowledge Explorer.,Please sign in to use the Knowledge Explorer.
+Policy Name,Policy Name
+Positive,Positive
+Potential conflicts detected:,Potential conflicts detected:
+Preference,Preference
+Preferred Model,Preferred Model
+"Preserve extracted-text blocks, spacing, and separators. This does not reconstruct the original PDF, Office, or image file.","Preserve extracted-text blocks, spacing, and separators. This does not reconstruct the original PDF, Office, or image file."
+Preserve Extracted-Text Structure,Preserve Extracted-Text Structure
+Preview Input,Preview Input
+Preview JSON Schema,Preview JSON Schema
+Preview Output,Preview Output
+Preview Prompt,Preview Prompt
+Previous,Previous
+Priority,Priority
+Procedural,Procedural
+process,process
+Process Now,Process Now
+Processing Duration (ms),Processing Duration (ms)
+Processing Heartbeat,Processing Heartbeat
+Processing Job ID,Processing Job ID
+Processing Progress,Processing Progress
+Processing Queue,Processing Queue
+Processing Requested By,Processing Requested By
+Processing Requested On,Processing Requested On
+Processing Status,Processing Status
+Processing user {0} is disabled.,Processing user {0} is disabled.
+Processing {0}. Your next question will use this file even if indexing is still running.,Processing {0}. Your next question will use this file even if indexing is still running.
+Processing {0}...,Processing {0}...
+Promoting to memory / skill...,Promoting to memory / skill...
+Prompt,Prompt
+Prompt Template,Prompt Template
+Prompt Template {0} is disabled.,Prompt Template {0} is disabled.
+Prompt Templates,Prompt Templates
+Prompt Tokens,Prompt Tokens
+Prompt variable {0} is required.,Prompt variable {0} is required.
+Provenance,Provenance
+Provenance is missing.,Provenance is missing.
+Provenance is recorded.,Provenance is recorded.
+Provenance: {0},Provenance: {0}
+Provide source text or a source document to translate.,Provide source text or a source document to translate.
+Provider,Provider
+Provider endpoints outside the local network will now be allowed. Prompts and document contents could leave this machine.,Provider endpoints outside the local network will now be allowed. Prompts and document contents could leave this machine.
+Provider Name,Provider Name
+Provider returned a non-JSON response.,Provider returned a non-JSON response.
+Provider Status,Provider Status
+Provider Type,Provider Type
+Provider type {0} does not support deleting models.,Provider type {0} does not support deleting models.
+Provider type {0} does not support pulling models.,Provider type {0} does not support pulling models.
+Provider {0},Provider {0}
+Provider {0} did not respond within {1}s.,Provider {0} did not respond within {1}s.
+Provider {0} is unreachable at {1}. Is the runtime running?,Provider {0} is unreachable at {1}. Is the runtime running?
+Provider {0} request failed: {1},Provider {0} request failed: {1}
+Provider {0} request was refused: {1},Provider {0} request was refused: {1}
+Provider {0} returned HTTP {1}: {2},Provider {0} returned HTTP {1}: {2}
+Provider {0} timed out while connecting to {1}.,Provider {0} timed out while connecting to {1}.
+Provider {0} was not called: the request time budget is exhausted.,Provider {0} was not called: the request time budget is exhausted.
+Provider {0} was not called: {1},Provider {0} was not called: {1}
+Providers,Providers
+Providers Online,Providers Online
+Public,Public
+Pulled On,Pulled On
+Purge,Purge
+Purge Logs,Purge Logs
+Purge Old Logs,Purge Old Logs
+Quality,Quality
+Quality Score,Quality Score
+Quality {0}%,Quality {0}%
+Quantization,Quantization
+Query,Query
+Question,Question
+Queue,Queue
+Queue data unavailable.,Queue data unavailable.
+Queue Time (ms),Queue Time (ms)
+Queued,Queued
+Queued for indexing,Queued for indexing
+Queued for processing,Queued for processing
+Queued for translation,Queued for translation
+Queued {0} documents for reindexing in {1}.,Queued {0} documents for reindexing in {1}.
+Quick Test,Quick Test
+Quota Exceeded,Quota Exceeded
+RAG,RAG
+Rate Limit / Minute,Rate Limit / Minute
+"Rating saved. Learning is disabled, so no candidate was created.","Rating saved. Learning is disabled, so no candidate was created."
+Rating saved. Teaching is not permitted for your role.,Rating saved. Teaching is not permitted for your role.
+Re-enable this skill?,Re-enable this skill?
+Re-index All,Re-index All
+Re-indexing Required,Re-indexing Required
+Re-process,Re-process
+Re-process every document in this knowledge base? This may take a while.,Re-process every document in this knowledge base? This may take a while.
+Re-process {0} document(s)?,Re-process {0} document(s)?
+Re-translate,Re-translate
+Re-translate segment,Re-translate segment
+Re-translate segment {0},Re-translate segment {0}
+Re-translating...,Re-translating...
+Read Only,Read Only
+Reader Used,Reader Used
+Reading model list...,Reading model list...
+"Real-time health, usage and configuration of the local AI platform.","Real-time health, usage and configuration of the local AI platform."
+Reason,Reason
+Reasoning,Reasoning
+Recalled Memories,Recalled Memories
+Recent,Recent
+Recent Documents,Recent Documents
+Recent Failures,Recent Failures
+"Recommended embeddings, ~274 MB","Recommended embeddings, ~274 MB"
+"Record search telemetry (query text, result identifiers, scores and bounded snippets). Values are passed through the configured redaction patterns before persistence; full result content is never stored. Rows are removed by the scheduled retention cleanup.","Record search telemetry (query text, result identifiers, scores and bounded snippets). Values are passed through the configured redaction patterns before persistence; full result content is never stored. Rows are removed by the scheduled retention cleanup."
+Recorded By: {0},Recorded By: {0}
+Recursive copy of {0} was queued.,Recursive copy of {0} was queued.
+Recursive deletion of {0} was queued.,Recursive deletion of {0} was queued.
+Recursive move of {0} was queued.,Recursive move of {0} was queued.
+Recursive nested pipeline call to {0} was refused.,Recursive nested pipeline call to {0} was refused.
+Redaction Patterns,Redaction Patterns
+Reference,Reference
+Reference DocType,Reference DocType
+Reference Document Type,Reference Document Type
+Reference Name,Reference Name
+Reference to a resource or approval policy governing access to this folder (informational; actual permission uses Frappe sharing).,Reference to a resource or approval policy governing access to this folder (informational; actual permission uses Frappe sharing).
+Refresh,Refresh
+Refresh Metadata,Refresh Metadata
+Refresh Statistics,Refresh Statistics
+Register,Register
+Registered,Registered
+Reject,Reject
+Reject this candidate so it is never learned?,Reject this candidate so it is never learned?
+Rejected,Rejected
+Rejected At,Rejected At
+Rejected By,Rejected By
+Relevance,Relevance
+Remove,Remove
+Remove Folder from Favorites,Remove Folder from Favorites
+Rename,Rename
+Rename Conversation,Rename Conversation
+Rename…,Rename…
+Repair Flagged Segments,Repair Flagged Segments
+Repeat Penalty,Repeat Penalty
+Report,Report
+Reports,Reports
+reprocess,reprocess
+req,req
+Request Payload,Request Payload
+Request Timeout (s),Request Timeout (s)
+Request Timeout must be at least 5 seconds.,Request Timeout must be at least 5 seconds.
+Requested At,Requested At
+Requested By,Requested By
+Requested On,Requested On
+Requests,Requests
+requests,requests
+Requests (24h),Requests (24h)
+Require Approval for Learned Knowledge,Require Approval for Learned Knowledge
+Require Approval for Write Tools,Require Approval for Write Tools
+Required,Required
+Requires Approval,Requires Approval
+Rerank,Rerank
+Reserved for schema compatibility until provider-backed model lifecycle management is implemented.,Reserved for schema compatibility until provider-backed model lifecycle management is implemented.
+Reserved for schema compatibility. Application-level document encryption is not supported; use encrypted storage and database controls.,Reserved for schema compatibility. Application-level document encryption is not supported; use encrypted storage and database controls.
+Reserved for schema compatibility. Extraction currently returns validated JSON and does not write target records.,Reserved for schema compatibility. Extraction currently returns validated JSON and does not write target records.
+Resource Control,Resource Control
+Resource Policies,Resource Policies
+Response,Response
+Response Format,Response Format
+Response Payload,Response Payload
+Restore Archived,Restore Archived
+Restrict to Roles,Restrict to Roles
+Result,Result
+Result Data,Result Data
+Result Mapping,Result Mapping
+Results,Results
+Retries,Retries
+Retrieval,Retrieval
+Retrieval Brute-Force Ceiling,Retrieval Brute-Force Ceiling
+"Retrieval Brute-Force Ceiling must be at least 200 chunks, or empty for the default.","Retrieval Brute-Force Ceiling must be at least 200 chunks, or empty for the default."
+Retrieval diagnostics,Retrieval diagnostics
+Retrieval Top K,Retrieval Top K
+Retry,Retry
+Retry a failed segment once with a stricter prompt naming the defect.,Retry a failed segment once with a stricter prompt naming the defect.
+Retry Last,Retry Last
+Retry Processing,Retry Processing
+Returned {0}-dimensional embeddings.,Returned {0}-dimensional embeddings.
+Reused,Reused
+reused,reused
+Reused From Memory,Reused From Memory
+Review,Review
+Review Flagged Only,Review Flagged Only
+Review Segments,Review Segments
+Review Translation,Review Translation
+Review {0},Review {0}
+Reviewed,Reviewed
+Role,Role
+Row {0}: a pipeline cannot call itself.,Row {0}: a pipeline cannot call itself.
+"Row {0}: a translatable term needs at least two languages,","Row {0}: a translatable term needs at least two languages,"
+Row {0}: Configuration is not valid JSON: {1},Row {0}: Configuration is not valid JSON: {1}
+Row {0}: enter the term in at least one language.,Row {0}: enter the term in at least one language.
+Row {0}: Field Name is required.,Row {0}: Field Name is required.
+Row {0}: Field Name {1} is duplicated.,Row {0}: Field Name {1} is duplicated.
+"Row {0}: Field Name {1} may only contain letters, numbers and underscores.","Row {0}: Field Name {1} may only contain letters, numbers and underscores."
+Row {0}: step name {1} is duplicated.,Row {0}: step name {1} is duplicated.
+Row {0}: this term is already in the glossary.,Row {0}: this term is already in the glossary.
+Row {0}: {1},Row {0}: {1}
+Row {0}: {1} is required for a {2} step.,Row {0}: {1} is required for a {2} step.
+rule,rule
+Rule Name,Rule Name
+Rule Result,Rule Result
+Rule {0} has no categories configured.,Rule {0} has no categories configured.
+Rules,Rules
+Run,Run
+Run Agent,Run Agent
+Run Discover Models on your provider.,Run Discover Models on your provider.
+Run Now,Run Now
+Run Pipeline,Run Pipeline
+Run Quality Checks,Run Quality Checks
+Run the tool {0} with the recorded arguments?,Run the tool {0} with the recorded arguments?
+Run {0} started.,Run {0} started.
+Running,Running
+Running a probe prompt...,Running a probe prompt...
+Running rule...,Running rule...
+Running...,Running...
+Runs,Runs
+Runtime Model Name,Runtime Model Name
+Sample Text,Sample Text
+Save,Save
+Scan,Scan
+Scanning patterns...,Scanning patterns...
+Scheduled,Scheduled
+Schema Name,Schema Name
+Scope,Scope
+Scope Value,Scope Value
+Scope Value is required when Scope is not Global.,Scope Value is required when Scope is not Global.
+Score,Score
+Search,Search
+Search conversations,Search conversations
+Search failed.,Search failed.
+Search folders and documents,Search folders and documents
+Search Queries,Search Queries
+Search query,Search query
+Search Type,Search Type
+Search type,Search type
+Search your documents in natural language...,Search your documents in natural language...
+Searching...,Searching...
+Security,Security
+Segment Size (characters),Segment Size (characters)
+Segment {0} does not exist in this translation.,Segment {0} does not exist in this translation.
+Segments,Segments
+Segments per Model Call,Segments per Model Call
+Segments reused from the translation memory.,Segments reused from the translation memory.
+Select,Select
+Select a knowledge base below or attach a file when you want grounded answers — general chat stays fast.,Select a knowledge base below or attach a file when you want grounded answers — general chat stays fast.
+Select an Extraction Schema first.,Select an Extraction Schema first.
+Select at least one document.,Select at least one document.
+Select at least one file or folder.,Select at least one file or folder.
+Select at least one item.,Select at least one item.
+Select Destination Folder,Select Destination Folder
+Select exactly one file or folder.,Select exactly one file or folder.
+Semantic,Semantic
+semantic,semantic
+semantic search fell back to keyword matching.,semantic search fell back to keyword matching.
+Send feedback,Send feedback
+Separator,Separator
+Sequence,Sequence
+Series,Series
+Server Method,Server Method
+Service Health Logs,Service Health Logs
+Set Default,Set Default
+Set Default Chat Model in AI Platform Settings.,Set Default Chat Model in AI Platform Settings.
+Setup incomplete,Setup incomplete
+Severity,Severity
+Shared destination folder used as the default for non-attachment uploads and platform output. Must be a full File folder name (e.g. Home/AI Platform). Only applied when the uploading user has write access to the folder; otherwise the shared uploads folder is used.,Shared destination folder used as the default for non-attachment uploads and platform output. Must be a full File folder name (e.g. Home/AI Platform). Only applied when the uploading user has write access to the folder; otherwise the shared uploads folder is used.
+short,short
+Shown to the model. Be explicit about when to use this tool.,Shown to the model. Be explicit about when to use this tool.
+Similarity Threshold,Similarity Threshold
+"Similarity Threshold must be between 0 and 1, or 1–100 as a percentage.","Similarity Threshold must be between 0 and 1, or 1–100 as a percentage."
+Size (bytes),Size (bytes)
+Skill disabled,Skill disabled
+Skill enabled,Skill enabled
+Skill ID,Skill ID
+Skill instructions cannot be empty.,Skill instructions cannot be empty.
+Skill Name,Skill Name
+Skill Summary,Skill Summary
+Skill Type,Skill Type
+Skills,Skills
+Skipped,Skipped
+"Small and capable, ~2.3 GB","Small and capable, ~2.3 GB"
+"Snake case identifier exposed to the model, e.g. search_knowledge_base","Snake case identifier exposed to the model, e.g. search_knowledge_base"
+Source,Source
+Source Candidate,Source Candidate
+Source Characters,Source Characters
+Source Checksum,Source Checksum
+Source Context,Source Context
+Source DocType,Source DocType
+Source DocType and record name are required.,Source DocType and record name are required.
+Source DocType and Source Name are required.,Source DocType and Source Name are required.
+Source DocType and Source Name must be provided together.,Source DocType and Source Name must be provided together.
+Source Document,Source Document
+Source Field,Source Field
+Source File,Source File
+Source File Record,Source File Record
+Source File record and Source File URL do not match.,Source File record and Source File URL do not match.
+Source File record {0} does not exist.,Source File record {0} does not exist.
+Source Folder Path,Source Folder Path
+Source Language,Source Language
+Source Name,Source Name
+Source record {0} {1} does not exist.,Source record {0} {1} does not exist.
+Source Record: {0} {1},Source Record: {0} {1}
+Source Text,Source Text
+Source Type,Source Type
+Source type {0} is not supported.,Source type {0} is not supported.
+Source Type {0} is not supported. Upload individual files instead.,Source Type {0} is not supported. Upload individual files instead.
+Source Type: {0},Source Type: {0}
+Source URL,Source URL
+Source URLs must not contain embedded credentials.,Source URLs must not contain embedded credentials.
+Source User,Source User
+Source user and type are recorded.,Source user and type are recorded.
+Source user or type is invalid.,Source user or type is invalid.
+Sources,Sources
+sources,sources
+Sources cited in the latest answer appear here.,Sources cited in the latest answer appear here.
+Stable display name within the parent folder. Tree operations enforce uniqueness without conflating it with the document ID or checksum.,Stable display name within the parent folder. Tree operations enforce uniqueness without conflating it with the document ID or checksum.
+Stable File record identity for file-backed documents; source_file remains the canonical attachment URL.,Stable File record identity for file-backed documents; source_file remains the canonical attachment URL.
+Stale,Stale
+Start Conversation,Start Conversation
+"Start your local runtime, then run Test All Providers.","Start your local runtime, then run Test All Providers."
+Started At,Started At
+Started pulling local model {0} onto {1}.,Started pulling local model {0} onto {1}.
+Statistics,Statistics
+Status,Status
+Step,Step
+Step '{0}' failed: {1},Step '{0}' failed: {1}
+Step Log,Step Log
+Step Logs,Step Logs
+Steps,Steps
+Stop,Stop
+Stop Generation,Stop Generation
+Stop generation,Stop generation
+Stop Sequences,Stop Sequences
+Storage & Retention,Storage & Retention
+Storage Folder,Storage Folder
+Storage Folder must be a folder.,Storage Folder must be a folder.
+Storage Folder {0} does not exist.,Storage Folder {0} does not exist.
+Strategy,Strategy
+Streaming,Streaming
+Strict Local Only,Strict Local Only
+Strict Local Only Mode,Strict Local Only Mode
+Strict Schema,Strict Schema
+String,String
+Structured Extraction,Structured Extraction
+Structured Output,Structured Output
+Structured output failed schema validation: {0},Structured output failed schema validation: {0}
+Structured warnings from extraction (ING-05): persisted via canonical reader manager. Empty array means clean extraction; partial extraction stores warnings while status remains Indexed.,Structured warnings from extraction (ING-05): persisted via canonical reader manager. Empty array means clean extraction; partial extraction stores warnings while status remains Indexed.
+Sub Pipeline,Sub Pipeline
+Sub-pipeline {0} ended with status {1}: {2},Sub-pipeline {0} ended with status {1}: {2}
+Subject,Subject
+"Subject domain, for example ""construction contracts"" or ""medical records"".","Subject domain, for example ""construction contracts"" or ""medical records""."
+Success,Success
+Successful,Successful
+Suggested Models,Suggested Models
+Summarise,Summarise
+Summarise Conversation,Summarise Conversation
+Summarise the document I just uploaded: {0},Summarise the document I just uploaded: {0}
+Summarise the documents I uploaded this week,Summarise the documents I uploaded this week
+Summarise this {0}.,Summarise this {0}.
+Summarising...,Summarising...
+Summarization,Summarization
+Summarize,Summarize
+summarize,summarize
+Summary,Summary
+Supported Formats,Supported Formats
+Supports JSON Mode,Supports JSON Mode
+Supports Streaming,Supports Streaming
+Supports Tool Calling,Supports Tool Calling
+Supports Vision,Supports Vision
+System,System
+System Prompt,System Prompt
+System Prompt Override,System Prompt Override
+System-generated source attribution. This value cannot be supplied by a model or client.,System-generated source attribution. This value cannot be supplied by a model or client.
+table,table
+Tag,Tag
+Tags,Tags
+Target agent does not exist.,Target agent does not exist.
+Target characters per chunk. Larger windows keep more context but reduce retrieval precision.,Target characters per chunk. Larger windows keep more context but reduce retrieval precision.
+Target DocType,Target DocType
+Target DocType (Unsupported),Target DocType (Unsupported)
+Target Field,Target Field
+Target folder,Target folder
+Target Language,Target Language
+Target language for the Translate action.,Target language for the Translate action.
+Target Report,Target Report
+Target role does not exist.,Target role does not exist.
+Target Scope,Target Scope
+Target scope is invalid.,Target scope is invalid.
+Target scope is valid.,Target scope is valid.
+Target Scope Value,Target Scope Value
+Target Scope Value is required for a non-global scope.,Target Scope Value is required for a non-global scope.
+Target user does not exist.,Target user does not exist.
+Task Type,Task Type
+Tasks,Tasks
+Teach,Teach
+Teach AI,Teach AI
+Teach the AI,Teach the AI
+"Teach the platform facts, preferences and procedures. Candidates are validated for provenance, tested for conflicts, approved by an AI Manager, and become persistent memories and skills that shape future answers.","Teach the platform facts, preferences and procedures. Candidates are validated for provenance, tested for conflicts, approved by an AI Manager, and become persistent memories and skills that shape future answers."
+Teaching content cannot be empty.,Teaching content cannot be empty.
+Teaching User,Teaching User
+Teaching user {0} does not exist.,Teaching user {0} does not exist.
+Teaching User: {0},Teaching User: {0}
+Technical,Technical
+Technical beta only. Disable until SEC-01/TRN-01 enforce authorized KB scope and policy-safe identity on every translation path.,Technical beta only. Disable until SEC-01/TRN-01 enforce authorized KB scope and policy-safe identity on every translation path.
+Temperature,Temperature
+Temperature must be between 0 and 2.,Temperature must be between 0 and 2.
+Template Name,Template Name
+Template Preview,Template Preview
+Terminology,Terminology
+Terms,Terms
+Test,Test
+Test Agent,Test Agent
+Test All,Test All
+Test All Providers,Test All Providers
+Test Automation Rule,Test Automation Rule
+Test Connection,Test Connection
+Test Extraction,Test Extraction
+Test Model,Test Model
+Test on a Document,Test on a Document
+Test on Sample Text,Test on Sample Text
+Testing providers...,Testing providers...
+Testing Status,Testing Status
+Testing...,Testing...
+Text,Text
+text,text
+Text content is required when Source Type is Text.,Text content is required when Source Type is Text.
+Text Direction,Text Direction
+Text Generation WebUI,Text Generation WebUI
+The AI Document was deleted while its attachment was being saved.,The AI Document was deleted while its attachment was being saved.
+The AI Platform is disabled in AI Platform Settings.,The AI Platform is disabled in AI Platform Settings.
+The AI Platform is disabled. Enable it in AI Platform Settings.,The AI Platform is disabled. Enable it in AI Platform Settings.
+The AI provider <b>{0}</b> at {1} is no longer reachable.<br><br>Error: {2},The AI provider <b>{0}</b> at {1} is no longer reachable.<br><br>Error: {2}
+The bulk selection changed. Refresh and try again.,The bulk selection changed. Refresh and try again.
+The Classify step needs a 'categories' list in its configuration.,The Classify step needs a 'categories' list in its configuration.
+The Compare step needs two documents in the run context.,The Compare step needs two documents in the run context.
+The Custom Method step needs a dotted method path.,The Custom Method step needs a dotted method path.
+The document changed while it was being deleted. Refresh and try again.,The document changed while it was being deleted. Refresh and try again.
+The document source or location changed. Refresh and try again.,The document source or location changed. Refresh and try again.
+"The document source, location, or attachments changed. Refresh and try again.","The document source, location, or attachments changed. Refresh and try again."
+The embedding model changed. Existing vectors are no longer comparable -,The embedding model changed. Existing vectors are no longer comparable -
+The embedding provider returned a malformed response.,The embedding provider returned a malformed response.
+The embedding provider returned a non-list response.,The embedding provider returned a non-list response.
+The embedding provider returned a non-numeric vector for chunk {0}.,The embedding provider returned a non-numeric vector for chunk {0}.
+The embedding provider returned an empty vector for chunk {0}.,The embedding provider returned an empty vector for chunk {0}.
+The embedding provider returned an invalid vector for chunk {0}.,The embedding provider returned an invalid vector for chunk {0}.
+The embedding provider returned an unnormalizable vector for chunk {0}.,The embedding provider returned an unnormalizable vector for chunk {0}.
+The embedding provider returned {0} dimensions for chunk {1}; expected {2}.,The embedding provider returned {0} dimensions for chunk {1}; expected {2}.
+The embedding provider returned {0} vectors for {1} chunks.,The embedding provider returned {0} vectors for {1} chunks.
+The embedding provider returned {0} vectors for {1} inputs.,The embedding provider returned {0} vectors for {1} inputs.
+The Extract Data step needs an extraction schema.,The Extract Data step needs an extraction schema.
+The file extension leaves no room for a copy name.,The file extension leaves no room for a copy name.
+The file location changed. Refresh and try again.,The file location changed. Refresh and try again.
+The folder is not empty. Confirm recursive deletion first.,The folder is not empty. Confirm recursive deletion first.
+The folder location changed. Refresh and try again.,The folder location changed. Refresh and try again.
+The folder operation failed and was not applied. Nothing was moved.,The folder operation failed and was not applied. Nothing was moved.
+The folder operation failed.,The folder operation failed.
+The folder selector is not available. Reload Desk and try again.,The folder selector is not available. Reload Desk and try again.
+The folder selector is still loading. Reload Desk and try again.,The folder selector is still loading. Reload Desk and try again.
+The folder subtree changed. Refresh and try again.,The folder subtree changed. Refresh and try again.
+The indexed document {0} was kept.,The indexed document {0} was kept.
+The invocation agent does not match the conversation agent.,The invocation agent does not match the conversation agent.
+The knowledge export documents value must be a JSON array.,The knowledge export documents value must be a JSON array.
+The knowledge export is not valid JSON: {0},The knowledge export is not valid JSON: {0}
+The knowledge export knowledge_base value must be a JSON object.,The knowledge export knowledge_base value must be a JSON object.
+The knowledge export root must be a JSON object.,The knowledge export root must be a JSON object.
+The Learning Loop is disabled in AI Platform Settings.,The Learning Loop is disabled in AI Platform Settings.
+The model could not start.,The model could not start.
+The model could not start. Try qwen2.5:0.5b on this machine.,The model could not start. Try qwen2.5:0.5b on this machine.
+The model could not start. Try qwen2.5:0.5b.,The model could not start. Try qwen2.5:0.5b.
+The model name cannot contain control characters.,The model name cannot contain control characters.
+The model pull worker requester does not match its execution authority.,The model pull worker requester does not match its execution authority.
+The Office document container is corrupt.,The Office document container is corrupt.
+The original requester is missing or disabled; execution was refused.,The original requester is missing or disabled; execution was refused.
+The originating record does not exist.,The originating record does not exist.
+The parent Pipeline Run does not exist.,The parent Pipeline Run does not exist.
+The parent Pipeline Run is not active under the requesting user.,The parent Pipeline Run is not active under the requesting user.
+The pipeline requester is missing or disabled.,The pipeline requester is missing or disabled.
+The previous attempt was rejected by quality checks.,The previous attempt was rejected by quality checks.
+The processing authority does not match the queued request.,The processing authority does not match the queued request.
+The provider or model name exceeds the supported length.,The provider or model name exceeds the supported length.
+The request failed.,The request failed.
+The root folder cannot be copied.,The root folder cannot be copied.
+The root folder cannot be deleted.,The root folder cannot be deleted.
+The root folder cannot be moved.,The root folder cannot be moved.
+The root folder cannot be renamed.,The root folder cannot be renamed.
+The root folder cannot be used in a bulk mutation.,The root folder cannot be used in a bulk mutation.
+The saved pipeline input is not valid JSON.,The saved pipeline input is not valid JSON.
+The saved pipeline input must be a JSON object.,The saved pipeline input must be a JSON object.
+The selected item no longer exists.,The selected item no longer exists.
+The selected subtree changed after this operation was queued. Refresh and try again.,The selected subtree changed after this operation was queued. Refresh and try again.
+The selected subtree changed. Refresh and try again.,The selected subtree changed. Refresh and try again.
+The selected tree node cannot be copied.,The selected tree node cannot be copied.
+The selected tree node cannot be deleted.,The selected tree node cannot be deleted.
+The selected tree node cannot be moved.,The selected tree node cannot be moved.
+The selected tree node cannot be renamed.,The selected tree node cannot be renamed.
+The source and target languages must differ.,The source and target languages must differ.
+The source document for this copy no longer exists.,The source document for this copy no longer exists.
+The source document no longer exists.,The source document no longer exists.
+The source File changed while this document was being saved. Refresh and try again.,The source File changed while this document was being saved. Refresh and try again.
+The source file location changed. Refresh and try again.,The source file location changed. Refresh and try again.
+The source URL is invalid.,The source URL is invalid.
+The teaching user cannot be changed after candidate creation.,The teaching user cannot be changed after candidate creation.
+The teaching user is not authorized to read the originating record.,The teaching user is not authorized to read the originating record.
+The text is already in {0}.,The text is already in {0}.
+The tool has no valid runtime limit.,The tool has no valid runtime limit.
+"The Translate step needs a 'target_language' (ar, en or he) in its configuration.","The Translate step needs a 'target_language' (ar, en or he) in its configuration."
+The uploaded file could not be read.,The uploaded file could not be read.
+The {0} reader could not parse {1}: {2},The {0} reader could not parse {1}: {2}
+The {0} reader found no readable text in {1}.,The {0} reader found no readable text in {1}.
+This action needs approval. An AI Manager must approve invocation {0}.,This action needs approval. An AI Manager must approve invocation {0}.
+This conversation has no messages to summarise.,This conversation has no messages to summarise.
+This folder contains {0} file(s) that are not represented by AI Documents.,This folder contains {0} file(s) that are not represented by AI Documents.
+This item changed after the tree was loaded. Refresh and try again.,This item changed after the tree was loaded. Refresh and try again.
+This platform cannot enforce tool runtime limits; execution was refused.,This platform cannot enforce tool runtime limits; execution was refused.
+This source type requires an originating record.,This source type requires an originating record.
+This translation has no text to index yet.,This translation has no text to index yet.
+This translation is already running.,This translation is already running.
+This turn was cancelled.,This turn was cancelled.
+This worker cannot safely enforce tool runtime limits; execution was refused.,This worker cannot safely enforce tool runtime limits; execution was refused.
+Threads,Threads
+Times Recalled,Times Recalled
+Times Used,Times Used
+Title,Title
+To Date,To Date
+Toggle context panel,Toggle context panel
+tok,tok
+tok/s,tok/s
+Token Count,Token Count
+Tokens,Tokens
+tokens,tokens
+Tokens (24h),Tokens (24h)
+Tokens / Second,Tokens / Second
+Tool,Tool
+Tool Call,Tool Call
+Tool Call ID,Tool Call ID
+Tool execution exceeded the {0}-second runtime limit.,Tool execution exceeded the {0}-second runtime limit.
+Tool Invocations,Tool Invocations
+Tool Name,Tool Name
+"Tool Name must be lowercase snake_case, 2-64 characters,","Tool Name must be lowercase snake_case, 2-64 characters,"
+Tool Result,Tool Result
+Tool Schema,Tool Schema
+Tool Sensitive Fields,Tool Sensitive Fields
+Tool Type,Tool Type
+Tool {0} failed.,Tool {0} failed.
+Tool {0} has no handler configured.,Tool {0} has no handler configured.
+Tool {0} has no target DocType.,Tool {0} has no target DocType.
+Tool {0} has no target report.,Tool {0} has no target report.
+Tool {0} is disabled.,Tool {0} is disabled.
+Tool {0} is not enabled for agent {1}.,Tool {0} is not enabled for agent {1}.
+Tool {0} received unsupported arguments: {1}.,Tool {0} received unsupported arguments: {1}.
+Tool {0} requires approval (invocation {1}); this pipeline run was stopped.,Tool {0} requires approval (invocation {1}); this pipeline run was stopped.
+Tool {0} requires argument {1}.,Tool {0} requires argument {1}.
+Tools,Tools
+Top K,Top K
+Top Models,Top Models
+Top P,Top P
+Top P must be between 0 and 1.,Top P must be between 0 and 1.
+Top Score,Top Score
+Top Users (7 days),Top Users (7 days)
+Total Characters,Total Characters
+Total Requests,Total Requests
+Total Tokens,Total Tokens
+Traceback,Traceback
+Translate,Translate
+Translate in Foreground,Translate in Foreground
+Translate Into,Translate Into
+Translate Now,Translate Now
+Translate {0},Translate {0}
+Translated,Translated
+Translated Characters,Translated Characters
+Translated Document,Translated Document
+Translated Text,Translated Text
+Translated {0} into {1}.,Translated {0} into {1}.
+Translate…,Translate…
+Translating,Translating
+Translating...,Translating...
+Translation,Translation
+Translation Glossaries,Translation Glossaries
+Translation is disabled in AI Platform Settings.,Translation is disabled in AI Platform Settings.
+Translation memory key for this source text and language pair.,Translation memory key for this source text and language pair.
+Translation Options,Translation Options
+Translation queued,Translation queued
+Translation Segment Size must be at least 200 characters.,Translation Segment Size must be at least 200 characters.
+Translation to {0} is not supported.,Translation to {0} is not supported.
+Translation {0} does not exist.,Translation {0} does not exist.
+Translations,Translations
+Tree,Tree
+Tree updated,Tree updated
+Trigger,Trigger
+Triggered By,Triggered By
+Turn,Turn
+Turn ID,Turn ID
+Type,Type
+Type is valid.,Type is valid.
+Unknown,Unknown
+unknown,unknown
+Unknown error,Unknown error
+Unsupported action {0}.,Unsupported action {0}.
+Unsupported candidate type {0}.,Unsupported candidate type {0}.
+Unsupported folder sort order.,Unsupported folder sort order.
+Unsupported source type {0}.,Unsupported source type {0}.
+Unsupported step type {0}.,Unsupported step type {0}.
+Unsupported tool type {0}.,Unsupported tool type {0}.
+Untitled,Untitled
+Updated,Updated
+Upload,Upload
+Upload could not be ingested,Upload could not be ingested
+Upload Document,Upload Document
+Upload your first document,Upload your first document
+Upper bound of distinct pattern entities stored per document scan. The scan itself samples at most 1 MB of extracted text (head and tail).,Upper bound of distinct pattern entities stored per document scan. The scan itself samples at most 1 MB of extracted text (head and tail).
+Urgent,Urgent
+URL,URL
+url,url
+URL exceeded the maximum of {0} redirects.,URL exceeded the maximum of {0} redirects.
+URL fetch ended without a document.,URL fetch ended without a document.
+URL redirect did not include a Location header.,URL redirect did not include a Location header.
+URL response could not be read: {0},URL response could not be read: {0}
+URL response exceeded the configured {0} byte limit.,URL response exceeded the configured {0} byte limit.
+URL response is larger than the configured {0} byte limit.,URL response is larger than the configured {0} byte limit.
+URL returned an empty document.,URL returned an empty document.
+URL returned an invalid Content-Length header.,URL returned an invalid Content-Length header.
+URL returned HTTP {0}.,URL returned HTTP {0}.
+URL returned unsupported Content-Type {0}.,URL returned unsupported Content-Type {0}.
+Usage,Usage
+Usage Snapshot,Usage Snapshot
+Usage Snapshots,Usage Snapshots
+Use Knowledge Retrieval,Use Knowledge Retrieval
+Use Translation Memory,Use Translation Memory
+Used,Used
+User,User
+User Agent,User Agent
+User Prompt,User Prompt
+User {0} cannot process AI Document {1}.,User {0} cannot process AI Document {1}.
+User {0} cannot read AI Document {1}.,User {0} cannot read AI Document {1}.
+User {0} cannot read source File {1}.,User {0} cannot read source File {1}.
+User {0} cannot read source record {1} {2}.,User {0} cannot read source record {1} {2}.
+User {0} is not allowed to ingest URL sources.,User {0} is not allowed to ingest URL sources.
+User {0} no longer has permission to process {1}.,User {0} no longer has permission to process {1}.
+User-Provided Context (Unverified): {0},User-Provided Context (Unverified): {0}
+Users with this Role,Users with this Role
+Validate & Test,Validate & Test
+Validated,Validated
+Validation,Validation
+Validation failed: {0},Validation failed: {0}
+Validation Notes,Validation Notes
+Value,Value
+value,value
+Value is required.,Value is required.
+Values must be a JSON object.,Values must be a JSON object.
+Variable,Variable
+Variables,Variables
+Vector Norm,Vector Norm
+Verify SSL,Verify SSL
+Verify this many segments per document by translating them back and comparing embeddings. 0 disables it.,Verify this many segments per document by translating them back and comparing embeddings. 0 disables it.
+Version,Version
+Versions (Unsupported),Versions (Unsupported)
+View,View
+View Agent,View Agent
+View Chunks,View Chunks
+View Conversation,View Conversation
+View Data,View Data
+View Learning Dashboard,View Learning Dashboard
+View List,View List
+View Messages,View Messages
+View Models,View Models
+View Patterns,View Patterns
+View Related,View Related
+View Translations,View Translations
+Visible to all AI Users,Visible to all AI Users
+Vision,Vision
+vLLM,vLLM
+Waiting for the local model…,Waiting for the local model…
+Warning,Warning
+Warnings unavailable — retry.,Warnings unavailable — retry.
+Weight,Weight
+What does our refund policy say?,What does our refund policy say?
+What would you like to teach?,What would you like to teach?
+"When enabled, taught facts, preferences and instructions wait for an AI Manager to approve them before they affect future answers.","When enabled, taught facts, preferences and instructions wait for an AI Manager to approve them before they affect future answers."
+"Whitespace that follows this segment in the source, so the document reassembles exactly.","Whitespace that follows this segment in the source, so the document reassembles exactly."
+Words,Words
+Workflow,Workflow
+Yes,Yes
+You appear to be offline. Reconnect and retry.,You appear to be offline. Reconnect and retry.
+You are not permitted to read {0} {1}.,You are not permitted to read {0} {1}.
+You are not permitted to read {0}.,You are not permitted to read {0}.
+You are not permitted to use agent {0}.,You are not permitted to use agent {0}.
+You are not permitted to use the agent {0}.,You are not permitted to use the agent {0}.
+You are not permitted to use the tool {0}.,You are not permitted to use the tool {0}.
+You cannot attribute teaching to another user.,You cannot attribute teaching to another user.
+You cannot cancel this document.,You cannot cancel this document.
+You cannot create items in this folder.,You cannot create items in this folder.
+You cannot edit settings for folder '{0}' without write permission.,You cannot edit settings for folder '{0}' without write permission.
+You cannot use a tool in this conversation.,You cannot use a tool in this conversation.
+You cannot use translation memory from that knowledge base.,You cannot use translation memory from that knowledge base.
+You do not have permission for the complete folder subtree.,You do not have permission for the complete folder subtree.
+You do not have permission to attach a source to this AI Document.,You do not have permission to attach a source to this AI Document.
+You do not have permission to create every document copy.,You do not have permission to create every document copy.
+You do not have permission to create this document copy.,You do not have permission to create this document copy.
+You do not have permission to search these knowledge bases.,You do not have permission to search these knowledge bases.
+You do not have permission to view warnings.,You do not have permission to view warnings.
+You may only validate your own knowledge candidates.,You may only validate your own knowledge candidates.
+Your resource policy does not permit the model {0}.,Your resource policy does not permit the model {0}.
+Your resource policy does not permit this action ({0}).,Your resource policy does not permit this action ({0}).
+Your selection contains an item you cannot delete.,Your selection contains an item you cannot delete.
+Your selection contains an item you cannot move.,Your selection contains an item you cannot move.
+{0} cannot be negative.,{0} cannot be negative.
+{0} Chunks,{0} Chunks
+{0} chunks,{0} chunks
+{0} chunks were embedded with the previous model.,{0} chunks were embedded with the previous model.
+{0} contains unsupported characters.,{0} contains unsupported characters.
+{0} conversations,{0} conversations
+{0} document(s) moved.,{0} document(s) moved.
+{0} document(s) queued.,{0} document(s) queued.
+{0} embedded,{0} embedded
+{0} failures,{0} failures
+{0} file(s) copied.,{0} file(s) copied.
+{0} flagged,{0} flagged
+{0} has a template error on line {1}: {2},{0} has a template error on line {1}: {2}
+{0} has no field named {1}.,{0} has no field named {1}.
+{0} installed.,{0} installed.
+{0} is a {1} model and cannot drive an agent.,{0} is a {1} model and cannot drive an agent.
+{0} is not a known built-in handler. Available: {1},{0} is not a known built-in handler. Available: {1}
+{0} is not a purgeable log type.,{0} is not a purgeable log type.
+{0} is not a valid cron expression.,{0} is not a valid cron expression.
+{0} is not an embedding model.,{0} is not an embedding model.
+{0} is required for a {1} tool.,{0} is required for a {1} tool.
+{0} is required for the {1} action.,{0} is required for the {1} action.
+{0} is required.,{0} is required.
+{0} item(s) moved.,{0} item(s) moved.
+{0} messages,{0} messages
+{0} model(s) available · {1} ms,{0} model(s) available · {1} ms
+{0} ms avg,{0} ms avg
+{0} must be a JSON array.,{0} must be a JSON array.
+{0} must be a list.,{0} must be a list.
+"{0} must be a {1} model, but {2} is a {3} model. {4}","{0} must be a {1} model, but {2} is a {3} model. {4}"
+{0} must be at least {1}.,{0} must be at least {1}.
+{0} must be between 0 and 1 (or 1-100 as a percentage). {1} is not valid.,{0} must be between 0 and 1 (or 1-100 as a percentage). {1} is not valid.
+{0} must be one of: {1}.,{0} must be one of: {1}.
+{0} of {1} providers are online.,{0} of {1} providers are online.
+{0} passages,{0} passages
+"{0} points to {1}, which is outside the local network.","{0} points to {1}, which is outside the local network."
+{0} promoted to {1}.,{0} promoted to {1}.
+{0} rejected candidate {1}.,{0} rejected candidate {1}.
+{0} requests,{0} requests
+{0} result(s) found in {1} ms,{0} result(s) found in {1} ms
+{0} reused,{0} reused
+{0} segments,{0} segments
+{0} selected,{0} selected
+{0} step(s) remaining,{0} step(s) remaining
+{0} supports at most {1} bytes.,{0} supports at most {1} bytes.
+{0} supports at most {1} characters.,{0} supports at most {1} characters.
+{0} supports at most {1} entries.,{0} supports at most {1} entries.
+{0} tokens,{0} tokens
+{0} → {1},{0} → {1}
+{0}% embedded,{0}% embedded
+{0}% success ({1} runs),{0}% success ({1} runs)
+{0}: {1},{0}: {1}
