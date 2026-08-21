@@ -129,12 +129,17 @@ Argument {0} for tool {1} is not an allowed value.,الوسيط {0} للأداة
 Argument {0} for tool {1} must be {2}.,الوسيط {0} للأداة {1} يجب أن يكون {2}.
 Arguments,الوسيطات
 Array,مصفوفة
+Ask,اسأل
 Ask About This,اسأل عن هذا
 Ask about {0},اسأل عن {0}
+Ask AI,اسأل الذكاء الاصطناعي
+"Ask anything, or attach a document...",اسأل عن أي شيء، أو أرفق مستنداً...
 Assistant,مساعد
+Attach a document,إرفاق مستند
 Audit,تدقيق
 Audit Log Retention (days),احتفاظ سجل التدقيق (أيام)
 Audit Logs,سجلات التدقيق
+Auto detect,الكشف التلقائي
 Auto Embed After Extraction,التضمين التلقائي بعد الاستخراج
 Auto Pattern Scan,المسح التلقائي للأنماط
 Auto Process Uploaded Documents,المعالجة التلقائية للمستندات المرفوعة
@@ -143,18 +148,41 @@ Automation Rules,قواعد الأتمتة
 Available,متاح
 Available Models,النماذج المتاحة
 Average Latency (ms),متوسط زمن الاستجابة (مللي ثانية)
+Avg,المتوسط
+avg,المتوسط
+Avg Latency,متوسط زمن الاستجابة
 Back-Translation Samples,عينات الترجمة العكسية
+Back-translation similarity is only {0}.,تشابه الترجمة العكسية {0} فقط.
+Background Queues,قوائم الانتظار الخلفية
 Base URL,عنوان URL الأساسي
+Base URL must include a hostname.,عنوان URL الأساسي يجب أن يتضمن اسم مضيف.
 Batch Size,حجم الدفعة
 Behaviour,السلوك
 Blocks any provider endpoint that is not a loopback/private address.,يحجب أي نقطة نهاية مزوّد ليست عنواناً محلياً/خاصاً.
 Boolean,منطقي
 "Bounded quote around the first occurrence, for citation re-anchoring.",اقتباس محدود حول الحدوث الأول، لإعادة تثبيت الاقتباس.
 Builtin,مدمج
+Bulk Actions,إجراءات مجمَّعة
+Bulk deletion of {0} items completed.,اكتمل الحذف المجمَّع لـ {0} عنصر.
+Bulk deletion of {0} items was queued.,تم إدراج الحذف المجمَّع لـ {0} عنصر في قائمة الانتظار.
+Bulk move of {0} items completed.,اكتمل النقل المجمَّع لـ {0} عنصر.
+Bulk move of {0} items was queued.,تم إدراج النقل المجمَّع لـ {0} عنصر في قائمة الانتظار.
+Bulk move queued.,تم إدراج النقل المجمَّع في قائمة الانتظار.
+By Type,حسب النوع
 Can Write,يستطيع الكتابة
+Cancel Processing,إلغاء المعالجة
 Cancel Requested,طُلب الإلغاء
+Cancellation requested,طُلب الإلغاء
 Cancelled,أُلغي
 Cancelled by user,أُلغي بواسطة المستخدم
+Candidate created: {0},تم إنشاء المرشح: {0}
+Candidate has no content.,المرشح بلا محتوى.
+Candidate ID,معرّف المرشح
+Candidate test result: {0},نتيجة اختبار المرشح: {0}
+Candidate type is invalid.,نوع المرشح غير صالح.
+Candidate {0} failed validation.,المرشح {0} فشل في التحقق.
+Candidates,المرشحون
+Cannot {0} a document in {1} status.,لا يمكن {0} مستند في الحالة {1}.
 Canonical parent in Frappe's native File folder hierarchy. Home represents the tree root.,الأب المرجعي في هرمية مجلدات الملفات الأصلية في Frappe. يمثّل Home جذر الشجرة.
 Capabilities,القدرات
 Case Sensitive,حسّاس لحالة الأحرف
@@ -162,28 +190,39 @@ Category,الفئة
 Character offset of the first match within the scanned text window.,إزاحة المحرف لأول تطابق داخل نافذة النص الممسوحة.
 Characters,المحارف
 Characters carried from one chunk to the next so no fact is split across a boundary. Must be smaller than Chunk Size.,المحارف المنقولة من جزء إلى الجزء التالي حتى لا تنقسم حقيقة عبر حد. يجب أن تكون أصغر من «حجم الجزء».
+chars,محارف
 Chat,دردشة
+Chat completion failed.,فشل إكمال الدردشة.
 Chat Correction,تصحيح الدردشة
 "Chat with your local models, search your knowledge, and run AI tasks.",تحدّث مع نماذجك المحلية، وابحث في معرفتك، ونفّذ مهام الذكاء الاصطناعي.
 Checked On,تُحقق منه بتاريخ
 Checksum,مجموع التحقق
 Checksum of the document source when this row was written. Rescans refresh it.,مجموع التحقق لمصدر المستند عند كتابة هذا الصف. تحدّثه إعادات المسح.
+Choose a target language: {0}.,اختر لغة هدف: {0}.
 Chunk,جزء
 Chunk Index,فهرس الجزء
 Chunk Overlap,تداخل الأجزاء
 Chunk Overlap (characters),تداخل الأجزاء (محارف)
+Chunk Overlap cannot be negative.,تداخل الأجزاء لا يمكن أن يكون سالباً.
 Chunk Size,حجم الجزء
 Chunk Size (characters),حجم الجزء (محارف)
+Chunk {0},الجزء {0}
 Chunking,التقسيم إلى أجزاء
 Chunks,الأجزاء
+chunks,أجزاء
 Citation Mode,وضع الاقتباس
 Citations,الاقتباسات
 Classification,تصنيف
 Classification Confidence,ثقة التصنيف
 Classify,تصنيف
 Close,إغلاق
+Collapse All,طيّ الكل
 Color,اللون
 Compare,مقارنة
+Compare Documents,مقارنة المستندات
+Compare with,مقارنة مع
+Compare With...,المقارنة مع...
+Comparing...,جارٍ المقارنة...
 Comparison,مقارنة
 Complete brute-force vector evaluation is used for every eligible chunk. Corpora larger than this ceiling are still scanned completely but are flagged as degraded relative to the published latency envelope (1k/10k interactive; 100k complete but possibly slow).,يُستخدم التقييم المتجهي الكامل بالقوة الغاشمة لكل جزء مؤهَّل. لا تزال المجموعات الأكبر من هذا السقف تُمسح بالكامل لكنها تُعلَّم كمتدهورة نسبةً إلى غلاف زمن الاستجابة المنشور (1k/10k تفاعلي؛ 100k كامل لكن ربما بطيء).
 Completed,مكتمل
@@ -191,37 +230,74 @@ Completed On,اكتمل بتاريخ
 Completion,إكمال
 Completion Tokens,رموز الإكمال
 Condition,الشرط
+Condition has a syntax error: {0},يوجد خطأ نحوي في الشرط: {0}
 Confidence,الثقة
 Configuration,الإعدادات
 Conflict,تعارض
+Conflict Override Notes,ملاحظات تجاوز التعارض
 Conflict Test,اختبار التعارض
+Conflicts,التعارضات
 Conflicts / Overlaps,التعارضات / التداخلات
 Conflicts Summary,ملخص التعارضات
+Connection Test,اختبار الاتصال
 Consecutive Failures,الإخفاقات المتتالية
+Contacting {0}...,جارٍ الاتصال بـ {0}...
 Content,المحتوى
+Content present.,المحتوى موجود.
 Context,السياق
 Context Override,تجاوز السياق
 Context Quote,اقتباس السياق
 Context Used,السياق المستخدم
 Context Window,نافذة السياق
+Context Window must be at least 512.,«نافذة السياق» يجب أن تكون 512 على الأقل.
 Continue,متابعة
 Conversation,المحادثة
 Conversation is required.,المحادثة مطلوبة.
+Conversation Summary,ملخص المحادثة
 Conversation {0} created.,تم إنشاء المحادثة {0}.
 Conversations,المحادثات
 Copied,تم النسخ
 Copied From,منسوخ من
 Copied On,نُسخ بتاريخ
 Copy,نسخ
+Copy completed with errors,اكتمل النسخ مع أخطاء
+Copy Document To…,نسخ المستند إلى…
+Copy failed,فشل النسخ
+Copy Files to Folder…,نسخ الملفات إلى مجلد…
+Copy provenance is immutable.,مصدر النسخة ثابت.
+Copy Translation,نسخ الترجمة
+Copying folder subtree,جارٍ نسخ الشجرة الفرعية للمجلد
+Corpus,مدوَّنة
 Correction,تصحيح
+Correction (optional),تصحيح (اختياري)
+Could not create folder,تعذّر إنشاء المجلد
+Could not fetch {0}: {1},تعذّر جلب {0}: {1}
+Could not inspect document job {0},تعذّر فحص مهمة المستند {0}
+Could not load custom adapter {0}: {1},تعذّر تحميل المحوّل المخصص {0}: {1}
+Could not load knowledge overview.,تعذّر تحميل نظرة عامة على المعرفة.
+Could not load the AI configuration.,تعذّر تحميل إعدادات الذكاء الاصطناعي.
+Could not load the operations dashboard.,تعذّر تحميل لوحة العمليات.
+Could not queue model installation.,تعذّر إدراج تثبيت النموذج في قائمة الانتظار.
+Could not reconcile AI document {0},تعذّر التوفيق بين مستند الذكاء الاصطناعي {0}
+Could not resolve source host {0}.,تعذّر تحليل مضيف المصدر {0}.
+Create,إنشاء
+Create an Agent,إنشاء وكيل
+Create an AI Agent to enable chat.,أنشئ وكيل ذكاء اصطناعي لتمكين الدردشة.
+Create an AI Provider first.,أنشئ مزوّد ذكاء اصطناعي أولاً.
+Create Folder,إنشاء مجلد
+Create inside the selected folder,الإنشاء داخل المجلد المحدد
+Create one,أنشئ واحداً
 Created,تم الإنشاء
+Created {0},أُنشئ {0}
 Critical,حرج
 Cron Schedule,جدولة Cron
 Custom,مخصص
 Custom Adapter Path,مسار المحوّل المخصص
 Custom Method,طريقة مخصصة
+Daily token limit reached ({0} tokens).,تم بلوغ الحد اليومي للرموز ({0} رمز).
 Data,بيانات
 Date,تاريخ
+Days,أيام
 Default,افتراضي
 Default Agent,الوكيل الافتراضي
 Default Chat Model,نموذج الدردشة الافتراضي
@@ -229,49 +305,87 @@ Default Embedding Model,نموذج التضمين الافتراضي
 Default for new translations: store the finished text as its own searchable AI Document.,الافتراضي للترجمات الجديدة: تخزين النص المنتهي كمستند ذكاء اصطناعي قابل للبحث خاص به.
 Default for Type,افتراضي للنوع
 Default Glossary,المسرد الافتراضي
+Default model,النموذج الافتراضي
 Default Provider,المزوّد الافتراضي
 Default System Prompt,موجّه النظام الافتراضي
 Default Target Language,اللغة الهدف الافتراضية
 Default Translation Model,نموذج الترجمة الافتراضي
+Default updated,تم تحديث الافتراضي
 Default Vision Model,نموذج الرؤية الافتراضي
 Degraded,متدهور
+Degraded retrieval,استرجاع متدهور
 Delete,حذف
 Delete Conversation,حذف المحادثة
+Delete records older than (days),حذف السجلات الأقدم من (أيام)
 Delete Selected,حذف المحدد
+Deleted {0} records.,تم حذف {0} سجل.
+Delete…,حذف…
+Deleting folder subtree,جارٍ حذف الشجرة الفرعية للمجلد
 Denormalised path of the folder for fast filtering and provenance.,مسار غير مطبَّع للمجلد لتصفية سريعة وتتبع المصدر.
 Denormalized from the document so knowledge-base row permissions apply without a join.,غير مطبَّع من المستند حتى تسري أذونات صف قاعدة المعرفة دون ربط.
+Depth,العمق
 Description,الوصف
+Desk assets failed to load,فشل تحميل موارد Desk
+Destination Folder,المجلد الوجهة
 Details,التفاصيل
+Detect automatically,الكشف تلقائياً
 "Detected written language(s) as ISO 639-1 codes (en, ar, he, or en,ar,he when mixed). Filled when text is extracted; you can correct it.","اللغة/اللغات المكتوبة المكتشفة كرموز ISO 639-1 (en أو ar أو he، أو en,ar,he عند الخلط). تُملأ عند استخراج النص؛ يمكنك تصحيحها."
 "Deterministic canonical identity for this type, used for deduplication.",هوية مرجعية حتمية لهذا النوع، تُستخدم لإزالة التكرار.
 Digest,الملخص
 Dimensions,الأبعاد
+Disable,تعطيل
+Disabled,معطَّل
+Discover,اكتشاف
 Discover Models,اكتشاف النماذج
+Discovering models...,جارٍ اكتشاف النماذج...
+Discovery Complete,اكتمل الاكتشاف
+Discovery Failed,فشل الاكتشاف
+Discovery failed.,فشل الاكتشاف.
+docs,مستندات
 DocType Action,إجراء نوع المستند
 DocType Query,استعلام نوع المستند
 DocType Record,سجل نوع المستند
 Document,المستند
 Document Chunks,أجزاء المستند
+Document copied to {0},تم نسخ المستند إلى {0}
+Document embedding failed.,فشل تضمين المستند.
 Document Ingest,استيعاب المستندات
 Document Intelligence,ذكاء المستندات
+Document processing was cancelled.,أُلغيت معالجة المستند.
+Document source is empty.,مصدر المستند فارغ.
+Document source URL,عنوان URL لمصدر المستند
+Document text extraction failed.,فشل استخراج نص المستند.
+Document Tree,شجرة المستندات
 Document Type,نوع المستند
+Document {0} has no extracted text.,المستند {0} بلا نص مستخرَج.
+Document {0} is indexed and searchable.,المستند {0} مفهرَس وقابل للبحث.
+Document {0} was moved from {1} to {2}.,تم نقل المستند {0} من {1} إلى {2}.
 Documents,المستندات
+Documents Indexed,المستندات المفهرَسة
 Documents Processed,المستندات المعالجة
 Domain,النطاق
 Dotted path to a class deriving from ai_fr_hg.ai.providers.base.BaseProvider,مسار بنقاط إلى صنف يشتق من ai_fr_hg.ai.providers.base.BaseProvider
 Dotted path to a whitelisted python callable.,مسار بنقاط إلى دالة Python مدرجة في القائمة البيضاء.
+Download as Text,تنزيل كنص
 Draft,مسودة
 Due Date,تاريخ الاستحقاق
 Duration (ms),المدة (مللي ثانية)
 "Each row is one concept in English, Arabic and Hebrew. The direction being translated decides which column is the source and which is the required output.",كل صف مفهوم واحد بالإنجليزية والعربية والعبرية. اتجاه الترجمة يحدد أي عمود هو المصدر وأيها الناتج المطلوب.
 Embed,تضمين
+Embed Dims,أبعاد التضمين
+Embed Model,نموذج التضمين
+Embedded,مُضمَّن
+embedded,مضمَّن
 Embedded Chunks,الأجزاء المضمَّنة
 Embedded On,ضُمِّن بتاريخ
 Embedding,تضمين
+Embedding Coverage,تغطية التضمين
 Embedding Dimensions,أبعاد التضمين
 Embedding Format,تنسيق التضمين
 Embedding Model,نموذج التضمين
 Embedding Vector,متجه التضمين
+Embeddings returned {0} dimensions.,أعادت التضمينات {0} بُعداً.
+Enable,تمكين
 Enable AI Platform,تمكين منصة الذكاء الاصطناعي
 Enable Health Checks,تمكين فحوصات السلامة
 Enable Hybrid Search,تمكين البحث الهجين
@@ -282,9 +396,12 @@ Enable Streaming,تمكين البث
 Enable Tool Calling,تمكين استدعاء الأدوات
 Enable Translation,تمكين الترجمة
 Enabled,مُفعَّل
+Endpoint,نقطة النهاية
 Engine,المحرك
 English,الإنجليزية
 Entity Type,نوع الكيان
+Entity type,نوع الكيان
+Entity value,قيمة الكيان
 Error,خطأ
 Error Message,رسالة الخطأ
 Error Type,نوع الخطأ
@@ -293,58 +410,98 @@ Execution,التنفيذ
 Execution Log,سجل التنفيذ
 Execution Log Retention (days),احتفاظ سجل التنفيذ (أيام)
 Execution Logs,سجلات التنفيذ
+Expand Loaded,توسيع المُحمَّل
 Explicit Teaching,تعليم صريح
 Export,تصدير
+Export Conversation,تصدير المحادثة
 Extra Headers,رؤوس إضافية
+Extra Headers must be a JSON object.,«الرؤوس الإضافية» يجب أن تكون كائن JSON.
+Extra Headers must be valid JSON: {0},«الرؤوس الإضافية» يجب أن تكون JSON صالحاً: {0}
 Extract,استخراج
 Extract Data,استخراج البيانات
+extract data from,استخراج البيانات من
+Extract Patterns,استخراج الأنماط
+Extract Structured Data,استخراج بيانات منظَّمة
 Extract Text,استخراج النص
 Extracted Data,البيانات المستخرجة
 Extracted Text,النص المستخرج
+Extracted {0} pattern entities,تم استخراج {0} كيان نمط
 Extracting,جارٍ الاستخراج
+Extracting...,جارٍ الاستخراج...
 Extraction,استخراج
 Extraction Instructions,تعليمات الاستخراج
 Extraction Schema,مخطط الاستخراج
+Extraction Schema {0} is disabled.,مخطط الاستخراج {0} معطَّل.
 Extraction Schemas,مخططات الاستخراج
 Extraction Warnings,تحذيرات الاستخراج
+Extraction warnings,تحذيرات الاستخراج
 Fact,حقيقة
 Failed,فشل
+Failed Documents,المستندات الفاشلة
 Failures,الإخفاقات
+Failures (24h),الإخفاقات (24س)
 Fallback Answer,الإجابة الاحتياطية
 Family,العائلة
 Favorite Folders,المجلدات المفضلة
+Favorites,المفضلة
 Feedback,التعليقات
 Feedback Comment,تعليق الملاحظات
+Feedback must be Positive or Negative.,الملاحظات يجب أن تكون إيجابية أو سلبية.
 Feedback Reason,سبب الملاحظات
+Feedback reason is invalid.,سبب الملاحظات غير صالح.
 Field Allowlist,قائمة الحقول المسموح بها
 Field Name,اسم الحقل
 Field on the triggering document used as input. Defaults to the whole document.,حقل في المستند المشغّل يُستخدم كمدخل. الافتراضي هو المستند بأكمله.
 Field on the triggering document where the result is written.,حقل في المستند المشغّل حيث تُكتب النتيجة.
 Fields,الحقول
 File,ملف
+File record not found for {0}.,لم يُعثر على سجل ملف لـ {0}.
+File record {0} does not match {1}.,سجل الملف {0} لا يطابق {1}.
+File record {0} was not found.,لم يُعثر على سجل الملف {0}.
 File Size (bytes),حجم الملف (بايت)
+File type,نوع الملف
 Files,الملفات
+Filters must be a JSON object.,يجب أن تكون المرشحات كائن JSON.
 Fingerprint,البصمة
 Finished At,انتهى في
 First Offset,الإزاحة الأولى
+"Fits machines with ~10 GB RAM, ~400 MB",يناسب الأجهزة بذاكرة ~10 غيغابايت، ~400 ميغابايت
 Flagged,معلَّم
 Flagged Segments,المقاطع المعلَّمة
+Focused,مركَّز عليه
 Focused Document,المستند المركَّز عليه
 Folder,المجلد
+Folder '{0}' does not exist.,المجلد '{0}' غير موجود.
+Folder added to favorites.,تمت إضافة المجلد إلى المفضلة.
+Folder assignment failed,فشل تعيين المجلد
 Folder Intelligence,ذكاء المجلدات
+Folder is required.,المجلد مطلوب.
+Folder Name,اسم المجلد
 Folder Organization,تنظيم المجلدات
+Folder removed from favorites.,تمت إزالة المجلد من المفضلة.
+Folder selector unavailable,منتقي المجلد غير متاح
+Folder {0} created.,تم إنشاء المجلد {0}.
+Folder {0} was created in {1}.,تم إنشاء المجلد {0} في {1}.
+Folder {0} was moved to {1}.,تم نقل المجلد {0} إلى {1}.
+Folder {0} was renamed to {1}.,أُعيد تسمية المجلد {0} إلى {1}.
+Folder: {0},المجلد: {0}
 Follows the folder's privacy setting at creation.,يتبع إعداد الخصوصية للمجلد عند الإنشاء.
 Footnote,حاشية
 Formal,رسمي
 Format,التنسيق
 Formatting,التنسيق
+Found {0} model(s) on {1}.,تم العثور على {0} نموذج/نماذج على {1}.
+Found {0} model(s).,تم العثور على {0} نموذج/نماذج.
 Free-form tag for folder-level knowledge tagging and filtered retrieval.,وسم حر لوسم المعرفة على مستوى المجلد والاسترجاع المفلتَر.
+From Date,من تاريخ
 General,عام
 Generated JSON Schema,مخطط JSON المُولَّد
 Generated Schema,المخطط المُولَّد
 Generation,التوليد
 Generation Defaults,افتراضيات التوليد
 Global,عام
+Global scope is valid.,النطاق العام صالح.
+Glossaries,المسارد
 Glossary,المسرد
 Glossary Name,اسم المسرد
 Governance,الحوكمة
@@ -356,10 +513,13 @@ Heading,العنوان
 Health,السلامة
 Health Check,فحص السلامة
 Health Check Interval (minutes),الفاصل الزمني لفحص السلامة (دقائق)
+Health History,سجل السلامة
 Health Log Retention (days),احتفاظ سجل السلامة (أيام)
 Hebrew,العبرية
 Helpful,مفيد
 High,عالٍ
+"Higher quality embeddings, ~670 MB",تضمينات ذات جودة أعلى، ~670 ميغابايت
+Home,الرئيسية
 How much source text is translated as one unit.,مقدار نص المصدر الذي يُترجَم كوحدة واحدة.
 Hybrid,هجين
 "Identifier used by the runtime, e.g. llama3.1:8b",المعرّف المستخدم من قِبل وقت التشغيل، مثلاً llama3.1:8b
@@ -367,8 +527,11 @@ Idle,خامل
 "If set, retrieval scoped to this folder can be constrained to a knowledge base.",إذا حُدِّد، يمكن تقييد الاسترجاع المحدود بهذا المجلد بقاعدة معرفة.
 Image-file OCR fallback only. Requires Tesseract and the optional ocr extra; scanned-PDF OCR is not supported.,احتياطي التعرف الضوئي لملفات الصور فقط. يتطلب Tesseract وإضافة ocr الاختيارية؛ التعرف الضوئي لملفات PDF الممسوحة ضوئياً غير مدعوم.
 Immutable source identity retained for provenance without changing source-document deletion policy.,هوية مصدر ثابتة يُحتفظ بها لتتبع المصدر دون تغيير سياسة حذف مستند المصدر.
+Improve this answer,تحسين هذه الإجابة
 In Progress,قيد التنفيذ
 Incorrect Information,معلومات غير صحيحة
+Index,الفهرس
+Index as Document,فهرسة كمستند
 Index Statistics,إحصاءات الفهرس
 Index Status,حالة الفهرس
 Index the finished translation as its own searchable AI Document.,فهرسة الترجمة المنتهية كمستند ذكاء اصطناعي قابل للبحث خاص بها.
@@ -377,41 +540,61 @@ Index Translations as Documents,فهرسة الترجمات كمستندات
 Indexed,مفهرَس
 Indexed On,فُهرس بتاريخ
 Indexing,جارٍ الفهرسة
+Indexing...,جارٍ الفهرسة...
 Info,معلومة
 Informal,غير رسمي
 Ingest Document,استيعاب مستند
 "Ingest, index and interrogate your documents. Everything stays on this machine.",استوعب مستنداتك وافهرسها واستفسر عنها. كل شيء يبقى على هذا الجهاز.
 Ingestion,الاستيعاب
 Inline,داخل السياق
+Inline extraction for chat failed: {0},فشل الاستخراج داخل السياق للدردشة: {0}
 Input,المدخل
 Input / Output,المدخل / المخرج
 Input Data,بيانات المدخل
 Input Key,مفتاح المدخل
+Input Preview,معاينة المدخل
+Install,تثبيت
+Install Failed,فشل التثبيت
+Install failed: {0},فشل التثبيت: {0}
+Install Model,تثبيت النموذج
 Instruction,تعليمات
+Instruction for this segment (optional),تعليمات لهذا المقطع (اختياري)
 Instructions,التعليمات
 Integer,عدد صحيح
 Intelligence,ذكاء
 Internal,داخلي
+Introduce yourself in one sentence.,قدّم نفسك في جملة واحدة.
+Invalid redaction pattern {0}: {1},نمط تنقيح غير صالح {0}: {1}
 Invalid tree continuation token.,رمز متابعة الشجرة غير صالح.
+Invalid tree DocType.,نوع مستند شجرة غير صالح.
+Invocation {0} does not exist.,الاستدعاء {0} غير موجود.
+Invocation {0} is not pending approval.,الاستدعاء {0} ليس بانتظار الموافقة.
 IP Address,عنوان IP
 Is Private,خاص
 Issue Summary,ملخص المشكلة
 Issues,المشكلات
 Jinja template. Variables declared below are available in the render context.,قالب Jinja. المتغيرات المُعلَنة أدناه متاحة في سياق العرض.
 Job ID,معرّف المهمة
+jobs,مهام
 JSON Schema,مخطط JSON
+JSON Schema is not valid JSON: {0},مخطط JSON ليس JSON صالحاً: {0}
+JSON Schema must be a JSON object.,مخطط JSON يجب أن يكون كائن JSON.
 Keep Alive,الإبقاء على الاتصال
 Keep As Is,الإبقاء كما هو
 Keep this term exactly as written in every language.,احتفظ بهذا المصطلح كما هو مكتوب تماماً في كل اللغات.
 Keys here become the pipeline's starting context.,المفاتيح هنا تصبح السياق الابتدائي لخط الأنابيب.
 Keyword,كلمة مفتاحية
+keyword,كلمة مفتاحية
 Kind,النوع
 Knowledge,المعرفة
 Knowledge Base,قاعدة المعرفة
+Knowledge base,قاعدة المعرفة
 Knowledge Base Scope,نطاق قاعدة المعرفة
 Knowledge Bases,قواعد المعرفة
+Knowledge bases,قواعد المعرفة
 Knowledge Candidates,مرشحو المعرفة
 Knowledge Content,محتوى المعرفة
+Knowledge Content cannot be empty.,لا يمكن أن يكون محتوى المعرفة فارغاً.
 Knowledge Explorer,مستكشف المعرفة
 Knowledge Tag,وسم المعرفة
 Label,التسمية
@@ -425,6 +608,7 @@ Last Operation,آخر عملية
 Last Operation By,آخر عملية بواسطة
 Last Operation On,آخر عملية بتاريخ
 Last Run,آخر تشغيل
+Last Used,آخر استخدام
 Last Used On,آخر استخدام بتاريخ
 Latency (ms),زمن الاستجابة (مللي ثانية)
 Learned Context,السياق المتعلَّم
@@ -435,14 +619,26 @@ Leave empty to detect the language of the extracted text automatically.,اترك
 Leave empty to use the default chat model.,اتركه فارغاً لاستخدام نموذج الدردشة الافتراضي.
 Leave empty to use the platform's default translation or chat model.,اتركه فارغاً لاستخدام نموذج الترجمة أو الدردشة الافتراضي للمنصة.
 Legal,قانوني
+limit,حد
 Limits,الحدود
+Load earlier messages,تحميل الرسائل السابقة
+Load more…,تحميل المزيد…
+Loading warnings...,جارٍ تحميل التحذيرات...
 Loading...,جارٍ التحميل...
+Local AI Assistant,مساعد الذكاء الاصطناعي المحلي
+Local Only Mode,الوضع المحلي فقط
+Local Only Mode Disabled,تم تعطيل الوضع المحلي فقط
+Location,الموقع
 Log Prompts,تسجيل الموجّهات
 Log Responses,تسجيل الردود
+Log retention days must be at least 1.,أيام احتفاظ السجلات يجب أن تكون 1 على الأقل.
 Log Search Queries,تسجيل استعلامات البحث
+Log Type,نوع السجل
 Low,منخفض
 Lower values are preferred during automatic failover.,القيم الأدنى مفضَّلة أثناء تجاوز الفشل التلقائي.
+Manage,إدارة
 Manual,يدوي
+Mark as Reviewed,وضع علامة كمراجَع
 Markdown,Markdown
 Max Concurrent Requests,الحد الأقصى للطلبات المتزامنة
 Max Context Characters,الحد الأقصى لمحارف السياق
@@ -457,40 +653,72 @@ Max Runtime (s),الحد الأقصى لوقت التشغيل (ثوانٍ)
 Max Tokens,الحد الأقصى للرموز
 Max Tokens / Day,الحد الأقصى للرموز / اليوم
 Max Tokens / User / Day,الحد الأقصى للرموز / المستخدم / اليوم
+Max Tokens cannot be negative.,الحد الأقصى للرموز لا يمكن أن يكون سالباً.
 Max Tool Iterations,الحد الأقصى لتكرارات الأدوات
+Max Tool Iterations cannot exceed 10.,«الحد الأقصى لتكرارات الأدوات» لا يمكن أن يتجاوز 10.
 Max Turn Duration (s),الحد الأقصى لمدة الدور (ثوانٍ)
 Medium,متوسط
 Memories,الذكريات
 Memories Recalled Per Turn,الذكريات المستدعاة لكل دور
 Memory,الذاكرة
+Memory archived,تمت أرشفة الذاكرة
+Memory content cannot be empty.,لا يمكن أن يكون محتوى الذاكرة فارغاً.
+Memory ID,معرّف الذاكرة
 Memory Reuse,إعادة استخدام الذاكرة
+Memory Type,نوع الذاكرة
 Memory Usage,استخدام الذاكرة
 Message,الرسالة
 Messages,الرسائل
+messages,رسائل
 Metadata,البيانات الوصفية
+Metadata refreshed,تم تحديث البيانات الوصفية
 Metrics,المقاييس
 MIME Type,نوع MIME
 Minimum cosine score from 0 to 1. Values such as 25 are treated as 25%.,الحد الأدنى لدرجة جيب التمام من 0 إلى 1. قيم مثل 25 تُعامَل كـ 25%.
 "Minimum cosine similarity a passage needs to be considered relevant. Use 0–1, or 1–100 as a percentage (25 becomes 0.25). 0 returns everything; 1 only exact matches.",الحد الأدنى لتشابه جيب التمام الذي يحتاجه المقطع ليُعدّ ذا صلة. استخدم 0–1، أو 1–100 كنسبة مئوية (25 تصبح 0.25). 0 يُرجع كل شيء؛ 1 يُرجع التطابقات التامة فقط.
+Minimum Usage Count,الحد الأدنى لعدد الاستخدام
 Missing,مفقود
 Missing Information,معلومات ناقصة
 Model,النموذج
+Model Discovery,اكتشاف النماذج
 Model Manager,مدير النماذج
+Model Name,اسم النموذج
 Model Name Prefix,بادئة اسم النموذج
+Model Not Permitted,النموذج غير مسموح به
+Model Test,اختبار النموذج
+Model Test Failed,فشل اختبار النموذج
+Model Test: {0},اختبار النموذج: {0}
 Model Type,نوع النموذج
 Model Used,النموذج المستخدم
 Models,النماذج
+models,نماذج
+Models Available,النماذج المتاحة
 Monitoring,المراقبة
 Move,نقل
+Move completed with errors,اكتمل النقل مع أخطاء
+Move Documents to Folder,نقل المستندات إلى مجلد
+Move Documents to Folder…,نقل المستندات إلى مجلد…
+Move failed,فشل النقل
+Move Selected,نقل المحدد
+Move Selected Items,نقل العناصر المحددة
+Move to Folder…,نقل إلى مجلد…
+Moved to {0},نُقل إلى {0}
+Moving folder subtree,جارٍ نقل الشجرة الفرعية للمجلد
 Must be a Chat or Vision model (for example qwen2.5:0.5b). Embedding models such as all-minilm belong in Default Embedding Model.,يجب أن يكون نموذج دردشة أو رؤية (مثل qwen2.5:0.5b). نماذج التضمين مثل all-minilm محلّها في «نموذج التضمين الافتراضي».
 Must be a Vision model (for example llava:7b). Leave empty if you have none that fit this machine.,يجب أن يكون نموذج رؤية (مثل llava:7b). اتركه فارغاً إن لم يكن لديك ما يناسب هذا الجهاز.
 Must be an Embedding model (nomic-embed-text or all-minilm). Do not put a chat model here.,يجب أن يكون نموذج تضمين (nomic-embed-text أو all-minilm). لا تضع هنا نموذج دردشة.
 My Conversations,محادثاتي
 Native File folder this settings record extends (is_folder=1).,مجلد الملفات الأصلي الذي يوسّعه سجل الإعدادات هذا (is_folder=1).
 Needs Review,يحتاج إلى مراجعة
+Needs Review ({0}),يحتاج إلى مراجعة ({0})
+Needs ~10 GB free RAM,يتطلب ~10 غيغابايت ذاكرة حرة
+Needs ~16 GB free RAM,يتطلب ~16 غيغابايت ذاكرة حرة
 Negative,سلبي
 Neutral,محايد
 New Conversation,محادثة جديدة
+New Folder,مجلد جديد
+New Knowledge Base,قاعدة معرفة جديدة
+New Name,الاسم الجديد
 Newline separated hostnames permitted in strict local-only mode.,أسماء مضيفين مفصولة بأسطر جديدة مسموح بها في الوضع الصارم المحلي فقط.
 Newline separated regular expressions redacted before logging.,تعبيرات نمطية مفصولة بأسطر جديدة تُنقَّح قبل التسجيل.
 Next,التالي
@@ -533,8 +761,13 @@ Normalized case-folded SHA-256 location-local identity used for collation-indepe
 Normalized Value,القيمة المطبَّعة
 not embedded,غير مضمَّن
 Not Helpful,غير مفيد
+Not helpful,غير مفيد
+Not Permitted,غير مسموح
+Not permitted.,غير مسموح.
+Not ready,غير جاهز
 Not Tested,لم يُختبر
 Notes,الملاحظات
+Nothing awaiting approval.,لا شيء بانتظار الموافقة.
 Number,رقم
 Number of passages retrieved for every query. More passages give the model more evidence but use more context window.,عدد المقاطع المُسترجعة لكل استعلام. مقاطع أكثر تعطي النموذج أدلة أكثر لكنها تستهلك نافذة سياق أكبر.
 Object,كائن
@@ -543,8 +776,16 @@ Offline,غير متصل
 On,عند
 On Error,عند الخطأ
 Online,متصل
+Only folders can be added to favorites.,لا يمكن إضافة سوى المجلدات إلى المفضلة.
 Open,مفتوح
+Open a conversation first.,افتح محادثة أولاً.
+Open document,فتح المستند
+Open Document Tree,فتح شجرة المستندات
+Open Files,فتح الملفات
+Open in Assistant,فتح في المساعد
+Open Settings,فتح الإعدادات
 Operation,العملية
+Operation queued: {0},تم إدراج العملية في قائمة الانتظار: {0}
 Operations Dashboard,لوحة العمليات
 "Optional budget for one interactive chat turn, including retries, failover and tool calls. 0 (the default) waits for the model with no extra cutoff. Set a value only when a reverse proxy would otherwise return 504, and keep it below that proxy timeout.",ميزانية اختيارية لدور دردشة تفاعلي واحد، تشمل المحاولات وتجاوز الفشل واستدعاءات الأدوات. القيمة 0 (الافتراضي) تنتظر النموذج دون قطع إضافي. حدّد قيمة فقط عندما يعيد وسيط عكسي وإلا الخطأ 504، واحتفظ بها أدنى من مهلة ذلك الوسيط.
 Optional color for UI (e.g. #4A90E2).,لون اختياري للواجهة (مثلاً #4A90E2).
@@ -559,37 +800,62 @@ Output,المخرج
 Output & Processing,المخرج والمعالجة
 Output Format,تنسيق المخرج
 Output Key,مفتاح المخرج
+Output Preview,معاينة المخرج
 Page,الصفحة
+page,صفحة
 Page Number,رقم الصفحة
 Pages,الصفحات
 Parameter,المعلمة
 Parameter Size,حجم المعلمة
 Parameters,المعلمات
 Parent Pipeline Run,تشغيل خط الأنابيب الأصل
+Partial,جزئي
+partial extraction will still be indexed,سيتم فهرسة الاستخراج الجزئي أيضاً
+Partial extraction — warnings present,استخراج جزئي — توجد تحذيرات
 Passed,ناجح
 Pattern Entities,كيانات النمط
 Pattern Match,تطابق النمط
 Payload,الحمولة
 Pending,قيد الانتظار
 Pending Approval,بانتظار الموافقة
+Pending Approvals,الموافقات المعلَّقة
 "Periodically extract high-precision pattern entities (emails, URLs, phones, IPs, hashes, dates, identifiers, money) from indexed documents into AI Pattern Entity rows. Reads only already-extracted content; off by default.",استخرج دورياً كيانات نمط عالية الدقة (بريد إلكتروني، عناوين URL، هواتف، عناوين IP، تجزئات، تواريخ، معرّفات، عملات) من المستندات المفهرَسة إلى صفوف «كيان نمط الذكاء الاصطناعي». يقرأ فقط المحتوى المستخرج بالفعل؛ معطَّل افتراضياً.
+Pick a Chat model such as qwen2.5:0.5b.,اختر نموذج دردشة مثل qwen2.5:0.5b.
+Pin / Unpin,تثبيت / إلغاء تثبيت
 Pinned,مثبَّت
 Pipeline,خط الأنابيب
+Pipeline input must be a JSON object.,مدخل خط الأنابيب يجب أن يكون كائن JSON.
 Pipeline Name,اسم خط الأنابيب
 Pipeline Run,تشغيل خط الأنابيب
+Pipeline run cancelled.,أُلغي تشغيل خط الأنابيب.
+Pipeline run {0} entered state {1}.,دخل تشغيل خط الأنابيب {0} الحالة {1}.
+Pipeline run {0} was cancelled by {1}.,أُلغي تشغيل خط الأنابيب {0} بواسطة {1}.
 Pipeline Runs,تشغيلات خط الأنابيب
+Pipeline {0} is disabled.,خط الأنابيب {0} معطَّل.
 Pipelines,خطوط الأنابيب
 "Pipelines, event-driven rules and agents that run without human intervention.",خطوط أنابيب وقواعد مدفوعة بالأحداث ووكلاء تعمل دون تدخل بشري.
 Platform Defaults,افتراضيات المنصة
+Platform enabled,المنصة مُفعَّلة
+Platform is fully configured and ready.,المنصة مُهيَّأة بالكامل وجاهزة.
+Platform is ready.,المنصة جاهزة.
 Platform Settings,إعدادات المنصة
+Please sign in to use the AI Assistant.,الرجاء تسجيل الدخول لاستخدام مساعد الذكاء الاصطناعي.
 Policy Name,اسم السياسة
 Positive,إيجابي
+Potential conflicts detected:,تعارضات محتملة تم اكتشافها:
 Preference,تفضيل
 Preferred Model,النموذج المفضل
 "Preserve extracted-text blocks, spacing, and separators. This does not reconstruct the original PDF, Office, or image file.",احتفظ بكتل النص المستخرَج والمسافات والفواصل. هذا لا يعيد بناء ملف PDF أو Office أو الصورة الأصلي.
 Preserve Extracted-Text Structure,الحفاظ على بنية النص المستخرج
+Preview Input,معاينة المدخل
+Preview JSON Schema,معاينة مخطط JSON
+Preview Output,معاينة المخرج
+Preview Prompt,معاينة الموجّه
+Previous,السابق
 Priority,الأولوية
 Procedural,إجرائي
+process,معالجة
+Process Now,معالجة الآن
 Processing Duration (ms),مدة المعالجة (مللي ثانية)
 Processing Heartbeat,نبض المعالجة
 Processing Job ID,معرّف مهمة المعالجة
@@ -598,30 +864,77 @@ Processing Queue,قائمة انتظار المعالجة
 Processing Requested By,طلب المعالجة بواسطة
 Processing Requested On,طُلبت المعالجة بتاريخ
 Processing Status,حالة المعالجة
+Processing user {0} is disabled.,مستخدم المعالجة {0} معطَّل.
+Processing {0}...,جارٍ معالجة {0}...
+Promoting to memory / skill...,جارٍ الترقية إلى ذاكرة / مهارة...
 Prompt,الموجّه
 Prompt Template,قالب الموجّه
+Prompt Template {0} is disabled.,قالب الموجّه {0} معطَّل.
 Prompt Templates,قوالب الموجّهات
 Prompt Tokens,رموز الموجّه
+Prompt variable {0} is required.,متغير الموجّه {0} مطلوب.
 Provenance,المصدر
+Provenance is missing.,المصدر مفقود.
+Provenance is recorded.,تم تسجيل المصدر.
+Provenance: {0},المصدر: {0}
 Provider,المزوّد
 Provider Name,اسم المزوّد
+Provider returned a non-JSON response.,أعاد المزوّد استجابة ليست JSON.
+Provider Status,حالة المزوّد
 Provider Type,نوع المزوّد
+Provider {0},المزوّد {0}
+Provider {0} request failed: {1},فشل طلب المزوّد {0}: {1}
+Provider {0} request was refused: {1},رُفض طلب المزوّد {0}: {1}
+Provider {0} returned HTTP {1}: {2},أعاد المزوّد {0} كود HTTP {1}: {2}
+Provider {0} was not called: {1},لم يتم استدعاء المزوّد {0}: {1}
 Providers,المزوّدون
+Providers Online,المزوّدون المتصلون
+Public,عام
 Pulled On,سُحب بتاريخ
+Purge,تطهير
+Purge Logs,تطهير السجلات
+Purge Old Logs,تطهير السجلات القديمة
 Quality,الجودة
 Quality Score,درجة الجودة
+Quality {0}%,الجودة {0}%
 Quantization,التكميم
 Query,الاستعلام
 Question,سؤال
 Queue,قائمة الانتظار
+Queue data unavailable.,بيانات قائمة الانتظار غير متاحة.
 Queue Time (ms),زمن قائمة الانتظار (مللي ثانية)
 Queued,في قائمة الانتظار
+Queued for indexing,في قائمة الانتظار للفهرسة
+Queued for processing,في قائمة الانتظار للمعالجة
+Queued for translation,في قائمة الانتظار للترجمة
+Quick Test,اختبار سريع
+Quota Exceeded,تم تجاوز الحصة
 Rate Limit / Minute,حد المعدل / الدقيقة
+Re-enable this skill?,إعادة تفعيل هذه المهارة؟
+Re-index All,إعادة فهرسة الكل
+Re-indexing Required,إعادة الفهرسة مطلوبة
+Re-process,إعادة المعالجة
+Re-process {0} document(s)?,إعادة معالجة {0} مستند؟
+Re-translate,إعادة الترجمة
+Re-translate segment,إعادة ترجمة المقطع
+Re-translate segment {0},إعادة ترجمة المقطع {0}
+Re-translating...,جارٍ إعادة الترجمة...
 Read Only,للقراءة فقط
 Reader Used,القارئ المستخدم
+Reading model list...,جارٍ قراءة قائمة النماذج...
 "Real-time health, usage and configuration of the local AI platform.",السلامة والاستخدام والإعدادات لمنصة الذكاء الاصطناعي المحلية في الوقت الفعلي.
+Reason,السبب
 Reasoning,الاستدلال
+Recalled Memories,الذكريات المستدعاة
+Recent,الحديث
+Recent Documents,المستندات الحديثة
+Recent Failures,الإخفاقات الحديثة
+"Recommended embeddings, ~274 MB",تضمينات موصى بها، ~274 ميغابايت
 "Record search telemetry (query text, result identifiers, scores and bounded snippets). Values are passed through the configured redaction patterns before persistence; full result content is never stored. Rows are removed by the scheduled retention cleanup.",سجّل قياس البحث عن بُعد (نص الاستعلام، معرّفات النتائج، الدرجات، ومقتطفات محدودة). تُمرَّر القيم عبر أنماط التنقيح المُهيَّأة قبل الحفظ؛ لا يُخزَّن أبداً محتوى النتيجة الكامل. تُزال الصفوف بواسطة تنظيف الاحتفاظ المجدول.
+Recorded By: {0},سُجّل بواسطة: {0}
+Recursive copy of {0} was queued.,تم إدراج النسخ العودي لـ {0} في قائمة الانتظار.
+Recursive deletion of {0} was queued.,تم إدراج الحذف العودي لـ {0} في قائمة الانتظار.
+Recursive move of {0} was queued.,تم إدراج النقل العودي لـ {0} في قائمة الانتظار.
 Redaction Patterns,أنماط التنقيح
 Reference,المرجع
 Reference DocType,نوع مستند المرجع
@@ -629,21 +942,34 @@ Reference Document Type,نوع مستند المرجع
 Reference Name,اسم المرجع
 Reference to a resource or approval policy governing access to this folder (informational; actual permission uses Frappe sharing).,مرجع إلى سياسة موارد أو موافقة تحكم الوصول إلى هذا المجلد (للاطلاع؛ الإذن الفعلي يستخدم مشاركة Frappe).
 Refresh,تحديث
+Refresh Metadata,تحديث البيانات الوصفية
+Refresh Statistics,تحديث الإحصاءات
 Register,تسجيل
+Registered,مسجَّل
+Reject,رفض
 Rejected,مرفوض
 Rejected At,رُفض في
 Rejected By,رُفض بواسطة
+Relevance,الصلة
+Remove,إزالة
+Remove Folder from Favorites,إزالة المجلد من المفضلة
 Rename,إعادة تسمية
+Rename Conversation,إعادة تسمية المحادثة
+Rename…,إعادة تسمية…
 Repair Flagged Segments,إصلاح المقاطع المعلَّمة
 Repeat Penalty,عقوبة التكرار
 Report,تقرير
 Reports,التقارير
+reprocess,إعادة المعالجة
+req,طلب
 Request Payload,حمولة الطلب
 Request Timeout (s),مهلة الطلب (ثوانٍ)
 Requested At,طُلب في
 Requested By,طُلب بواسطة
 Requested On,طُلب بتاريخ
 Requests,الطلبات
+requests,طلبات
+Requests (24h),الطلبات (24س)
 Require Approval for Learned Knowledge,طلب الموافقة على المعرفة المتعلَّمة
 Require Approval for Write Tools,طلب الموافقة على أدوات الكتابة
 Required,مطلوب
@@ -657,6 +983,7 @@ Resource Policies,سياسات الموارد
 Response,الرد
 Response Format,تنسيق الرد
 Response Payload,حمولة الرد
+Restore Archived,استعادة المؤرشف
 Restrict to Roles,التقييد بالأدوار
 Result,النتيجة
 Result Data,بيانات النتيجة
@@ -665,58 +992,101 @@ Results,النتائج
 Retries,المحاولات
 Retrieval,الاسترجاع
 Retrieval Brute-Force Ceiling,سقف الاسترجاع بالقوة الغاشمة
+Retrieval diagnostics,تشخيصات الاسترجاع
 Retrieval Top K,أعلى K للاسترجاع
 Retry,إعادة المحاولة
 Retry a failed segment once with a stricter prompt naming the defect.,أعد محاولة مقطع فاشل مرة واحدة بموجّه أكثر صرامة يسمّي العيب.
+Retry Last,إعادة محاولة الأخير
+Retry Processing,إعادة محاولة المعالجة
+Returned {0}-dimensional embeddings.,أعادت تضمينات ذات {0} بُعد.
 Reused,معاد استخدامه
+reused,معاد استخدامه
 Reused From Memory,معاد استخدامه من الذاكرة
+Review,مراجعة
+Review Flagged Only,مراجعة المعلَّم فقط
+Review Segments,مراجعة المقاطع
+Review Translation,مراجعة الترجمة
+Review {0},مراجعة {0}
 Reviewed,تمت مراجعته
 Role,الدور
+Row {0}: a pipeline cannot call itself.,الصف {0}: خط الأنابيب لا يمكنه استدعاء نفسه.
+Row {0}: Field Name is required.,الصف {0}: اسم الحقل مطلوب.
+Row {0}: Field Name {1} is duplicated.,الصف {0}: اسم الحقل {1} مكرر.
+Row {0}: step name {1} is duplicated.,الصف {0}: اسم الخطوة {1} مكرر.
+Row {0}: {1},الصف {0}: {1}
+Row {0}: {1} is required for a {2} step.,الصف {0}: {1} مطلوب لخطوة {2}.
 Rule Name,اسم القاعدة
 Rule Result,نتيجة القاعدة
 Rule {0} has no categories configured.,القاعدة {0} بلا فئات مُهيَّأة.
 Rules,القواعد
 Run,تشغيل
 Run Agent,تشغيل الوكيل
+Run Discover Models on your provider.,شغّل «اكتشاف النماذج» على مزوّدك.
 Run Now,تشغيل الآن
 Run Pipeline,تشغيل خط الأنابيب
 Run Quality Checks,تشغيل فحوصات الجودة
 Run {0} started.,بدأ التشغيل {0}.
 Running,قيد التشغيل
+Running a probe prompt...,جارٍ تشغيل موجّه فحص...
 Running rule...,جارٍ تشغيل القاعدة...
+Running...,جارٍ التشغيل...
 Runs,التشغيلات
 Runtime Model Name,اسم نموذج التشغيل
+Sample Text,نص عيّنة
 Save,حفظ
 Scan,مسح
+Scanning patterns...,جارٍ مسح الأنماط...
 Scheduled,مجدول
 Schema Name,اسم المخطط
 Scope,النطاق
 Scope Value,قيمة النطاق
 Score,الدرجة
 Search,بحث
+Search conversations,بحث في المحادثات
+Search failed.,فشل البحث.
+Search folders and documents,البحث في المجلدات والمستندات
 Search Queries,استعلامات البحث
+Search query,استعلام البحث
 Search Type,نوع البحث
+Search type,نوع البحث
+Searching...,جارٍ البحث...
 Security,الأمن
 Segment Size (characters),حجم المقطع (محارف)
 Segments,المقاطع
 Segments per Model Call,المقاطع لكل استدعاء نموذج
 Segments reused from the translation memory.,مقاطع أُعيد استخدامها من ذاكرة الترجمة.
 Select,تحديد
+Select an Extraction Schema first.,اختر مخطط استخراج أولاً.
+Select at least one document.,اختر مستنداً واحداً على الأقل.
+Select at least one file or folder.,اختر ملفاً أو مجلداً واحداً على الأقل.
+Select at least one item.,اختر عنصراً واحداً على الأقل.
+Select Destination Folder,اختر مجلد الوجهة
+Select exactly one file or folder.,اختر ملفاً أو مجلداً واحداً بالضبط.
 Semantic,دلالي
+semantic,دلالي
+Send feedback,إرسال ملاحظات
 Separator,الفاصل
 Sequence,التسلسل
 Series,التسلسل
 Server Method,طريقة الخادم
 Service Health Logs,سجلات صحة الخدمة
+Set Default,تعيين افتراضي
+Setup incomplete,الإعداد غير مكتمل
 Severity,الخطورة
 Shared destination folder used as the default for non-attachment uploads and platform output. Must be a full File folder name (e.g. Home/AI Platform). Only applied when the uploading user has write access to the folder; otherwise the shared uploads folder is used.,مجلد وجهة مشترك يُستخدم كافتراضي للمرفوعات غير المُرفَقة ومخرجات المنصة. يجب أن يكون اسم مجلد ملفات كاملاً (مثلاً Home/AI Platform). لا يُطبَّق إلا حين يملك المستخدم الرافع صلاحية كتابة على المجلد؛ وإلا يُستخدم مجلد المرفوعات المشترك.
 Shown to the model. Be explicit about when to use this tool.,يُعرَض للنموذج. كن صريحاً حول متى تُستخدم هذه الأداة.
 Similarity Threshold,عتبة التشابه
 Size (bytes),الحجم (بايت)
+Skill disabled,المهارة معطَّلة
+Skill enabled,المهارة مُفعَّلة
+Skill ID,معرّف المهارة
+Skill instructions cannot be empty.,لا يمكن أن تكون تعليمات المهارة فارغة.
 Skill Name,اسم المهارة
 Skill Summary,ملخص المهارة
+Skill Type,نوع المهارة
 Skills,المهارات
 Skipped,متجاوز
+"Small and capable, ~2.3 GB",صغير وقادر، ~2.3 غيغابايت
 "Snake case identifier exposed to the model, e.g. search_knowledge_base",معرّف بصيغة snake_case يُعرَض للنموذج، مثلاً search_knowledge_base
 Source,المصدر
 Source Candidate,مرشح المصدر
@@ -728,12 +1098,22 @@ Source Document,مستند المصدر
 Source Field,حقل المصدر
 Source File,ملف المصدر
 Source File Record,سجل ملف المصدر
+Source File record {0} does not exist.,سجل ملف المصدر {0} غير موجود.
 Source Folder Path,مسار مجلد المصدر
 Source Language,لغة المصدر
 Source Name,اسم المصدر
+Source record {0} {1} does not exist.,سجل المصدر {0} {1} غير موجود.
+Source Record: {0} {1},سجل المصدر: {0} {1}
 Source Text,نص المصدر
 Source Type,نوع المصدر
+Source type {0} is not supported.,نوع المصدر {0} غير مدعوم.
+Source Type: {0},نوع المصدر: {0}
 Source URL,عنوان URL للمصدر
+Source User,مستخدم المصدر
+Source user and type are recorded.,تم تسجيل مستخدم المصدر والنوع.
+Source user or type is invalid.,مستخدم أو نوع المصدر غير صالح.
+Sources,المصادر
+sources,مصادر
 Stable display name within the parent folder. Tree operations enforce uniqueness without conflating it with the document ID or checksum.,اسم عرض ثابت داخل المجلد الأصل. تفرض عمليات الشجرة الفرادة دون خلطه بمعرّف المستند أو مجموع التحقق.
 Stable File record identity for file-backed documents; source_file remains the canonical attachment URL.,هوية سجل ملف ثابتة للمستندات المستندة إلى ملف؛ يبقى source_file هو عنوان URL المرجعي للمرفق.
 Stale,قديم
@@ -742,14 +1122,21 @@ Started At,بدأ في
 Statistics,الإحصاءات
 Status,الحالة
 Step,الخطوة
+Step '{0}' failed: {1},فشلت الخطوة '{0}': {1}
 Step Log,سجل الخطوة
 Step Logs,سجلات الخطوات
 Steps,الخطوات
 Stop,إيقاف
+Stop Generation,إيقاف التوليد
+Stop generation,إيقاف التوليد
 Stop Sequences,تسلسلات الإيقاف
 Storage & Retention,التخزين والاحتفاظ
 Storage Folder,مجلد التخزين
+Storage Folder must be a folder.,«مجلد التخزين» يجب أن يكون مجلداً.
+Storage Folder {0} does not exist.,«مجلد التخزين» {0} غير موجود.
+Strategy,الاستراتيجية
 Streaming,بث مباشر
+Strict Local Only,محلي صارم فقط
 Strict Local Only Mode,الوضع الصارم المحلي فقط
 Strict Schema,مخطط صارم
 String,نص
@@ -761,9 +1148,16 @@ Subject,الموضوع
 "Subject domain, for example ""construction contracts"" or ""medical records"".","نطاق الموضوع، مثلاً ""عقود الإنشاء"" أو ""السجلات الطبية""."
 Success,نجاح
 Successful,ناجح
+Suggested Models,النماذج المقترحة
+Summarise,تلخيص
+Summarise Conversation,تلخيص المحادثة
+Summarise this {0}.,لخّص هذا {0}.
+Summarising...,جارٍ التلخيص...
 Summarization,تلخيص
 Summarize,تلخيص
+summarize,تلخيص
 Summary,الملخص
+Supported Formats,التنسيقات المدعومة
 Supports JSON Mode,يدعم وضع JSON
 Supports Streaming,يدعم البث
 Supports Tool Calling,يدعم استدعاء الأدوات
@@ -774,41 +1168,92 @@ System Prompt Override,تجاوز موجّه النظام
 System-generated source attribution. This value cannot be supplied by a model or client.,إسناد مصدر مولَّد نظامياً. لا يمكن أن يُقدَّم هذه القيمة نموذج أو عميل.
 Tag,الوسم
 Tags,الوسوم
+Target agent does not exist.,الوكيل الهدف غير موجود.
 Target characters per chunk. Larger windows keep more context but reduce retrieval precision.,المحارف المستهدفة لكل جزء. النوافذ الأكبر تحفظ سياقاً أكثر لكنها تخفض دقة الاسترجاع.
 Target DocType,نوع المستند الهدف
 Target DocType (Unsupported),نوع المستند الهدف (غير مدعوم)
 Target Field,الحقل الهدف
+Target folder,المجلد الهدف
 Target Language,اللغة الهدف
 Target language for the Translate action.,اللغة الهدف لإجراء الترجمة.
 Target Report,التقرير الهدف
+Target role does not exist.,الدور الهدف غير موجود.
 Target Scope,النطاق الهدف
+Target scope is invalid.,النطاق الهدف غير صالح.
+Target scope is valid.,النطاق الهدف صالح.
 Target Scope Value,قيمة النطاق الهدف
+Target user does not exist.,المستخدم الهدف غير موجود.
 Task Type,نوع المهمة
 Tasks,المهام
+Teach,تعليم
+Teach AI,تعليم الذكاء الاصطناعي
+Teach the AI,علِّم الذكاء الاصطناعي
 "Teach the platform facts, preferences and procedures. Candidates are validated for provenance, tested for conflicts, approved by an AI Manager, and become persistent memories and skills that shape future answers.",علّم المنصة الحقائق والتفضيلات والإجراءات. يتم التحقق من مصدر المرشحين واختبارهم للتعارضات واعتمادهم من قِبل مدير الذكاء الاصطناعي ليصبحوا ذكريات ومهارات دائمة تشكّل الإجابات المستقبلية.
+Teaching content cannot be empty.,لا يمكن أن يكون محتوى التعليم فارغاً.
 Teaching User,المستخدم المُعَلِّم
+Teaching user {0} does not exist.,المستخدم المُعَلِّم {0} غير موجود.
+Teaching User: {0},المستخدم المُعَلِّم: {0}
 Technical,تقني
 Technical beta only. Disable until SEC-01/TRN-01 enforce authorized KB scope and policy-safe identity on every translation path.,نسخة تقنية تجريبية فقط. عطّل إلى حين فرض SEC-01/TRN-01 لنطاق قاعدة معرفة مصرّح به وهوية آمنة سياسياً على كل مسار ترجمة.
 Temperature,الحرارة
+Temperature must be between 0 and 2.,«الحرارة» يجب أن تكون بين 0 و 2.
 Template Name,اسم القالب
+Template Preview,معاينة القالب
 Terminology,المصطلحات
 Terms,المصطلحات
+Test,اختبار
+Test Agent,اختبار الوكيل
+Test All,اختبار الكل
+Test All Providers,اختبار جميع المزوّدين
 Test Automation Rule,اختبار قاعدة الأتمتة
+Test Connection,اختبار الاتصال
+Test Extraction,اختبار الاستخراج
+Test Model,اختبار النموذج
 Test on a Document,اختبار على مستند
+Test on Sample Text,اختبار على نص عيّنة
+Testing providers...,جارٍ اختبار المزوّدين...
 Testing Status,حالة الاختبار
+Testing...,جارٍ الاختبار...
 Text,نص
+text,نص
 Text Direction,اتجاه النص
 The file extension leaves no room for a copy name.,امتداد الملف لا يترك مجالاً لاسم نسخة.
+The folder operation failed.,فشلت عملية المجلد.
+The indexed document {0} was kept.,تم الاحتفاظ بالمستند المفهرَس {0}.
+The model could not start.,تعذّر بدء النموذج.
+The originating record does not exist.,السجل المنشِئ غير موجود.
+The parent Pipeline Run does not exist.,تشغيل خط الأنابيب الأصل غير موجود.
+The request failed.,فشل الطلب.
+The root folder cannot be copied.,لا يمكن نسخ المجلد الجذر.
+The root folder cannot be deleted.,لا يمكن حذف المجلد الجذر.
+The root folder cannot be moved.,لا يمكن نقل المجلد الجذر.
+The root folder cannot be renamed.,لا يمكن إعادة تسمية المجلد الجذر.
 The selected item no longer exists.,العنصر المحدد لم يعد موجوداً.
 The selected subtree changed after this operation was queued. Refresh and try again.,تغيّرت الشجرة الفرعية المحددة بعد إدراج هذه العملية في قائمة الانتظار. حدِّث ثم أعد المحاولة.
 The selected subtree changed. Refresh and try again.,تغيّرت الشجرة الفرعية المحددة. حدِّث ثم أعد المحاولة.
+The selected tree node cannot be copied.,لا يمكن نسخ عقدة الشجرة المحددة.
+The selected tree node cannot be moved.,لا يمكن نقل عقدة الشجرة المحددة.
+The source document no longer exists.,مستند المصدر لم يعد موجوداً.
+The source URL is invalid.,عنوان URL للمصدر غير صالح.
+The text is already in {0}.,النص موجود بالفعل في {0}.
+The tool has no valid runtime limit.,الأداة بلا حد وقت تشغيل صالح.
+The uploaded file could not be read.,تعذّر قراءة الملف المرفوع.
+The {0} reader could not parse {1}: {2},قارئ {0} لم يتمكن من تحليل {1}: {2}
 This item changed after the tree was loaded. Refresh and try again.,تغيّر هذا العنصر بعد تحميل الشجرة. حدِّث ثم أعد المحاولة.
+This translation is already running.,هذه الترجمة قيد التشغيل بالفعل.
+This turn was cancelled.,أُلغي هذا الدور.
 Threads,الخيوط
 Times Recalled,مرات الاستدعاء
 Times Used,مرات الاستخدام
 Title,العنوان
+To Date,إلى تاريخ
+Toggle context panel,تبديل لوحة السياق
+tok,رمز
+tok/s,رمز/ث
 Token Count,عدد الرموز
 Tokens,الرموز
+tokens,رموز
+Tokens (24h),الرموز (24س)
 Tokens / Second,الرموز / الثانية
 Tool,أداة
 Tool Call,استدعاء أداة
@@ -816,49 +1261,100 @@ Tool Call ID,معرّف استدعاء الأداة
 Tool Invocations,استدعاءات الأدوات
 Tool Name,اسم الأداة
 Tool Result,نتيجة الأداة
+Tool Schema,مخطط الأداة
 Tool Sensitive Fields,الحقول الحساسة للأداة
 Tool Type,نوع الأداة
+Tool {0} failed.,فشلت الأداة {0}.
+Tool {0} has no handler configured.,الأداة {0} بلا معالج مُهيَّأ.
+Tool {0} has no target DocType.,الأداة {0} بلا نوع مستند هدف.
+Tool {0} has no target report.,الأداة {0} بلا تقرير هدف.
+Tool {0} is disabled.,الأداة {0} معطَّلة.
+Tool {0} is not enabled for agent {1}.,الأداة {0} غير مُفعَّلة للوكيل {1}.
+Tool {0} requires argument {1}.,الأداة {0} تتطلب الوسيط {1}.
 Tools,الأدوات
 Top K,أعلى K
+Top Models,أفضل النماذج
 Top P,أعلى P
+Top P must be between 0 and 1.,Top P يجب أن يكون بين 0 و 1.
 Top Score,أعلى درجة
+Top Users (7 days),أهم المستخدمين (7 أيام)
 Total Characters,إجمالي المحارف
 Total Requests,إجمالي الطلبات
 Total Tokens,إجمالي الرموز
 Traceback,تتبّع المكدس
 Translate,ترجمة
+Translate in Foreground,الترجمة في المقدمة
+Translate Into,الترجمة إلى
+Translate Now,ترجمة الآن
+Translate {0},ترجمة {0}
 Translated,مترجَم
 Translated Characters,المحارف المترجمة
 Translated Document,المستند المترجم
 Translated Text,النص المترجم
+Translated {0} into {1}.,تُرجم {0} إلى {1}.
+Translate…,ترجمة…
 Translating,جارٍ الترجمة
+Translating...,جارٍ الترجمة...
 Translation,الترجمة
 Translation Glossaries,مسارد الترجمة
 Translation memory key for this source text and language pair.,مفتاح ذاكرة الترجمة لهذا النص المصدر وزوج اللغات.
 Translation Options,خيارات الترجمة
+Translation queued,تم إدراج الترجمة في قائمة الانتظار
+Translation to {0} is not supported.,الترجمة إلى {0} غير مدعومة.
+Translation {0} does not exist.,الترجمة {0} غير موجودة.
 Translations,الترجمات
+Tree,الشجرة
+Tree updated,تم تحديث الشجرة
 Trigger,المشغّل
 Triggered By,شُغّل بواسطة
 Turn,الدور
 Turn ID,معرّف الدور
 Type,النوع
+Type is valid.,النوع صالح.
 Unknown,غير معروف
+unknown,غير معروف
+Unknown error,خطأ غير معروف
+Unsupported action {0}.,الإجراء {0} غير مدعوم.
+Unsupported candidate type {0}.,نوع المرشح {0} غير مدعوم.
+Unsupported folder sort order.,ترتيب فرز المجلدات غير مدعوم.
+Unsupported source type {0}.,نوع المصدر {0} غير مدعوم.
+Unsupported step type {0}.,نوع الخطوة {0} غير مدعوم.
+Unsupported tool type {0}.,نوع الأداة {0} غير مدعوم.
+Untitled,بلا عنوان
 Updated,تم التحديث
 Upload,رفع
+Upload could not be ingested,تعذّر استيعاب الملف المرفوع
 Upload Document,رفع مستند
+Upload your first document,ارفع أول مستند لك
 Upper bound of distinct pattern entities stored per document scan. The scan itself samples at most 1 MB of extracted text (head and tail).,الحد الأعلى لكيانات النمط المميّزة المخزَّنة لكل مسح مستند. يأخذ المسح نفسه عينة لا تتجاوز 1 ميغابايت من النص المستخرَج (البداية والنهاية).
 Urgent,عاجل
+URL fetch ended without a document.,انتهى جلب عنوان URL دون مستند.
+URL response could not be read: {0},تعذّر قراءة استجابة عنوان URL: {0}
+URL returned an empty document.,أعاد عنوان URL مستنداً فارغاً.
+URL returned HTTP {0}.,أعاد عنوان URL كود HTTP {0}.
 Usage,الاستخدام
+Usage Snapshot,لقطة الاستخدام
 Usage Snapshots,لقطات الاستخدام
 Use Knowledge Retrieval,استخدام استرجاع المعرفة
 Use Translation Memory,استخدام ذاكرة الترجمة
+Used,مستخدم
 User,المستخدم
 User Agent,وكيل المستخدم
 User Prompt,موجّه المستخدم
+User {0} cannot process AI Document {1}.,المستخدم {0} لا يستطيع معالجة مستند الذكاء الاصطناعي {1}.
+User {0} cannot read AI Document {1}.,المستخدم {0} لا يستطيع قراءة مستند الذكاء الاصطناعي {1}.
+User {0} cannot read source File {1}.,المستخدم {0} لا يستطيع قراءة ملف المصدر {1}.
+User-Provided Context (Unverified): {0},سياق قدّمه المستخدم (غير متحقَّق منه): {0}
+Users with this Role,المستخدمون بهذا الدور
+Validate & Test,تحقّق واختبر
 Validated,متحقَّق منه
 Validation,التحقق
+Validation failed: {0},فشل التحقق: {0}
 Validation Notes,ملاحظات التحقق
 Value,القيمة
+value,قيمة
+Value is required.,القيمة مطلوبة.
+Values must be a JSON object.,يجب أن تكون القيم كائن JSON.
 Variable,المتغير
 Variables,المتغيرات
 Vector Norm,معيار المتجه
@@ -867,18 +1363,63 @@ Verify this many segments per document by translating them back and comparing em
 Version,الإصدار
 Versions (Unsupported),الإصدارات (غير مدعوم)
 View,عرض
+View Agent,عرض الوكيل
+View Chunks,عرض الأجزاء
+View Conversation,عرض المحادثة
+View Data,عرض البيانات
+View Learning Dashboard,عرض لوحة التعلّم
+View List,عرض القائمة
+View Messages,عرض الرسائل
+View Models,عرض النماذج
+View Patterns,عرض الأنماط
+View Related,عرض المرتبط
+View Translations,عرض الترجمات
 Visible to all AI Users,مرئي لكل مستخدمي الذكاء الاصطناعي
 Vision,رؤية
+Waiting for the local model…,بانتظار النموذج المحلي…
 Warning,تحذير
+Warnings unavailable — retry.,التحذيرات غير متاحة — أعد المحاولة.
 Weight,الوزن
+What does our refund policy say?,ماذا تقول سياسة الاسترداد لدينا؟
+What would you like to teach?,ماذا تريد أن تعلِّم؟
 "When enabled, taught facts, preferences and instructions wait for an AI Manager to approve them before they affect future answers.",عند التمكين، تنتظر الحقائق والتفضيلات والتعليمات المُعلَّمة موافقة مدير الذكاء الاصطناعي قبل أن تؤثر على الإجابات المستقبلية.
 "Whitespace that follows this segment in the source, so the document reassembles exactly.",المسافات البيضاء التي تتبع هذا المقطع في المصدر، حتى تُعاد تجميع المستند تماماً.
 Words,الكلمات
 Workflow,سير العمل
 Yes,نعم
+You are not permitted to read {0} {1}.,لا يُسمح لك بقراءة {0} {1}.
+You are not permitted to read {0}.,لا يُسمح لك بقراءة {0}.
+You are not permitted to use agent {0}.,لا يُسمح لك باستخدام الوكيل {0}.
 You are not permitted to use the agent {0}.,لا يُسمح لك باستخدام الوكيل {0}.
+You cannot cancel this document.,لا يمكنك إلغاء هذا المستند.
+You cannot create items in this folder.,لا يمكنك إنشاء عناصر في هذا المجلد.
 You do not have permission for the complete folder subtree.,لا تملك إذناً للشجرة الفرعية للمجلد بالكامل.
+{0} cannot be negative.,{0} لا يمكن أن يكون سالباً.
+{0} Chunks,{0} أجزاء
+{0} chunks,{0} أجزاء
+{0} contains unsupported characters.,{0} يحتوي على محارف غير مدعومة.
+{0} conversations,{0} محادثة
+{0} document(s) moved.,تم نقل {0} مستند.
+{0} document(s) queued.,تم إدراج {0} مستند في قائمة الانتظار.
+{0} embedded,{0} مضمَّن
 {0} failures,{0} إخفاقات
+{0} file(s) copied.,تم نسخ {0} ملف.
+{0} flagged,{0} معلَّم
+{0} has no field named {1}.,{0} ليس فيه حقل باسم {1}.
+{0} installed.,تم تثبيت {0}.
+{0} is not a purgeable log type.,{0} ليس نوع سجل قابلاً للتطهير.
+{0} is not a valid cron expression.,{0} ليس تعبير Cron صالحاً.
+{0} is not an embedding model.,{0} ليس نموذج تضمين.
+{0} is required for a {1} tool.,{0} مطلوب لأداة {1}.
+{0} is required for the {1} action.,{0} مطلوب لإجراء {1}.
+{0} is required.,{0} مطلوب.
+{0} item(s) moved.,تم نقل {0} عنصر.
+{0} messages,{0} رسالة
+{0} model(s) available · {1} ms,{0} نموذج متاح · {1} مللي ثانية
+{0} ms avg,{0} مللي ثانية متوسط
+{0} must be a JSON array.,{0} يجب أن يكون مصفوفة JSON.
+{0} must be a list.,{0} يجب أن يكون قائمة.
+{0} must be at least {1}.,{0} يجب أن يكون على الأقل {1}.
 {0} must be one of: {1}.,{0} يجب أن يكون واحداً من: {1}.
 {0} of {1} providers are online.,{0} من {1} مزوّد متصل.
 {0} passages,{0} مقاطع
