@@ -55,7 +55,14 @@ Local (no bench):
 - `node --test ai_fr_hg/tests/js/test_frontend_ui.mjs` — PASS, 16
 - `python3 -m compileall -q ai_fr_hg` — PASS
 
-Hosted bench integration (API trigger, schedule claim, ingest trigger, nested approval resume, task role matrix, delete snapshot) is committed for Server CI.
+Hosted Frappe v17 bench on SHA `a89d809`:
+
+| Check | Result | Run |
+| --- | --- | --- |
+| Server | **pass** 2m52s | [32459427515](https://github.com/Oscar-Hyde/ai_fr_hg/actions/runs/32459427515) |
+| Linter / Frontend static / Dependency audit | **pass** | [32459427224](https://github.com/Oscar-Hyde/ai_fr_hg/actions/runs/32459427224) |
+
+PR: [#41](https://github.com/Oscar-Hyde/ai_fr_hg/pull/41)
 
 ## Remaining issues
 
