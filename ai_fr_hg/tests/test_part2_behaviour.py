@@ -1,0 +1,890 @@
+# Copyright (c) 2026, Ai Fr Hg and contributors
+# For license information, please see license.txt
+
+"""Executing behaviour tests for the Part 2 platform requirements.
+
+These replace the source-text assertions in `test_part2_platform_contracts.py`
+with tests that **run the application's own functions** against the in-memory
+bench in `fakebench.py`, then assert on observed state and return values.
+
+Why this matters: a test of the form ``assertIn("last_scanned_on", source)``
+passes when the field is written to the wrong row, when the value is `None`,
+and when the function raises before reaching it. It fails when someone renames
+a local variable. It measures text, not behaviour.
+
+Scope honesty: the harness models Frappe's *observable semantics*, not a
+database. These tests prove control flow, state transitions, filtering,
+idempotency, error handling and side effects. They do **not** prove SQL,
+isolation levels, index usage, or migrations — that remains bench work.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from unittest import TestCase
+
+from ai_fr_hg.tests.fakebench import FakeBench, ValidationError, import_app, install
+
+APP = Path(__file__).resolve().parents[1]
+
+LOG_DOCTYPES = (
+	"AI Execution Log",
+	"AI Service Health Log",
+	"AI Audit Log",
+	"AI Search Query",
+)
+
+
+def _bench_with_logs(**retention) -> FakeBench:
+	bench = install(FakeBench())
+	for doctype in LOG_DOCTYPES:
+		bench.register_doctype(doctype, [{"fieldname": "name"}, {"fieldname": "creation"}])
+	bench.register_doctype("AI Platform Settings", [], is_single=True)
+	bench.db.singles["AI Platform Settings"] = {
+		"execution_log_retention_days": 0,
+		"health_log_retention_days": 0,
+		"audit_log_retention_days": 0,
+		**retention,
+	}
+	return bench
+
+
+def _seed(bench, doctype, count, creation, prefix="R"):
+	for index in range(count):
+		bench.db.insert_row(doctype, {"name": f"{prefix}-{index:05d}", "creation": creation})
+
+
+# ---------------------------------------------------------------------------
+# §20.4 / §26 / §27 — retention actually deletes the right rows
+# ---------------------------------------------------------------------------
+
+
+class TestRetentionBehaviour(TestCase):
+	OLD = "2020-01-01 00:00:00"
+	RECENT = "2026-08-21 00:00:00"
+
+	def test_only_expired_rows_are_deleted(self):
+		bench = _bench_with_logs(execution_log_retention_days=30)
+		_seed(bench, "AI Execution Log", 1200, self.OLD, prefix="OLD")
+		_seed(bench, "AI Execution Log", 5, self.RECENT, prefix="NEW")
+
+		tasks = import_app("ai_fr_hg.tasks")
+
+		tasks.cleanup_logs()
+
+		survivors = sorted(bench.get_all("AI Execution Log", pluck="name"))
+		self.assertEqual(len(survivors), 5)
+		self.assertTrue(all(name.startswith("NEW-") for name in survivors))
+
+	def test_deletion_is_committed_per_batch_not_once_at_the_end(self):
+		"""Per-batch commits are what make an interrupted run resumable."""
+		bench = _bench_with_logs(execution_log_retention_days=30)
+		_seed(bench, "AI Execution Log", 1200, self.OLD)
+
+		tasks = import_app("ai_fr_hg.tasks")
+
+		tasks.cleanup_logs()
+
+		# 1200 rows / 500 per batch = 3 batches, so 3 commits.
+		self.assertEqual(bench.db.committed, 3)
+
+	def test_a_run_stops_at_the_ceiling_and_reports_the_remainder(self):
+		bench = _bench_with_logs()
+		_seed(bench, "AI Execution Log", 25_000, self.OLD)
+
+		tasks = import_app("ai_fr_hg.tasks")
+
+		result = tasks.delete_expired_rows("AI Execution Log", "2026-01-01")
+
+		self.assertEqual(result["deleted"], tasks.CLEANUP_MAX_PER_RUN)
+		self.assertTrue(result["remaining"])
+		# The backlog survives for the next run rather than being lost.
+		self.assertEqual(bench.db.count("AI Execution Log"), 25_000 - tasks.CLEANUP_MAX_PER_RUN)
+
+	def test_the_next_run_resumes_and_finishes_the_backlog(self):
+		bench = _bench_with_logs()
+		_seed(bench, "AI Execution Log", 25_000, self.OLD)
+
+		tasks = import_app("ai_fr_hg.tasks")
+
+		first = tasks.delete_expired_rows("AI Execution Log", "2026-01-01")
+		second = tasks.delete_expired_rows("AI Execution Log", "2026-01-01")
+
+		self.assertTrue(first["remaining"])
+		self.assertFalse(second["remaining"])
+		self.assertEqual(bench.db.count("AI Execution Log"), 0)
+
+	def test_zero_retention_disables_deletion_for_that_doctype(self):
+		bench = _bench_with_logs(execution_log_retention_days=0)
+		_seed(bench, "AI Execution Log", 10, self.OLD)
+
+		tasks = import_app("ai_fr_hg.tasks")
+
+		tasks.cleanup_logs()
+		self.assertEqual(bench.db.count("AI Execution Log"), 10)
+
+	def test_a_failing_doctype_does_not_stop_the_others(self):
+		bench = _bench_with_logs(execution_log_retention_days=30, audit_log_retention_days=30)
+		_seed(bench, "AI Execution Log", 3, self.OLD, prefix="E")
+		_seed(bench, "AI Audit Log", 3, self.OLD, prefix="A")
+
+		tasks = import_app("ai_fr_hg.tasks")
+
+		original = tasks.delete_expired_rows
+		calls: list[str] = []
+
+		def flaky(doctype, cutoff, **kwargs):
+			calls.append(doctype)
+			if doctype == "AI Execution Log":
+				raise RuntimeError("table is locked")
+			return original(doctype, cutoff, **kwargs)
+
+		tasks.delete_expired_rows = flaky
+		try:
+			tasks.cleanup_logs()
+		finally:
+			tasks.delete_expired_rows = original
+
+		# The failure was recorded, and the later DocType still ran.
+		self.assertEqual(bench.db.count("AI Execution Log"), 3)
+		self.assertEqual(bench.db.count("AI Audit Log"), 0)
+		self.assertTrue(any("retention cleanup failed" in (e["title"] or "") for e in bench.errors))
+
+	def test_search_queries_use_the_fixed_thirty_day_window(self):
+		bench = _bench_with_logs()
+		_seed(bench, "AI Search Query", 4, self.OLD, prefix="Q")
+		_seed(bench, "AI Search Query", 2, self.RECENT, prefix="QNEW")
+
+		tasks = import_app("ai_fr_hg.tasks")
+
+		tasks.cleanup_logs()
+		survivors = bench.get_all("AI Search Query", pluck="name")
+		self.assertEqual(sorted(survivors), ["QNEW-00000", "QNEW-00001"])
+
+	def test_nothing_to_delete_is_a_no_op(self):
+		bench = _bench_with_logs(execution_log_retention_days=30)
+
+		tasks = import_app("ai_fr_hg.tasks")
+
+		result = tasks.delete_expired_rows("AI Execution Log", "2026-01-01")
+		self.assertEqual(result["deleted"], 0)
+		self.assertEqual(result["batches"], 0)
+		self.assertEqual(bench.db.committed, 0)
+
+
+# ---------------------------------------------------------------------------
+# §13.3 — retrieval provenance is computed, not just declared
+# ---------------------------------------------------------------------------
+
+
+class TestRetrievalProvenanceBehaviour(TestCase):
+	def _provenance(self):
+		install(FakeBench())
+		from ai_fr_hg.ai.retrieval import _extraction_provenance
+
+		return _extraction_provenance
+
+	def _method(self):
+		install(FakeBench())
+		from ai_fr_hg.ai.retrieval import _retrieval_method
+
+		return _retrieval_method
+
+	def test_versions_and_timestamp_are_read_from_stored_evidence(self):
+		provenance = self._provenance()
+
+		class Meta:
+			extraction_evidence = json.dumps(
+				{
+					"versions": {"app": "0.0.1", "reader": "1.1", "library_version": "6.16.1"},
+					"extracted_on": "2026-08-21T10:00:00+00:00",
+				}
+			)
+
+		versions, extracted_on = provenance(Meta())
+		self.assertEqual(versions["reader"], "1.1")
+		self.assertEqual(versions["library_version"], "6.16.1")
+		self.assertEqual(extracted_on, "2026-08-21T10:00:00+00:00")
+
+	def test_malformed_evidence_degrades_instead_of_raising(self):
+		provenance = self._provenance()
+
+		class Meta:
+			def __init__(self, value):
+				self.extraction_evidence = value
+
+		for bad in (None, "", "not json", "[]", '"a string"', "{{{"):
+			versions, extracted_on = provenance(Meta(bad))
+			self.assertEqual(versions, {})
+			self.assertIsNone(extracted_on)
+
+	def test_legacy_evidence_without_versions_yields_empty_provenance(self):
+		provenance = self._provenance()
+
+		class Meta:
+			extraction_evidence = json.dumps({"reader": "PDF", "detector": {"family": "pdf"}})
+
+		versions, extracted_on = provenance(Meta())
+		self.assertEqual(versions, {})
+		self.assertIsNone(extracted_on)
+
+	def test_retrieval_method_reflects_which_path_found_the_chunk(self):
+		method = self._method()
+		self.assertEqual(method("c1", {"c1": 0.8}, {"c1": 0.4}), "hybrid")
+		self.assertEqual(method("c1", {"c1": 0.8}, {}), "semantic")
+		self.assertEqual(method("c1", {}, {"c1": 0.4}), "keyword")
+		self.assertEqual(method("c1", {}, {}), "unknown")
+
+	def test_serialized_result_carries_the_whole_evidence_chain(self):
+		install(FakeBench())
+		from ai_fr_hg.ai.retrieval import RetrievedChunk
+
+		payload = RetrievedChunk(
+			chunk="CH1",
+			document="DOC1",
+			document_title="Q3",
+			knowledge_base="KB",
+			content="text",
+			score=0.91,
+			reader_used="PDF",
+			extractor_version={"app": "0.0.1", "reader": "1.1"},
+			extracted_on="2026-08-21T10:00:00+00:00",
+			retrieval_method="hybrid",
+		).as_dict()
+
+		# Where did it come from, who produced it, which version, how was it found.
+		self.assertEqual(payload["document"], "DOC1")
+		self.assertEqual(payload["reader_used"], "PDF")
+		self.assertEqual(payload["extractor_version"]["reader"], "1.1")
+		self.assertEqual(payload["extracted_on"], "2026-08-21T10:00:00+00:00")
+		self.assertEqual(payload["retrieval_method"], "hybrid")
+
+	def test_default_result_has_no_invented_provenance(self):
+		"""Absent provenance must read as absent, never as a plausible default."""
+		install(FakeBench())
+		from ai_fr_hg.ai.retrieval import RetrievedChunk
+
+		payload = RetrievedChunk(
+			chunk="CH1", document="D", document_title="D", knowledge_base="KB", content="c"
+		).as_dict()
+		self.assertIsNone(payload["reader_used"])
+		self.assertEqual(payload["extractor_version"], {})
+		self.assertIsNone(payload["extracted_on"])
+		self.assertEqual(payload["retrieval_method"], "unknown")
+
+
+# ---------------------------------------------------------------------------
+# §15.3 — the disclosure survives a reload
+# ---------------------------------------------------------------------------
+
+
+class TestGroundingDisclosureBehaviour(TestCase):
+	def _decorate(self):
+		install(FakeBench())
+		from ai_fr_hg.ai.conversation import _decorate_messages
+
+		return _decorate_messages
+
+	def test_a_cited_answer_is_reported_as_sourced(self):
+		decorate = self._decorate()
+		[message] = decorate(
+			[
+				{
+					"role": "Assistant",
+					"content": "answer",
+					"citations": json.dumps([{"document": "D1"}, {"document": "D2"}]),
+					"learned_context": None,
+				}
+			]
+		)
+		self.assertEqual(message["grounding"]["basis"], "sources")
+		self.assertEqual(message["grounding"]["citation_count"], 2)
+		self.assertTrue(message["grounding"]["has_context"])
+
+	def test_an_uncited_answer_is_reported_as_unsupported(self):
+		decorate = self._decorate()
+		[message] = decorate(
+			[{"role": "Assistant", "content": "recall", "citations": None, "learned_context": None}]
+		)
+		self.assertEqual(message["grounding"]["basis"], "unsupported")
+		self.assertEqual(message["grounding"]["citation_count"], 0)
+
+	def test_user_messages_carry_no_grounding_claim(self):
+		decorate = self._decorate()
+		[message] = decorate(
+			[{"role": "User", "content": "question", "citations": None, "learned_context": None}]
+		)
+		self.assertNotIn("grounding", message)
+
+	def test_corrupt_citation_json_does_not_fabricate_grounding(self):
+		"""A parse failure must fall back to 'unsupported', never to 'sources'."""
+		decorate = self._decorate()
+		[message] = decorate(
+			[
+				{
+					"role": "Assistant",
+					"content": "answer",
+					"citations": "{not valid json",
+					"learned_context": None,
+				}
+			]
+		)
+		self.assertEqual(message["grounding"]["basis"], "unsupported")
+
+	def test_disclosure_matches_the_citations_actually_returned(self):
+		decorate = self._decorate()
+		[message] = decorate(
+			[
+				{
+					"role": "Assistant",
+					"content": "a",
+					"citations": json.dumps([{"document": "D1"}]),
+					"learned_context": None,
+				}
+			]
+		)
+		self.assertEqual(message["grounding"]["citation_count"], len(message["citations"]))
+
+
+# ---------------------------------------------------------------------------
+# §24 — the audit entry is really written, with the rejection detail
+# ---------------------------------------------------------------------------
+
+
+def _semantic_bench() -> FakeBench:
+	bench = install(FakeBench())
+	bench.register_doctype(
+		"AI Document",
+		[{"fieldname": f} for f in ("name", "content", "knowledge_base", "checksum")],
+	)
+	bench.register_doctype(
+		"AI Pattern Entity",
+		[
+			{"fieldname": f}
+			for f in (
+				"name",
+				"document",
+				"knowledge_base",
+				"entity_type",
+				"extraction_method",
+				"value",
+				"normalized_value",
+				"occurrences",
+				"first_offset",
+				"context_quote",
+				"confidence",
+				"model_used",
+				"source_checksum",
+				"last_scanned_on",
+			)
+		],
+	)
+	bench.register_doctype(
+		"AI Entity Relationship",
+		[
+			{"fieldname": f}
+			for f in (
+				"name",
+				"document",
+				"knowledge_base",
+				"subject",
+				"object",
+				"relationship_type",
+				"evidence_quote",
+				"first_offset",
+				"confidence",
+				"model_used",
+				"source_checksum",
+				"last_scanned_on",
+			)
+		],
+	)
+	bench.register_doctype("AI Audit Log", [{"fieldname": "name"}])
+	bench.register_doctype("AI Platform Settings", [], is_single=True)
+	bench.db.singles["AI Platform Settings"] = {
+		"semantic_entities_enabled": 1,
+		"semantic_confidence_floor": 50,
+	}
+	bench.db.insert_row(
+		"AI Document",
+		{
+			"name": "DOC1",
+			"content": "Alice Novak works for Cyberdyne Systems in Sofia.",
+			"knowledge_base": "KB1",
+			"checksum": "abc123",
+		},
+	)
+	return bench
+
+
+def _patch_extraction(monkeypatched_module, payload):
+	"""Replace the model call with a fixed payload, keeping all other logic real."""
+	monkeypatched_module.extract_semantic = lambda text, model=None, document=None: payload
+
+
+class TestSemanticAuditBehaviour(TestCase):
+	def test_scan_writes_an_audit_row_recording_rejections(self):
+		bench = _semantic_bench()
+		semantic = import_app("ai_fr_hg.ai.semantic")
+
+		_patch_extraction(
+			semantic,
+			{
+				"entities": [
+					{
+						"entity_type": "person",
+						"value": "Alice Novak",
+						"normalized_value": "alice novak",
+						"confidence": 90.0,
+						"first_offset": 0,
+						"context_quote": "Alice Novak works",
+						"occurrences": 1,
+					}
+				],
+				"relationships": [],
+				"rejected": {"ungrounded": 3, "low_confidence": 1, "invalid": 0},
+				"model": "llama3.1:8b",
+			},
+		)
+
+		semantic.scan_document_semantic("DOC1")
+
+		audits = bench.get_all("AI Audit Log")
+		self.assertEqual(len(audits), 1)
+		entry = audits[0]
+		self.assertEqual(entry["action"], "Semantic Entities Extracted")
+		self.assertEqual(entry["reference_name"], "DOC1")
+		details = json.loads(entry["details"]) if isinstance(entry["details"], str) else entry["details"]
+		# The grounding filter is only trustworthy if its rejections are visible.
+		self.assertEqual(details["rejected"]["ungrounded"], 3)
+		self.assertEqual(details["model"], "llama3.1:8b")
+		self.assertEqual(details["confidence_floor"], 50)
+
+	def test_entities_are_persisted_with_provenance(self):
+		bench = _semantic_bench()
+		semantic = import_app("ai_fr_hg.ai.semantic")
+
+		_patch_extraction(
+			semantic,
+			{
+				"entities": [
+					{
+						"entity_type": "organization",
+						"value": "Cyberdyne Systems",
+						"normalized_value": "cyberdyne systems",
+						"confidence": 88.0,
+						"first_offset": 25,
+						"context_quote": "works for Cyberdyne Systems",
+						"occurrences": 1,
+					}
+				],
+				"relationships": [],
+				"rejected": {},
+				"model": "llama3.1:8b",
+			},
+		)
+
+		result = semantic.scan_document_semantic("DOC1")
+
+		self.assertEqual(result["entities"], 1)
+		self.assertEqual(result["created"], 1)
+		[row] = bench.get_all("AI Pattern Entity")
+		self.assertEqual(row["extraction_method"], "semantic")
+		self.assertEqual(row["confidence"], 88.0)
+		self.assertEqual(row["model_used"], "llama3.1:8b")
+		self.assertEqual(row["source_checksum"], "abc123")
+		self.assertIsNotNone(row["last_scanned_on"])
+
+	def test_rescanning_updates_in_place_instead_of_duplicating(self):
+		bench = _semantic_bench()
+		semantic = import_app("ai_fr_hg.ai.semantic")
+
+		payload = {
+			"entities": [
+				{
+					"entity_type": "person",
+					"value": "Alice Novak",
+					"normalized_value": "alice novak",
+					"confidence": 90.0,
+					"first_offset": 0,
+					"context_quote": "Alice Novak",
+					"occurrences": 1,
+				}
+			],
+			"relationships": [],
+			"rejected": {},
+			"model": "m1",
+		}
+		_patch_extraction(semantic, payload)
+
+		first = semantic.scan_document_semantic("DOC1")
+		second = semantic.scan_document_semantic("DOC1")
+
+		self.assertEqual(first["created"], 1)
+		self.assertEqual(second["created"], 0)
+		self.assertEqual(second["updated"], 1)
+		self.assertEqual(bench.db.count("AI Pattern Entity"), 1)
+
+	def test_entities_that_disappear_on_rescan_are_removed(self):
+		bench = _semantic_bench()
+		semantic = import_app("ai_fr_hg.ai.semantic")
+
+		_patch_extraction(
+			semantic,
+			{
+				"entities": [
+					{
+						"entity_type": "person",
+						"value": "Alice Novak",
+						"normalized_value": "alice novak",
+						"confidence": 90.0,
+						"first_offset": 0,
+						"context_quote": "q",
+						"occurrences": 1,
+					}
+				],
+				"relationships": [],
+				"rejected": {},
+				"model": "m1",
+			},
+		)
+		semantic.scan_document_semantic("DOC1")
+		self.assertEqual(bench.db.count("AI Pattern Entity"), 1)
+
+		_patch_extraction(semantic, {"entities": [], "relationships": [], "rejected": {}, "model": "m1"})
+		result = semantic.scan_document_semantic("DOC1")
+
+		self.assertEqual(result["removed"], 1)
+		self.assertEqual(bench.db.count("AI Pattern Entity"), 0)
+
+	def test_relationships_are_persisted_with_evidence_and_timestamp(self):
+		bench = _semantic_bench()
+		semantic = import_app("ai_fr_hg.ai.semantic")
+
+		_patch_extraction(
+			semantic,
+			{
+				"entities": [],
+				"relationships": [
+					{
+						"subject": "Alice Novak",
+						"object": "Cyberdyne Systems",
+						"relationship_type": "works_for",
+						"evidence_quote": "Alice Novak works for Cyberdyne Systems in Sofia.",
+						"first_offset": 0,
+						"confidence": 92.0,
+					}
+				],
+				"rejected": {},
+				"model": "m1",
+			},
+		)
+
+		result = semantic.scan_document_semantic("DOC1")
+
+		self.assertEqual(result["relationships"], 1)
+		[row] = bench.get_all("AI Entity Relationship")
+		self.assertEqual(row["relationship_type"], "works_for")
+		self.assertTrue(row["evidence_quote"])
+		self.assertEqual(row["confidence"], 92.0)
+		self.assertIsNotNone(row["last_scanned_on"])
+
+	def test_scanning_a_missing_document_raises(self):
+		_semantic_bench()
+		semantic = import_app("ai_fr_hg.ai.semantic")
+
+		with self.assertRaises(Exception):
+			semantic.scan_document_semantic("NOPE")
+
+	def test_semantic_rows_are_scoped_to_the_documents_knowledge_base(self):
+		"""A leaked knowledge_base is a cross-tenant disclosure, not a cosmetic bug."""
+		bench = _semantic_bench()
+		semantic = import_app("ai_fr_hg.ai.semantic")
+
+		_patch_extraction(
+			semantic,
+			{
+				"entities": [
+					{
+						"entity_type": "person",
+						"value": "Alice Novak",
+						"normalized_value": "alice novak",
+						"confidence": 90.0,
+						"first_offset": 0,
+						"context_quote": "q",
+						"occurrences": 1,
+					}
+				],
+				"relationships": [
+					{
+						"subject": "Alice Novak",
+						"object": "Cyberdyne Systems",
+						"relationship_type": "works_for",
+						"evidence_quote": "Alice Novak works for Cyberdyne Systems in Sofia.",
+						"first_offset": 0,
+						"confidence": 92.0,
+					}
+				],
+				"rejected": {},
+				"model": "m1",
+			},
+		)
+		semantic.scan_document_semantic("DOC1")
+
+		self.assertEqual(bench.get_all("AI Pattern Entity")[0]["knowledge_base"], "KB1")
+		self.assertEqual(bench.get_all("AI Entity Relationship")[0]["knowledge_base"], "KB1")
+
+	def test_document_deletion_cascades_to_relationships(self):
+		bench = _semantic_bench()
+		semantic = import_app("ai_fr_hg.ai.semantic")
+
+		bench.db.insert_row(
+			"AI Entity Relationship",
+			{"name": "REL1", "document": "DOC1", "knowledge_base": "KB1", "subject": "a", "object": "b"},
+		)
+		self.assertEqual(bench.db.count("AI Entity Relationship"), 1)
+
+		semantic.handle_document_trashed(bench.get_doc("AI Document", "DOC1"))
+
+		self.assertEqual(bench.db.count("AI Entity Relationship"), 0)
+
+
+# ---------------------------------------------------------------------------
+# §23 — the relationship controller enforces its own invariants
+# ---------------------------------------------------------------------------
+
+
+class TestRelationshipValidation(TestCase):
+	def _controller_bench(self):
+		bench = install(FakeBench())
+		bench.register_doctype("AI Document", [{"fieldname": "name"}, {"fieldname": "knowledge_base"}])
+		bench.db.insert_row("AI Document", {"name": "DOC1", "knowledge_base": "KB1"})
+		from ai_fr_hg.ai_knowledge.doctype.ai_entity_relationship.ai_entity_relationship import (
+			AIEntityRelationship,
+		)
+
+		bench.register_doctype(
+			"AI Entity Relationship",
+			[
+				{"fieldname": f}
+				for f in (
+					"name",
+					"document",
+					"knowledge_base",
+					"subject",
+					"object",
+					"relationship_type",
+					"evidence_quote",
+					"confidence",
+					"first_offset",
+				)
+			],
+			controller=AIEntityRelationship,
+		)
+		return bench
+
+	def _new(self, bench, **values):
+		doc = bench.new_doc("AI Entity Relationship", **values)
+		return doc
+
+	def test_a_relationship_without_evidence_is_rejected(self):
+		"""An inferred claim with no supporting span cannot be audited."""
+		bench = self._controller_bench()
+		doc = self._new(
+			bench,
+			document="DOC1",
+			subject="Alice",
+			object="Cyberdyne",
+			relationship_type="works_for",
+			evidence_quote="",
+		)
+		with self.assertRaises(ValidationError):
+			doc.insert()
+
+	def test_self_referential_relationships_are_rejected(self):
+		bench = self._controller_bench()
+		doc = self._new(
+			bench,
+			document="DOC1",
+			subject="Acme",
+			object="acme",
+			relationship_type="part_of",
+			evidence_quote="Acme is part of acme.",
+		)
+		with self.assertRaises(ValidationError):
+			doc.insert()
+
+	def test_confidence_is_clamped_into_range(self):
+		bench = self._controller_bench()
+		doc = self._new(
+			bench,
+			document="DOC1",
+			subject="Alice",
+			object="Cyberdyne",
+			relationship_type="works_for",
+			evidence_quote="Alice works for Cyberdyne.",
+			confidence=5000,
+		)
+		doc.insert()
+		self.assertEqual(bench.get_all("AI Entity Relationship")[0]["confidence"], 100.0)
+
+	def test_unknown_predicate_degrades_to_related_to(self):
+		bench = self._controller_bench()
+		doc = self._new(
+			bench,
+			document="DOC1",
+			subject="Alice",
+			object="Cyberdyne",
+			relationship_type="invented_predicate",
+			evidence_quote="Alice and Cyberdyne.",
+		)
+		doc.insert()
+		self.assertEqual(bench.get_all("AI Entity Relationship")[0]["relationship_type"], "related_to")
+
+	def test_knowledge_base_is_inherited_from_the_document(self):
+		bench = self._controller_bench()
+		doc = self._new(
+			bench,
+			document="DOC1",
+			subject="Alice",
+			object="Cyberdyne",
+			relationship_type="works_for",
+			evidence_quote="Alice works for Cyberdyne.",
+		)
+		doc.insert()
+		self.assertEqual(bench.get_all("AI Entity Relationship")[0]["knowledge_base"], "KB1")
+
+	def test_a_relationship_on_a_missing_document_is_rejected(self):
+		bench = self._controller_bench()
+		doc = self._new(
+			bench,
+			document="GONE",
+			subject="Alice",
+			object="Cyberdyne",
+			relationship_type="works_for",
+			evidence_quote="Alice works for Cyberdyne.",
+		)
+		with self.assertRaises(ValidationError):
+			doc.insert()
+
+
+# ---------------------------------------------------------------------------
+# §10 — provenance immutability is enforced, not merely styled read-only
+# ---------------------------------------------------------------------------
+
+
+class TestProvenanceImmutability(TestCase):
+	def _bench(self):
+		bench = install(FakeBench())
+		from ai_fr_hg.ai_knowledge.doctype.ai_document import ai_document as module
+
+		bench.register_doctype(
+			"AI Document",
+			[
+				{"fieldname": f}
+				for f in ("name", "checksum", "reader_used", "file_size", "mime_type", "extraction_evidence")
+			],
+		)
+		return bench, module
+
+	def test_editing_a_provenance_field_is_refused(self):
+		bench, module = self._bench()
+		doc = module.AIDocument.__new__(module.AIDocument)
+		from ai_fr_hg.tests.fakebench import FakeDocument
+
+		FakeDocument.__init__(doc, bench, "AI Document", {"name": "D1", "checksum": "aaa"})
+		object.__setattr__(doc, "_before_save", {"name": "D1", "checksum": "aaa"})
+
+		doc.checksum = "tampered"
+		with self.assertRaises(ValidationError):
+			doc.validate_extraction_provenance()
+
+	def test_unchanged_provenance_passes(self):
+		bench, module = self._bench()
+		doc = module.AIDocument.__new__(module.AIDocument)
+		from ai_fr_hg.tests.fakebench import FakeDocument
+
+		FakeDocument.__init__(doc, bench, "AI Document", {"name": "D1", "checksum": "aaa"})
+		object.__setattr__(doc, "_before_save", {"name": "D1", "checksum": "aaa"})
+
+		doc.validate_extraction_provenance()  # must not raise
+
+	def test_the_canonical_pipeline_may_rewrite_provenance(self):
+		bench, module = self._bench()
+		doc = module.AIDocument.__new__(module.AIDocument)
+		from ai_fr_hg.tests.fakebench import FakeDocument
+
+		FakeDocument.__init__(doc, bench, "AI Document", {"name": "D1", "checksum": "aaa"})
+		object.__setattr__(doc, "_before_save", {"name": "D1", "checksum": "aaa"})
+		doc.checksum = "recomputed"
+
+		with module.allow_extraction_provenance():
+			doc.validate_extraction_provenance()  # authorized path
+
+	def test_a_new_document_is_not_blocked(self):
+		bench, module = self._bench()
+		doc = module.AIDocument.__new__(module.AIDocument)
+		from ai_fr_hg.tests.fakebench import FakeDocument
+
+		FakeDocument.__init__(doc, bench, "AI Document", {"name": "D1", "checksum": "aaa"})
+		doc.validate_extraction_provenance()  # no prior version, nothing to protect
+
+
+# ---------------------------------------------------------------------------
+# §6.2 — archive containment is a security control, tested as one
+# ---------------------------------------------------------------------------
+
+
+class TestArchiveContainment(TestCase):
+	"""These assert on the resolver's decisions, not on the presence of a guard.
+
+	The earlier suite tested traversal only through a whole-archive read, which
+	could not distinguish "blocked by the resolver" from "the member happened
+	not to be extracted". A mutation campaign showed one guard was redundant;
+	these pin the effective behaviour instead of the implementation shape.
+	"""
+
+	def _safe(self):
+		install(FakeBench())
+		from ai_fr_hg.ai.readers.archive import _safe_member_path
+
+		return _safe_member_path
+
+	def test_paths_that_escape_the_root_are_refused(self):
+		safe = self._safe()
+		for hostile in (
+			"../../etc/passwd",
+			"a/../../etc/passwd",
+			"..",
+			"../x",
+			"a/b/../../../outside",
+		):
+			self.assertIsNone(safe(hostile), f"{hostile!r} must be refused")
+
+	def test_absolute_and_drive_paths_are_refused(self):
+		safe = self._safe()
+		for hostile in ("/etc/shadow", "/", "C:/windows/system32", "C:\\windows", "\\\\server\\share"):
+			self.assertIsNone(safe(hostile), f"{hostile!r} must be refused")
+
+	def test_interior_traversal_that_stays_inside_is_normalized(self):
+		"""`a/b/../c.txt` is legitimate; over-blocking would break real archives."""
+		safe = self._safe()
+		self.assertEqual(safe("a/b/../c.txt"), "a/c.txt")
+		self.assertEqual(safe("dir/../ok.txt"), "ok.txt")
+
+	def test_ordinary_paths_survive_unchanged(self):
+		safe = self._safe()
+		self.assertEqual(safe("readme.md"), "readme.md")
+		self.assertEqual(safe("docs/guide/intro.txt"), "docs/guide/intro.txt")
+
+	def test_empty_and_dot_paths_are_refused(self):
+		safe = self._safe()
+		for empty in ("", ".", "./", None):
+			self.assertIsNone(safe(empty))
+
+	def test_backslash_separators_are_normalized_before_checking(self):
+		"""A Windows-style path must not bypass the POSIX checks."""
+		safe = self._safe()
+		self.assertIsNone(safe("..\\..\\etc\\passwd"))
+		self.assertEqual(safe("dir\\file.txt"), "dir/file.txt")

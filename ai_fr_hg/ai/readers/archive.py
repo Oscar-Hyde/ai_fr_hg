@@ -188,8 +188,10 @@ def _safe_member_path(name: str) -> str | None:
 	normalized = name.replace("\\", "/")
 	if normalized.startswith("/") or (len(normalized) > 1 and normalized[1] == ":"):
 		return None
-	if any(part == ".." for part in normalized.split("/")):
-		return None
+	# Resolve `.` and `..` first, then judge the *result*. Rejecting any member
+	# whose raw path merely contains ".." would also discard legitimate entries
+	# such as "docs/drafts/../final.txt", which normalizes to "docs/final.txt"
+	# and never leaves the root. Only an escape is unsafe.
 	resolved = posixpath.normpath(normalized)
 	if resolved.startswith(("/", "../")) or resolved == "..":
 		return None

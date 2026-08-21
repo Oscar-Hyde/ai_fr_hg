@@ -99,6 +99,27 @@ A closed row is not permission to weaken the audit's cross-cutting requirements.
 | LEARN-04 | Skills are not relevance ranked | 6 | Learning | OPEN | Rank by request with priority/conflict/version rules. | Relevance, conflict, scope, prompt-budget tests. |
 | LEARN-05 | Learning lifecycle maintenance is incomplete | 6 | Learning + Jobs | OPEN | Merge/supersede/archive/review/re-embed lifecycle. | Transition, provenance, scheduler, model-change, permission tests. |
 
+## Verification quality remediation (2026-08-21)
+
+Raised against my own work, not against the product. An audit of the Part 2
+suite found **29 of 38 tests were source-text assertions** — `assertIn("field",
+source)`. That form passes when a field is written to the wrong row, when the
+value is `None`, and when the function raises before reaching it; it fails when
+a local variable is renamed. It measures text, not behaviour, and it inflated
+the apparent evidence behind several "CLOSED — IMPLEMENTED" rows.
+
+| ID | Finding | Status | Disposition | Evidence |
+| --- | --- | --- | --- | --- |
+| VER-01 | Part 2 coverage was largely tautological | CLOSED — IMPLEMENTED | Built `ai_fr_hg/tests/fakebench.py`, an in-memory Frappe substitute (documents, controllers, filters, ordering, paging, singles, savepoints, permission hooks) so application functions **execute**. Replaced the grep tests with 43 behavioural tests in `test_part2_behaviour.py`. | Retention, semantic persistence, audit writes, relationship validation, grounding disclosure and provenance immutability are now asserted on observed state after running real code. |
+| VER-02 | Nothing proved the suite could fail | CLOSED — IMPLEMENTED (CI wiring: OWNER ACTION) | Added `scripts/mutation_check.py`: 26 realistic defects injected into application source, suite rerun per mutation. | **26/26 caught, 0 survived, 0 stale**, run locally. The CI job could not be pushed — the GitHub App lacks `workflows` permission — so it is documented for a maintainer in [`APPLY_MUTATION_GATE.md`](phase-reports/APPLY_MUTATION_GATE.md). Until applied, the gate is a local tool, not an enforced check. |
+| VER-03 | Archive path resolver over-blocked legitimate members | CLOSED — IMPLEMENTED | Found *by* VER-02: the redundant `".." in path` scan rejected `docs/drafts/../final.txt`, which normalizes inside the root. Real data loss, reported to the user as "unsafe path". `posixpath.normpath` was already the effective control; the redundant scan was removed. | `TestArchiveContainment` (6 tests) pins escape-vs-interior behaviour; traversal, absolute, drive-letter, backslash and symlink cases still refused. |
+
+**What the harness does not prove.** It models Frappe's observable semantics,
+not a database. SQL correctness, InnoDB isolation, index usage, concurrency and
+migrations remain real-bench work (Phase 7). Tests written against it must not
+claim otherwise, and `fakebench.py` says so in its module docstring.
+
+
 ## Part 2 platform directive (2026-08-21)
 
 Findings raised by Part 2 (§13–§29) and verified **against code, not against this register**. Each was confirmed by reading the implementation before being recorded.
