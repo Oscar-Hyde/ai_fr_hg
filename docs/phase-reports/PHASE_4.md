@@ -1,6 +1,6 @@
 # Phase 4 — Ingestion, Intelligence, Patterns, and Translation
 
-**Status:** IN PROGRESS — 2026-08-21 increment closed TRN-03, TRN-07, PAT-01, PAT-02, PAT-03. TRN-04/05 remain in progress. PAT-04 and ING-06 browser evidence remain open. Phase is **not** closed.
+**Status:** IN PROGRESS — 2026-08-21. Worker lifecycle tests added for ING-06 and TRN-04; TRN-05 accounting tests added. Hosted Server evidence still required. Phase is **not** closed.
 
 ## Phase inventory
 

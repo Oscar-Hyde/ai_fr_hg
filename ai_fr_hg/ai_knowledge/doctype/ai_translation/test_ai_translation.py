@@ -120,6 +120,38 @@ class TestDocumentTranslation(TranslationTestCase):
 		self.assertEqual(translation.status, "Cancelled")
 		self.assertEqual(cint(translation.cancel_requested), 1)
 
+	def test_duplicate_cancel_is_idempotent(self):
+		from ai_fr_hg.ai.translation import cancel_translation
+
+		document = self.make_document("Cancel Twice", "The contractor shall deliver the works on time.\n")
+		translation = self.make_translation(document, "ar")
+		translation.db_set("status", "Translating")
+		first = cancel_translation(translation.name)
+		second = cancel_translation(translation.name)
+		self.assertTrue(first["cancelled"])
+		self.assertFalse(second["cancelled"])
+
+	def test_run_observes_cancel_and_does_not_mark_failed(self):
+		from ai_fr_hg.ai.translation import TranslationOutcome, cancel_translation, run_translation
+
+		document = self.make_document("Cancel During Run", STRUCTURED_SOURCE)
+		translation = self.make_translation(document, "ar")
+
+		def fake_translate(*args, **kwargs):
+			progress = kwargs.get("progress")
+			cancel_translation(translation.name)
+			if progress:
+				progress(1, 2)
+			return TranslationOutcome(text="x", source_language="en", target_language="ar", quality_score=100)
+
+		with patch("ai_fr_hg.ai.translation.translate_text", side_effect=fake_translate):
+			result = run_translation(translation.name)
+
+		translation.reload()
+		self.assertEqual(result["status"], "Cancelled")
+		self.assertEqual(translation.status, "Cancelled")
+		self.assertNotEqual(translation.status, "Failed")
+
 	def test_translation_preserves_document_structure(self):
 		from ai_fr_hg.ai.translation import run_translation
 
