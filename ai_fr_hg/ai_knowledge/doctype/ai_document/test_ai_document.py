@@ -106,6 +106,30 @@ class TestIngestionProgressCancellation(AIPlatformTestCase):
 		self.assertEqual(document.status, "Cancelled")
 		self.assertNotEqual(document.status, "Failed")
 
+	def test_unrelated_user_cannot_cancel_processing(self):
+		from ai_fr_hg.ai.exceptions import DocumentSourcePermissionError
+		from ai_fr_hg.ai.ingestion import cancel_processing
+
+		document = self.make_document("Foreign Cancel Document", "not yours")
+		document.db_set(
+			{"status": "Extracting", "processing_requested_by": frappe.session.user},
+			update_modified=False,
+		)
+		email = "ing06-stranger@example.com"
+		if not frappe.db.exists("User", email):
+			frappe.get_doc(
+				{
+					"doctype": "User",
+					"email": email,
+					"first_name": "Stranger",
+					"send_welcome_email": 0,
+				}
+			).insert(ignore_permissions=True)
+		with self.assertRaises(DocumentSourcePermissionError):
+			cancel_processing(document.name, requested_by=email)
+		document.reload()
+		self.assertEqual(document.status, "Extracting")
+
 	def test_stale_in_flight_heartbeat_is_reaped_without_duplicate_start(self):
 		from ai_fr_hg.ai.ingestion import process_pending_documents
 

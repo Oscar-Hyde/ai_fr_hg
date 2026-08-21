@@ -138,6 +138,40 @@ class TestPatternEntityScan(AIPlatformTestCase):
 		self.assertTrue(has_document_permission(row, "read", user="someone@example.com"))
 		self.assertFalse(has_document_permission(row, "write", user="someone@example.com"))
 
+	def test_explorer_denies_unauthorized_knowledge_base(self):
+		from ai_fr_hg.api.knowledge import explore_pattern_entities
+
+		email = "pat04-stranger@example.com"
+		if not frappe.db.exists("User", email):
+			frappe.get_doc(
+				{
+					"doctype": "User",
+					"email": email,
+					"first_name": "Pattern Stranger",
+					"send_welcome_email": 0,
+					"roles": [{"role": "AI User"}],
+				}
+			).insert(ignore_permissions=True)
+		private_name = "PAT-04 Private KB"
+		if not frappe.db.exists("AI Knowledge Base", private_name):
+			frappe.get_doc(
+				{
+					"doctype": "AI Knowledge Base",
+					"knowledge_base_name": private_name,
+					"enabled": 1,
+					"is_public": 0,
+					"chunk_size": 400,
+					"chunk_overlap": 40,
+					"embedding_model": self.embedding_model.name,
+				}
+			).insert(ignore_permissions=True)
+		frappe.set_user(email)
+		try:
+			with self.assertRaises(frappe.PermissionError):
+				explore_pattern_entities(knowledge_base=private_name, limit=10, offset=0)
+		finally:
+			frappe.set_user("Administrator")
+
 	def test_explorer_lists_across_documents_with_pagination(self):
 		from ai_fr_hg.ai.patterns import scan_document
 		from ai_fr_hg.api.knowledge import explore_pattern_entities

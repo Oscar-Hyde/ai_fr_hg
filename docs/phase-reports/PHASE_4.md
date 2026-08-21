@@ -23,7 +23,7 @@ Prior green code baseline for stale-worker/cancel status: `5b256d1` Server [3245
 | ID | Finding | Status | Evidence on this branch | Remaining |
 | --- | --- | --- | --- | --- |
 | ING-01–05 | Folder/`.msg`/OCR claims, ZIP bombs, warnings | CLOSED earlier | Register + prior Server | — |
-| ING-06 | Progress/cancel/stale worker | IN PROGRESS | Cancel before/mid extract; stale heartbeat → `Failed(StaleWorker)` then one `enqueue_processing` | Desk reconnect / live RQ worker death |
+| ING-06 | Progress/cancel/stale worker | IN PROGRESS | Cancel before/mid extract; unauthorized cancel denied; stale heartbeat → `Failed(StaleWorker)` then one `enqueue_processing` | Live RQ process death and Desk reconnect remain Phase 7 |
 | INT-01–04 | Extraction mapping / schema / coverage | CLOSED earlier | Register | — |
 | TRN-01–02, 06 | Memory policy, index default, text-structure | CLOSED earlier | Register | — |
 | TRN-03 | Worker `as_user` | CLOSED — IMPLEMENTED | Disabled requester + restore-after-failure | — |
@@ -31,7 +31,7 @@ Prior green code baseline for stale-worker/cancel status: `5b256d1` Server [3245
 | TRN-05 | Back-translation accounting | CLOSED — IMPLEMENTED | Verification tokens in `total_tokens`; failed run keeps usage; deadline `partial`; timeout-after-generation and cancel-after-partial persist usage on Server `32454131712` | — |
 | TRN-07 | Glossary KB parity | CLOSED — IMPLEMENTED | Unauthorized glossary use raises `PermissionError` | — |
 | PAT-01–03 | Durable empty scan, offsets, validators | CLOSED — IMPLEMENTED | Integration + unit tests on Server | — |
-| PAT-04 | Pattern Explorer | CLOSED — IMPLEMENTED (backend+page) | `explore_pattern_entities` + Desk page | Browser workflow → Phase 7 |
+| PAT-04 | Pattern Explorer | CLOSED — IMPLEMENTED (backend+page) | Pagination/filter + unauthorized KB `PermissionError` | Browser workflow → Phase 7 |
 
 ## Architecture
 
