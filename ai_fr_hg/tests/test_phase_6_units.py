@@ -389,14 +389,30 @@ class TestChat02SequenceAllocatorContract(TestCase):
 		# names both rejected designs and would match either pattern.
 		body = function.split('"""', 2)[2]
 
-		# A plain `select max(sequence)` is served from the REPEATABLE READ
-		# snapshot and reissues an already-committed sequence.
-		self.assertNotIn("max(sequence)", body.replace("(select max(sequence)", ""))
-		# `max(...) for update` triggers MariaDB 1020 via the MAX optimizer.
+		# Every shape the bench rejected, pinned so none can come back:
+		# 1. a plain `select max(sequence)` is served from the REPEATABLE READ
+		#    snapshot and reissues an already-committed sequence;
+		# 2. `max(...) for update` triggers MariaDB 1020 via the MAX optimizer;
+		# 3. a subquery inside the UPDATE is a consistent read (1020 again) and
+		#    locks `tabAI Message`, deadlocking against concurrent inserts.
+		self.assertNotIn("max(sequence)", body)
 		self.assertNotIn("for update", body)
-		# The allocation must be a DML current read on the parent row.
+		self.assertNotIn("select", body.lower().split("where name = %s")[0])
+		# The allocation must be a bare single-row DML current read.
 		self.assertIn("update `tabAI Conversation`", body)
 		self.assertIn("message_sequence_counter", body)
+
+	def test_explicit_sequences_move_the_allocator_watermark(self):
+		source = (self.app / "ai/conversation.py").read_text()
+		self.assertIn("def bump_sequence_watermark", source)
+		save = source.split("def save_message")[1].split("\ndef ")[0]
+		self.assertIn("bump_sequence_watermark", save)
+
+	def test_counter_backfill_patch_is_registered(self):
+		patches = (self.app / "patches.txt").read_text()
+		entry = "ai_fr_hg.patches.v0_0_22_conversation_sequence_counter"
+		self.assertIn(entry, patches)
+		self.assertEqual(patches.count(entry), 1)
 
 	def test_sequence_constraints_are_schema_owned_not_patch_owned(self):
 		# Frappe skips historical patches on a fresh install, so a constraint

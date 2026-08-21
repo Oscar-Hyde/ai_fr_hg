@@ -107,23 +107,23 @@ def allocate_sequence(conversation: str) -> int:
 	the parent conversation row is therefore both the lock and the allocation,
 	in one statement that cannot interleave.
 
-	``greatest(...)`` re-seeds the counter from the real messages, so a
-	conversation created before this field existed, or one whose messages were
-	inserted with explicit sequences, self-heals on its next allocation instead
-	of handing out a colliding value.
+	The statement is deliberately a bare single-row increment, matching
+	``engine.update_model_metrics``. An earlier version re-seeded the counter
+	inline with ``greatest(..., (select max(sequence) ...))`` and failed on the
+	bench two ways at once: the subquery is a consistent read, so updating the
+	row raised ``1020 Record has changed since last read``, and it took locks on
+	``tabAI Message`` that inverted against the concurrent inserts, producing
+	``1213 Deadlock found``. Seeding belongs outside the hot path — the
+	migration backfills existing conversations and
+	:func:`bump_sequence_watermark` covers explicitly numbered inserts.
 	"""
 	frappe.db.sql(
 		"""
 		update `tabAI Conversation`
-		set message_sequence_counter = greatest(
-			coalesce(message_sequence_counter, 0),
-			coalesce(
-				(select max(sequence) from `tabAI Message` where conversation = %(conversation)s), 0
-			)
-		) + 1
-		where name = %(conversation)s
+		set message_sequence_counter = coalesce(message_sequence_counter, 0) + 1
+		where name = %s
 		""",
-		{"conversation": conversation},
+		(conversation,),
 	)
 	allocated = frappe.db.sql(
 		"select message_sequence_counter from `tabAI Conversation` where name = %s",
@@ -134,11 +134,35 @@ def allocate_sequence(conversation: str) -> int:
 	return cint(allocated[0][0])
 
 
+def bump_sequence_watermark(conversation: str, sequence: int) -> None:
+	"""Raise the allocator's watermark to cover an explicitly numbered message.
+
+	``save_message`` accepts a caller-supplied ``sequence``. Without this the
+	counter would still hand that number out again later. Single row, no
+	subquery, no locks on ``tabAI Message`` — the constraints that the
+	allocator itself has to satisfy.
+	"""
+	if cint(sequence) <= 0:
+		return
+	frappe.db.sql(
+		"""
+		update `tabAI Conversation`
+		set message_sequence_counter = greatest(coalesce(message_sequence_counter, 0), %s)
+		where name = %s
+		""",
+		(cint(sequence), conversation),
+	)
+
+
 def save_message(conversation: str, role: str, content: str, **kwargs):
 	"""Append a message with a locked, unique sequence (CHAT-02)."""
 	sequence = kwargs.pop("sequence", None)
 	if sequence is None:
 		sequence = allocate_sequence(conversation)
+	else:
+		# An explicitly numbered message must still move the allocator's
+		# watermark, or the counter hands the same number out again later.
+		bump_sequence_watermark(conversation, sequence)
 
 	payload = {
 		"doctype": "AI Message",
