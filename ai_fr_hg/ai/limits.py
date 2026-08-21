@@ -293,12 +293,22 @@ def acquire_leases(specs: list[tuple[str, int]], *, ttl: int = 300) -> LeaseSet:
 
 
 def _describe_scope(scope: str) -> str:
-	prefix, _, value = str(scope).partition(":")
-	labels = {"user": _("Your account"), "provider": _("Provider {0}"), "model": _("Model {0}")}
-	label = labels.get(prefix)
-	if not label:
+	"""Human-readable name for a lease/rate scope.
+
+	Note the deliberate ``separator`` name: unpacking ``partition()`` into a
+	throwaway ``_`` shadows Frappe's translation function for the rest of the
+	function body, which is exactly the defect the bench run caught here.
+	"""
+	prefix, separator, value = str(scope).partition(":")
+	if not separator:
 		return scope
-	return label.format(value) if "{0}" in str(label) else str(label)
+	if prefix == "user":
+		return _("Your account")
+	if prefix == "provider":
+		return _("Provider {0}").format(value)
+	if prefix == "model":
+		return _("Model {0}").format(value)
+	return scope
 
 
 # ---------------------------------------------------------------------------

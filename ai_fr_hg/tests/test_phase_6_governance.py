@@ -100,8 +100,24 @@ class TestConcurrencyLeases(AIPlatformTestCase):
 		held = limits.acquire_leases([(scope, 1)])
 		with self.assertRaises(ConcurrencyLimitError) as caught:
 			limits.acquire_leases([(scope, 1)])
-		self.assertIn("concurrent request limit", str(caught.exception))
+		message = str(caught.exception)
+		self.assertIn("concurrent request limit", message)
+		# The scope must be named, not rendered as a raw internal key.
+		self.assertIn(scope.split(":", 1)[1], message)
 		held.release()
+
+	def test_every_scope_prefix_renders_a_message(self):
+		# Regression: unpacking str.partition() into `_` shadowed Frappe's
+		# translation function, so every rejection raised TypeError instead of
+		# the policy error. Exercise all three prefixes.
+		for prefix in ("user", "provider", "model"):
+			scope = _scope(prefix)
+			held = limits.acquire_leases([(scope, 1)])
+			try:
+				with self.assertRaises(ConcurrencyLimitError):
+					limits.acquire_leases([(scope, 1)])
+			finally:
+				held.release()
 
 	def test_policy_resolves_user_provider_and_model_scopes(self):
 		from ai_fr_hg.ai.governance import runtime_concurrency_limits
@@ -549,11 +565,33 @@ class TestLearningReports(AIPlatformTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
+		# Candidate creation is refused when the Learning Loop is disabled.
+		frappe.db.set_single_value("AI Platform Settings", "learning_enabled", 1)
+		frappe.clear_cache(doctype="AI Platform Settings")
 		cls.active = cls._memory("Phase 6 active memory", "Active", 9)
 		cls.archived = cls._memory("Phase 6 archived memory", "Archived", 0)
 
 	@classmethod
 	def _memory(cls, content, status, usage):
+		"""Create a memory the way the platform does: by promoting a candidate.
+
+		`AI Memory.before_insert` refuses a direct insert - memories exist only
+		as the product of an approved `AI Knowledge Candidate`. The fixture
+		honours that invariant instead of bypassing it.
+		"""
+		candidate = frappe.get_doc(
+			{
+				"doctype": "AI Knowledge Candidate",
+				"title": content[:100],
+				"content": content,
+				"candidate_type": "Fact",
+				"source_type": "Explicit Teaching",
+				"target_scope": "Global",
+			}
+		)
+		candidate.flags.ignore_permissions = True
+		candidate.insert(ignore_permissions=True)
+
 		doc = frappe.get_doc(
 			{
 				"doctype": "AI Memory",
@@ -562,8 +600,11 @@ class TestLearningReports(AIPlatformTestCase):
 				"status": status,
 				"scope": "Global",
 				"usage_count": usage,
+				"source_candidate": candidate.name,
 			}
 		)
+		doc.flags.ignore_permissions = True
+		doc.flags.from_learning = True
 		doc.insert(ignore_permissions=True)
 		return doc
 
