@@ -139,8 +139,8 @@ class TestPatternEntityScan(AIPlatformTestCase):
 		self.assertFalse(has_document_permission(row, "write", user="someone@example.com"))
 
 	def test_explorer_lists_across_documents_with_pagination(self):
-		from ai_fr_hg.api.knowledge import explore_pattern_entities
 		from ai_fr_hg.ai.patterns import scan_document
+		from ai_fr_hg.api.knowledge import explore_pattern_entities
 
 		first = self.make_document("Explorer One", ENTITY_CONTENT)
 		second = self.make_document("Explorer Two", "Contact zed@corp.example about INV-2099-0001.")

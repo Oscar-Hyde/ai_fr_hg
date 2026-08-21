@@ -11,6 +11,7 @@ from frappe.utils import cint
 from ai_fr_hg.tests.integration_test_case import (
 	AIPlatformTestCase,
 	pseudo_translate,
+	stub_embeddings,
 	stub_translation_model,
 )
 
@@ -589,6 +590,37 @@ class TestTranslationRecord(TranslationTestCase):
 		self.assertEqual(ingest.call_args.kwargs["language"], "he")
 		translation.reload()
 		self.assertEqual(translation.translated_document, created.name)
+
+
+class TestBackTranslationAccounting(TranslationTestCase):
+	def test_back_translation_tokens_are_included_in_outcome(self):
+		from ai_fr_hg.ai.translation import translate_text
+
+		with stub_translation_model(), stub_embeddings():
+			outcome = translate_text(
+				"The contractor shall deliver the works on time before the agreed completion date.\n",
+				"ar",
+				source_language="en",
+				back_translation_samples=1,
+				knowledge_base=self.knowledge_base.name,
+			)
+		self.assertGreater(outcome.total_tokens, 0)
+		self.assertIn("tokens", outcome.verification)
+		self.assertGreaterEqual(cint(outcome.verification.get("tokens")), 0)
+		self.assertGreaterEqual(cint(outcome.verification.get("sampled")), 0)
+
+	def test_deadline_marks_partial_without_dropping_usage(self):
+		from ai_fr_hg.ai.deadline import turn_budget
+		from ai_fr_hg.ai.translation import translate_text
+
+		with stub_translation_model(), turn_budget(0.01):
+			outcome = translate_text(
+				STRUCTURED_SOURCE,
+				"he",
+				source_language="en",
+				knowledge_base=self.knowledge_base.name,
+			)
+		self.assertTrue(outcome.partial)
 
 
 class TestTranslationIntegrations(TranslationTestCase):

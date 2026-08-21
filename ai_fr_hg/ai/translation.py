@@ -956,8 +956,14 @@ def _run_translation(doc, *, durable: bool) -> dict:
 		if durable:
 			frappe.db.rollback()
 		doc = frappe.get_doc("AI Translation", doc.name)
+		cancelled = bool(frappe.db.get_value("AI Translation", doc.name, "cancel_requested"))
 		doc.db_set(
-			{"status": "Failed", "error_message": str(error)[:1000], "completed_on": now_datetime()},
+			{
+				"status": "Cancelled" if cancelled else "Failed",
+				"error_message": None if cancelled else str(error)[:1000],
+				"completed_on": now_datetime(),
+				"processing_message": "Cancelled" if cancelled else "Failed",
+			},
 			update_modified=False,
 		)
 		frappe.log_error(title="AI translation failed", message=frappe.get_traceback())

@@ -14,7 +14,7 @@
 | PAT-01 | `pattern_scan_checksum` including empty scans | Same | Zero-result no-rescan test | CLOSED — IMPLEMENTED |
 | PAT-02 | Scan-window offset mapper | Same | Tail identifier source offset test | CLOSED — IMPLEMENTED |
 | PAT-03 | IPv4/calendar/money semantic checks | Same | Invalid IP/date unit test | CLOSED — IMPLEMENTED |
-| PAT-04 | Document-local listing only | Pattern Explorer UI | Frontend workflow tests | OPEN |
+| PAT-04 | Document-local listing only | Pattern Explorer UI | Pagination/filter tests; browser → Phase 7 | CLOSED — IMPLEMENTED |
 
 ## Architecture
 

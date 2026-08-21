@@ -41,6 +41,71 @@ class TestIngestionProgressCancellation(AIPlatformTestCase):
 		self.assertEqual(frappe.db.get_value("AI Document", document.name, "processing_progress"), 0)
 		enqueue.assert_called_once()
 
+	def test_duplicate_cancel_is_idempotent(self):
+		from ai_fr_hg.ai.ingestion import cancel_processing
+
+		document = self.make_document("Duplicate Cancel Document", "cancel twice")
+		document.db_set(
+			{"status": "Queued", "processing_requested_by": frappe.session.user}, update_modified=False
+		)
+		first = cancel_processing(document.name)
+		second = cancel_processing(document.name)
+		self.assertTrue(first["cancelled"])
+		self.assertFalse(second["cancelled"])
+		self.assertEqual(second["status"], "Cancelled")
+
+	def test_worker_observes_cancel_before_extraction(self):
+		from ai_fr_hg.ai.ingestion import process_document
+
+		document = self.make_document("Cancel Before Extract", "worker should stop")
+		document.db_set(
+			{
+				"status": "Queued",
+				"cancel_requested": 1,
+				"processing_requested_by": frappe.session.user,
+			},
+			update_modified=False,
+		)
+		result = process_document(document.name, requested_by=frappe.session.user)
+		self.assertEqual(result["status"], "Cancelled")
+		document.reload()
+		self.assertEqual(document.status, "Cancelled")
+
+	def test_worker_observes_cancel_mid_extraction(self):
+		from ai_fr_hg.ai.ingestion import process_document
+
+		document = self.make_document("Cancel Mid Extract", "worker should stop after extract")
+		document.db_set(
+			{
+				"status": "Queued",
+				"processing_requested_by": frappe.session.user,
+			},
+			update_modified=False,
+		)
+
+		def extract_then_cancel(doc, authority):
+			frappe.db.set_value("AI Document", doc.name, "cancel_requested", 1, update_modified=False)
+			reader = type("R", (), {"label": "Text"})()
+			result = frappe._dict(
+				text=doc.content or "x",
+				page_count=1,
+				word_count=1,
+				character_count=len(doc.content or "x"),
+				metadata={},
+				warnings=[],
+			)
+			return result, reader, b"x", "cancel.txt", "text/plain"
+
+		with (
+			patch("ai_fr_hg.ai.ingestion._extract_source", side_effect=extract_then_cancel),
+			patch("ai_fr_hg.ai.ingestion.validate_source_access"),
+		):
+			result = process_document(document.name, requested_by=frappe.session.user)
+		self.assertEqual(result["status"], "Cancelled")
+		document.reload()
+		self.assertEqual(document.status, "Cancelled")
+		self.assertNotEqual(document.status, "Failed")
+
 
 class TestIndexing(AIPlatformTestCase):
 	def test_document_is_chunked_and_embedded(self):
