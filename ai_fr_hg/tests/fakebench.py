@@ -76,6 +76,21 @@ def _matches(row: dict, filters) -> bool:
 	return True
 
 
+def _comparable(actual, value):
+	"""Coerce one side so a datetime compares with its string form.
+
+	MariaDB compares a DATETIME column against '2020-01-01 00:00:00' without
+	complaint; Python raises TypeError. Rows are stored here as strings while
+	callers pass `now_datetime()`, so without this a perfectly valid filter
+	blows up in the harness and not in production.
+	"""
+	import datetime as _dt
+
+	if isinstance(actual, _dt.datetime) != isinstance(value, _dt.datetime):
+		return str(actual), str(value)
+	return actual, value
+
+
 def _like_matches(pattern: str, actual: str) -> bool:
 	"""Model MariaDB's LIKE, including backslash escaping of the wildcards.
 
@@ -113,14 +128,17 @@ def _matches_one(row: dict, field_name: str, operator: str, value) -> bool:
 		return actual in value
 	if operator == "not in":
 		return actual not in value
-	if operator == "<":
-		return actual is not None and actual < value
-	if operator == ">":
-		return actual is not None and actual > value
-	if operator == "<=":
-		return actual is not None and actual <= value
-	if operator == ">=":
-		return actual is not None and actual >= value
+	if operator in ("<", ">", "<=", ">="):
+		if actual is None:
+			return False
+		left, right = _comparable(actual, value)
+		if operator == "<":
+			return left < right
+		if operator == ">":
+			return left > right
+		if operator == "<=":
+			return left <= right
+		return left >= right
 	if operator == "like":
 		return _like_matches(str(value), str(actual or ""))
 	if operator == "is":
@@ -333,6 +351,9 @@ class FakeDB:
 		self.rolled_back = 0
 		self.savepoints: list[str] = []
 		self.sql_log: list[str] = []
+		#: (doctype, used_for_update) per get_value, so a test can assert that a
+		#: claim path took the lock even though the lock itself is not modelled.
+		self.for_update_reads: list[tuple[str, bool]] = []
 		#: Set to raise on the next write, to exercise failure handling.
 		self.fail_next_write: Exception | None = None
 
@@ -383,6 +404,15 @@ class FakeDB:
 		return [r for r in self._table(doctype).values() if _matches(r, filters)]
 
 	def get_value(self, doctype, filters=None, fieldname="name", as_dict=False, **kwargs):
+		"""Read one value.
+
+		`for_update` is accepted and ignored: this harness is single-threaded,
+		so there is no lock to take and no contention to observe. Code that
+		relies on `SELECT ... FOR UPDATE` for correctness is therefore only
+		partly testable here — the *logic* around the lock can be exercised,
+		the *mutual exclusion* cannot. CHAT-09 is the standing example.
+		"""
+		self.for_update_reads.append((doctype, bool(kwargs.get("for_update"))))
 		rows = (
 			[self.get_row(doctype, filters)] if isinstance(filters, str) else self._filtered(doctype, filters)
 		)
@@ -702,6 +732,9 @@ class FakeBench:
 			self._cache_client = _FakeCache(_new_fakeredis())
 		return self._cache_client
 
+	def clear_document_cache(self, doctype, name=None):
+		self._cached_singles.pop(doctype, None)
+
 	def clear_cache(self, **kwargs):
 		return None
 
@@ -773,6 +806,7 @@ class FakeBench:
 			"get_request_header",
 			"delete_doc",
 			"clear_cache",
+			"clear_document_cache",
 			"get_meta",
 			"whitelist",
 		):

@@ -237,6 +237,28 @@ MUTATIONS: list[Mutation] = [
 		breaks="Evidence must record when extraction ran.",
 	),
 	# -- formula preservation (§6.2) --------------------------------------
+	# -- task lifecycle governance (TASK-02) ------------------------------
+	Mutation(
+		name="task-actor-authority-dropped",
+		path="ai_fr_hg/ai/tasks.py",
+		old='raise frappe.PermissionError(_("You cannot perform this action on AI Task {0}.").format(doc.name))',
+		new="return",
+		breaks="Any signed-in user can cancel or retry another user's task.",
+	),
+	Mutation(
+		name="task-cancelled-is-not-terminal",
+		path="ai_fr_hg/ai/tasks.py",
+		old='"Cancelled": set(),',
+		new='"Cancelled": {"Open", "Cancelled"},',
+		breaks="A terminal state becomes re-openable, so the lifecycle is not a lifecycle.",
+	),
+	Mutation(
+		name="task-claim-trusts-stale-list",
+		path="ai_fr_hg/ai/tasks.py",
+		old='status = frappe.db.get_value("AI Task", row.name, "status", for_update=True)',
+		new='status = row.get("status") or "Open"',
+		breaks="A task already taken by another worker is claimed and run twice.",
+	),
 	# -- quota reservation ledger (GOV-03) --------------------------------
 	Mutation(
 		name="quota-request-ceiling-not-enforced",

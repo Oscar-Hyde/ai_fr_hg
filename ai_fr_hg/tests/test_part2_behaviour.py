@@ -1633,3 +1633,119 @@ class TestQuotaReservationLedger(TestCase):
 		reservation.release()
 
 		self.assertTrue(reservation.released)
+
+
+class TestTaskLifecycleGovernance(TestCase):
+	"""TASK-02 re-audit: state machine and actor authority, run rather than read.
+
+	Part 2 sections 19 and 20 require a governed job lifecycle. The risk is not that the
+	transition table is wrong on paper — it is that a caller reaches a
+	transition without the authority for it, or that a terminal state turns
+	out not to be terminal.
+	"""
+
+	def _bench(self, *, status="Open", requester="alice@example.com", requires_approval=0):
+		bench = install(FakeBench())
+		bench.register_doctype(
+			"AI Task",
+			["status", "requested_by", "requires_approval", "priority", "due_date", "error_message"],
+		)
+		bench.db.insert_row(
+			"AI Task",
+			{
+				"name": "TASK-1",
+				"owner": requester,
+				"status": status,
+				"requested_by": requester,
+				"requires_approval": requires_approval,
+				"priority": "Medium",
+			},
+		)
+		bench.session.user = requester
+		return bench, import_app("ai_fr_hg.ai.tasks")
+
+	def _status(self, bench):
+		return bench.db.tables["AI Task"]["TASK-1"]["status"]
+
+	def test_terminal_states_are_actually_terminal(self):
+		for terminal in ("Completed", "Cancelled", "Rejected"):
+			bench, tasks = self._bench(status=terminal)
+			bench.roles["alice@example.com"] = ["AI Manager"]
+			with self.assertRaises(tasks.TaskIllegalTransition):
+				tasks.cancel_task("TASK-1")
+			self.assertEqual(self._status(bench), terminal)
+
+	def test_a_stranger_cannot_cancel_someone_elses_task(self):
+		bench, tasks = self._bench()
+		bench.session.user = "mallory@example.com"
+		bench.roles["mallory@example.com"] = []
+
+		import frappe
+
+		with self.assertRaises(frappe.PermissionError):
+			tasks.cancel_task("TASK-1")
+		self.assertEqual(self._status(bench), "Open")
+
+	def test_guest_cannot_act_at_all(self):
+		bench, tasks = self._bench()
+		bench.session.user = "Guest"
+
+		import frappe
+
+		with self.assertRaises(frappe.PermissionError):
+			tasks.cancel_task("TASK-1")
+
+	def test_requester_may_cancel_their_own_task(self):
+		bench, tasks = self._bench()
+
+		tasks.cancel_task("TASK-1")
+
+		self.assertEqual(self._status(bench), "Cancelled")
+
+	def test_manager_may_cancel_any_task(self):
+		bench, tasks = self._bench(requester="alice@example.com")
+		bench.session.user = "boss@example.com"
+		bench.roles["boss@example.com"] = ["AI Manager"]
+
+		tasks.cancel_task("TASK-1")
+
+		self.assertEqual(self._status(bench), "Cancelled")
+
+	def test_approval_gate_blocks_a_non_manager_running_it_early(self):
+		"""requires_approval must not be bypassable by the requester."""
+		bench, tasks = self._bench(requires_approval=1)
+
+		import frappe
+
+		with self.assertRaises(frappe.PermissionError):
+			tasks.run_now("TASK-1")
+		self.assertEqual(self._status(bench), "Open")
+
+	def test_claiming_reads_status_under_a_lock_before_acting(self):
+		"""The claim must re-read status for update, not trust the list query."""
+		bench, tasks = self._bench()
+		bench.db.tables["AI Task"]["TASK-1"]["due_date"] = "2020-01-01 00:00:00"
+		bench.db.for_update_reads.clear()
+
+		tasks.claim_due_tasks(limit=10)
+
+		self.assertIn(
+			("AI Task", True),
+			bench.db.for_update_reads,
+			"claim_due_tasks did not re-read status FOR UPDATE",
+		)
+
+	def test_a_task_already_taken_is_not_claimed_twice(self):
+		"""Simulates the row having moved on between the list and the lock."""
+		bench, tasks = self._bench()
+		bench.db.tables["AI Task"]["TASK-1"]["due_date"] = "2020-01-01 00:00:00"
+
+		original = bench.db.get_value
+
+		def moved_on(doctype, filters=None, fieldname="name", **kwargs):
+			if kwargs.get("for_update") and fieldname == "status":
+				return "In Progress"
+			return original(doctype, filters, fieldname, **kwargs)
+
+		bench.db.get_value = moved_on
+		self.assertEqual(tasks.claim_due_tasks(limit=10), [])
