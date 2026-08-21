@@ -24,7 +24,13 @@ import json
 from pathlib import Path
 from unittest import TestCase
 
-from ai_fr_hg.tests.fakebench import FakeBench, ValidationError, import_app, install
+from ai_fr_hg.tests.fakebench import (
+	FakeBench,
+	PermissionError_,
+	ValidationError,
+	import_app,
+	install,
+)
 
 APP = Path(__file__).resolve().parents[1]
 
@@ -1102,3 +1108,146 @@ class TestFolderSubtreeIsolation(TestCase):
 		)
 
 		self.assertEqual(self._query(bench, "Home/A"), set())
+
+
+class TestGenericToolPermissionEnforcement(TestCase):
+	"""SEC-02 / SEC-03 re-audit: no test referenced `safe_count` at all.
+
+	Both rows are CLOSED security claims — "count runs through permission-aware
+	listing" and "central permlevel-aware projection plus sensitive-field
+	deny" — and the whole of `ai/tools/query.py` had no direct coverage. These
+	tests exercise the real functions against a bench whose `get_list` applies
+	a row-permission hook, which is the exact distinction SEC-02 turns on:
+	`frappe.db.count` ignores permission query conditions, `get_list` does not.
+	"""
+
+	def _bench(self):
+		bench = install(FakeBench())
+		bench.register_doctype("AI Document", ["title", "owner_user", "api_key", "vault_pin", "notes"])
+		bench.field_types["AI Document"] = {
+			"title": "Data",
+			"owner_user": "Data",
+			"api_key": "Data",
+			# `vault_pin` is innocuous by name, so only its Password *type*
+			# can deny it. Without this the type rule is untested: `api_key`
+			# is already caught by the substring policy.
+			"vault_pin": "Password",
+			"notes": "Small Text",
+		}
+		for index in range(1, 7):
+			bench.db.insert_row(
+				"AI Document",
+				{
+					"name": f"DOC-{index}",
+					"title": f"doc {index}",
+					# Half belong to someone else.
+					"owner_user": "alice@example.com" if index % 2 else "bob@example.com",
+					"api_key": "super-secret",
+					"vault_pin": "1234",
+					"notes": "n",
+				},
+			)
+		# Row-level rule: a user sees only their own rows.
+		bench.permission_hooks["AI Document"] = lambda user, row: row.get("owner_user") == user
+		bench.session.user = "alice@example.com"
+		return bench
+
+	def test_count_respects_row_level_permissions(self):
+		"""SEC-02: the aggregate must not reveal rows the caller cannot list."""
+		bench = self._bench()
+		query = import_app("ai_fr_hg.ai.tools.query")
+
+		result = query.safe_count("AI Document")
+
+		# Six rows exist; three belong to alice.
+		self.assertEqual(len(bench.db.tables["AI Document"]), 6)
+		self.assertEqual(result["count"], 3)
+		self.assertTrue(result["exact"])
+		self.assertFalse(result["bounded"])
+
+	def test_count_changes_with_the_acting_user(self):
+		"""Proves the number tracks authority rather than being a constant."""
+		bench = self._bench()
+		query = import_app("ai_fr_hg.ai.tools.query")
+
+		bench.session.user = "bob@example.com"
+		self.assertEqual(query.safe_count("AI Document")["count"], 3)
+
+		bench.permission_hooks["AI Document"] = lambda user, row: True
+		self.assertEqual(query.safe_count("AI Document")["count"], 6)
+
+	def test_count_is_reported_as_bounded_rather_than_wrong(self):
+		"""Beyond the scan cap the tool must not pretend to be exact."""
+		bench = self._bench()
+		query = import_app("ai_fr_hg.ai.tools.query")
+		bench.permission_hooks["AI Document"] = lambda user, row: True
+
+		original = query.COUNT_SCAN_CAP
+		try:
+			query.COUNT_SCAN_CAP = 2
+			result = query.safe_count("AI Document")
+		finally:
+			query.COUNT_SCAN_CAP = original
+
+		self.assertEqual(result["count"], 2)
+		self.assertFalse(result["exact"])
+		self.assertTrue(result["bounded"])
+
+	def test_unreadable_doctype_is_refused_before_any_query(self):
+		self._bench()
+		query = import_app("ai_fr_hg.ai.tools.query")
+		import frappe
+
+		def deny(doctype, ptype="read", doc=None, user=None, throw=False):
+			return False
+
+		frappe.has_permission = deny
+		# `_assert_readable` must refuse before any row is read.
+		with self.assertRaises(PermissionError_):
+			query.safe_count("AI Document")
+
+	def test_password_and_secret_fields_are_denied(self):
+		"""SEC-03: sensitive fields are denied by type and by name."""
+		self._bench()
+		query = import_app("ai_fr_hg.ai.tools.query")
+
+		denied = query.denied_fieldnames("AI Document")
+
+		# Denied by name (substring policy).
+		self.assertIn("api_key", denied)
+		# Denied by fieldtype alone — the name gives nothing away.
+		self.assertIn("vault_pin", denied)
+		self.assertNotIn("title", denied)
+		self.assertNotIn("notes", denied)
+
+	def test_permlevel_restricted_fields_are_not_projected(self):
+		"""SEC-03: the projection follows Frappe's permitted-field rules."""
+		bench = self._bench()
+		query = import_app("ai_fr_hg.ai.tools.query")
+
+		bench.permitted_fields["AI Document"] = {"title", "api_key"}
+		permitted, denied = query.readable_fields("AI Document")
+
+		self.assertEqual(permitted, {"title", "api_key"})
+		self.assertIn("api_key", denied)
+		# The usable projection is what survives both rules.
+		self.assertEqual(permitted - denied, {"title"})
+
+	def test_write_payload_strips_fields_outside_write_authority(self):
+		"""SEC-03: a model-supplied payload cannot set a restricted field."""
+		bench = self._bench()
+		query = import_app("ai_fr_hg.ai.tools.query")
+
+		bench.permitted_fields["AI Document"] = {"title", "notes", "api_key", "vault_pin"}
+		cleaned = query.safe_field_values(
+			"AI Document",
+			{
+				"title": "ok",
+				"api_key": "attempt",
+				"vault_pin": "attempt",
+				"owner_user": "escalate",
+				"unknown": "x",
+			},
+		)
+
+		self.assertEqual(cleaned, {"title": "ok"})

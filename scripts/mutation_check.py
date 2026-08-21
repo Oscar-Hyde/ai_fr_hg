@@ -237,6 +237,21 @@ MUTATIONS: list[Mutation] = [
 		breaks="Evidence must record when extraction ran.",
 	),
 	# -- formula preservation (§6.2) --------------------------------------
+	# -- generic tool permissions (SEC-02 / SEC-03) -----------------------
+	Mutation(
+		name="count-bypasses-row-permissions",
+		path="ai_fr_hg/ai/tools/query.py",
+		old="names = frappe.get_list(\n\t\tdoctype,\n\t\tfilters=cleaned_filters or None,",
+		new="names = frappe.get_all(\n\t\tdoctype,\n\t\tfilters=cleaned_filters or None,",
+		breaks="The original SEC-02 bug: the aggregate counts rows the caller cannot list.",
+	),
+	Mutation(
+		name="password-fieldtype-not-denied",
+		path="ai_fr_hg/ai/tools/query.py",
+		old='SENSITIVE_FIELD_TYPES = {"Password"}',
+		new="SENSITIVE_FIELD_TYPES = set()",
+		breaks="A Password field with an innocuous name becomes readable by generic tools.",
+	),
 	# -- folder subtree isolation (RET-07) --------------------------------
 	Mutation(
 		name="folder-prefix-matches-siblings",

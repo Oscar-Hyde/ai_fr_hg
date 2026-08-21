@@ -149,7 +149,17 @@ class FakeDocType:
 	controller: type | None = None
 
 	def fieldnames(self) -> set[str]:
-		return {f["fieldname"] for f in self.fields}
+		# Fields may be declared as bare names or as DocField-like dicts.
+		return {f if isinstance(f, str) else f["fieldname"] for f in self.fields}
+
+	def fieldtypes(self) -> dict[str, str]:
+		types_by_name: dict[str, str] = {}
+		for entry in self.fields:
+			if isinstance(entry, str):
+				types_by_name[entry] = "Data"
+			else:
+				types_by_name[entry["fieldname"]] = entry.get("fieldtype", "Data")
+		return types_by_name
 
 
 class FakeDocument:
@@ -330,7 +340,7 @@ class FakeDB:
 			if target in self._table(doctype):
 				self.update_row(doctype, target, values, partial=True)
 
-	def get_single_value(self, doctype, fieldname):
+	def get_single_value(self, doctype, fieldname, *args, cache=False, **kwargs):
 		return self.singles.get(doctype, {}).get(fieldname)
 
 	def set_single_value(self, doctype, fieldname, value):
@@ -395,6 +405,10 @@ class FakeBench:
 		self.realtime: list[dict] = []
 		self.enqueued: list[dict] = []
 		self.permission_hooks: dict[str, callable] = {}
+		#: doctype -> set|callable of fields the user may read/write.
+		self.permitted_fields: dict[str, object] = {}
+		#: doctype -> {fieldname: fieldtype}, so field-policy code can see types.
+		self.field_types: dict[str, dict[str, str]] = {}
 		self.roles: dict[str, list[str]] = {}
 		self._cached_singles: dict[str, FakeDocument] = {}
 
@@ -492,12 +506,35 @@ class FakeBench:
 		return rows
 
 	def get_list(self, doctype, **kwargs):
-		# Row-level permission filtering, the way `get_list` differs from `get_all`.
-		rows = self.get_all(doctype, **kwargs)
+		"""`get_all` plus row-level permission filtering.
+
+		The permission hook must see whole rows, so when the caller asks for
+		`pluck` or a narrow `fields` projection the filtering happens first and
+		the projection is applied afterwards. Filtering the projected output
+		would hand the hook a bare string and silently pass every row — which
+		is exactly the bypass SEC-02 is about.
+		"""
 		hook = self.permission_hooks.get(doctype)
 		if hook is None:
-			return rows
-		return [r for r in rows if hook(self.session.user, r)]
+			return self.get_all(doctype, **kwargs)
+
+		pluck = kwargs.pop("pluck", None)
+		fields = kwargs.pop("fields", None)
+		limit = kwargs.pop("limit", None)
+		limit_page_length = kwargs.pop("limit_page_length", None)
+
+		rows = self.get_all(doctype, **kwargs)
+		allowed = [row for row in rows if hook(self.session.user, row)]
+
+		page = limit_page_length if limit_page_length is not None else limit
+		if page:
+			allowed = allowed[:page]
+		if pluck:
+			return [row.get(pluck) for row in allowed]
+		if fields:
+			plain = [f for f in fields if isinstance(f, str)]
+			return [_Row({f: row.get(f) for f in plain}) for row in allowed]
+		return allowed
 
 	def has_permission(self, doctype, ptype="read", doc=None, user=None, throw=False):
 		hook = self.permission_hooks.get(doctype)
@@ -564,11 +601,45 @@ class FakeBench:
 	def get_meta(self, doctype):
 		meta = self.doctypes.get(doctype)
 		names = meta.fieldnames() if meta else set()
+		# `.fields` mirrors Frappe: DocField-like objects carrying at least
+		# fieldname/fieldtype, which field-policy code inspects.
+		fields = [
+			types.SimpleNamespace(
+				fieldname=name,
+				fieldtype=(
+					self.field_types.get(doctype, {}).get(
+						name, (meta.fieldtypes().get(name, "Data") if meta else "Data")
+					)
+				),
+				label=name,
+			)
+			for name in sorted(names)
+		]
 		return types.SimpleNamespace(
 			name=doctype,
 			issingle=bool(meta and meta.is_single),
 			has_field=lambda f: f in names,
+			fields=fields,
+			get_field=lambda f: next((x for x in fields if x.fieldname == f), None),
 		)
+
+	def get_permitted_fields(self, doctype, user=None, permission_type="read"):
+		"""Fields the user may see, honouring a registered permlevel policy.
+
+		Frappe computes this from permlevels and role permissions. Tests
+		register the outcome directly via `bench.permitted_fields[doctype]`,
+		which may be a set or a callable taking `(user, permission_type)`.
+		With nothing registered every field is permitted, matching a
+		single-permlevel DocType.
+		"""
+		policy = self.permitted_fields.get(doctype)
+		meta = self.doctypes.get(doctype)
+		everything = sorted(meta.fieldnames()) if meta else []
+		if policy is None:
+			return everything
+		if callable(policy):
+			return sorted(policy(user or self.session.user, permission_type))
+		return sorted(policy)
 
 	# -- module assembly ---------------------------------------------------
 
@@ -615,6 +686,7 @@ class FakeBench:
 		)
 		module.utils = self._utils_module()
 		module.model = types.ModuleType("frappe.model")
+		module.model.get_permitted_fields = self.get_permitted_fields
 		document_module = types.ModuleType("frappe.model.document")
 
 		bench = self
@@ -658,10 +730,35 @@ class FakeBench:
 			)
 			return base.strftime("%Y-%m-%d")
 
+		def add_to_date(date=None, years=0, months=0, days=0, hours=0, minutes=0, seconds=0, **kwargs):
+			from datetime import datetime, timedelta
+
+			if date is None:
+				base = now_datetime()
+			elif isinstance(date, datetime):
+				base = date
+			else:
+				text = str(date)
+				base = datetime.fromisoformat(text if len(text) > 10 else f"{text} 00:00:00")
+			# Approximate calendar arithmetic is sufficient here: tests assert
+			# ordering and retention windows, never exact month lengths.
+			base += timedelta(
+				days=days + months * 30 + years * 365,
+				hours=hours,
+				minutes=minutes,
+				seconds=seconds,
+			)
+			if kwargs.get("as_string"):
+				return base.strftime(
+					"%Y-%m-%d" if kwargs.get("as_datetime") is False else "%Y-%m-%d %H:%M:%S"
+				)
+			return base
+
 		utils.cint = cint
 		utils.flt = flt
 		utils.now_datetime = now_datetime
 		utils.add_days = add_days
+		utils.add_to_date = add_to_date
 		utils.today = lambda: "2026-08-21"
 		utils.now = lambda: "2026-08-21 12:00:00"
 		utils.get_datetime = lambda v=None: v
