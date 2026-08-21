@@ -14,6 +14,7 @@ from ai_fr_hg.ai.organization import organization_name_key
 
 _COPY_PROVENANCE_ALLOWED = ContextVar("ai_document_copy_provenance_allowed", default=False)
 _DEFER_FILE_SOURCE_SYNC = ContextVar("ai_document_defer_file_source_sync", default=False)
+_EXTRACTION_PROVENANCE_ALLOWED = ContextVar("ai_document_extraction_provenance", default=False)
 
 
 @contextmanager
@@ -34,6 +35,22 @@ def allow_deferred_file_source_sync():
 		yield
 	finally:
 		_DEFER_FILE_SOURCE_SYNC.reset(token)
+
+
+@contextmanager
+def allow_extraction_provenance():
+	"""Authorize extraction provenance writes inside the canonical pipeline.
+
+	The ingestion pipeline normally writes provenance with `db_set`, which does
+	not run `validate`. This context exists for the paths that legitimately
+	re-extract through a full document save, so the immutability guard stays
+	strict for everyone else instead of being softened for everyone.
+	"""
+	token = _EXTRACTION_PROVENANCE_ALLOWED.set(True)
+	try:
+		yield
+	finally:
+		_EXTRACTION_PROVENANCE_ALLOWED.reset(token)
 
 
 class AIDocument(Document):
@@ -176,10 +193,43 @@ class AIDocument(Document):
 	def validate(self):
 		self.validate_source()
 		self.validate_copy_provenance()
+		self.validate_extraction_provenance()
 		self.validate_organization()
 		self.lock_and_revalidate_file_source()
 		self.set_organization_revision()
 		validate_source_access(self, user=frappe.session.user)
+
+	#: Provenance written by the canonical extraction owner. `read_only` on the
+	#: DocType is a Desk affordance only -- Frappe does not enforce it
+	#: server-side -- so immutability is asserted here.
+	EXTRACTION_PROVENANCE_FIELDS = (
+		"checksum",
+		"reader_used",
+		"file_size",
+		"mime_type",
+		"extraction_evidence",
+	)
+
+	def validate_extraction_provenance(self) -> None:
+		"""Keep extraction provenance writable only by the extraction pipeline.
+
+		Answering "which file, which extractor, which version produced this?"
+		is only trustworthy if the answer cannot be edited after the fact. The
+		ingestion pipeline writes these fields with `db_set`, which bypasses
+		`validate`, so this guard constrains ordinary document saves without
+		obstructing the canonical owner.
+		"""
+		old = self.get_doc_before_save()
+		if not old:
+			return
+		if _EXTRACTION_PROVENANCE_ALLOWED.get() or _DEFER_FILE_SOURCE_SYNC.get():
+			return
+		for fieldname in self.EXTRACTION_PROVENANCE_FIELDS:
+			if self.get(fieldname) != old.get(fieldname):
+				frappe.throw(
+					_("Extraction provenance field {0} is immutable.").format(_(fieldname)),
+					frappe.ValidationError,
+				)
 
 	def lock_and_revalidate_file_source(self) -> None:
 		"""Serialize canonical source changes after the parent folder is locked."""

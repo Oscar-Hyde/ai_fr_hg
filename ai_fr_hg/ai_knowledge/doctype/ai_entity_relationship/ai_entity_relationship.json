@@ -3,7 +3,7 @@
  "allow_import": 1,
  "allow_rename": 0,
  "autoname": "hash",
- "creation": "2026-08-19 09:00:00.000000",
+ "creation": "2026-08-21 12:00:00.000000",
  "doctype": "DocType",
  "editable_grid": 1,
  "engine": "InnoDB",
@@ -11,18 +11,19 @@
   "document_sec",
   "document",
   "knowledge_base",
-  "pattern_cb",
-  "entity_type",
-  "occurrences",
-  "extraction_method",
+  "relationship_cb",
+  "relationship_type",
   "confidence",
-  "model_used",
-  "value_sec",
-  "value",
-  "normalized_value",
+  "subject_sec",
+  "subject",
+  "subject_entity",
+  "object_cb",
+  "object",
+  "object_entity",
   "provenance_sec",
+  "evidence_quote",
   "first_offset",
-  "context_quote",
+  "model_used",
   "scan_sec",
   "source_checksum"
  ],
@@ -54,41 +55,23 @@
    "search_index": 1
   },
   {
-   "fieldname": "pattern_cb",
+   "fieldname": "relationship_cb",
    "fieldtype": "Column Break"
   },
   {
-   "default": "custom",
-   "fieldname": "entity_type",
+   "description": "Normalized predicate describing how the subject relates to the object.",
+   "fieldname": "relationship_type",
    "fieldtype": "Select",
    "in_list_view": 1,
-   "in_preview": 1,
    "in_standard_filter": 1,
-   "label": "Entity Type",
-   "options": "email\nurl\nphone\nip\nhash\ndate\nidentifier\nmoney\nperson\norganization\nlocation\nconcept\ncustom"
-  },
-  {
-   "default": "1",
-   "fieldname": "occurrences",
-   "fieldtype": "Int",
-   "in_list_view": 1,
-   "label": "Occurrences",
-   "non_negative": 1,
-   "read_only": 1
-  },
-  {
-   "description": "How this entity was produced. Deterministic patterns are exact; semantic entities are model-inferred and carry a confidence.",
-   "fieldname": "extraction_method",
-   "fieldtype": "Select",
-   "in_standard_filter": 1,
-   "label": "Extraction Method",
-   "options": "pattern\nsemantic",
-   "default": "pattern",
-   "read_only": 1,
+   "label": "Relationship Type",
+   "options": "works_for\nlocated_in\npart_of\nreports_to\nowns\npartner_of\nmentions\nrelated_to",
+   "default": "related_to",
+   "reqd": 1,
    "search_index": 1
   },
   {
-   "description": "Model-reported confidence for semantic entities (0-100). Empty for deterministic pattern matches, which are exact by construction.",
+   "description": "Model-reported confidence (0-100). Relationships are always inferred, never deterministic.",
    "fieldname": "confidence",
    "fieldtype": "Percent",
    "in_list_view": 1,
@@ -96,33 +79,47 @@
    "read_only": 1
   },
   {
-   "description": "The AI Model that inferred this entity, when extraction_method is semantic.",
-   "fieldname": "model_used",
+   "fieldname": "subject_sec",
+   "fieldtype": "Section Break",
+   "label": "Subject"
+  },
+  {
+   "fieldname": "subject",
    "fieldtype": "Data",
-   "label": "Model Used",
+   "in_list_view": 1,
+   "label": "Subject",
+   "length": 500,
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "description": "Resolved AI Pattern Entity for the subject, when one exists.",
+   "fieldname": "subject_entity",
+   "fieldtype": "Link",
+   "label": "Subject Entity",
+   "options": "AI Pattern Entity",
    "read_only": 1
   },
   {
-   "fieldname": "value_sec",
-   "fieldtype": "Section Break",
-   "label": "Pattern Match"
+   "fieldname": "object_cb",
+   "fieldtype": "Column Break"
   },
   {
-   "fieldname": "value",
+   "fieldname": "object",
    "fieldtype": "Data",
-   "in_preview": 1,
-   "label": "Value",
+   "in_list_view": 1,
+   "label": "Object",
    "length": 500,
-   "reqd": 1
-  },
-  {
-   "description": "Deterministic canonical identity for this type, used for deduplication.",
-   "fieldname": "normalized_value",
-   "fieldtype": "Data",
-   "label": "Normalized Value",
-   "length": 500,
-   "read_only": 1,
+   "reqd": 1,
    "search_index": 1
+  },
+  {
+   "description": "Resolved AI Pattern Entity for the object, when one exists.",
+   "fieldname": "object_entity",
+   "fieldtype": "Link",
+   "label": "Object Entity",
+   "options": "AI Pattern Entity",
+   "read_only": 1
   },
   {
    "collapsible": 1,
@@ -131,17 +128,23 @@
    "label": "Provenance"
   },
   {
-   "description": "Character offset of the first match within the scanned text window.",
+   "description": "Verbatim span from the document that supports this relationship. A relationship without supporting text is not persisted.",
+   "fieldname": "evidence_quote",
+   "fieldtype": "Small Text",
+   "label": "Evidence Quote",
+   "read_only": 1
+  },
+  {
+   "description": "Character offset of the evidence quote within the document content.",
    "fieldname": "first_offset",
    "fieldtype": "Int",
    "label": "First Offset",
    "read_only": 1
   },
   {
-   "description": "Bounded quote around the first occurrence, for citation re-anchoring.",
-   "fieldname": "context_quote",
-   "fieldtype": "Small Text",
-   "label": "Context Quote",
+   "fieldname": "model_used",
+   "fieldtype": "Data",
+   "label": "Model Used",
    "read_only": 1
   },
   {
@@ -164,7 +167,7 @@
  "modified": "2026-08-21 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "AI Knowledge",
- "name": "AI Pattern Entity",
+ "name": "AI Entity Relationship",
  "naming_rule": "Random",
  "owner": "Administrator",
  "permissions": [
@@ -203,11 +206,11 @@
   }
  ],
  "row_format": "Dynamic",
- "search_fields": "document,entity_type,value,normalized_value",
+ "search_fields": "document,relationship_type,subject,object",
  "show_title_field_in_link": 1,
  "sort_field": "creation",
  "sort_order": "DESC",
  "states": [],
- "title_field": "value",
+ "title_field": "subject",
  "track_changes": 0
 }

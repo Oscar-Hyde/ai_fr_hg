@@ -16,6 +16,9 @@ These decisions make the supported product boundary explicit. They remain author
 | ADR-008 | File intelligence is custom extraction on native File bytes; advertise only real parsers | Accepted | Knowledge/Ingestion | When a real parser exists for a currently unsupported family |
 | ADR-009 | Runtime admission control is Redis/Lua on `frappe.cache()`, and fails open when Redis is down | Accepted | Governance | If a non-Redis deployment target is ever supported |
 | ADR-010 | Enforced model capability defaults to the adapter's transport capability | Accepted | Provider + Governance | When a capability probe protocol exists for every supported runtime |
+| ADR-011 | Semantic entities are model-inferred and mechanically grounded | Accepted | Knowledge/Intelligence | When a local NER runtime is approved |
+| ADR-012 | Legacy binary Office formats (DOC/XLS/PPT) remain unsupported | Accepted | Knowledge/Ingestion | When an OLE2 parser or sandboxed converter is approved |
+| ADR-013 | A user archive is one document, not a synthetic folder tree | Accepted | Knowledge/Ingestion | If per-member citation granularity is required |
 
 ## ADR-001 — MariaDB-only application support
 
@@ -163,3 +166,130 @@ An unrecognised error never marks a capability missing.
 that declares tool support and cannot deliver it fails at the runtime once, and
 is then refused locally until the probe expires. A full pre-flight capability
 probe per model is Phase 7 real-runtime matrix work.
+
+## ADR-011 — Semantic entities are model-inferred, mechanically grounded
+
+**Date.** 2026-08-21 (Part 1 §11).
+
+**Context.** §11 requires people, organizations, locations, concepts, and
+relationships. `ai.patterns` extracts only what a regex can prove, and
+deliberately refuses lexical guesses. None of the five required categories has
+a deterministic surface form, so the existing engine cannot satisfy §11 by
+extension.
+
+**Frappe V17 capability evaluated.** Frappe provides DocTypes, background jobs,
+scheduling, permissions, caching, and the query builder — all used here. Frappe
+has **no** native named-entity recognition or relationship inference. A domain
+implementation is therefore required and duplicates no framework
+responsibility.
+
+**Options considered.**
+
+1. *Local NER package* (spaCy or similar). Rejected for now: a heavyweight
+   dependency plus model-weight distribution in a local-first application, and
+   it would still need its own governance, failure, and versioning contract.
+2. *Model layer via `engine.run_chat`.* Chosen. It reuses quota reservation
+   (GOV-03), rate limiting (GOV-02), concurrency leases (GOV-01), failover
+   (PROV-01), execution logging, and the INT-02 structured-output validator.
+   No new governance surface is created.
+
+**Decision.** Semantic extraction runs through the governed model path and is
+constrained by three mechanical rules enforced in `ai.semantic`, not by prompt
+instructions:
+
+1. **Grounding.** Every entity value, relationship subject, relationship
+   object, and evidence span must be locatable verbatim in the source text.
+   Anything that cannot be located is discarded and counted as `ungrounded`.
+2. **Confidence.** Every semantic row carries a model-reported confidence and
+   is filtered against `semantic_confidence_floor` (default 50).
+3. **Evidence.** Entities record a true character offset and a context quote;
+   relationships require a supporting verbatim span, enforced in the DocType
+   controller.
+
+**Determinism carve-out.** §8 requires deterministic output "where possible".
+Model inference is not deterministic, so this layer is explicitly excluded from
+that clause. The three rules above are what make it auditable instead. Rows are
+separated by `extraction_method`, so a deterministic pattern row can never be
+confused with an inferred one, and `persistable_pattern_type` refuses a
+semantic type on a `pattern` row.
+
+**Opt-in.** `semantic_entities_enabled` defaults to off and patch
+`v0_0_23_part1_file_intelligence` never enables it, because each scan costs a
+model call. Deterministic pattern extraction is unaffected and remains the
+default behaviour.
+
+**Consequence.** Semantic entities are *evidence-backed inferences*, not facts.
+Confidence is populated only for `semantic` rows; a deterministic match is
+exact and carries no confidence, because inventing one would be a false signal.
+
+## ADR-012 — Legacy binary Office formats remain unsupported
+
+**Date.** 2026-08-21 (Part 1 §6.2).
+
+**Context.** §6.2 lists `DOC`, `XLS`, and `PPT` as example formats. None is
+registered. They are OLE2 compound-binary containers, unrelated to the OOXML
+and OpenDocument ZIP families the platform parses.
+
+**Frappe V17 capability evaluated.** Frappe File stores and serves the bytes
+but performs no document parsing; there is no native converter.
+
+**Options considered.**
+
+1. *Add an OLE2 parser stack* (`olefile` plus per-format decoders). Rejected
+   for now: three separate binary formats, each needing its own decoder,
+   fixtures, and fuzz coverage.
+2. *Out-of-process conversion* (LibreOffice headless). Rejected for now: an
+   external binary with its own sandboxing, timeout, resource, and supply-chain
+   contract — a deployment change, not a reader.
+3. *Register the extensions anyway.* Rejected outright: that is exactly the
+   "declared only" pattern Phase 0 removed, and ADR-008 forbids it.
+
+**Decision.** `.doc`, `.xls`, and `.ppt` remain unsupported. Ingestion reports
+them as unsupported with an actionable message rather than failing obscurely.
+Revisit when a real parser or a sandboxed converter is approved, with the
+threat model that decision requires.
+
+**Consequence.** The supported-format list stays truthful. Users converting a
+legacy file to its modern equivalent get full support immediately.
+
+## ADR-013 — User archives are one document, not a synthetic folder tree
+
+**Date.** 2026-08-21 (Part 1 §6.2 "Archives").
+
+**Context.** §6.2 requires safe extraction, recursive processing, file
+relationship tracking, and protection against unsafe input for archives.
+ADR-003 already establishes that native Frappe `File` is the only folder
+authority, and that no synthetic folder source may compete with it.
+
+**Frappe V17 capability evaluated.** Frappe File provides the folder tree,
+attachments, privacy, and identity. It has no archive-expansion capability and
+no archive safety policy — `ai.readers.archive` already exists precisely
+because Frappe has no ZIP-bomb policy.
+
+**Decision.** An archive is ingested as **one** `AI Document` whose text is the
+concatenation of its readable members and whose `structure` records the full
+containment tree (`path`, `parent`, `depth`, `reader`, `bytes`). Members do not
+become folders, and do not become independent documents.
+
+**Why not one document per member.** That would create a second recursive tree
+competing with `File` for identity, permissions, moves, and deletion —
+precisely what ADR-003 forbids. It would also raise unanswered questions about
+member permissions and re-upload identity.
+
+**Safety.** One cumulative `ArchiveBudget` governs an entire nested walk:
+`MAX_ARCHIVE_DEPTH` (3), `MAX_TOTAL_MEMBERS` (1000), `MAX_TOTAL_EXTRACTED`
+(200 MB), and `MAX_MEMBER_SIZE` (50 MB). Because the budget is cumulative,
+nesting cannot multiply cost. Path traversal, absolute paths, drive letters,
+symlinks, hardlinks, and encrypted members are refused; a per-member failure is
+isolated and reported rather than failing the archive.
+
+**Office containers are excluded.** A `.docx` is a single document that happens
+to be a ZIP, so it keeps the stricter single-document Office policy
+(`validate_zip_container`). `_needs_zip_guard` excludes user-archive extensions
+so the 500-member Office cap cannot reject a legitimate bundle, while
+`ArchiveReader` still enforces ratio, traversal, and encryption rules through
+the same authority module.
+
+**Consequence.** Members are searchable through the parent document, and the
+containment tree is fully reconstructable from evidence. Per-member retrieval
+citation granularity is a future enhancement and is not claimed today.

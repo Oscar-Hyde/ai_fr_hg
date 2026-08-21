@@ -27,3 +27,4 @@ ai_fr_hg.patches.v0_0_19_phase_5_automation
 ai_fr_hg.patches.v0_0_20_extraction_evidence
 ai_fr_hg.patches.v0_0_21_phase_6_governance
 ai_fr_hg.patches.v0_0_22_conversation_sequence_counter
+ai_fr_hg.patches.v0_0_23_part1_file_intelligence

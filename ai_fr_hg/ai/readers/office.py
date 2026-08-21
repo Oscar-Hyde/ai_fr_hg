@@ -188,8 +188,12 @@ class DocxReader(BaseReader):
 class XlsxReader(BaseReader):
 	label = "Excel Workbook"
 	requires = "openpyxl"
+	version = "1.1"  # 1.1 adds formula preservation
 
 	MAX_ROWS_PER_SHEET = 5000
+	#: Bound on captured formulas so a pathological workbook cannot blow up
+	#: the evidence payload. Excess is reported as a structured warning.
+	MAX_FORMULAS = 500
 
 	def read(self, content: bytes, filename: str) -> ReadResult:
 		_validate_zip_archive(content, filename)
@@ -199,33 +203,124 @@ class XlsxReader(BaseReader):
 		parts: list[str] = []
 		warnings: list[str] = []
 		sheet_names = []
+		structure: list[dict] = []
+		#: (sheet, coordinate) pairs whose cached value is empty. Cross-checked
+		#: against the formula pass to detect a workbook whose formulas have
+		#: never been evaluated by a spreadsheet application.
+		empty_cells: set[tuple[str, str]] = set()
 
 		for sheet in workbook.worksheets:
 			sheet_names.append(sheet.title)
 			parts.append(f"\n[Sheet: {sheet.title}]")
-			for index, row in enumerate(sheet.iter_rows(values_only=True)):
+			for index, row in enumerate(sheet.iter_rows()):
 				if index >= self.MAX_ROWS_PER_SHEET:
 					warnings.append(f"Sheet '{sheet.title}' truncated at {self.MAX_ROWS_PER_SHEET} rows.")
 					break
-				cells = ["" if cell is None else str(cell).strip() for cell in row]
+				cells = []
+				for cell in row:
+					value = cell.value
+					if value is None:
+						empty_cells.add((sheet.title, cell.coordinate))
+						cells.append("")
+					else:
+						cells.append(str(value).strip())
 				if any(cells):
 					parts.append(" | ".join(cells))
 
 		workbook.close()
+
+		structure = [{"kind": "sheet", "name": title, "index": i + 1} for i, title in enumerate(sheet_names)]
+
+		# Second pass: preserve formulas. `data_only=True` above yields only the
+		# last cached *value*, so without this the formula itself is discarded
+		# silently -- and cells in a workbook never opened by Excel come back as
+		# None. Both outcomes are reported rather than hidden.
+		formulas, formula_warnings, _ = self._read_formulas(openpyxl, content)
+		warnings.extend(formula_warnings)
+		structure.extend(formulas)
+
+		# A formula whose cached value was empty in the data_only pass means the
+		# workbook was never evaluated by a spreadsheet application. The text
+		# above is therefore missing those values; say so instead of returning
+		# a silently incomplete extraction.
+		uncached = sum(1 for f in formulas if (f["sheet"], f["cell"]) in empty_cells)
+		if uncached:
+			warnings.append(
+				f"{uncached} formula cell(s) have no cached value and appear blank in the "
+				"extracted text; the workbook has not been evaluated by a spreadsheet application."
+			)
+
+		metadata: dict = {"format": "xlsx", "sheets": sheet_names, "formula_count": len(formulas)}
+		if uncached:
+			metadata["uncached_formula_values"] = uncached
+
 		return ReadResult(
 			text=self.clean("\n".join(parts)),
-			metadata={"format": "xlsx", "sheets": sheet_names},
+			metadata=metadata,
 			page_count=len(sheet_names),
 			warnings=warnings,
-			structure=[
-				{"kind": "sheet", "name": title, "index": i + 1} for i, title in enumerate(sheet_names)
-			],
+			structure=structure,
 		)
+
+	def _read_formulas(self, openpyxl, content: bytes) -> tuple[list[dict], list[str], int]:
+		"""Capture formulas as structure blocks.
+
+		Returns ``(formula_blocks, warnings, uncached_count)``. A failure here
+		degrades to a warning: losing formulas must never fail an extraction
+		that already produced good text.
+		"""
+		blocks: list[dict] = []
+		warnings: list[str] = []
+		uncached = 0
+		workbook = None
+		try:
+			workbook = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=False)
+			truncated = False
+			for sheet in workbook.worksheets:
+				if truncated:
+					break
+				for index, row in enumerate(sheet.iter_rows()):
+					if index >= self.MAX_ROWS_PER_SHEET:
+						break
+					for cell in row:
+						value = cell.value
+						if not isinstance(value, str) or not value.startswith("="):
+							continue
+						if len(blocks) >= self.MAX_FORMULAS:
+							truncated = True
+							break
+						blocks.append(
+							{
+								"kind": "formula",
+								"sheet": sheet.title,
+								"cell": cell.coordinate,
+								"formula": value[:500],
+							}
+						)
+					if truncated:
+						break
+			if truncated:
+				warnings.append(
+					f"Only the first {self.MAX_FORMULAS} formulas were preserved; the workbook contains more."
+				)
+		except Exception as exc:
+			warnings.append(f"Formulas could not be preserved: {exc}")
+		finally:
+			if workbook is not None:
+				try:
+					workbook.close()
+				except Exception:
+					pass
+		return blocks, warnings, uncached
 
 
 class PptxReader(BaseReader):
 	label = "PowerPoint Presentation"
 	requires = "python-pptx"
+	version = "1.1"  # 1.1 adds embedded-object reporting
+
+	#: Bound on recorded embedded objects per presentation.
+	MAX_EMBEDDED = 200
 
 	def read(self, content: bytes, filename: str) -> ReadResult:
 		_validate_zip_archive(content, filename)
@@ -234,6 +329,7 @@ class PptxReader(BaseReader):
 		presentation = pptx.Presentation(io.BytesIO(content))
 		parts: list[str] = []
 		slides: list[str] = []
+		embedded: list[dict] = []
 
 		for index, slide in enumerate(presentation.slides, start=1):
 			slide_parts = [f"[Slide {index}]"]
@@ -245,6 +341,7 @@ class PptxReader(BaseReader):
 						cells = [cell.text.strip() for cell in row.cells]
 						if any(cells):
 							slide_parts.append(" | ".join(cells))
+				self._record_embedded(shape, index, embedded)
 			if notes_slide := (slide.notes_slide if slide.has_notes_slide else None):
 				if notes := notes_slide.notes_text_frame.text.strip():
 					slide_parts.append(f"[Notes] {notes}")
@@ -255,11 +352,47 @@ class PptxReader(BaseReader):
 
 		return ReadResult(
 			text=self.clean("\n\n".join(parts)),
-			metadata={"format": "pptx", "slides": len(slides)},
+			metadata={"format": "pptx", "slides": len(slides), "embedded_count": len(embedded)},
 			page_count=len(slides),
 			pages=slides,
 			structure=[{"kind": "slide", "index": i + 1} for i in range(len(slides))],
+			embedded_objects=embedded,
 		)
+
+	def _record_embedded(self, shape, slide_index: int, embedded: list[dict]) -> None:
+		"""Record pictures, charts, and OLE objects carried by a slide.
+
+		Text extraction already covers text frames and tables; non-text content
+		would otherwise vanish without any evidence that it existed. Failures
+		are swallowed per shape: evidence collection never fails an extraction.
+		"""
+		if len(embedded) >= self.MAX_EMBEDDED:
+			return
+		try:
+			kind = None
+			shape_type = str(getattr(shape, "shape_type", "") or "")
+			if getattr(shape, "has_chart", False):
+				kind = "chart"
+			elif "PICTURE" in shape_type.upper():
+				kind = "image"
+			elif "OLE" in shape_type.upper() or "EMBED" in shape_type.upper():
+				kind = "ole_object"
+			elif "MEDIA" in shape_type.upper() or "MOVIE" in shape_type.upper():
+				kind = "media"
+			if not kind:
+				return
+			name = str(getattr(shape, "name", "") or f"{kind}-slide-{slide_index}")
+			entry = {"kind": kind, "name": name[:200], "location": f"slide {slide_index}"}
+			if kind == "image":
+				try:
+					image = shape.image
+					entry["content_type"] = str(getattr(image, "content_type", "") or "")
+					entry["bytes"] = len(image.blob or b"")
+				except Exception:
+					pass
+			embedded.append(entry)
+		except Exception:
+			return
 
 
 def _odf_plain_text(element) -> str:
@@ -296,7 +429,9 @@ class OdtReader(BaseReader):
 class OdsReader(BaseReader):
 	label = "OpenDocument Spreadsheet"
 	requires = "odfpy"
+	version = "1.1"  # 1.1 adds formula preservation
 	MAX_ROWS_PER_SHEET = 5000
+	MAX_FORMULAS = 500
 
 	def read(self, content: bytes, filename: str) -> ReadResult:
 		_validate_zip_archive(content, filename)
@@ -305,6 +440,7 @@ class OdsReader(BaseReader):
 		document = opendocument.load(io.BytesIO(content))
 		parts: list[str] = []
 		warnings: list[str] = []
+		formulas: list[dict] = []
 		sheets = document.getElementsByType(odf_table.Table)
 		for sheet in sheets:
 			title = sheet.getAttribute("name") or "Sheet"
@@ -313,15 +449,38 @@ class OdsReader(BaseReader):
 				if index >= self.MAX_ROWS_PER_SHEET:
 					warnings.append(f"Sheet '{title}' truncated at {self.MAX_ROWS_PER_SHEET} rows.")
 					break
+				for column, cell in enumerate(row.getElementsByType(odf_table.TableCell), start=1):
+					# OpenDocument keeps the formula on the cell alongside its
+					# cached value. Preserve it rather than discarding it.
+					formula = None
+					try:
+						formula = cell.getAttribute("formula")
+					except Exception:
+						formula = None
+					if formula and len(formulas) < self.MAX_FORMULAS:
+						formulas.append(
+							{
+								"kind": "formula",
+								"sheet": title,
+								"cell": f"r{index + 1}c{column}",
+								"formula": str(formula)[:500],
+							}
+						)
 				cells = [_odf_plain_text(cell).strip() for cell in row.getElementsByType(odf_table.TableCell)]
 				if any(cells):
 					parts.append(" | ".join(cells))
+		if len(formulas) >= self.MAX_FORMULAS:
+			warnings.append(
+				f"Only the first {self.MAX_FORMULAS} formulas were preserved; the spreadsheet contains more."
+			)
+		structure: list[dict] = [{"kind": "sheet", "index": i + 1} for i in range(len(sheets))]
+		structure.extend(formulas)
 		return ReadResult(
 			text=self.clean("\n".join(parts)),
-			metadata={"format": "ods", "sheets": len(sheets)},
+			metadata={"format": "ods", "sheets": len(sheets), "formula_count": len(formulas)},
 			page_count=len(sheets),
 			warnings=warnings,
-			structure=[{"kind": "sheet", "index": i + 1} for i in range(len(sheets))],
+			structure=structure,
 		)
 
 

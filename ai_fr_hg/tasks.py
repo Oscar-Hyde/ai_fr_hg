@@ -112,6 +112,29 @@ def scan_pending_pattern_entities() -> None:
 			pass
 
 
+def scan_pending_semantic_entities() -> None:
+	"""Backfill semantic entities/relationships for indexed documents.
+
+	Doubly opt-in: the platform must be enabled *and*
+	`semantic_entities_enabled` must be on, because each document costs a model
+	call. Documents already scanned at their current checksum are skipped, so a
+	rerun is cheap and idempotent.
+	"""
+	try:
+		if not frappe.db.get_single_value("AI Platform Settings", "platform_enabled"):
+			return
+		from ai_fr_hg.ai.semantic import scan_pending_documents_semantic, semantic_enabled
+
+		if not semantic_enabled():
+			return
+		scan_pending_documents_semantic()
+	except Exception:
+		try:
+			frappe.log_error(title="AI scan_pending_semantic_entities failed", message=frappe.get_traceback())
+		except Exception:
+			pass
+
+
 def run_scheduled_pipelines() -> None:
 	"""Start pipelines whose cron schedule is due."""
 	if not frappe.db.get_single_value("AI Platform Settings", "platform_enabled"):

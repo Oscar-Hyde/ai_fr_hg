@@ -203,10 +203,19 @@ def _passes_semantic_check(entity_type: str, value: str) -> bool:
 	return True
 
 
-def persistable_pattern_type(entity_type: str) -> str:
-	"""Map any extracted type onto the DocType options without dropping the fact."""
+def persistable_pattern_type(entity_type: str, method: str = "pattern") -> str:
+	"""Map any extracted type onto the DocType options without dropping the fact.
+
+	`method` selects the valid registry: deterministic rows may only carry a
+	pattern type, semantic rows may additionally carry the §11 semantic kinds.
+	This keeps a model from writing "person" onto a row that claims to be an
+	exact regex match.
+	"""
+	from ai_fr_hg.ai.semantic import SEMANTIC_ENTITY_TYPES
+
 	raw = (entity_type or "custom").strip().lower()
-	return raw if raw in PATTERN_ENTITY_TYPES else "custom"
+	allowed = PATTERN_ENTITY_TYPES + SEMANTIC_ENTITY_TYPES if method == "semantic" else PATTERN_ENTITY_TYPES
+	return raw if raw in allowed else "custom"
 
 
 # ---------------------------------------------------------------------------
@@ -514,6 +523,9 @@ def list_pattern_entities(
 			"occurrences",
 			"first_offset",
 			"context_quote",
+			"extraction_method",
+			"confidence",
+			"model_used",
 		],
 		order_by="occurrences desc, modified desc",
 		limit=page,

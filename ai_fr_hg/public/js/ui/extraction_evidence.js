@@ -23,12 +23,22 @@ export function summarizeExtractionEvidence(raw) {
 	const structure = evidence.structure || {};
 	const provenance = evidence.provenance || {};
 	const embedded = Array.isArray(evidence.embedded_objects) ? evidence.embedded_objects : [];
+	const versions = evidence.versions && typeof evidence.versions === "object" ? evidence.versions : {};
 	const mismatch = Boolean(detector.mismatch);
 	const empty = !evidence.reader && !detector.family && !provenance.bytes;
+	// Evidence written before the versioned extractor is marked by the
+	// v0_0_23 migration, so "unknown provenance" is visible rather than blank.
+	const legacy = versions.app === "pre-0.0.2";
 	return {
 		kind: empty ? "empty" : mismatch ? "mismatch" : "aligned",
 		empty,
 		reader: evidence.reader || "",
+		extracted_on: evidence.extracted_on || "",
+		app_version: versions.app || "",
+		reader_version: versions.reader || "",
+		library: versions.library || "",
+		library_version: versions.library_version || "",
+		legacy,
 		family: detector.family || "",
 		magic: detector.magic || "",
 		extension: detector.extension || "",

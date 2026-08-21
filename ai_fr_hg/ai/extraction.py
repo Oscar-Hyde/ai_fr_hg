@@ -12,8 +12,10 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
 
 from ai_fr_hg.ai.readers.archive import (
+	ARCHIVE_EXTENSIONS,
 	ZIP_EXTENSIONS,
 	ArchiveCorruptError,
 	ArchiveLimitError,
@@ -22,6 +24,7 @@ from ai_fr_hg.ai.readers.archive import (
 	zip_kind,
 )
 from ai_fr_hg.ai.readers.base import BaseReader, ReadResult
+from ai_fr_hg.ai.readers.code import LANGUAGES as _CODE_LANGUAGES
 
 MAGIC_PDF = b"%PDF"
 MAGIC_ZIP = b"PK\x03\x04"
@@ -67,17 +70,16 @@ EXTENSION_FAMILY = {
 	"txt": "text",
 	"log": "text",
 	"rst": "text",
-	"py": "text",
-	"js": "text",
-	"ts": "text",
-	"sql": "text",
-	"sh": "text",
 	"yaml": "text",
 	"yml": "text",
 	"ini": "text",
 	"cfg": "text",
 	"toml": "text",
 }
+
+# Source-code extensions all resolve to the single `code` family so detection
+# never guesses a binary format for a text source file.
+EXTENSION_FAMILY.update({extension: "code" for extension in _CODE_LANGUAGES})
 
 
 @dataclass(frozen=True)
@@ -93,11 +95,26 @@ class FormatIdentity:
 
 @dataclass
 class ExtractionEvidence:
+	"""Durable, bounded evidence for one extraction run.
+
+	Satisfies the six-element extraction result contract:
+	source identity (``provenance.checksum_sha256``), processing timestamp
+	(``extracted_on``), extractor identity (``reader``), version information
+	(``versions``), extracted content (persisted separately on the document),
+	and evidence references (``structure`` / ``embedded_objects``).
+	"""
+
 	detector: dict
 	reader: str
 	embedded_objects: list[dict] = field(default_factory=list)
 	structure: dict = field(default_factory=dict)
 	provenance: dict = field(default_factory=dict)
+	#: UTC ISO-8601 timestamp of when this extraction ran.
+	extracted_on: str = ""
+	#: Versions that produced this result: application, reader, and the
+	#: parsing library actually used. Lets operators identify precisely which
+	#: documents were produced by a superseded extractor after a reader fix.
+	versions: dict = field(default_factory=dict)
 
 	def as_dict(self) -> dict:
 		return asdict(self)
@@ -191,7 +208,43 @@ def _families_compatible(extension_family: str, magic_family: str) -> bool:
 	return False
 
 
-def build_evidence(identity: FormatIdentity, result, reader_label: str, content: bytes) -> ExtractionEvidence:
+def app_version() -> str:
+	"""Installed application version, for extraction provenance."""
+	try:
+		from ai_fr_hg import __version__
+
+		return str(__version__)
+	except Exception:
+		return "unknown"
+
+
+def build_versions(reader: BaseReader | type[BaseReader] | None) -> dict:
+	"""Collect the version triple that produced an extraction result.
+
+	Never raises: provenance collection must not be able to fail an extraction.
+	"""
+	versions: dict = {"app": app_version()}
+	if reader is None:
+		return versions
+	reader_class = reader if isinstance(reader, type) else type(reader)
+	versions["reader"] = str(getattr(reader_class, "version", "1.0"))
+	package = getattr(reader_class, "requires", None)
+	if package:
+		versions["library"] = package
+		try:
+			versions["library_version"] = reader_class.library_version()
+		except Exception:
+			versions["library_version"] = None
+	return versions
+
+
+def build_evidence(
+	identity: FormatIdentity,
+	result,
+	reader_label: str,
+	content: bytes,
+	reader: BaseReader | type[BaseReader] | None = None,
+) -> ExtractionEvidence:
 	"""Summarize extraction for durable persistence (bounded, no full text)."""
 	embedded = list(getattr(result, "embedded_objects", None) or [])[:50]
 	blocks = list(getattr(result, "structure", None) or [])
@@ -217,10 +270,23 @@ def build_evidence(identity: FormatIdentity, result, reader_label: str, content:
 			"word_count": getattr(result, "word_count", 0),
 			"character_count": getattr(result, "character_count", 0),
 		},
+		extracted_on=datetime.now(UTC).isoformat(),
+		versions=build_versions(reader),
 	)
 
 
 def _needs_zip_guard(identity: FormatIdentity) -> bool:
+	"""True when the *Office container* policy applies to this input.
+
+	User archives (.zip/.tar/...) are deliberately excluded: they are containers
+	of independent files governed by `ArchiveBudget`'s cumulative member, size,
+	and depth ceilings, not by the single-document Office limits. Applying the
+	Office 500-member cap to a user archive would reject legitimate bundles,
+	while `ArchiveReader` still enforces ratio, traversal, and encryption rules
+	member by member through the same authority module.
+	"""
+	if identity.extension in ARCHIVE_EXTENSIONS:
+		return False
 	if identity.magic in ZIP_FAMILIES:
 		return True
 	if identity.extension in ZIP_EXTENSIONS and not identity.mismatch:
@@ -282,7 +348,7 @@ def extract_bytes(content: bytes, filename: str, *, reader: BaseReader | None = 
 			f"Filename extension .{identity.extension} does not match detected format {identity.magic}."
 		)
 		result.warnings = warnings
-	evidence = build_evidence(identity, result, resolved.label, content)
+	evidence = build_evidence(identity, result, resolved.label, content, reader=resolved)
 	metadata = dict(result.metadata or {})
 	metadata["extraction_evidence"] = evidence.as_dict()
 	result.metadata = metadata

@@ -92,9 +92,35 @@ class BaseReader:
 	label: str = "Generic"
 	#: Optional pip package required by this reader.
 	requires: str | None = None
+	#: Reader implementation version. Bump whenever parsing behaviour changes in
+	#: a way that would produce different output for the same bytes, so that
+	#: `ExtractionEvidence.versions` can identify documents needing reprocessing.
+	version: str = "1.0"
 
 	def read(self, content: bytes, filename: str) -> ReadResult:
 		raise NotImplementedError
+
+	# -- version reporting (§8 "version information") --------------------
+
+	@classmethod
+	def library_version(cls) -> str | None:
+		"""Installed version of the optional parsing library backing this reader.
+
+		Returns ``None`` when the reader has no external dependency or the
+		package is not installed. Never raises: version reporting must not be
+		able to break an extraction.
+		"""
+		package = cls.requires
+		if not package:
+			return None
+		try:
+			from importlib.metadata import PackageNotFoundError, version
+
+			return version(package)
+		except PackageNotFoundError:
+			return None
+		except Exception:
+			return None
 
 	# -- helpers ---------------------------------------------------------
 

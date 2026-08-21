@@ -524,6 +524,15 @@ frappe.ui.form.on("AI Document", {
 							${frappe.utils.escape_html(entity.value)}
 							<span class="text-muted small">× ${entity.occurrences}</span>
 							${
+								entity.extraction_method === "semantic"
+									? `<span class="indicator-pill orange small" title="${__(
+											"Model-inferred, grounded in the source text"
+									  )}">${__("inferred")} ${Math.round(entity.confidence || 0)}%</span>`
+									: `<span class="indicator-pill blue small" title="${__(
+											"Deterministic pattern match"
+									  )}">${__("exact")}</span>`
+							}
+							${
 								entity.context_quote
 									? `<div class="text-muted small" style="margin-top:2px">…${frappe.utils.escape_html(
 											entity.context_quote
@@ -539,6 +548,95 @@ frappe.ui.form.on("AI Document", {
 						title: __("Pattern Entities"),
 						wide: true,
 						message: groups,
+					});
+				},
+				__("View")
+			);
+
+			frm.add_custom_button(
+				__("Extract Entities & Relationships"),
+				async () => {
+					frappe.dom.freeze(__("Analyzing document…"));
+					try {
+						const result = await frappe.xcall(
+							"ai_fr_hg.api.knowledge.scan_semantic_entities",
+							{ document: frm.doc.name }
+						);
+						frappe.dom.unfreeze();
+						const rejected = result.rejected || {};
+						const dropped =
+							(rejected.ungrounded || 0) +
+							(rejected.low_confidence || 0) +
+							(rejected.invalid || 0);
+						frappe.show_alert({
+							message: __("Found {0} entities and {1} relationships ({2} discarded)", [
+								result.entities,
+								result.relationships,
+								dropped,
+							]),
+							indicator: result.entities || result.relationships ? "green" : "orange",
+						});
+						frm.reload_doc();
+					} catch (error) {
+						frappe.dom.unfreeze();
+						// The server already surfaces a typed message (disabled
+						// feature, no content, permission, provider failure).
+					}
+				},
+				__("Intelligence")
+			);
+
+			frm.add_custom_button(
+				__("View Relationships"),
+				async () => {
+					let result;
+					try {
+						result = await frappe.xcall(
+							"ai_fr_hg.api.knowledge.get_entity_relationships",
+							{ document: frm.doc.name }
+						);
+					} catch (error) {
+						return;
+					}
+					if (!result.relationships.length) {
+						frappe.msgprint({
+							title: __("Entity Relationships"),
+							message: __(
+								"No relationships yet. Use Extract Entities & Relationships to analyze this document."
+							),
+							indicator: "blue",
+						});
+						return;
+					}
+					const rows = result.relationships
+						.map((item) => {
+							const confidence = Math.round(item.confidence || 0);
+							const indicator =
+								confidence >= 80 ? "green" : confidence >= 60 ? "orange" : "red";
+							return `
+					<div style="border-bottom:1px solid var(--border-color);padding:6px 0">
+						<div>
+							<strong>${frappe.utils.escape_html(item.subject)}</strong>
+							<span class="text-muted">${frappe.utils.escape_html(item.relationship_type)}</span>
+							<strong>${frappe.utils.escape_html(item.object)}</strong>
+							<span class="indicator-pill ${indicator} small">${confidence}%</span>
+						</div>
+						${
+							item.evidence_quote
+								? `<div class="text-muted small" style="margin-top:2px">“${frappe.utils.escape_html(
+										item.evidence_quote
+								  )}”</div>`
+								: ""
+						}
+					</div>`;
+						})
+						.join("");
+					frappe.msgprint({
+						title: __("Entity Relationships"),
+						wide: true,
+						message: `<div class="text-muted small" style="margin-bottom:8px">${__(
+							"Model-inferred and grounded in the source text. Confidence is the model's own estimate."
+						)}</div>${rows}`,
 					});
 				},
 				__("View")

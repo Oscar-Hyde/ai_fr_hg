@@ -25,13 +25,28 @@ class AIPatternEntity(Document):
 	if TYPE_CHECKING:
 		from frappe.types import DF
 
+		confidence: DF.Percent
 		context_quote: DF.SmallText | None
 		document: DF.Link
 		entity_type: DF.Literal[
-			"email", "url", "phone", "ip", "hash", "date", "identifier", "money", "custom"
+			"email",
+			"url",
+			"phone",
+			"ip",
+			"hash",
+			"date",
+			"identifier",
+			"money",
+			"person",
+			"organization",
+			"location",
+			"concept",
+			"custom",
 		]
+		extraction_method: DF.Literal["pattern", "semantic"]
 		first_offset: DF.Int
 		knowledge_base: DF.Link
+		model_used: DF.Data | None
 		normalized_value: DF.Data | None
 		occurrences: DF.Int
 		source_checksum: DF.Data | None
@@ -39,7 +54,13 @@ class AIPatternEntity(Document):
 	# end: auto-generated types
 
 	def validate(self):
-		self.entity_type = persistable_pattern_type(self.entity_type or "custom")
+		self.extraction_method = (
+			"semantic" if (self.extraction_method or "").strip() == "semantic" else "pattern"
+		)
+		self.entity_type = persistable_pattern_type(
+			self.entity_type or "custom", method=self.extraction_method
+		)
+		self.normalize_confidence()
 		self.value = (self.value or "").strip()[:MAX_VALUE_LENGTH]
 		if not self.value:
 			frappe.throw(_("Value is required."))
@@ -50,6 +71,20 @@ class AIPatternEntity(Document):
 			self.normalized_value = canonicalize_pattern_value(self.entity_type, self.value)[:500]
 		self.normalize_provenance()
 		self.sync_knowledge_base()
+
+	def normalize_confidence(self):
+		"""Confidence is meaningful only for inferred rows.
+
+		Deterministic pattern matches are exact by construction, so a
+		confidence number on them would be a fabricated signal.
+		"""
+		from frappe.utils import flt
+
+		if self.extraction_method != "semantic":
+			self.confidence = 0
+			self.model_used = None
+			return
+		self.confidence = max(0.0, min(100.0, flt(self.confidence)))
 
 	def normalize_provenance(self):
 		if self.first_offset is not None and self.first_offset < 0:

@@ -16,6 +16,9 @@ reader reports that clearly instead of crashing the ingestion pipeline.
 """
 
 from ai_fr_hg.ai.readers.base import BaseReader, ReadResult
+from ai_fr_hg.ai.readers.code import LANGUAGES as CODE_LANGUAGES
+from ai_fr_hg.ai.readers.code import CodeReader
+from ai_fr_hg.ai.readers.container import ArchiveReader
 from ai_fr_hg.ai.readers.office import (
 	CSVReader,
 	DocxReader,
@@ -41,11 +44,6 @@ BUILTIN_READERS: dict[str, type[BaseReader]] = {
 	"txt": TextReader,
 	"log": TextReader,
 	"rst": TextReader,
-	"py": TextReader,
-	"js": TextReader,
-	"ts": TextReader,
-	"sql": TextReader,
-	"sh": TextReader,
 	"yaml": TextReader,
 	"yml": TextReader,
 	"ini": TextReader,
@@ -78,6 +76,25 @@ BUILTIN_READERS: dict[str, type[BaseReader]] = {
 	"bmp": ImageReader,
 	"tiff": ImageReader,
 }
+
+# Source code: one reader owns every recognized programming language, so
+# structure preservation cannot drift between formats.
+BUILTIN_READERS.update({extension: CodeReader for extension in CODE_LANGUAGES})
+
+# User archives. Office containers (docx/xlsx/...) are *not* listed here: they
+# are single documents owned by their own readers, not containers of files.
+BUILTIN_READERS.update(
+	{
+		"zip": ArchiveReader,
+		"tar": ArchiveReader,
+		"gz": ArchiveReader,
+		"tgz": ArchiveReader,
+		"bz2": ArchiveReader,
+		"tbz2": ArchiveReader,
+		"xz": ArchiveReader,
+		"txz": ArchiveReader,
+	}
+)
 
 
 def get_readers() -> dict[str, type[BaseReader]]:
