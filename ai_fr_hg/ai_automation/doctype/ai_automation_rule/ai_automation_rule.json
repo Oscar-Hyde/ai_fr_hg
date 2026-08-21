@@ -21,6 +21,7 @@
   "target_language",
   "knowledge_base",
   "queue",
+  "coalesce_events",
   "condition_sec",
   "condition",
   "mapping_sec",
@@ -129,6 +130,13 @@
    "options": "default\nshort\nlong"
   },
   {
+   "default": "1",
+   "description": "When enabled, later updates to the same document while a job is queued or running are recorded as Coalesced and not executed separately. Disable to run every distinct document revision.",
+   "fieldname": "coalesce_events",
+   "fieldtype": "Check",
+   "label": "Coalesce Concurrent Events"
+  },
+  {
    "fieldname": "condition_sec",
    "fieldtype": "Section Break",
    "label": "Condition"
@@ -147,13 +155,14 @@
    "label": "Result Mapping"
   },
   {
-   "description": "Field on the triggering document used as input. Defaults to the whole document.",
+   "description": "Scalar field on the triggering document used as input. Child tables, Password fields, and credential-named fields are rejected. Defaults to the whole document.",
    "fieldname": "source_field",
    "fieldtype": "Data",
    "label": "Source Field"
   },
   {
-   "description": "Field on the triggering document where the result is written.",
+   "depends_on": "eval:doc.event!='on_trash'",
+   "description": "Field on the triggering document where the result is written. Not allowed for delete events.",
    "fieldname": "target_field",
    "fieldtype": "Data",
    "label": "Target Field"
@@ -193,7 +202,12 @@
   }
  ],
  "index_web_pages_for_search": 1,
- "links": [],
+ "links": [
+  {
+   "link_doctype": "AI Automation Event",
+   "link_fieldname": "rule"
+  }
+ ],
  "modified": "2026-08-16 09:00:00.000000",
  "modified_by": "Administrator",
  "module": "AI Automation",

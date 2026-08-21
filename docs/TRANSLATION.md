@@ -37,7 +37,7 @@ reconstruct the original PDF, Office, email, or image binary.
 | Capability | Detail |
 | --- | --- |
 | **Languages** | Arabic (`ar`), English (`en`), Hebrew (`he`) — all six directions, translated directly without pivoting through a third language. |
-| **Sources** | Extracted text from 36 registered extensions, subject to optional parser availability. Text-layer PDFs and `.eml` are supported; scanned-PDF OCR and Outlook `.msg` are not. |
+| **Sources** | Extracted text from 37 registered extensions, subject to optional parser availability. Text-layer PDFs, Office Open XML, OpenDocument (including `.odp`), and `.eml` are supported; scanned-PDF OCR, Outlook `.msg`, OLE `.doc`/`.xls`/`.ppt`, audio, video, and database files are not. |
 | **Extracted-text structure** | Text headings, paragraphs, list markers, table rows, indentation, blank lines and `[Page N]` markers are reassembled. Original binary formatting is not reconstructed. |
 | **Protected spans** | Numbers, dates, currency figures, URLs, e-mail addresses, file paths, identifiers, code spans, template placeholders and HTML tags are masked and checked after restoration; failed integrity checks flag the segment rather than proving corruption is impossible. |
 | **RTL aware** | Arabic and Hebrew presentation forms from PDF extraction are folded to base letters, bidi control characters are stripped, and the output is rendered with the correct direction in Desk. |

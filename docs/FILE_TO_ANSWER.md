@@ -30,9 +30,9 @@ POST /api/method/ai_fr_hg.api.knowledge.upload_document
    │     └─ enqueue_processing()  → background worker (queue="long")
    ▼
 Background worker: process_document()
-   ├─ 1. read      extract_source_text()  → reader dispatcher
-   │                 (PDF/DOCX/XLSX/PPTX/TXT/MD/CSV/JSON/HTML/…)  → bytes → text
-   ├─ 2. extract   store content, language, counts, checksum, metadata on AI Document
+   ├─ 1. detect    ai.extraction.detect_format()  magic + extension
+   ├─ 2. extract   extract_bytes() → one reader registry (PDF/DOCX/XLSX/PPTX/ODT/ODS/ODP/TXT/MD/CSV/JSON/HTML/EML/…)
+   │                 persist text, language, counts, checksum, metadata, warnings, extraction_evidence
    ├─ 3. chunk     chunk_text()            structure-aware, heading-aware windows
    ├─ 4. embed     index_document()        embed_chunks() in batches of 16
    ├─ 5. index     write AI Document Chunk rows (base64 float32 vectors)
@@ -77,7 +77,7 @@ grounded in the new upload even on the very first question.
 | DocType | Role |
 | --- | --- |
 | `AI Knowledge Base` | Owns chunking + embedding policy (chunk size/overlap, top_k, similarity threshold, embedding model). |
-| `AI Document` | One ingested source: extracted text, metadata, source file attachment, status, chunk/embed counts. |
+| `AI Document` | One ingested source: extracted text, metadata, extraction evidence, source file attachment, status, chunk/embed counts. |
 | `AI Document Chunk` | One retrievable slice with its embedding (base64 float32), heading, page, checksum, source document. |
 | `AI Conversation` | Chat thread bound to an agent; conversation-level knowledge bases. |
 | `AI Message` | A turn's user/assistant/tool messages, with citations and token accounting. |
@@ -215,7 +215,8 @@ stub the chat and embedding engines so CI needs no GPU or Ollama.
 
 | Area | Change |
 | --- | --- |
-| `ai/ingestion.py` | `prepare_documents_for_turn()` extracts unread uploads inline and only polls briefly when nothing readable exists. |
+| `ai/extraction.py` | Magic-byte detection, reader resolution, ZIP-container policy, and bounded extraction evidence persisted on `AI Document`. |
+| `ai/ingestion.py` | `prepare_documents_for_turn()` extracts unread uploads inline and only polls briefly when nothing readable exists. Canonical extraction goes through `extract_bytes()`. |
 | `api/chat.py` | `send_message` accepts `documents`, checks read permission, prepares them, and passes indexed names plus extracted text to the agent. |
 | `ai/agent.py` | `run_agent_turn` accepts `documents` and `folder`, forwards agent KB weights, and uses the packed citation list; language instructions when context is labelled; catches provider OOM/timeout/offline as saved answers. |
 | `ai/language.py` | Detects written language (BG first-class) and labels excerpts / retrieved chunks. |

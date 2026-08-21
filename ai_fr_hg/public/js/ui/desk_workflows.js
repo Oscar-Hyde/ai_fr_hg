@@ -41,3 +41,41 @@ export function patternExplorerErrorView(error) {
 			: (error && error.message) || "Could not load pattern entities.",
 	};
 }
+
+const TASK_ACTIONS = {
+	Open: ["submit", "run", "cancel"],
+	"Pending Approval": ["approve", "reject", "cancel"],
+	Approved: ["run", "cancel"],
+	"In Progress": ["cancel"],
+	Failed: ["retry"],
+};
+
+export function taskActionsFor(
+	status,
+	{ isManager = false, isRequester = false, requiresApproval = false } = {}
+) {
+	const allowed = TASK_ACTIONS[status] || [];
+	return allowed.filter((action) => {
+		if (action === "approve") return isManager && !isRequester;
+		if (action === "reject") return isManager;
+		if (action === "run" && status === "Open") return isManager || !requiresApproval;
+		return isManager || isRequester;
+	});
+}
+
+export function pipelineRunIndicator(status) {
+	return (
+		{
+			Queued: "grey",
+			Running: "blue",
+			"Waiting Approval": "orange",
+			Completed: "green",
+			Failed: "red",
+			Cancelled: "orange",
+		}[status] || "grey"
+	);
+}
+
+export function pipelineCanCancel(status) {
+	return ["Queued", "Running", "Waiting Approval"].includes(status);
+}

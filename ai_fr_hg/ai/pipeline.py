@@ -12,14 +12,14 @@ on the `AI Pipeline Run` for full traceability.
 import json
 import time
 import traceback
-from contextlib import contextmanager
 from uuid import uuid4
 
 import frappe
 from frappe import _
-from frappe.utils import cint, now_datetime
+from frappe.utils import cint, get_datetime, now_datetime
 
 from ai_fr_hg.ai.exceptions import PipelineApprovalRequired, PipelineError, PipelineStepRecordedError
+from ai_fr_hg.utils.authority import as_user as _authority_as_user
 
 _PIPELINE_METHOD_MARKER = "_ai_pipeline_step_method"
 MAX_NESTED_PIPELINE_DEPTH = 10
@@ -155,6 +155,8 @@ def run_pipeline(
 	reference_name: str | None = None,
 	enqueue_job: bool = True,
 	_parent_run: str | None = None,
+	trigger_source: str = "Manual",
+	idempotency_key: str | None = None,
 ):
 	"""Start a pipeline run, either inline or on a background worker."""
 	from ai_fr_hg.ai.governance import check_capability
@@ -169,6 +171,15 @@ def run_pipeline(
 		frappe.throw(_("Pipeline {0} is disabled.").format(pipeline))
 	if _parent_run:
 		_validate_parent_run(_parent_run, pipeline)
+	if idempotency_key:
+		existing = frappe.db.get_value(
+			"AI Pipeline Run",
+			{"pipeline": pipeline, "idempotency_key": idempotency_key},
+			["name", "status"],
+			as_dict=True,
+		)
+		if existing:
+			return frappe.get_doc("AI Pipeline Run", existing.name)
 
 	run = frappe.new_doc("AI Pipeline Run")
 	run.update(
@@ -176,6 +187,8 @@ def run_pipeline(
 			"pipeline": pipeline,
 			"status": "Queued",
 			"triggered_by": frappe.session.user,
+			"trigger_source": trigger_source or "Manual",
+			"idempotency_key": idempotency_key,
 			"parent_pipeline_run": _parent_run,
 			"reference_doctype": reference_doctype,
 			"reference_name": reference_name,
@@ -210,33 +223,48 @@ def execute_run(run: str) -> dict:
 	if not authority or authority == "Guest" or not frappe.db.get_value("User", authority, "enabled"):
 		return _finish_invalid_run(run_doc, _("The pipeline requester is missing or disabled."))
 
-	with _as_user(authority):
+	with _authority_as_user(authority):
 		return _execute_run(run_doc)
 
 
-def _execute_run(run_doc) -> dict:
-	"""Locked pipeline state machine. Call through :func:`execute_run`."""
+def _execute_run(run_doc, *, resume_from_idx: int = 0) -> dict:
+	"""Locked pipeline state machine. Call through :func:`execute_run` or :func:`resume_run`."""
 	status = frappe.db.get_value("AI Pipeline Run", run_doc.name, "status", for_update=True)
-	if status != "Queued":
+	if resume_from_idx:
+		if status != "Running":
+			return {"run": run_doc.name, "status": status, "skipped": True}
+	elif status != "Queued":
 		return {"run": run_doc.name, "status": status, "skipped": True}
 
 	pipeline_doc = frappe.get_cached_doc("AI Pipeline", run_doc.pipeline)
 	if not pipeline_doc.enabled:
 		return _finish_invalid_run(run_doc, _("Pipeline {0} is disabled.").format(run_doc.pipeline))
 	started = time.monotonic()
-	durable = _is_standalone_background_run(run_doc.name)
+	durable = _is_standalone_background_run(run_doc.name) or bool(resume_from_idx)
 	run_doc.reload()
-	run_doc.status = "Running"
-	run_doc.started_at = now_datetime()
-	run_doc.finished_at = None
-	run_doc.error_message = None
-	run_doc.traceback = None
-	run_doc.set("step_logs", [])
-	_audit_pipeline_state(run_doc, "Running", raise_on_error=True)
-	_persist_checkpoint(run_doc, durable=durable)
+	if not resume_from_idx:
+		run_doc.status = "Running"
+		run_doc.started_at = now_datetime()
+		run_doc.finished_at = None
+		run_doc.error_message = None
+		run_doc.traceback = None
+		run_doc.set("step_logs", [])
+		_audit_pipeline_state(run_doc, "Running", raise_on_error=True)
+		_persist_checkpoint(run_doc, durable=durable)
+	else:
+		run_doc.status = "Running"
+		run_doc.finished_at = None
+		run_doc.error_message = None
+		_persist_checkpoint(run_doc, durable=durable)
 
 	try:
-		context: dict = json.loads(run_doc.input_data or "{}")
+		if resume_from_idx:
+			try:
+				context = json.loads(run_doc.output_data or run_doc.input_data or "{}")
+			except (TypeError, ValueError):
+				context = json.loads(run_doc.input_data or "{}")
+		else:
+			context = json.loads(run_doc.input_data or "{}")
 		if not isinstance(context, dict):
 			raise PipelineError(_("Pipeline input must be a JSON object."))
 		# ``run`` is reserved execution provenance; callers and parent pipelines
@@ -252,6 +280,8 @@ def _execute_run(run_doc) -> dict:
 		failure_traceback = None
 
 		for step in pipeline_doc.steps:
+			if resume_from_idx and cint(step.idx) <= cint(resume_from_idx):
+				continue
 			if _is_cancelled(run_doc.name):
 				cancelled = True
 				break
@@ -313,9 +343,19 @@ def _execute_run(run_doc) -> dict:
 				break
 
 			if last_error is not None:
+				if isinstance(last_error, PipelineApprovalRequired):
+					return _pause_for_approval(
+						run_doc,
+						step,
+						log_row,
+						last_error,
+						context,
+						durable=durable,
+						started=started,
+					)
 				log_row.status = "Failed"
 				log_row.error_message = str(last_error)[:1000]
-				if isinstance(last_error, PipelineApprovalRequired) or step.on_error in ("Stop", "Retry"):
+				if step.on_error in ("Stop", "Retry"):
 					failed = True
 					error_message = _("Step '{0}' failed: {1}").format(step.step_name, last_error)
 			_persist_checkpoint(run_doc, context=context, durable=durable)
@@ -352,6 +392,8 @@ def _execute_run(run_doc) -> dict:
 			)
 		except Exception:
 			frappe.log_error(title="AI pipeline completion event failed", message=frappe.get_traceback())
+		if run_doc.status == "Completed" and run_doc.parent_pipeline_run:
+			_maybe_resume_parent(run_doc)
 		return {"run": run_doc.name, "status": run_doc.status, "duration_ms": duration_ms}
 
 	except Exception as exc:
@@ -364,20 +406,6 @@ def _execute_run(run_doc) -> dict:
 		)
 
 
-@contextmanager
-def _as_user(user: str):
-	previous = frappe.session.user
-	if previous != user:
-		# Security-reviewed worker boundary: the run stores its triggering user
-		# and each pipeline operation rechecks authority under this context.
-		frappe.set_user(user)  # nosemgrep
-	try:
-		yield
-	finally:
-		if frappe.session.user != previous:
-			frappe.set_user(previous)  # nosemgrep
-
-
 def _is_standalone_background_run(run: str) -> bool:
 	"""Return whether this exact run owns the worker transaction.
 
@@ -388,7 +416,7 @@ def _is_standalone_background_run(run: str) -> bool:
 	job = getattr(frappe.local, "job", None)
 	return bool(
 		job
-		and job.get("method") == "ai_fr_hg.ai.pipeline.execute_run"
+		and job.get("method") in {"ai_fr_hg.ai.pipeline.execute_run", "ai_fr_hg.ai.pipeline.resume_run"}
 		and (job.get("kwargs") or {}).get("run") == run
 	)
 
@@ -398,6 +426,14 @@ def _persist_checkpoint(run_doc, context: dict | None = None, *, durable: bool) 
 	current = frappe.db.get_value("AI Pipeline Run", run_doc.name, "status", for_update=True)
 	if current == "Cancelled" and run_doc.status != "Cancelled":
 		run_doc.status = "Cancelled"
+		return False
+	if current == "Waiting Approval" and run_doc.status not in {
+		"Waiting Approval",
+		"Running",
+		"Cancelled",
+		"Failed",
+	}:
+		run_doc.status = current
 		return False
 	if context is not None:
 		run_doc.output_data = frappe.as_json(_serialisable(context))[:60000]
@@ -641,9 +677,10 @@ def execute_step(step, context: dict, run_doc):
 		if outcome.get("status") == "Pending Approval":
 			invocation = outcome.get("invocation") or (outcome.get("result") or {}).get("invocation")
 			raise PipelineApprovalRequired(
-				_("Tool {0} requires approval (invocation {1}); this pipeline run was stopped.").format(
+				_("Tool {0} requires approval (invocation {1}).").format(
 					step.tool, invocation or _("unknown")
-				)
+				),
+				invocation=invocation,
 			)
 		if outcome.get("status") != "Success":
 			raise PipelineStepRecordedError(outcome.get("error") or _("Tool {0} failed.").format(step.tool))
@@ -656,14 +693,16 @@ def execute_step(step, context: dict, run_doc):
 			enqueue_job=False,
 			_parent_run=run_doc.name,
 		)
+		if sub_run.status == "Waiting Approval":
+			raise PipelineApprovalRequired(
+				_("Sub-pipeline {0} is waiting for approval.").format(step.sub_pipeline),
+				invocation=sub_run.waiting_invocation,
+				child_run=sub_run.name,
+			)
 		if sub_run.status != "Completed":
 			error = _("Sub-pipeline {0} ended with status {1}: {2}").format(
 				step.sub_pipeline, sub_run.status, sub_run.error_message or _("no details")
 			)
-			if frappe.db.exists(
-				"AI Tool Invocation", {"pipeline_run": sub_run.name, "status": "Pending Approval"}
-			):
-				raise PipelineApprovalRequired(error)
 			raise PipelineStepRecordedError(error)
 		return json.loads(sub_run.output_data or "{}")
 
@@ -713,3 +752,283 @@ def _update_pipeline_stats(pipeline: str, failed: bool) -> None:
 		""",
 		(0 if failed else 1, 1 if failed else 0, now_datetime(), pipeline),
 	)
+
+
+def _pause_for_approval(run_doc, step, log_row, error, context, *, durable: bool, started: float) -> dict:
+	"""Persist Waiting Approval and checkpoint so approval can resume exactly once."""
+	log_row.status = "Waiting Approval"
+	log_row.error_message = str(error)[:1000]
+	run_doc.status = "Waiting Approval"
+	run_doc.resume_from_idx = cint(step.idx)
+	run_doc.resume_output_key = step.output_field or f"step_{step.idx}"
+	run_doc.waiting_invocation = getattr(error, "invocation", None)
+	run_doc.waiting_child_run = getattr(error, "child_run", None)
+	run_doc.output_data = frappe.as_json(_serialisable(context))[:60000]
+	run_doc.error_message = str(error)[:1000]
+	_audit_pipeline_state(run_doc, "Waiting Approval", raise_on_error=True)
+	run_doc.flags.ignore_permissions = True
+	run_doc.save(ignore_permissions=True)
+	if durable:
+		frappe.db.commit()  # nosemgrep: frappe-manual-commit
+	try:
+		frappe.publish_realtime(
+			"ai_pipeline_finished",
+			{"run": run_doc.name, "pipeline": run_doc.pipeline, "status": "Waiting Approval"},
+			user=run_doc.triggered_by,
+		)
+	except Exception:
+		frappe.log_error(title="AI pipeline waiting-approval event failed", message=frappe.get_traceback())
+	return {
+		"run": run_doc.name,
+		"status": "Waiting Approval",
+		"duration_ms": int((time.monotonic() - started) * 1000),
+		"invocation": run_doc.waiting_invocation,
+	}
+
+
+def resume_run(run: str) -> dict:
+	"""Resume a Waiting Approval run exactly once under the original requester."""
+	run_doc = frappe.get_doc("AI Pipeline Run", run)
+	authority = run_doc.triggered_by
+	if not authority or authority == "Guest" or not frappe.db.get_value("User", authority, "enabled"):
+		return _finish_invalid_run(run_doc, _("The pipeline requester is missing or disabled."))
+
+	status = frappe.db.get_value("AI Pipeline Run", run, "status", for_update=True)
+	if status != "Waiting Approval":
+		return {"run": run, "status": status, "skipped": True}
+
+	resume_from = cint(run_doc.resume_from_idx)
+	output_key = run_doc.resume_output_key
+	invocation = run_doc.waiting_invocation
+	child_run = run_doc.waiting_child_run
+
+	if child_run:
+		child_status = frappe.db.get_value("AI Pipeline Run", child_run, "status")
+		if child_status == "Waiting Approval":
+			return {"run": run, "status": "Waiting Approval", "skipped": True}
+		if child_status != "Completed":
+			return _finish_invalid_run(
+				run_doc, _("Nested pipeline {0} ended with status {1}.").format(child_run, child_status)
+			)
+	elif invocation:
+		inv_status = frappe.db.get_value("AI Tool Invocation", invocation, "status")
+		if inv_status != "Success":
+			return _finish_invalid_run(
+				run_doc, _("Waiting tool invocation {0} is {1}.").format(invocation, inv_status or "missing")
+			)
+
+	run_doc.db_set(
+		{
+			"status": "Running",
+			"waiting_invocation": None,
+			"waiting_child_run": None,
+			"error_message": None,
+		},
+		update_modified=False,
+	)
+	# Apply the approved step output into the checkpointed context.
+	try:
+		context = json.loads(run_doc.output_data or run_doc.input_data or "{}")
+	except (TypeError, ValueError):
+		context = {}
+	if not isinstance(context, dict):
+		context = {}
+	if child_run:
+		child_output = frappe.db.get_value("AI Pipeline Run", child_run, "output_data")
+		context[output_key or f"step_{resume_from}"] = json.loads(child_output or "{}")
+	elif invocation:
+		raw = frappe.db.get_value("AI Tool Invocation", invocation, "result")
+		try:
+			context[output_key or f"step_{resume_from}"] = json.loads(raw or "{}")
+		except (TypeError, ValueError):
+			context[output_key or f"step_{resume_from}"] = raw
+	injected = context.get(output_key or f"step_{resume_from}")
+	for log in run_doc.step_logs:
+		if log.status == "Waiting Approval":
+			log.status = "Success"
+			if injected is not None:
+				log.output = frappe.as_json(injected)[:20000]
+			log.error_message = None
+	run_doc.output_data = frappe.as_json(_serialisable(context))[:60000]
+	run_doc.flags.ignore_permissions = True
+	run_doc.save(ignore_permissions=True)
+
+	with _authority_as_user(authority):
+		return _execute_run(run_doc, resume_from_idx=resume_from)
+
+
+def resume_after_approval(run: str, invocation: str | None = None) -> dict:
+	"""Claim and resume a paused run after a tool invocation is approved or a child completes."""
+	status = frappe.db.get_value("AI Pipeline Run", run, "status", for_update=True)
+	if status != "Waiting Approval":
+		return {"run": run, "status": status, "skipped": True}
+	waiting = frappe.db.get_value("AI Pipeline Run", run, "waiting_invocation")
+	if invocation and waiting and waiting != invocation:
+		return {"run": run, "status": status, "skipped": True, "reason": "invocation_mismatch"}
+	pipeline = frappe.db.get_value("AI Pipeline Run", run, "pipeline")
+	queue = frappe.db.get_value("AI Pipeline", pipeline, "queue") or "long"
+	job = getattr(frappe.local, "job", None)
+	# Inline when we are already on a worker or in tests; otherwise enqueue.
+	if job or frappe.flags.in_test:
+		return resume_run(run)
+	frappe.enqueue(
+		"ai_fr_hg.ai.pipeline.resume_run",
+		queue=queue,
+		timeout=3600,
+		job_id=f"ai_pipeline_resume_{run}_{invocation or 'child'}",
+		deduplicate=True,
+		run=run,
+		enqueue_after_commit=True,
+	)
+	return {"run": run, "status": "Waiting Approval", "queued_resume": True}
+
+
+def fail_waiting_run(run: str, error: str) -> dict:
+	"""Reject a paused run after a tool invocation is denied."""
+	run_doc = frappe.get_doc("AI Pipeline Run", run)
+	status = frappe.db.get_value("AI Pipeline Run", run, "status", for_update=True)
+	if status != "Waiting Approval":
+		return {"run": run, "status": status, "skipped": True}
+	return _finish_invalid_run(run_doc, error, durable=True)
+
+
+def _maybe_resume_parent(child_run) -> None:
+	parent = child_run.parent_pipeline_run
+	if not parent:
+		return
+	status = frappe.db.get_value("AI Pipeline Run", parent, "status")
+	waiting_child = frappe.db.get_value("AI Pipeline Run", parent, "waiting_child_run")
+	if status == "Waiting Approval" and waiting_child == child_run.name:
+		resume_after_approval(parent)
+
+
+def next_cron_datetime(expression: str, after) -> object:
+	from croniter import croniter
+
+	return croniter(expression, after).get_next(type(after))
+
+
+def compute_next_run(expression: str, after=None):
+	after = after or now_datetime()
+	try:
+		return next_cron_datetime(expression, after)
+	except Exception:
+		return None
+
+
+def claim_due_scheduled_pipelines(now=None) -> list[str]:
+	"""Atomically claim due scheduled pipelines under a row lock.
+
+	Misfire Skip: jump to the next future slot without running.
+	Misfire Run Once: run once, then jump to the next future slot.
+	"""
+	now = now or now_datetime()
+	claimed: list[str] = []
+	rows = frappe.get_all(
+		"AI Pipeline",
+		filters={"enabled": 1, "trigger_type": "Scheduled"},
+		fields=["name", "schedule_cron", "next_run_on", "misfire_policy"],
+	)
+	for row in rows:
+		if not row.schedule_cron:
+			continue
+		due = get_datetime(row.next_run_on) if row.next_run_on else None
+		if due and due > now:
+			continue
+		locked = frappe.db.get_value(
+			"AI Pipeline",
+			row.name,
+			["name", "enabled", "trigger_type", "schedule_cron", "next_run_on", "misfire_policy"],
+			as_dict=True,
+			for_update=True,
+		)
+		if not locked or not locked.enabled or locked.trigger_type != "Scheduled" or not locked.schedule_cron:
+			continue
+		due = get_datetime(locked.next_run_on) if locked.next_run_on else None
+		if due and due > now:
+			continue
+		future = compute_next_run(locked.schedule_cron, now)
+		policy = locked.misfire_policy or "Run Once"
+		should_run = policy != "Skip"
+		frappe.db.set_value(
+			"AI Pipeline",
+			row.name,
+			{"next_run_on": future, "last_run_on": now if should_run else locked.next_run_on},
+			update_modified=False,
+		)
+		if should_run:
+			claimed.append(row.name)
+	return claimed
+
+
+def trigger_document_ingest_pipelines(
+	document_name: str, knowledge_base: str | None, requested_by: str
+) -> list[str]:
+	"""Start Document Ingest pipelines after a successful canonical index."""
+	started: list[str] = []
+	pipelines = frappe.get_all(
+		"AI Pipeline",
+		filters={"enabled": 1, "trigger_type": "Document Ingest"},
+		fields=["name", "knowledge_base"],
+	)
+	content = frappe.db.get_value("AI Document", document_name, "content") or ""
+	for row in pipelines:
+		if row.knowledge_base and knowledge_base and row.knowledge_base != knowledge_base:
+			continue
+		job_id = f"ai_ingest_{row.name}_{document_name}"
+		try:
+			from frappe.utils.background_jobs import is_job_enqueued
+
+			if is_job_enqueued(job_id):
+				continue
+		except Exception:
+			pass
+		run_pipeline(
+			row.name,
+			input_data={
+				"document": document_name,
+				"content": content,
+				"knowledge_base": knowledge_base,
+			},
+			reference_doctype="AI Document",
+			reference_name=document_name,
+			trigger_source="Document Ingest",
+			idempotency_key=job_id[:64],
+		)
+		started.append(row.name)
+	return started
+
+
+STEP_CONFIG_CONTRACTS = {
+	"Classify": {"categories": list},
+	"Summarize": {},
+	"Chunk": {},
+	"Compare": {},
+	"Translate": {"target_language": str},
+	"Tool": {},
+}
+
+
+def validate_step_config(step_type: str, config_text: str | None) -> dict:
+	"""Typed configuration contract for PIPE-04. Empty config is allowed except where required."""
+	if not config_text:
+		if step_type == "Classify":
+			raise PipelineError(_("The Classify step needs a 'categories' list in its configuration."))
+		if step_type == "Translate":
+			raise PipelineError(_("The Translate step needs a 'target_language' in its configuration."))
+		return {}
+	try:
+		config = json.loads(config_text)
+	except ValueError as exc:
+		raise PipelineError(_("Configuration is not valid JSON: {0}").format(str(exc))) from exc
+	if not isinstance(config, dict):
+		raise PipelineError(_("Step configuration must be a JSON object."))
+	required = STEP_CONFIG_CONTRACTS.get(step_type) or {}
+	for key, expected in required.items():
+		if key not in config:
+			raise PipelineError(_("Step configuration is missing '{0}'.").format(key))
+		if expected is list and not isinstance(config[key], list):
+			raise PipelineError(_("Step configuration '{0}' must be a list.").format(key))
+		if expected is str and not isinstance(config[key], str):
+			raise PipelineError(_("Step configuration '{0}' must be a string.").format(key))
+	return config

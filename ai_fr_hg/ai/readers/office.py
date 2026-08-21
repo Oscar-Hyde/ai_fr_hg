@@ -11,40 +11,26 @@ the ingestion pipeline records that on the document instead of failing hard.
 import csv
 import io
 
+from ai_fr_hg.ai.readers.archive import (
+	ArchiveCorruptError,
+	ArchiveLimitError,
+	validate_zip_container,
+)
+from ai_fr_hg.ai.readers.base import BaseReader, ReadResult
+
 
 def _validate_zip_archive(content: bytes, filename: str) -> None:
-	"""Bounded secure archive validation for ZIP-based office formats (ING-04)."""
-	import io
-	import os
-	import zipfile
-
-	MAX_MEMBERS = 500
-	MAX_UNCOMPRESSED = 50 * 1024 * 1024  # 50 MB
-	MAX_RATIO = 100  # compression ratio
+	"""Delegate to the single ZIP-container authority, translating domain errors."""
 	try:
-		z = zipfile.ZipFile(io.BytesIO(content))
-	except zipfile.BadZipFile:
-		raise ValueError(f"{filename}: invalid or corrupted archive")
-	if len(z.namelist()) > MAX_MEMBERS:
-		raise ValueError(f"{filename}: archive has too many members ({len(z.namelist())})")
-	total_uncompressed = 0
-	for info in z.infolist():
-		# Path traversal check
-		if ".." in info.filename or info.filename.startswith("/") or info.filename.startswith("\\"):
-			raise ValueError(f"{filename}: archive contains unsafe path {info.filename}")
-		total_uncompressed += info.file_size
-		if total_uncompressed > MAX_UNCOMPRESSED:
-			raise ValueError(f"{filename}: archive uncompressed size exceeds limit")
-		# Ratio check per member
-		if info.compress_size and info.file_size / max(info.compress_size, 1) > MAX_RATIO:
-			raise ValueError(f"{filename}: archive compression ratio exceeded for {info.filename}")
-	# Also check total ratio
-	total_compressed = sum(i.compress_size for i in z.infolist())
-	if total_compressed and total_uncompressed / max(total_compressed, 1) > MAX_RATIO:
-		raise ValueError(f"{filename}: archive total compression ratio exceeded")
+		validate_zip_container(content, filename)
+	except ArchiveLimitError as exc:
+		from ai_fr_hg.ai.exceptions import DocumentResourceLimitError
 
+		raise DocumentResourceLimitError(str(exc)) from exc
+	except ArchiveCorruptError as exc:
+		from ai_fr_hg.ai.exceptions import CorruptDocumentError
 
-from ai_fr_hg.ai.readers.base import BaseReader, ReadResult
+		raise CorruptDocumentError(str(exc)) from exc
 
 
 class PDFReader(BaseReader):
@@ -65,12 +51,27 @@ class PDFReader(BaseReader):
 				return ReadResult(metadata={"format": "pdf", "encrypted": True}, warnings=warnings)
 
 		pages: list[str] = []
+		embedded: list[dict] = []
+		structure: list[dict] = []
 		for index, page in enumerate(reader.pages):
 			try:
-				pages.append(page.extract_text() or "")
+				page_text = page.extract_text() or ""
 			except Exception as exc:
-				pages.append("")
+				page_text = ""
 				warnings.append(f"Page {index + 1} could not be read: {exc}")
+			pages.append(page_text)
+			structure.append({"kind": "page", "index": index + 1, "characters": len(page_text)})
+			try:
+				for image in list(getattr(page, "images", None) or [])[:20]:
+					embedded.append(
+						{
+							"kind": "image",
+							"name": str(getattr(image, "name", None) or f"page-{index + 1}-image"),
+							"location": f"page {index + 1}",
+						}
+					)
+			except Exception:
+				pass
 
 		text = self.clean("\n\n".join(f"[Page {i + 1}]\n{p}" for i, p in enumerate(pages) if p.strip()))
 
@@ -99,6 +100,8 @@ class PDFReader(BaseReader):
 			page_count=len(reader.pages),
 			pages=pages,
 			warnings=warnings,
+			structure=structure[:500],
+			embedded_objects=embedded[:50],
 		)
 
 
@@ -112,6 +115,8 @@ class DocxReader(BaseReader):
 
 		document = docx.Document(io.BytesIO(content))
 		parts: list[str] = []
+		structure: list[dict] = []
+		embedded: list[dict] = []
 
 		for paragraph in document.paragraphs:
 			if not paragraph.text.strip():
@@ -119,16 +124,43 @@ class DocxReader(BaseReader):
 			style = (paragraph.style.name or "") if paragraph.style else ""
 			if style.startswith("Heading"):
 				level = "".join(c for c in style if c.isdigit()) or "1"
-				parts.append(f"{'#' * min(int(level), 6)} {paragraph.text.strip()}")
+				line = f"{'#' * min(int(level), 6)} {paragraph.text.strip()}"
+				structure.append({"kind": "heading", "text": paragraph.text.strip(), "level": int(level)})
 			else:
-				parts.append(paragraph.text.strip())
+				line = paragraph.text.strip()
+				structure.append({"kind": "paragraph", "text": line})
+			parts.append(line)
+			for rel in getattr(paragraph, "hyperlinks", []) or []:
+				target = getattr(rel, "url", None) or getattr(rel, "target", None)
+				if target:
+					embedded.append({"kind": "hyperlink", "name": target, "location": "body"})
 
 		for index, table in enumerate(document.tables):
 			parts.append(f"\n[Table {index + 1}]")
+			structure.append({"kind": "table", "index": index + 1})
 			for row in table.rows:
 				cells = [cell.text.strip().replace("\n", " ") for cell in row.cells]
 				if any(cells):
 					parts.append(" | ".join(cells))
+
+		for section_index, section in enumerate(getattr(document, "sections", []) or [], start=1):
+			for label, part in (("header", section.header), ("footer", section.footer)):
+				try:
+					text = "\n".join(p.text.strip() for p in part.paragraphs if p.text.strip())
+				except Exception:
+					text = ""
+				if text:
+					parts.append(f"\n[{label.title()} {section_index}]\n{text}")
+					structure.append({"kind": label, "index": section_index, "text": text[:500]})
+
+		try:
+			for comment in getattr(document, "comments", []) or []:
+				body = getattr(comment, "text", None) or str(comment)
+				if body:
+					parts.append(f"[Comment] {body}")
+					embedded.append({"kind": "comment", "name": str(body)[:200], "location": "comments"})
+		except Exception:
+			pass
 
 		metadata = {"format": "docx", "tables": len(document.tables)}
 		try:
@@ -148,6 +180,8 @@ class DocxReader(BaseReader):
 			text=self.clean("\n".join(parts)),
 			metadata={k: v for k, v in metadata.items() if v},
 			page_count=1,
+			structure=structure[:500],
+			embedded_objects=embedded[:50],
 		)
 
 
@@ -183,6 +217,9 @@ class XlsxReader(BaseReader):
 			metadata={"format": "xlsx", "sheets": sheet_names},
 			page_count=len(sheet_names),
 			warnings=warnings,
+			structure=[
+				{"kind": "sheet", "name": title, "index": i + 1} for i, title in enumerate(sheet_names)
+			],
 		)
 
 
@@ -221,6 +258,7 @@ class PptxReader(BaseReader):
 			metadata={"format": "pptx", "slides": len(slides)},
 			page_count=len(slides),
 			pages=slides,
+			structure=[{"kind": "slide", "index": i + 1} for i in range(len(slides))],
 		)
 
 
@@ -247,7 +285,12 @@ class OdtReader(BaseReader):
 			text = _odf_plain_text(node).strip()
 			if text:
 				parts.append(text)
-		return ReadResult(text=self.clean("\n".join(parts)), metadata={"format": "odt"}, page_count=1)
+		return ReadResult(
+			text=self.clean("\n".join(parts)),
+			metadata={"format": "odt", "paragraphs": len(parts)},
+			page_count=1,
+			structure=[{"kind": "paragraph", "index": i + 1} for i in range(min(len(parts), 200))],
+		)
 
 
 class OdsReader(BaseReader):
@@ -278,6 +321,40 @@ class OdsReader(BaseReader):
 			metadata={"format": "ods", "sheets": len(sheets)},
 			page_count=len(sheets),
 			warnings=warnings,
+			structure=[{"kind": "sheet", "index": i + 1} for i in range(len(sheets))],
+		)
+
+
+class OdpReader(BaseReader):
+	label = "OpenDocument Presentation"
+	requires = "odfpy"
+
+	def read(self, content: bytes, filename: str) -> ReadResult:
+		_validate_zip_archive(content, filename)
+		opendocument = self.require("odf.opendocument", "odfpy")
+		odf_draw = self.require("odf.draw", "odfpy")
+		odf_text = self.require("odf.text", "odfpy")
+		document = opendocument.load(io.BytesIO(content))
+		pages = document.getElementsByType(odf_draw.Page)
+		parts: list[str] = []
+		slides: list[str] = []
+		for index, page in enumerate(pages, start=1):
+			texts = []
+			for node in list(page.getElementsByType(odf_text.P)) + list(
+				page.getElementsByType(odf_text.Span)
+			):
+				value = _odf_plain_text(node).strip()
+				if value:
+					texts.append(value)
+			rendered = "\n".join([f"[Slide {index}]", *texts])
+			slides.append(rendered)
+			parts.append(rendered)
+		return ReadResult(
+			text=self.clean("\n\n".join(parts)),
+			metadata={"format": "odp", "slides": len(slides)},
+			page_count=len(slides),
+			pages=slides,
+			structure=[{"kind": "slide", "index": i + 1} for i in range(len(slides))],
 		)
 
 

@@ -12,7 +12,13 @@
   "pipeline",
   "status",
   "triggered_by",
+  "trigger_source",
+  "idempotency_key",
   "parent_pipeline_run",
+  "resume_from_idx",
+  "waiting_invocation",
+  "waiting_child_run",
+  "resume_output_key",
   "run_cb",
   "reference_doctype",
   "reference_name",
@@ -54,7 +60,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Status",
-   "options": "Queued\nRunning\nCompleted\nFailed\nCancelled"
+   "options": "Queued\nRunning\nWaiting Approval\nCompleted\nFailed\nCancelled"
   },
   {
    "fieldname": "triggered_by",
@@ -62,6 +68,48 @@
    "in_standard_filter": 1,
    "label": "Triggered By",
    "options": "User"
+  },
+  {
+   "default": "Manual",
+   "fieldname": "trigger_source",
+   "fieldtype": "Select",
+   "label": "Trigger Source",
+   "options": "Manual\nAPI\nSchedule\nDocument Ingest\nAutomation",
+   "read_only": 1
+  },
+  {
+   "fieldname": "idempotency_key",
+   "fieldtype": "Data",
+   "label": "Idempotency Key",
+   "read_only": 1
+  },
+  {
+   "fieldname": "resume_from_idx",
+   "fieldtype": "Int",
+   "hidden": 1,
+   "label": "Resume From Step",
+   "read_only": 1
+  },
+  {
+   "fieldname": "waiting_invocation",
+   "fieldtype": "Link",
+   "label": "Waiting Invocation",
+   "options": "AI Tool Invocation",
+   "read_only": 1
+  },
+  {
+   "fieldname": "waiting_child_run",
+   "fieldtype": "Link",
+   "label": "Waiting Child Run",
+   "options": "AI Pipeline Run",
+   "read_only": 1
+  },
+  {
+   "fieldname": "resume_output_key",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Resume Output Key",
+   "read_only": 1
   },
   {
    "fieldname": "parent_pipeline_run",

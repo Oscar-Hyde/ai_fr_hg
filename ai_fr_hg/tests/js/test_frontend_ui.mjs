@@ -3,7 +3,10 @@ import { describe, it } from "node:test";
 
 import {
   patternExplorerErrorView,
+  pipelineCanCancel,
+  pipelineRunIndicator,
   reconnectTranslationFromServer,
+  taskActionsFor,
   translationRealtimeShouldReload,
   translationShouldShowStop,
 } from "../../public/js/ui/desk_workflows.js";
@@ -13,6 +16,10 @@ import {
   isGatewayTimeout,
   normalizeRpcError,
 } from "../../public/js/ui/rpc.js";
+import {
+  parseExtractionEvidence,
+  summarizeExtractionEvidence,
+} from "../../public/js/ui/extraction_evidence.js";
 import {
   parseAssistantRoute,
   serializeAssistantHash,
@@ -115,6 +122,83 @@ describe("PAT-04 pattern explorer permission view", () => {
     });
     assert.equal(view.kind, "permission-denied");
     assert.deepEqual(view.entities, []);
+  });
+});
+
+describe("TASK-03 task action parity", () => {
+  it("hides approve from the requester even when they are a manager", () => {
+    const actions = taskActionsFor("Pending Approval", {
+      isManager: true,
+      isRequester: true,
+    });
+    assert.equal(actions.includes("approve"), false);
+    assert.equal(actions.includes("reject"), true);
+  });
+
+  it("lets a manager who is not the requester approve", () => {
+    const actions = taskActionsFor("Pending Approval", {
+      isManager: true,
+      isRequester: false,
+    });
+    assert.deepEqual(actions, ["approve", "reject", "cancel"]);
+  });
+
+  it("blocks run for users when approval is required", () => {
+    const actions = taskActionsFor("Open", {
+      isManager: false,
+      isRequester: true,
+      requiresApproval: true,
+    });
+    assert.equal(actions.includes("run"), false);
+    assert.equal(actions.includes("submit"), true);
+  });
+});
+
+describe("PIPE-03 run status contract", () => {
+  it("uses orange for waiting approval and allows cancel", () => {
+    assert.equal(pipelineRunIndicator("Waiting Approval"), "orange");
+    assert.equal(pipelineCanCancel("Waiting Approval"), true);
+    assert.equal(pipelineCanCancel("Completed"), false);
+  });
+});
+
+describe("Wave 4 extraction evidence summary", () => {
+  it("treats missing payload as empty", () => {
+    const summary = summarizeExtractionEvidence("");
+    assert.equal(summary.kind, "empty");
+    assert.equal(summary.empty, true);
+  });
+
+  it("flags extension/magic mismatch and counts embedded objects", () => {
+    const summary = summarizeExtractionEvidence({
+      detector: {
+        extension: "txt",
+        magic: "pdf",
+        family: "pdf",
+        mismatch: true,
+        reason: "extension_magic_mismatch",
+      },
+      reader: "PDF",
+      embedded_objects: [{ kind: "image", name: "p1" }],
+      structure: { block_count: 2, kinds: { page: 2 } },
+      provenance: {
+        bytes: 1200,
+        checksum_sha256: "abc",
+        word_count: 40,
+        page_count: 2,
+      },
+    });
+    assert.equal(summary.kind, "mismatch");
+    assert.equal(summary.reader, "PDF");
+    assert.equal(summary.embedded, 1);
+    assert.equal(summary.blocks, 2);
+    assert.equal(summary.word_count, 40);
+  });
+
+  it("parses JSON strings without throwing", () => {
+    const parsed = parseExtractionEvidence('{"reader":"Plain Text"}');
+    assert.equal(parsed.reader, "Plain Text");
+    assert.deepEqual(parseExtractionEvidence("not-json"), {});
   });
 });
 

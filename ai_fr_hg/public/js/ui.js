@@ -6,6 +6,7 @@
  * Loaded on every Desk boot via ai_fr_hg.bundle.js.
  */
 
+import * as extractionEvidence from "./ui/extraction_evidence";
 import * as realtime from "./ui/realtime";
 import * as rpc from "./ui/rpc";
 import * as routeState from "./ui/route_state";
@@ -13,5 +14,5 @@ import * as routeState from "./ui/route_state";
 (() => {
 	if (typeof frappe === "undefined" || typeof frappe.provide !== "function") return;
 	frappe.provide("frappe.ai.ui");
-	Object.assign(frappe.ai.ui, routeState, rpc, realtime);
+	Object.assign(frappe.ai.ui, routeState, rpc, realtime, extractionEvidence);
 })();

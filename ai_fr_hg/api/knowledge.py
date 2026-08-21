@@ -367,6 +367,30 @@ def get_document_warnings(document: str) -> dict:
 
 
 @frappe.whitelist()
+def get_document_evidence(document: str) -> dict:
+	"""Return durable extraction evidence (detection, structure, provenance).
+
+	Read permission on AI Document is required. The payload is bounded JSON
+	produced by ``ai.extraction`` and never includes full extracted text.
+	"""
+	doc = frappe.get_doc("AI Document", document)
+	doc.check_permission("read")
+	raw = doc.get("extraction_evidence") or "{}"
+	try:
+		evidence = json.loads(raw) if isinstance(raw, str) else raw
+		if not isinstance(evidence, dict):
+			evidence = {}
+	except Exception:
+		evidence = {}
+	return {
+		"document": document,
+		"evidence": evidence,
+		"status": doc.status,
+		"reader_used": doc.reader_used,
+	}
+
+
+@frappe.whitelist()
 def scan_pattern_entities(document: str) -> dict:
 	"""Extract high-precision pattern entities from a document's stored content.
 

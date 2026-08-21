@@ -58,7 +58,9 @@ class AIDocument(Document):
 		embedded_chunk_count: DF.Int
 		error_message: DF.SmallText | None
 		extracted_data: DF.Code | None
+		extraction_evidence: DF.Code | None
 		extraction_schema: DF.Link | None
+		extraction_warnings: DF.Code | None
 		file_size: DF.Float
 		folder: DF.Link
 		organization_name: DF.Data
@@ -75,6 +77,7 @@ class AIDocument(Document):
 		mime_type: DF.Data | None
 		naming_series: DF.Literal["AIDOC-.YYYY.-"]
 		page_count: DF.Int
+		pattern_scan_checksum: DF.Data | None
 		processing_duration_ms: DF.Int
 		processing_progress: DF.Percent
 		processing_message: DF.SmallText | None

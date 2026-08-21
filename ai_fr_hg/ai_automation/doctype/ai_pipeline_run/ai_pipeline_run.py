@@ -30,7 +30,13 @@ class AIPipelineRun(Document):
 		reference_doctype: DF.Link | None
 		reference_name: DF.DynamicLink | None
 		started_at: DF.Datetime | None
-		status: DF.Literal["Queued", "Running", "Completed", "Failed", "Cancelled"]
+		idempotency_key: DF.Data | None
+		resume_from_idx: DF.Int
+		resume_output_key: DF.Data | None
+		status: DF.Literal["Queued", "Running", "Waiting Approval", "Completed", "Failed", "Cancelled"]
+		trigger_source: DF.Literal["Manual", "API", "Schedule", "Document Ingest", "Automation"]
+		waiting_child_run: DF.Link | None
+		waiting_invocation: DF.Link | None
 		step_logs: DF.Table[AIPipelineRunStep]
 		traceback: DF.Code | None
 		triggered_by: DF.Link | None
@@ -81,8 +87,8 @@ class AIPipelineRun(Document):
 
 		self._assert_action_authority()
 		status = frappe.db.get_value("AI Pipeline Run", self.name, "status", for_update=True)
-		if status not in {"Queued", "Running"}:
-			frappe.throw(_("Only queued or running pipelines can be cancelled."))
+		if status not in {"Queued", "Running", "Waiting Approval"}:
+			frappe.throw(_("Only queued, running, or waiting-approval pipelines can be cancelled."))
 
 		frappe.db.set_value(
 			"AI Pipeline Run",

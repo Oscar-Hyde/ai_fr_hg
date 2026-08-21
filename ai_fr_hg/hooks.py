@@ -177,6 +177,7 @@ permission_query_conditions = {
 	"AI Memory": "ai_fr_hg.utils.permissions.memory_query",
 	"AI Skill": "ai_fr_hg.utils.permissions.skill_query",
 	"AI Task": "ai_fr_hg.utils.permissions.task_query",
+	"AI Automation Event": "ai_fr_hg.utils.permissions.automation_event_query",
 	"AI Pipeline Run": "ai_fr_hg.utils.permissions.pipeline_run_query",
 	"AI Execution Log": "ai_fr_hg.utils.permissions.execution_log_query",
 	"AI Search Query": "ai_fr_hg.utils.permissions.search_query",
@@ -228,6 +229,7 @@ scheduler_events = {
 		# Due scheduled pipelines.
 		"*/10 * * * *": [
 			"ai_fr_hg.tasks.run_scheduled_pipelines",
+			"ai_fr_hg.tasks.run_due_tasks",
 		],
 	},
 	"hourly_long": [
@@ -281,7 +283,7 @@ before_tests = "ai_fr_hg.install.before_tests"
 
 # Audit references preserve historical identities and must never become
 # retention constraints on the business/File records they describe.
-ignore_links_on_delete = ["AI Audit Log"]
+ignore_links_on_delete = ["AI Audit Log", "AI Automation Event"]
 
 # Request Events
 # ----------------
@@ -354,6 +356,7 @@ default_log_clearing_doctypes = {
 # ai_document_readers - new file format readers       (BaseReader subclasses)
 # ai_tools            - new built-in tool handlers    (plain callables)
 # ai_pipeline_methods - trusted Custom Method steps   (plain callables)
+# ai_task_methods     - trusted Custom AI Task methods (plain callables)
 #
 # Example, in another app's hooks.py:
 #

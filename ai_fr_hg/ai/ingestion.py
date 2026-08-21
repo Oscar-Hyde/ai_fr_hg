@@ -16,9 +16,7 @@ import mimetypes
 import os
 import socket
 import time
-import zipfile
 from contextlib import contextmanager
-from io import BytesIO
 from urllib.parse import unquote, urljoin, urlparse
 
 import frappe
@@ -41,21 +39,21 @@ from ai_fr_hg.ai.language import (
 	resolve_document_language,
 )
 from ai_fr_hg.ai.logging import write_audit_log
-from ai_fr_hg.ai.readers import get_reader, supported_extensions
 from ai_fr_hg.ai.readers.base import MissingDependency
 from ai_fr_hg.ai.readers.base import coerce_warnings as __coerce_warnings
 from ai_fr_hg.utils.network import enforce_local_only, get_allowed_hosts
 
 DEFAULT_MAX_DOCUMENT_MB = 50
 MAX_REDIRECTS = 5
-MAX_ARCHIVE_MEMBERS = 10_000
-ARCHIVE_EXTENSIONS = {"docx", "xlsx", "xlsm", "pptx"}
 REDIRECT_STATUSES = {301, 302, 303, 307, 308}
 ALLOWED_CONTENT_TYPES = {
 	"application/json",
 	"application/octet-stream",
 	"application/pdf",
 	"application/vnd.ms-excel.sheet.macroenabled.12",
+	"application/vnd.oasis.opendocument.presentation",
+	"application/vnd.oasis.opendocument.spreadsheet",
+	"application/vnd.oasis.opendocument.text",
 	"application/vnd.openxmlformats-officedocument.presentationml.presentation",
 	"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 	"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -72,6 +70,9 @@ MIME_EXTENSIONS = {
 	"application/json": ".json",
 	"application/pdf": ".pdf",
 	"application/vnd.ms-excel.sheet.macroenabled.12": ".xlsm",
+	"application/vnd.oasis.opendocument.presentation": ".odp",
+	"application/vnd.oasis.opendocument.spreadsheet": ".ods",
+	"application/vnd.oasis.opendocument.text": ".odt",
 	"application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
 	"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
 	"application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
@@ -460,6 +461,9 @@ def process_document(
 						)
 						if result.warnings
 						else "[]",
+						"extraction_evidence": json.dumps(
+							(result.metadata or {}).get("extraction_evidence") or {}, default=str, indent=2
+						),
 					},
 					update_modified=False,
 				)
@@ -539,6 +543,15 @@ def process_document(
 					{"document": document_name, "status": "Indexed"},
 					user=authority,
 				)
+				try:
+					from ai_fr_hg.ai.pipeline import trigger_document_ingest_pipelines
+
+					trigger_document_ingest_pipelines(document_name, document.knowledge_base, authority)
+				except Exception:
+					frappe.log_error(
+						title="AI document-ingest pipeline trigger failed",
+						message=frappe.get_traceback(),
+					)
 				return {
 					"document": document_name,
 					"status": "Indexed",
@@ -595,31 +608,25 @@ def process_document(
 
 
 def _extract_source(document, authority: str):
-	"""Run the one reader-registry extraction path and validate its output."""
+	"""Run the one extraction owner: detect, resolve, parse, and attach evidence."""
+	from ai_fr_hg.ai.extraction import extract_bytes
+
 	content, filename, mime_type = get_source_content(document, authority)
 	_validate_size(content)
-	_validate_archive(content, filename)
-
-	reader = get_reader(filename)
-	if not reader:
-		extension = _extension(filename) or _("unknown")
-		raise UnsupportedDocumentError(
-			_("No document reader is registered for .{0}. Supported extensions: {1}").format(
-				extension, ", ".join(supported_extensions())
-			)
-		)
 
 	try:
-		result = reader.read(content, filename)
+		outcome = extract_bytes(content, filename)
 	except MissingDependency as exc:
 		raise UnsupportedDocumentError(str(exc)) from exc
 	except DocumentProcessingError:
 		raise
 	except Exception as exc:
 		raise CorruptDocumentError(
-			_("The {0} reader could not parse {1}: {2}").format(reader.label, filename, str(exc))
+			_("The document reader could not parse {0}: {1}").format(filename, str(exc))
 		) from exc
 
+	result = outcome.result
+	reader = outcome.reader
 	if not result.text or not result.text.strip():
 		raise CorruptDocumentError(
 			_("The {0} reader found no readable text in {1}.").format(reader.label, filename)
@@ -843,28 +850,6 @@ def _validate_size(content: bytes) -> None:
 		)
 	if not content:
 		raise CorruptDocumentError(_("Document source is empty."))
-
-
-def _validate_archive(content: bytes, filename: str) -> None:
-	"""Reject corrupt/encrypted Office containers and bounded zip bombs."""
-	if _extension(filename) not in ARCHIVE_EXTENSIONS:
-		return
-	try:
-		with zipfile.ZipFile(BytesIO(content)) as archive:
-			members = archive.infolist()
-			if len(members) > MAX_ARCHIVE_MEMBERS:
-				raise DocumentResourceLimitError(
-					_("Office document contains too many archive members ({0}).").format(len(members))
-				)
-			uncompressed = sum(member.file_size for member in members)
-			if uncompressed > _max_document_bytes() * 10:
-				raise DocumentResourceLimitError(
-					_("Office document expands beyond the configured processing limit.")
-				)
-			if any(member.flag_bits & 0x1 for member in members):
-				raise CorruptDocumentError(_("Encrypted Office documents are not supported."))
-	except (zipfile.BadZipFile, zipfile.LargeZipFile) as exc:
-		raise CorruptDocumentError(_("The Office document container is corrupt.")) from exc
 
 
 def _reconcile_file_privacy_from_url(file_doc) -> None:

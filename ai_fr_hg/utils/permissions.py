@@ -262,7 +262,13 @@ def skill_query(user: str) -> str:
 
 
 def task_query(user: str) -> str:
-	return _owned_condition("AI Task", "owner", user, auditors=True)
+	if _is_manager(user) or _is_auditor(user):
+		return ""
+	return f"(`tabAI Task`.`owner` = {_escape(user)} or `tabAI Task`.`requested_by` = {_escape(user)})"
+
+
+def automation_event_query(user: str) -> str:
+	return _owned_condition("AI Automation Event", "requested_by", user, auditors=True)
 
 
 def pipeline_run_query(user: str) -> str:
@@ -331,6 +337,7 @@ candidate_query = _safe_condition(candidate_query)
 memory_query = _safe_condition(memory_query)
 skill_query = _safe_condition(skill_query)
 task_query = _safe_condition(task_query)
+automation_event_query = _safe_condition(automation_event_query)
 pipeline_run_query = _safe_condition(pipeline_run_query)
 execution_log_query = _safe_condition(execution_log_query)
 search_query = _safe_condition(search_query)
@@ -473,7 +480,11 @@ def has_document_permission(
 	if doc.doctype in {"AI Memory", "AI Skill"}:
 		return _is_read(permission_type) and _learning_scope_applies(doc, user)
 	if doc.doctype == "AI Task":
-		return _owned_document_access(doc, user, "owner", permission_type, auditors=True)
+		if _owned_document_access(doc, user, "owner", permission_type, auditors=True):
+			return True
+		return _owned_document_access(doc, user, "requested_by", permission_type, auditors=True)
+	if doc.doctype == "AI Automation Event":
+		return _owned_document_access(doc, user, "requested_by", permission_type, auditors=True)
 	if doc.doctype == "AI Pipeline Run":
 		return _owned_document_access(doc, user, "triggered_by", permission_type, auditors=True)
 	if doc.doctype in {"AI Execution Log", "AI Search Query", "AI Tool Invocation"}:

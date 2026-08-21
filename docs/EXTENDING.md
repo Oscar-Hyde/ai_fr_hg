@@ -11,6 +11,7 @@ ai_providers = {"My Runtime": "your_app.ai.providers.MyRuntimeProvider"}
 ai_document_readers = {"dwg": "your_app.ai.readers.DWGReader"}
 ai_tools = {"lookup_customer": "your_app.ai.tools.lookup_customer"}
 ai_pipeline_methods = {"enrich_erp": "your_app.ai.steps.enrich_with_erp_data"}
+ai_task_methods = {"close_ticket": "your_app.ai.tasks.close_ticket"}
 ```
 
 ---
@@ -148,10 +149,17 @@ class DWGReader(BaseReader):
 Once registered, the format works everywhere: upload, ingestion, pipelines,
 the supported-formats dialog and automation rules. Nothing else changes.
 
-`ReadResult` carries `text`, `metadata`, `page_count`, `pages` and `warnings`.
-Use `warnings` for partial extraction — a scanned page with no text layer, a
-password-protected section — rather than raising, so the rest of the document
-still indexes.
+`ReadResult` carries `text`, `metadata`, `page_count`, `pages`, `warnings`,
+`structure` (bounded blocks such as pages/sheets/headings) and
+`embedded_objects` (attachments, comments, images, hyperlinks). The canonical
+extraction owner (`ai.extraction`) detects format from magic bytes, compares
+the filename extension, and persists bounded `extraction_evidence` on
+`AI Document`. Use `warnings` for partial extraction — a scanned page with no
+text layer, a password-protected section — rather than raising, so the rest of
+the document still indexes. Do not register a format unless a real parser
+exists; audio, video, database files, OLE `.doc`/`.xls`/`.ppt`, Outlook
+`.msg`, scanned-PDF OCR, and generic `zip`/`tar` sources are intentionally
+unsupported.
 
 For paginated formats, emit `[Page N]` markers in the text; the chunker reads
 them and records page numbers on each chunk, which then appear in citations.
@@ -272,6 +280,10 @@ elevate privileges.
 
 The return value is written into the run context under the step's **Output
 Field**, where later steps read it via their **Input Field**.
+
+Custom **AI Task** type `Custom` uses the same trust model: decorate with
+`@task_method` or register the dotted path in `ai_task_methods`. The callable
+signature is `method(task, payload)` and it runs as the task requester.
 
 ---
 

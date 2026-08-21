@@ -15,12 +15,11 @@ All readers degrade gracefully: when an optional parsing library is missing the
 reader reports that clearly instead of crashing the ingestion pipeline.
 """
 
-import frappe
-
 from ai_fr_hg.ai.readers.base import BaseReader, ReadResult
 from ai_fr_hg.ai.readers.office import (
 	CSVReader,
 	DocxReader,
+	OdpReader,
 	OdsReader,
 	OdtReader,
 	PDFReader,
@@ -67,6 +66,7 @@ BUILTIN_READERS: dict[str, type[BaseReader]] = {
 	"pptx": PptxReader,
 	"odt": OdtReader,
 	"ods": OdsReader,
+	"odp": OdpReader,
 	"csv": CSVReader,
 	"tsv": CSVReader,
 	# images (OCR / vision)
@@ -83,6 +83,10 @@ BUILTIN_READERS: dict[str, type[BaseReader]] = {
 def get_readers() -> dict[str, type[BaseReader]]:
 	"""Built-in readers merged with those contributed by installed apps."""
 	readers = dict(BUILTIN_READERS)
+	try:
+		import frappe
+	except ImportError:
+		return readers
 	for extension, dotted_path in (frappe.get_hooks("ai_document_readers") or {}).items():
 		if isinstance(dotted_path, list):
 			dotted_path = dotted_path[-1]
