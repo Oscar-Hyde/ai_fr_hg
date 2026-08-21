@@ -141,6 +141,70 @@ class _Row(dict):
 		self[key] = value
 
 
+def _new_fakeredis():
+	"""A fakeredis client with Lua support, or None when unavailable."""
+	try:
+		import fakeredis
+	except ImportError:  # pragma: no cover - optional dependency
+		return None
+	client = fakeredis.FakeStrictRedis()
+	try:
+		client.eval("return 1", 0)
+	except Exception:  # pragma: no cover - fakeredis installed without [lua]
+		return None
+	return client
+
+
+class _FakeCache:
+	"""Frappe's cache surface over a fakeredis client.
+
+	Frappe's RedisWrapper namespaces keys and adds `get_value`/`set_value` on
+	top of the raw client. Only the operations `ai/limits.py` uses are
+	modelled; anything else raises rather than silently answering None, so a
+	missing method surfaces as a test failure instead of a false pass.
+	"""
+
+	def __init__(self, client):
+		self.client = client
+
+	@property
+	def available(self) -> bool:
+		return self.client is not None
+
+	def _require(self):
+		if self.client is None:
+			raise RuntimeError("fakeredis[lua] is not installed")
+		return self.client
+
+	def make_key(self, key, user=None, shared=False):
+		return f"ai_fr_hg|{key}"
+
+	def get_value(self, key, *args, **kwargs):
+		value = self._require().get(self.make_key(key))
+		return value.decode() if isinstance(value, bytes) else value
+
+	def set_value(self, key, value, *args, expires_in_sec=None, **kwargs):
+		return self._require().set(self.make_key(key), value, ex=expires_in_sec)
+
+	def delete_value(self, key, *args, **kwargs):
+		return self._require().delete(self.make_key(key))
+
+	def eval(self, script, numkeys, *args):
+		return self._require().eval(script, numkeys, *args)
+
+	def delete(self, *keys):
+		return self._require().delete(*keys)
+
+	def zrem(self, key, *members):
+		return self._require().zrem(key, *members)
+
+	def zcard(self, key):
+		return self._require().zcard(key)
+
+	def zremrangebyscore(self, key, low, high):
+		return self._require().zremrangebyscore(key, low, high)
+
+
 @dataclass
 class FakeDocType:
 	name: str
@@ -411,6 +475,7 @@ class FakeBench:
 		self.field_types: dict[str, dict[str, str]] = {}
 		self.roles: dict[str, list[str]] = {}
 		self._cached_singles: dict[str, FakeDocument] = {}
+		self._cache_client = None
 
 	# -- registry ----------------------------------------------------------
 
@@ -620,6 +685,23 @@ class FakeBench:
 	def delete_doc(self, doctype, name, **kwargs):
 		self.db.delete_row(doctype, name)
 
+	def cache(self):
+		"""Frappe's cache, backed by fakeredis when it is installed.
+
+		`frappe.cache()` in production is a Redis client, and `ai/limits.py`
+		runs Lua scripts through it for atomic lease and quota operations.
+		The previous stub answered `None` to everything, so every limits code
+		path silently took its "backend unavailable" branch and no admission
+		control was ever exercised.
+
+		`fakeredis[lua]` executes real Lua, so the actual scripts run here.
+		Without it, `_lua_cache` stays None and tests that need it skip
+		rather than passing vacuously.
+		"""
+		if self._cache_client is None:
+			self._cache_client = _FakeCache(_new_fakeredis())
+		return self._cache_client
+
 	def clear_cache(self, **kwargs):
 		return None
 
@@ -708,9 +790,7 @@ class FakeBench:
 		module.msgprint = lambda *a, **k: None
 		module.scrub = lambda v: str(v).replace(" ", "_").lower()
 		module.parse_json = lambda v: json.loads(v) if isinstance(v, str) else v
-		module.cache = lambda: types.SimpleNamespace(
-			get_value=lambda *a, **k: None, set_value=lambda *a, **k: None
-		)
+		module.cache = self.cache
 		module.utils = self._utils_module()
 		module.model = types.ModuleType("frappe.model")
 		module.model.get_permitted_fields = self.get_permitted_fields

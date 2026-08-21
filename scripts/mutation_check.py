@@ -237,6 +237,21 @@ MUTATIONS: list[Mutation] = [
 		breaks="Evidence must record when extraction ran.",
 	),
 	# -- formula preservation (§6.2) --------------------------------------
+	# -- quota reservation ledger (GOV-03) --------------------------------
+	Mutation(
+		name="quota-request-ceiling-not-enforced",
+		path="ai_fr_hg/ai/limits.py",
+		old="\tif status == -1:",
+		new="\tif False:",
+		breaks="The GOV-03 bug: concurrent callers all pass the same pre-call check.",
+	),
+	Mutation(
+		name="quota-reserves-nothing-for-tokens",
+		path="ai_fr_hg/ai/limits.py",
+		old="\testimate = max(0, cint(estimated_tokens))",
+		new="\testimate = 0",
+		breaks="Reserving zero makes the daily token cap an average, not a limit.",
+	),
 	# -- URL ingestion gate (SEC-04 application layer) --------------------
 	Mutation(
 		name="fetch-url-allows-embedded-credentials",

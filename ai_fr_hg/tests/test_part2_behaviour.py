@@ -1540,3 +1540,96 @@ class TestUrlIngestionGate(TestCase):
 		module._validate_fetch_url("https://example.com/doc.pdf")
 
 		self.assertEqual(calls, ["https://example.com/doc.pdf"])
+
+
+class TestQuotaReservationLedger(TestCase):
+	"""GOV-03 re-audit: the cited evidence was `assertIn("reserve_request_quota", source)`.
+
+	GOV-01/02/03 are all closed on source-text assertions in
+	`test_phase_6_units.py` — that the engine *mentions* `reserve_request_quota`,
+	`acquire_leases` and `check_rate_limit`. None of them runs the Lua that
+	makes a reservation atomic, which is the entire point of the finding:
+	"quotas are check-then-use, not reserved".
+
+	`fakeredis[lua]` executes the real scripts, so these tests drive the
+	actual ledger. They skip rather than pass when it is unavailable.
+	"""
+
+	def setUp(self):
+		self.bench = install(FakeBench())
+		if not self.bench.cache().available:
+			self.skipTest("fakeredis[lua] is not installed")
+		self.limits = import_app("ai_fr_hg.ai.limits")
+
+	def _reserve(self, **kwargs):
+		params = {
+			"user": "alice@example.com",
+			"request_limit": 3,
+			"token_limit": 1000,
+			"committed_requests": 0,
+			"committed_tokens": 0,
+			"estimated_tokens": 100,
+		}
+		params.update(kwargs)
+		return self.limits.reserve_quota(**params)
+
+	def test_concurrent_reservations_cannot_all_pass_the_same_check(self):
+		"""The GOV-03 defect: N callers observing one pre-call total."""
+		granted = [self._reserve() for _ in range(3)]
+		self.assertTrue(all(r.enforced for r in granted))
+
+		# The fourth exceeds max_requests_per_hour=3 while the others are
+		# still in flight — nothing has been committed to the database yet.
+		with self.assertRaises(self.limits.QuotaExceededError):
+			self._reserve()
+
+	def test_releasing_a_reservation_returns_the_allowance(self):
+		held = [self._reserve() for _ in range(3)]
+		with self.assertRaises(self.limits.QuotaExceededError):
+			self._reserve()
+
+		held[0].release()
+		# The freed slot is immediately reusable.
+		self._reserve()
+
+	def test_committed_usage_and_in_flight_are_summed(self):
+		"""Database usage plus ledger reservations, compared as one total."""
+		# Two already recorded in the database, one in flight -> at the limit.
+		self._reserve(committed_requests=2)
+
+		with self.assertRaises(self.limits.QuotaExceededError):
+			self._reserve(committed_requests=2)
+
+	def test_worst_case_tokens_are_reserved_not_the_average(self):
+		"""Reserving max_tokens is what makes a daily token cap a real cap."""
+		self._reserve(request_limit=0, token_limit=500, estimated_tokens=400)
+
+		# 400 held; a second 400 would exceed 500 even though nothing has
+		# actually been consumed yet.
+		with self.assertRaises(self.limits.QuotaExceededError):
+			self._reserve(request_limit=0, token_limit=500, estimated_tokens=400)
+
+	def test_token_ceiling_accounts_for_committed_tokens(self):
+		with self.assertRaises(self.limits.QuotaExceededError):
+			self._reserve(request_limit=0, token_limit=500, committed_tokens=450, estimated_tokens=100)
+
+	def test_reservations_are_scoped_per_user(self):
+		for _ in range(3):
+			self._reserve(user="alice@example.com")
+		with self.assertRaises(self.limits.QuotaExceededError):
+			self._reserve(user="alice@example.com")
+
+		# Bob's allowance is untouched by Alice saturating hers.
+		self._reserve(user="bob@example.com")
+
+	def test_no_limits_configured_means_no_enforcement(self):
+		reservation = self._reserve(request_limit=0, token_limit=0)
+
+		self.assertFalse(reservation.enforced)
+
+	def test_release_is_idempotent(self):
+		reservation = self._reserve()
+		reservation.release()
+		reservation.release()
+
+		self.assertTrue(reservation.released)

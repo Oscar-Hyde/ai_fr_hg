@@ -26,6 +26,14 @@ documents = [
     "lxml>=5.0",            # Faster HTML/XML parsing
 ]
 
+# Offline verification harness. `fakeredis[lua]` executes the real Lua scripts
+# in `ai/limits.py`, so admission control (GOV-01/02/03) can be tested without
+# a Redis server. Without it those tests skip rather than passing vacuously.
+#   bench pip install --editable "./apps/ai_fr_hg[verification]"
+verification = [
+    "fakeredis[lua]>=2.21",
+]
+
 # Optical character recognition fallback for image files only.
 # Scanned-PDF OCR is unsupported. Also needs: apt install tesseract-ocr
 ocr = [

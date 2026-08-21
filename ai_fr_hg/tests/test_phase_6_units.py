@@ -320,6 +320,14 @@ class TestPhase6SourceContracts(TestCase):
 		self.assertIn("for_update=True", source)
 
 	def test_engine_reserves_rather_than_only_checking_quota(self):
+		"""The engine must route through admission control, not around it.
+
+		This asserts *wiring only*. Whether reservation is actually atomic is
+		proven by `TestQuotaReservationLedger` in `test_part2_behaviour.py`,
+		which runs the real Lua under `fakeredis[lua]`; asserting that
+		`ai/engine.py` contains the string "reserve_request_quota" was the
+		entire prior evidence for GOV-01/02/03 and could not fail.
+		"""
 		source = (self.app / "ai/engine.py").read_text()
 		self.assertIn("reserve_request_quota", source)
 		self.assertIn("acquire_leases", source)
