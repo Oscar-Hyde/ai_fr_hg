@@ -76,6 +76,33 @@ def _matches(row: dict, filters) -> bool:
 	return True
 
 
+def _like_matches(pattern: str, actual: str) -> bool:
+	"""Model MariaDB's LIKE, including backslash escaping of the wildcards.
+
+	`%` and `_` are wildcards; `\\%` and `\\_` are the literal characters. A
+	naive translation that ignores the escapes would make `Home/A\\_1/%` match
+	`Home/AX1/child`, which is exactly the RET-07 sibling-prefix bug this
+	harness is used to test for — the fake would silently pass code that a
+	real database rejects.
+	"""
+	regex = []
+	index = 0
+	while index < len(pattern):
+		char = pattern[index]
+		if char == "\\" and index + 1 < len(pattern):
+			regex.append(re.escape(pattern[index + 1]))
+			index += 2
+			continue
+		if char == "%":
+			regex.append(".*")
+		elif char == "_":
+			regex.append(".")
+		else:
+			regex.append(re.escape(char))
+		index += 1
+	return re.fullmatch("".join(regex), actual, re.IGNORECASE | re.DOTALL) is not None
+
+
 def _matches_one(row: dict, field_name: str, operator: str, value) -> bool:
 	actual = row.get(field_name)
 	if operator in ("=", "=="):
@@ -95,8 +122,7 @@ def _matches_one(row: dict, field_name: str, operator: str, value) -> bool:
 	if operator == ">=":
 		return actual is not None and actual >= value
 	if operator == "like":
-		pattern = re.escape(str(value)).replace("%", ".*")
-		return re.fullmatch(pattern, str(actual or ""), re.IGNORECASE) is not None
+		return _like_matches(str(value), str(actual or ""))
 	if operator == "is":
 		return (actual in (None, "")) if value == "not set" else (actual not in (None, ""))
 	raise AssertionError(f"fakebench: unsupported operator {operator!r}")
@@ -434,9 +460,17 @@ class FakeBench:
 		pluck=None,
 		group_by=None,
 		as_list=False,
+		or_filters=None,
 		**kwargs,
 	):
 		rows = [dict(r) for r in self.db._filtered(doctype, filters)]
+		if or_filters:
+			# ANDed with `filters`, matching Frappe: a row must satisfy the
+			# base filters and at least one or_filter. Previously this
+			# argument fell into **kwargs and was discarded, so any code
+			# relying on it (folder subtree scoping, RET-07) was tested
+			# against an unfiltered result set and could not fail.
+			rows = [row for row in rows if any(_matches(row, [clause]) for clause in or_filters)]
 		if order_by:
 			for clause in reversed([c.strip() for c in str(order_by).split(",")]):
 				parts = clause.split()

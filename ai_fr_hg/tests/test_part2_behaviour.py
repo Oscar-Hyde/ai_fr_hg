@@ -1020,3 +1020,85 @@ class TestConversationHistoryBehaviour(TestCase):
 
 		self.assertEqual(len(module.get_conversation_history("CONV-1", limit=0)), 20)
 		self.assertLessEqual(len(module.get_conversation_history("CONV-1", limit=10_000)), 200)
+
+
+class TestFolderSubtreeIsolation(TestCase):
+	"""RET-07 re-audit: query with the filters, don't just inspect their shape.
+
+	The existing test asserts that `folder_match_or_filters` returns a
+	particular list of triples. That is a restatement of the implementation:
+	it would pass unchanged if `get_all` ignored `or_filters` entirely, and it
+	says nothing about which rows a query actually returns. These tests run
+	the filters through a bench and assert on the resulting rows.
+
+	`fakebench` now models MariaDB's LIKE escaping, so `\\_` and `\\%` are
+	literal here as they are in the database.
+	"""
+
+	def _bench(self):
+		bench = install(FakeBench())
+		bench.register_doctype("AI Document", ["folder", "source_folder", "title"])
+		return bench
+
+	def _query(self, bench, folder):
+		import frappe
+
+		from ai_fr_hg.ai.folders import folder_match_or_filters
+
+		return {
+			row["title"]
+			for row in frappe.get_all(
+				"AI Document",
+				fields=["title"],
+				or_filters=folder_match_or_filters(folder, ("folder", "source_folder")),
+			)
+		}
+
+	def test_sibling_prefix_folder_is_not_included(self):
+		"""The RET-07 bug: `Home/A%` also matched `Home/AB`."""
+		bench = self._bench()
+		for name, folder in (
+			("inside", "Home/A"),
+			("nested", "Home/A/deep"),
+			("sibling", "Home/AB"),
+			("sibling-nested", "Home/AB/deep"),
+			("unrelated", "Home/Other"),
+		):
+			bench.db.insert_row(
+				"AI Document", {"name": name, "folder": folder, "source_folder": folder, "title": name}
+			)
+
+		self.assertEqual(self._query(bench, "Home/A"), {"inside", "nested"})
+
+	def test_like_metacharacters_in_a_folder_name_are_literal(self):
+		"""An underscore in a folder name must not act as a single-char wildcard."""
+		bench = self._bench()
+		for name, folder in (
+			("literal", "Home/Q_1/child"),
+			("wildcard-victim", "Home/QX1/child"),
+		):
+			bench.db.insert_row(
+				"AI Document", {"name": name, "folder": folder, "source_folder": folder, "title": name}
+			)
+
+		self.assertEqual(self._query(bench, "Home/Q_1"), {"literal"})
+
+	def test_documents_moved_out_are_still_found_by_source_folder(self):
+		"""Both columns are matched, so provenance survives a move."""
+		bench = self._bench()
+		bench.db.insert_row(
+			"AI Document",
+			{"name": "moved", "folder": "Home/Elsewhere", "source_folder": "Home/A", "title": "moved"},
+		)
+
+		self.assertEqual(self._query(bench, "Home/A"), {"moved"})
+
+	def test_or_filters_are_actually_applied_by_the_harness(self):
+		"""Guard the harness: if or_filters were ignored, everything would match."""
+		bench = self._bench()
+		bench.db.insert_row(
+			"AI Document",
+			{"name": "far", "folder": "Home/Zzz", "source_folder": "Home/Zzz", "title": "far"},
+		)
+
+		self.assertEqual(self._query(bench, "Home/A"), set())

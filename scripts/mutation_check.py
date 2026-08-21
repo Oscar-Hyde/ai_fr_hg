@@ -237,6 +237,21 @@ MUTATIONS: list[Mutation] = [
 		breaks="Evidence must record when extraction ran.",
 	),
 	# -- formula preservation (§6.2) --------------------------------------
+	# -- folder subtree isolation (RET-07) --------------------------------
+	Mutation(
+		name="folder-prefix-matches-siblings",
+		path="ai_fr_hg/ai/folders.py",
+		old='filters.append([fieldname, "like", f"{escaped}/%"])',
+		new='filters.append([fieldname, "like", f"{escaped}%"])',
+		breaks="The original RET-07 bug: Home/A also matches the sibling Home/AB.",
+	),
+	Mutation(
+		name="folder-like-metacharacters-unescaped",
+		path="ai_fr_hg/ai/folders.py",
+		old="escaped = escape_like(norm)",
+		new="escaped = norm",
+		breaks="An underscore in a folder name becomes a wildcard, widening the scope.",
+	),
 	# -- conversation history (CHAT-01) -----------------------------------
 	Mutation(
 		name="history-selects-oldest",
