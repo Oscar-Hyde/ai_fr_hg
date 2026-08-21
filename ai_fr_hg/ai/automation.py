@@ -30,12 +30,14 @@ from ai_fr_hg.utils.authority import as_user, assert_valid_authority
 
 CACHE_KEY = "ai_fr_hg:automation_rules"
 
-SOURCE_FIELD_MESSAGES = {
-	"child_table_path": _("Child-table paths are not a supported automation source."),
-	"missing": _("The source field does not exist on {0}."),
-	"disallowed_type": _("The source field {0} is not a readable scalar field."),
-	"sensitive": _("The source field {0} is sensitive and cannot be used as automation input."),
-}
+
+def _source_field_messages() -> dict[str, str]:
+	return {
+		"child_table_path": _("Child-table paths are not a supported automation source."),
+		"missing": _("The source field does not exist on {0}."),
+		"disallowed_type": _("The source field {0} is not a readable scalar field."),
+		"sensitive": _("The source field {0} is sensitive and cannot be used as automation input."),
+	}
 
 
 def get_rule_index() -> dict:
@@ -329,7 +331,7 @@ def validate_source_field(document_type: str | None, source_field: str | None) -
 	)
 	if not code:
 		return
-	template = SOURCE_FIELD_MESSAGES[code]
+	template = _source_field_messages()[code]
 	if code == "missing":
 		frappe.throw(template.format(document_type))
 	frappe.throw(template.format(source_field))
