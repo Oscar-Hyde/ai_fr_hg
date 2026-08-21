@@ -133,6 +133,23 @@ class TestDocumentTranslation(TranslationTestCase):
 		self.assertTrue(first["cancelled"])
 		self.assertFalse(second["cancelled"])
 
+	def test_get_translation_after_cancel_is_reconnect_source_of_truth(self):
+		"""TRN-04: a reconnecting Desk must read Cancelled from the DocType API."""
+		from ai_fr_hg.ai.translation import cancel_translation
+		from ai_fr_hg.api.translation import get_translation
+
+		document = self.make_document(
+			"Reconnect Translation", "The contractor shall deliver the works on time.\n"
+		)
+		translation = self.make_translation(document, "ar")
+		translation.db_set("status", "Translating", update_modified=False)
+		cancel_translation(translation.name)
+		payload = get_translation(translation.name, include_segments=False)
+		self.assertEqual(payload["status"], "Cancelled")
+		self.assertEqual(cint(payload["cancel_requested"]), 1)
+		self.assertIn("processing_progress", payload)
+		self.assertIn("processing_message", payload)
+
 	def test_run_observes_cancel_and_does_not_mark_failed(self):
 		from ai_fr_hg.ai.translation import TranslationOutcome, cancel_translation, run_translation
 

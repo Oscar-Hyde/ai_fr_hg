@@ -181,6 +181,27 @@ class TestIngestionProgressCancellation(AIPlatformTestCase):
 		]
 		self.assertEqual(called.count(document.name), 0)
 
+	def test_queued_job_missing_from_rq_is_re_enqueued_once(self):
+		"""ING-06: if RQ no longer has the job, recovery uses the same enqueue path once."""
+		from ai_fr_hg.ai.ingestion import enqueue_processing
+
+		document = self.make_document("Vanished RQ Job", "queue lost the worker")
+		document.db_set(
+			{
+				"status": "Queued",
+				"processing_job_id": f"ai-document::{document.name}",
+				"processing_requested_by": frappe.session.user,
+			},
+			update_modified=False,
+		)
+		with (
+			patch("frappe.utils.background_jobs.is_job_enqueued", return_value=False),
+			patch("ai_fr_hg.ai.ingestion.frappe.enqueue") as enqueue,
+		):
+			result = enqueue_processing(document.name, requested_by=frappe.session.user)
+		self.assertEqual(result["status"], "Queued")
+		enqueue.assert_called_once()
+
 	def test_in_flight_enqueue_does_not_start_a_second_job(self):
 		"""ING-06: recovery never duplicates while status is still in-flight."""
 		from ai_fr_hg.ai.ingestion import enqueue_processing

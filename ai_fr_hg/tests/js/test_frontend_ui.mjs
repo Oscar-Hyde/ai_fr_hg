@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import {
+  patternExplorerErrorView,
+  reconnectTranslationFromServer,
+  translationRealtimeShouldReload,
+  translationShouldShowStop,
+} from "../../public/js/ui/desk_workflows.js";
 import { createRealtimeSession } from "../../public/js/ui/realtime.js";
 import {
   GATEWAY_TIMEOUT_MESSAGE,
@@ -65,6 +71,50 @@ describe("rpc errors", () => {
   it("falls back to the provided message", () => {
     assert.equal(normalizeRpcError({ message: "nope" }, "fallback"), "nope");
     assert.equal(normalizeRpcError({}, "fallback"), "fallback");
+  });
+});
+
+describe("TRN-04 translation Stop/reconnect contracts", () => {
+  it("shows Stop only while queued or translating", () => {
+    assert.equal(translationShouldShowStop("Queued"), true);
+    assert.equal(translationShouldShowStop("Translating"), true);
+    assert.equal(translationShouldShowStop("Cancelled"), false);
+    assert.equal(translationShouldShowStop("Completed"), false);
+  });
+
+  it("reloads from realtime only for the same translation name", () => {
+    assert.equal(
+      translationRealtimeShouldReload({ translation: "TRN-1" }, "TRN-1"),
+      true
+    );
+    assert.equal(
+      translationRealtimeShouldReload({ translation: "TRN-2" }, "TRN-1"),
+      false
+    );
+  });
+
+  it("reconnects from server fields, not browser memory", () => {
+    const restored = reconnectTranslationFromServer({
+      status: "Cancelled",
+      processing_progress: 40,
+      processing_message: "Cancelled",
+      cancel_requested: 1,
+      total_tokens: 19,
+    });
+    assert.equal(restored.status, "Cancelled");
+    assert.equal(restored.progress, 40);
+    assert.equal(restored.cancel_requested, 1);
+    assert.equal(restored.total_tokens, 19);
+  });
+});
+
+describe("PAT-04 pattern explorer permission view", () => {
+  it("denies without leaking entities", () => {
+    const view = patternExplorerErrorView({
+      message: "You cannot explore patterns in that knowledge base.",
+    });
+    assert.equal(view.kind, "permission-denied");
+    assert.deepEqual(view.entities, []);
   });
 });
 

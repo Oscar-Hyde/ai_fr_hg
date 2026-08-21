@@ -49,16 +49,22 @@ This is `bench --site test_site run-tests --app ai_fr_hg` on the pinned Frappe v
 - Translation cancel/progress is DocType + `frappe.publish_realtime("ai_translation_progress")`.
 - Pattern Explorer lists through `frappe.get_list` (permission query + `limit`/`start`).
 
-## Deferred evidence (not dropped, not waived)
+## Option B (Phase 7 evidence) — in progress, not closed
 
-Moved to **Phase 7** as evidence-environment gaps, not as unfixed backend contracts:
+Owner chose Option B. This increment is **not** a Desk/browser run and **not** an OS-level RQ kill.
 
-1. **ING-06** — actual RQ worker process termination and restart under a live queue.
-2. **TRN-04** — Desk/browser Stop and reconnect against DocType + realtime state.
-3. **PAT-04** — Desk/browser permission-denied explorer workflow.
+Added:
 
-No further Phase 4 backend test churn unless a hosted Server regression appears.
+- ING-06: queued document whose RQ job is gone (`is_job_enqueued` false) is re-enqueued once.
+- TRN-04: `get_translation` after cancel is the reconnect payload. Node: Stop only while Queued/Translating; realtime reload is name-scoped; reconnect uses server fields.
+- PAT-04: Node permission error view contains no entities; Desk matcher now treats `cannot explore` as denied.
+
+Still missing:
+
+1. ING-06 kill a live RQ worker process.
+2. TRN-04 real Desk Stop + browser reconnect.
+3. PAT-04 real Desk unauthorized explorer UX.
 
 ## Phase verdict
 
-`FAIL` — implementation and hosted backend CI are recorded; remaining items are deferred operational/browser evidence. **Do not start Phase 5** until the project owner either (A) accepts these three items as Phase 7 evidence, or (B) the Phase 7 matrices close them and this report is revised.
+`FAIL` — Option B started; Node/API reconnect contracts are not Desk/OS chaos. **Do not start Phase 5.** PASS is not claimed.

@@ -105,8 +105,8 @@ Phase 1 isolation/API safety, Phase 2 retrieval correctness, and Phase 3 convers
 2. Keep removed Folder/`.msg`/reranker/target-mapping controls absent; implement translation/ingestion progress, parser hardening, and provider model lifecycle. Scanned-PDF OCR and original-format reconstruction remain intentionally unsupported unless a future decision supersedes Phase 0.
 3. Add pipeline API/document-ingest triggers, atomic schedule claims, waiting-approval resume, and a typed builder.
 4. Complete AI Task types, state transitions, scheduling, audit links, and UI.
-5. Add translation/pattern/ingestion progress and cancellation.
-6. Build Learning and Pattern Explorer dashboards and fix reports.
+5. Phase 4 backend progress/cancel exists; remaining proof is Phase 7 browser/chaos (ING-06/TRN-04/PAT-04). Do not start Phase 5 until that gate is accepted.
+6. Build Learning dashboard and fix reports (Phase 6); Pattern Explorer backend exists.
 7. Make export/import a versioned, tested restore path.
 8. Add browser, real-runtime, optional dependency, load, concurrency, security, and migration tests.
 
