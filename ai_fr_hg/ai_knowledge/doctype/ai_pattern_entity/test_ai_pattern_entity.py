@@ -73,6 +73,24 @@ class TestPatternEntityScan(AIPlatformTestCase):
 		self.assertEqual(second["total"], first["total"])
 		self.assertEqual(before, after)
 
+	def test_zero_result_scan_is_durable_and_not_rescanned(self):
+		from ai_fr_hg.ai.patterns import scan_document, scan_pending_documents
+
+		document = self.make_document("Empty Pattern Scan", "Nothing but plain words.")
+		frappe.db.set_value(
+			"AI Document",
+			document.name,
+			{"status": "Indexed", "checksum": "empty-scan"},
+			update_modified=False,
+		)
+		result = scan_document(document.name)
+		self.assertEqual(result["total"], 0)
+		self.assertEqual(
+			frappe.db.get_value("AI Document", document.name, "pattern_scan_checksum"),
+			"empty-scan",
+		)
+		self.assertEqual(scan_pending_documents(), [])
+
 	def test_rescan_prunes_entities_removed_from_content(self):
 		from ai_fr_hg.ai.patterns import scan_document
 

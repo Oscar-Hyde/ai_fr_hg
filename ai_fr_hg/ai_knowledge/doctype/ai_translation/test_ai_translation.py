@@ -6,6 +6,7 @@
 from unittest.mock import MagicMock, call, patch
 
 import frappe
+from frappe.utils import cint
 
 from ai_fr_hg.tests.integration_test_case import (
 	AIPlatformTestCase,
@@ -72,18 +73,19 @@ class TranslationTestCase(AIPlatformTestCase):
 
 class TestDocumentTranslation(TranslationTestCase):
 	def test_worker_authority_is_restored_after_failure(self):
-		from ai_fr_hg.ai.translation import _translation_user
+		from ai_fr_hg.utils.authority import as_user
 
 		worker_frappe = MagicMock()
 		worker_frappe.session.user = "background-worker@example.com"
+		worker_frappe.db.exists.return_value = True
 		worker_frappe.db.get_value.return_value = 1
 		worker_frappe.set_user.side_effect = lambda user: setattr(worker_frappe.session, "user", user)
 
 		with (
-			patch("ai_fr_hg.ai.translation.frappe", worker_frappe),
+			patch("ai_fr_hg.utils.authority.frappe", worker_frappe),
 			self.assertRaisesRegex(RuntimeError, "provider failed"),
 		):
-			with _translation_user("requester@example.com"):
+			with as_user("requester@example.com"):
 				self.assertEqual(worker_frappe.session.user, "requester@example.com")
 				raise RuntimeError("provider failed")
 
@@ -92,6 +94,30 @@ class TestDocumentTranslation(TranslationTestCase):
 			worker_frappe.set_user.call_args_list,
 			[call("requester@example.com"), call("background-worker@example.com")],
 		)
+
+	def test_run_translation_rejects_disabled_requester(self):
+		from ai_fr_hg.ai.translation import run_translation
+
+		user = self.make_ai_user("disabled-translator@example.com", "Disabled Translator")
+		user.enabled = 0
+		user.save(ignore_permissions=True)
+		document = self.make_document("Disabled Authority", "The contractor shall deliver the works on time.\n")
+		translation = self.make_translation(document, "ar")
+
+		with self.assertRaises(frappe.PermissionError):
+			run_translation(translation.name, requested_by=user.name)
+
+	def test_cancel_marks_translation_cancelled(self):
+		from ai_fr_hg.ai.translation import cancel_translation
+
+		document = self.make_document("Cancellable", "The contractor shall deliver the works on time.\n")
+		translation = self.make_translation(document, "ar")
+		translation.db_set("status", "Queued")
+		result = cancel_translation(translation.name)
+		self.assertTrue(result["cancelled"])
+		translation.reload()
+		self.assertEqual(translation.status, "Cancelled")
+		self.assertEqual(cint(translation.cancel_requested), 1)
 
 	def test_translation_preserves_document_structure(self):
 		from ai_fr_hg.ai.translation import run_translation
@@ -433,6 +459,22 @@ class TestGlossary(TranslationTestCase):
 		)
 		doc.insert(ignore_permissions=True)
 		return doc
+
+	def test_glossary_use_requires_knowledge_base_access(self):
+		from ai_fr_hg.ai.translation import load_glossary
+
+		self.make_ai_user("translator-b@example.com", "Translator B")
+		private = self.ensure_private_knowledge_base()
+		glossary = self.ensure_glossary()
+		glossary.db_set("knowledge_base", private.name)
+		frappe.clear_document_cache("AI Translation Glossary", glossary.name)
+
+		frappe.set_user("translator-b@example.com")
+		try:
+			with self.assertRaises(frappe.PermissionError):
+				load_glossary(glossary.name, "en", "ar")
+		finally:
+			frappe.set_user("Administrator")
 
 	def test_protected_terms_survive_translation(self):
 		from ai_fr_hg.ai.translation import run_translation

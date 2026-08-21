@@ -171,6 +171,7 @@ permission_query_conditions = {
 	"AI Document Chunk": "ai_fr_hg.utils.permissions.chunk_query",
 	"AI Pattern Entity": "ai_fr_hg.utils.permissions.pattern_entity_query",
 	"AI Translation": "ai_fr_hg.utils.permissions.translation_query",
+	"AI Translation Glossary": "ai_fr_hg.utils.permissions.glossary_query",
 	"AI Agent": "ai_fr_hg.utils.permissions.agent_query",
 	"AI Knowledge Candidate": "ai_fr_hg.utils.permissions.candidate_query",
 	"AI Memory": "ai_fr_hg.utils.permissions.memory_query",

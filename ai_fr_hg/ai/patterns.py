@@ -28,6 +28,7 @@ Design contract:
 
 from __future__ import annotations
 
+import calendar
 import re
 
 import frappe
@@ -108,6 +109,10 @@ _SCHEDULER_BATCH = 25
 
 _ISO_DATE_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})$")
 _SLASH_DATE_RE = re.compile(r"^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$")
+_MONTH_DATE_RE = re.compile(
+	r"^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4}$",
+	re.IGNORECASE,
+)
 _MONEY_NOISE_RE = re.compile(r"[,\s]")
 
 
@@ -129,24 +134,72 @@ def canonicalize_pattern_value(entity_type: str, value: str) -> str:
 	return cleaned
 
 
+def _calendar_date(year: int, month: int, day: int) -> str | None:
+	if month < 1 or month > 12 or day < 1:
+		return None
+	try:
+		last = calendar.monthrange(year, month)[1]
+	except ValueError:
+		return None
+	if day > last:
+		return None
+	return f"{year:04d}-{month:02d}-{day:02d}"
+
+
 def _to_iso_date(value: str) -> str | None:
 	match = _ISO_DATE_RE.match(value)
 	if match:
-		return value
+		return _calendar_date(int(match.group(1)), int(match.group(2)), int(match.group(3)))
 	match = _SLASH_DATE_RE.match(value)
 	if not match:
 		return None
 	left, mid, year = match.group(1), match.group(2), match.group(3)
 	if len(year) == 2:
 		year = f"20{year}" if int(year) < 70 else f"19{year}"
+	year_i = int(year)
 	# Ambiguous D/M vs M/D: if first part > 12 it is day-first; if the second
 	# part > 12 it is month-first; otherwise keep the ISO-like M/D reading.
 	a, b = int(left), int(mid)
 	if a > 12 and b <= 12:
-		return f"{year}-{b:02d}-{a:02d}"
+		return _calendar_date(year_i, b, a)
 	if b > 12 and a <= 12:
-		return f"{year}-{a:02d}-{b:02d}"
-	return f"{year}-{a:02d}-{b:02d}"
+		return _calendar_date(year_i, a, b)
+	return _calendar_date(year_i, a, b)
+
+
+def _is_valid_ipv4(value: str) -> bool:
+	parts = value.split(".")
+	if len(parts) != 4:
+		return False
+	for part in parts:
+		if not part.isdigit() or len(part) > 3:
+			return False
+		number = int(part)
+		if number > 255:
+			return False
+	return True
+
+
+def _is_valid_money(value: str) -> bool:
+	digits = re.sub(r"[^\d.]", "", value or "")
+	if not digits:
+		return False
+	try:
+		amount = float(digits)
+	except ValueError:
+		return False
+	return 0 <= amount < 1_000_000_000_000
+
+
+def _passes_semantic_check(entity_type: str, value: str) -> bool:
+	"""Reject shape-only matches that are not real IP/date/money values."""
+	if entity_type == "ip":
+		return _is_valid_ipv4(value)
+	if entity_type == "date":
+		return bool(_to_iso_date(" ".join((value or "").strip().casefold().split())) or _to_iso_date(value.strip()))
+	if entity_type == "money":
+		return _is_valid_money(value)
+	return True
 
 
 def persistable_pattern_type(entity_type: str) -> str:
@@ -206,12 +259,7 @@ def extract_pattern_entities(text: str, max_entities: int = DEFAULT_MAX_PATTERN_
 	if not text:
 		return []
 
-	# Sample beginning and end for massive texts, like the reference tokenizer.
-	if len(text) > MAX_SCAN_CHARS:
-		half = MAX_SCAN_CHARS // 2
-		scan_text = text[:half] + "\n" + text[-half:]
-	else:
-		scan_text = text
+	scan_text, to_source = _scan_window(text)
 
 	folded = scan_text.casefold()
 	found: dict[tuple[str, str], dict] = {}
@@ -219,6 +267,8 @@ def extract_pattern_entities(text: str, max_entities: int = DEFAULT_MAX_PATTERN_
 	def add(entity_type: str, value: str) -> None:
 		val = value.strip().strip(".,;:)]}")
 		if not val or len(val) > MAX_VALUE_LENGTH:
+			return
+		if not _passes_semantic_check(entity_type, val):
 			return
 		normalized = canonicalize_pattern_value(entity_type, val)
 		key = (entity_type, normalized)
@@ -233,7 +283,7 @@ def extract_pattern_entities(text: str, max_entities: int = DEFAULT_MAX_PATTERN_
 			}
 			located = _first_occurrence_quote(scan_text, val)
 			if located is not None:
-				entry["first_offset"] = located[0]
+				entry["first_offset"] = to_source(located[0])
 				entry["context_quote"] = located[1]
 			found[key] = entry
 		found[key]["occurrences"] = int(found[key]["occurrences"]) + 1
@@ -270,7 +320,10 @@ def scan_document(document: str, *, max_entities: int | None = None) -> dict:
 	and deterministic.
 	"""
 	row = frappe.db.get_value(
-		"AI Document", document, ["name", "content", "knowledge_base", "checksum"], as_dict=True
+		"AI Document",
+		document,
+		["name", "content", "knowledge_base", "checksum", "pattern_scan_checksum"],
+		as_dict=True,
 	)
 	if row is None:
 		frappe.throw(_("AI Document {0} does not exist.").format(document), frappe.DoesNotExistError)
@@ -385,16 +438,28 @@ def _scan_cache_key(document: str) -> str:
 
 
 def _mark_scanned(document: str, checksum: str) -> None:
-	"""Best-effort marker so the scheduler skips freshly scanned documents."""
+	"""Persist scan identity on the document so empty results are not rescanned."""
+	value = checksum or ""
 	try:
-		frappe.cache.set_value(_scan_cache_key(document), checksum or "", expires_in_sec=_SCAN_CACHE_TTL)
+		frappe.db.set_value("AI Document", document, "pattern_scan_checksum", value, update_modified=False)
+	except Exception:
+		pass
+	try:
+		frappe.cache.set_value(_scan_cache_key(document), value, expires_in_sec=_SCAN_CACHE_TTL)
 	except Exception:
 		pass
 
 
 def _was_scanned(document: str, checksum: str) -> bool:
+	value = checksum or ""
 	try:
-		return frappe.cache.get_value(_scan_cache_key(document)) == (checksum or "")
+		stored = frappe.db.get_value("AI Document", document, "pattern_scan_checksum")
+		if stored == value:
+			return True
+	except Exception:
+		pass
+	try:
+		return frappe.cache.get_value(_scan_cache_key(document)) == value
 	except Exception:
 		return False
 
