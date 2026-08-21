@@ -459,6 +459,28 @@ class TestArchiveProcessing(TestCase):
 		failed = [b for b in result.structure if b.get("skipped_reason") == "read_failed"]
 		self.assertEqual(len(failed), 1)
 
+	def test_empty_archive_is_reported_as_empty_not_corrupt(self):
+		"""An empty archive is not a damaged file; the message must not mislead."""
+		result = ArchiveReader().read(_zip({}), "empty.zip")
+		self.assertEqual(result.metadata["member_count"], 0)
+		self.assertEqual(result.text, "")
+
+	def test_single_stream_gzip_is_supported(self):
+		import gzip
+
+		result = ArchiveReader().read(gzip.compress(b"hello from gzip"), "notes.txt.gz")
+		self.assertIn("hello from gzip", result.text)
+
+	def test_tar_gz_is_walked_as_a_tarball(self):
+		buffer = io.BytesIO()
+		with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
+			payload = b"tar gz content"
+			member = tarfile.TarInfo("a.txt")
+			member.size = len(payload)
+			archive.addfile(member, io.BytesIO(payload))
+		result = ArchiveReader().read(buffer.getvalue(), "bundle.tar.gz")
+		self.assertIn("tar gz content", result.text)
+
 	def test_archive_is_detected_by_extension(self):
 		self.assertTrue(is_archive("a.zip"))
 		self.assertTrue(is_archive("a.tar.gz"))
@@ -630,6 +652,25 @@ class TestSemanticGrounding(TestCase):
 	def test_malformed_payload_is_survivable(self):
 		self.assertEqual(self._parse(None)["entities"], [])
 		self.assertEqual(self._parse({"entities": ["not-a-dict"]})["entities"], [])
+
+	def test_confidence_is_clamped_to_a_valid_range(self):
+		out = self._parse({"entities": [{"type": "person", "value": "Alice Novak", "confidence": 5000}]})
+		self.assertEqual(out["entities"][0]["confidence"], 100.0)
+
+	def test_grounding_tolerates_normalized_whitespace(self):
+		"""Models re-space names; the entity is still really in the document."""
+		from ai_fr_hg.ai.semantic import find_grounded_offset
+
+		self.assertIsNotNone(find_grounded_offset("Acme  Corp signed.", "Acme Corp"))
+
+	def test_nothing_grounds_against_empty_text(self):
+		from ai_fr_hg.ai.semantic import parse_semantic_payload
+
+		out = parse_semantic_payload(
+			{"entities": [{"type": "person", "value": "X", "confidence": 99}]}, "", 50.0
+		)
+		self.assertEqual(out["entities"], [])
+		self.assertEqual(out["rejected"]["ungrounded"], 1)
 
 	def test_unknown_predicate_degrades_to_related_to(self):
 		from ai_fr_hg.ai.semantic import normalize_relationship_type
