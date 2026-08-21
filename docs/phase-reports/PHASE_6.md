@@ -179,6 +179,75 @@ defects that `compileall`, `ruff`, and the 40 offline tests all passed over.
 
 ---
 
+## 5a. Interruption — CHAT-02 reopened and re-fixed
+
+Phase 6 work was suspended when a real `bench run-tests` on `main` was supplied
+showing `test_100_concurrent_sends_preserve_order_and_uniqueness` failing with
+`[1, 1, 2, ... 99]`. CHAT-02 was recorded `CLOSED — IMPLEMENTED`. It was not
+closed. Directive §1.1 makes a previous phase's exit criteria a precondition
+for the current one, so this took priority over Phase 6 part B.
+
+### What was actually wrong
+
+**1. The allocator ignored its own lock.** `for update` on the conversation row
+serialized the writers correctly; the following plain `select max(sequence)`
+was served from the transaction's REPEATABLE READ snapshot, established at the
+first read inside `frappe.connect()`. Each serialized writer read a stale
+maximum and reissued a committed sequence.
+
+**2. The unique index existed on no fresh install.** It was defined only in
+patch `v0_0_17`. Frappe marks historical patches as already-applied when a site
+is installed fresh, so no new site ever created it — including every CI run.
+The one test that checked it called `skipTest` when it was absent, so the
+missing backstop reported green.
+
+### Three rejected fixes, each caught by the bench
+
+| Attempt | Why it failed |
+| --- | --- |
+| `max(sequence) … for update` | MariaDB resolves `MAX()` on an indexed column with a single index-entry lookup; that optimization plus a locking read raises `1020 Record has changed since last read`. |
+| `UPDATE … greatest(…, (select max(sequence) …))` | The subquery is a consistent read (`1020` again) **and** locks `tabAI Message`, inverting against the concurrent inserts: `1213 Deadlock found`. |
+| Bare increment, no row lock | Passed the 100-worker test, but failed the production shape — a caller that already loaded the conversation trips the `1020` version check. |
+
+### What shipped
+
+- `allocate_sequence` takes a locking read of the conversation row, then
+  increments `AI Conversation.message_sequence_counter` — a DML current read,
+  single row, no subquery, no locks on `tabAI Message`.
+- `bump_sequence_watermark` keeps explicitly numbered inserts from being
+  reissued; patch `v0_0_22` seeds existing conversations.
+- The unique index moved to `ai/conversation_indexes.py`, installed through the
+  native `AI Message.on_doctype_update` hook, which Frappe runs on fresh
+  installs *and* migrations. `v0_0_17` is now a two-line delegate. The ALTER
+  failure raises instead of logging.
+- `test_duplicate_sequence_is_rejected_by_the_database` asserts the index
+  exists instead of skipping.
+
+Green on hosted Server [32471565463](https://github.com/Oscar-Hyde/ai_fr_hg/actions/runs/32471565463),
+including the 100-worker test and `bench migrate`.
+
+### What this exposed and did not fix — CHAT-09
+
+Under REPEATABLE READ, a transaction that has already consistent-read the
+conversation row cannot lock or update it after another transaction commits to
+it; MariaDB raises `1020 … try restarting transaction`. This is pre-existing
+and not introduced here. The guarantee held today is **no silent duplicate** —
+the caller receives a retryable error. Making it transparent needs a dedicated
+allocator row that no caller loads, or a transaction-level retry. Registered as
+**CHAT-09**, targeted at Phase 7 concurrency/chaos work. It is not closed and
+not hidden.
+
+### Process consequence
+
+Two closed findings were wrong in the same area, and both were wrong in ways a
+green CI run did not reveal: one because the test was probabilistic, one
+because the test skipped itself. The lesson recorded for later phases is that a
+test which can skip its own subject is not evidence, and a concurrency test
+that passes is not proof unless the invariant it guards also has a
+deterministic assertion.
+
+---
+
 ## 6. Frontend
 
 No frontend work was required by part A. The only user-visible change is that

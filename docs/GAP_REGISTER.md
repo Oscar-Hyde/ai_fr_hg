@@ -3,7 +3,7 @@
 **Register date:** 2026-08-19 (last updated 2026-08-21, Phase 6 part A)
 **Authoritative finding source:** [`DEVELOPMENT_PLAN.md`](DEVELOPMENT_PLAN.md)
 **Change control:** update a row only with its implementation evidence and phase review.
-**Count:** 79 findings.
+**Count:** 80 findings (CHAT-09 added 2026-08-21 from the CHAT-02 reopening).
 
 Status meanings:
 
@@ -33,13 +33,14 @@ A closed row is not permission to weaken the audit's cross-cutting requirements.
 | RET-06 | Oversized first context block can yield no context | 2 | Retrieval | CLOSED — IMPLEMENTED | Truncate first block; dedupe overlap; preserve packed citation mapping. | Oversized-first-result and character-budget tests. |
 | RET-07 | Folder subtree filtering uses unsafe prefix matching | 2 | Retrieval + File/Folder | CLOSED — IMPLEMENTED | Shared `folder_match_or_filters`: exact or `root/%`. | Sibling-prefix unit + integration tests. |
 | CHAT-01 | History selects oldest rather than latest messages | 3 | Conversation | CLOSED — IMPLEMENTED | Latest N via `window_latest_messages`; tool groups kept intact; summary injected when truncated. | 100-message latest-context unit + integration tests. Browser E2E → Phase 7. |
-| CHAT-02 | Concurrent message sequence allocation races | 3 | Conversation | CLOSED — IMPLEMENTED | Conversation row `FOR UPDATE` allocator; `turn_id` on messages; unique `(conversation, sequence)` index. | `TestConversationHistory.test_100_concurrent_sends_preserve_order_and_uniqueness`: 100 independent Frappe worker connections, 100 committed messages, sequences 1–100 unique; passed in hosted Server run `32394651654`. |
+| CHAT-02 | Concurrent message sequence allocation races | 3 | Conversation | CLOSED — IMPLEMENTED (reopened and re-fixed 2026-08-21) | **Reopened:** a real bench run on `main` produced `[1, 1, 2, ... 99]`, so the original closure was wrong. Root cause was InnoDB REPEATABLE READ: the `for update` row lock serialized writers correctly, but the following plain `select max(sequence)` was served from the transaction snapshot taken at `frappe.connect()`, so each serialized writer read a stale maximum. Allocation is now an atomic counter increment on the conversation row (`message_sequence_counter`), a DML current read, preceded by a locking read of the same row. The unique `(conversation, sequence)` index is now schema-owned via `AI Message.on_doctype_update` — defined only in a patch, it never existed on *any* fresh install, including CI. | 100-worker concurrent test, a deterministic stale-snapshot test, and `test_duplicate_sequence_is_rejected_by_the_database` (which no longer skips itself when the index is absent); all green on hosted Server `32471565463`. |
 | CHAT-03 | Existing conversation state is not synchronized | 3 | Conversation + Frontend | CLOSED — IMPLEMENTED | Route-options/path/query/hash parser; open restores agent/model/KB/focused document; config persisted per turn. | Route-state JS tests + backend config tests. Desk deep-link smoke → Phase 7. |
 | CHAT-04 | Focus document, fallback, weights, citations are disconnected | 3 | Conversation + Retrieval | CLOSED — IMPLEMENTED | Focused document merged into authorized retrieve scope; strict-grounding fallback; footnote instructions; weights already in RET-04. | Per-control integration tests. |
 | CHAT-05 | End-user conversation actions are missing | 3 | Conversation + Frontend | CLOSED — IMPLEMENTED | Service-layer rename/pin/archive/restore/export/pagination with v17 `limit`/`offset`; Assistant menus + archived filter. | Permission and pagination tests. Browser workflow → Phase 7. |
 | CHAT-06 | Negative feedback lacks reason/correction | 3 | Learning + Frontend | CLOSED — IMPLEMENTED | Dialog persists reason/correction; learning-disabled still records the rating. | Persistence/reason tests. Browser dialog → Phase 7. |
 | CHAT-07 | Turn cancellation/reconnect is absent | 3 | Conversation + Jobs | CLOSED — IMPLEMENTED | Same `turn_id` as streaming; cache cancel flag; Streaming placeholder; engine stream abort; `get_turn_status`; Stop button. | Cancel-by-id, isolation, stream-abort, reconnect tests. Browser Stop → Phase 7. |
 | CHAT-08 | Attachment identity is inconsistent | 3 | Conversation + File/Folder | CLOSED — IMPLEMENTED | Uploader passes `file.name` as `file_record`; pending chips; restore pending on send failure. | Source contract + FILE-02 resolver tests. Browser upload → Phase 7. |
+| CHAT-09 | Allocation under a stale row snapshot surfaces as a retryable error | 7 | Conversation | OPEN | Discovered while re-fixing CHAT-02, and pre-existing. Under REPEATABLE READ a transaction that has already consistent-read the conversation row cannot lock or update it once another transaction has committed to it; MariaDB raises `1020 … try restarting transaction`. The guarantee held today is *no silent duplicate* — the caller gets a retryable error instead. Making it transparent needs either a dedicated allocator row that no caller loads, or a transaction-level retry, and belongs with Phase 7 chaos/concurrency work. | Contract asserted today: `allocate_sequence` either returns the next sequence or raises `QueryDeadlockError`, never a committed one. |
 | ING-01 | Folder source is non-functional | 0 | Ingestion + File/Folder | CLOSED — REMOVED | Select option removed; server rejects; native File remains sole folder authority. | Metadata/controller tests and legacy-row preservation statement. |
 | ING-02 | Scanned-PDF OCR is advertised but absent | 0 | Ingestion | CLOSED — SCOPED | PDF text extraction and image OCR retained; scanned-PDF OCR promise/guidance removed. | Reader-warning and documentation contract tests. |
 | ING-03 | `.msg` is not real Outlook parsing | 0 | Readers | CLOSED — REMOVED | `.msg` registry/UI claim removed; `.eml` remains supported. | Reader registry and supported-format API tests. |
@@ -109,6 +110,6 @@ A closed row is not permission to weaken the audit's cross-cutting requirements.
 | 4 | 15 |
 | 5 | 11 |
 | 6 | 17 |
-| **Total** | **79** |
+| **Total** | **80** |
 
 Phase 7 is the integrated qualification gate; it owns no new audit ID and verifies all 79 closures in the real runtime, browser, load, chaos, upgrade, and restore matrices.
