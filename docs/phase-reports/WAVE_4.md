@@ -67,7 +67,14 @@ Local (no bench):
 - `python3 -m compileall -q ai_fr_hg` — PASS
 - `ruff check ai_fr_hg` — PASS
 
-Hosted Frappe v17 Server/Linter/Frontend static/Dependency audit must pass on this SHA before a production verdict.
+Hosted Frappe v17 bench on SHA `f03173c`:
+
+| Check | Result | Run |
+| --- | --- | --- |
+| Server | **pass** 2m34s | [32461564835](https://github.com/Oscar-Hyde/ai_fr_hg/actions/runs/32461564835) |
+| Linter / Frontend static / Dependency audit | **pass** | [32461564867](https://github.com/Oscar-Hyde/ai_fr_hg/actions/runs/32461564867) |
+
+PR: [#41](https://github.com/Oscar-Hyde/ai_fr_hg/pull/41)
 
 ## Remaining issues
 
