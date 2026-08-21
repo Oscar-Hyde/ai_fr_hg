@@ -656,29 +656,21 @@ class TestBackTranslationAccounting(TranslationTestCase):
 			)
 		self.assertTrue(outcome.partial)
 
-	def test_provider_failure_does_not_drop_prior_token_count(self):
-		from ai_fr_hg.ai.translation import translate_text
+	def test_failed_run_keeps_existing_token_total(self):
+		from ai_fr_hg.ai.translation import run_translation
 
-		state = {"calls": 0}
+		document = self.make_document("Retain Tokens", "The contractor shall deliver the works on time.\n")
+		translation = self.make_translation(document, "ar")
+		translation.db_set("total_tokens", 42, update_modified=False)
 
-		def fail_after_one(system, user, target):
-			from ai_fr_hg.tests.integration_test_case import _default_translation_reply
+		with patch(
+			"ai_fr_hg.ai.translation.translate_text", side_effect=RuntimeError("provider failed after usage")
+		):
+			result = run_translation(translation.name)
 
-			state["calls"] += 1
-			if state["calls"] > 1:
-				raise RuntimeError("provider failed after usage")
-			return _default_translation_reply(system, user, target)
-
-		with stub_translation_model(behaviour=fail_after_one):
-			with self.assertRaises(RuntimeError):
-				translate_text(
-					STRUCTURED_SOURCE,
-					"ar",
-					source_language="en",
-					knowledge_base=self.knowledge_base.name,
-					repair_pass=False,
-					quality_checks=False,
-				)
+		self.assertEqual(result["status"], "Failed")
+		translation.reload()
+		self.assertEqual(cint(translation.total_tokens), 42)
 
 
 class TestTranslationIntegrations(TranslationTestCase):

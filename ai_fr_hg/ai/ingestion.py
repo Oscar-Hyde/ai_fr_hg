@@ -265,6 +265,7 @@ def enqueue_processing(
 	with frappe.cache.lock(lock_key, timeout=15, blocking_timeout=10):
 		with _as_user(requested_by):
 			document = frappe.get_doc("AI Document", document_name)
+			document.reload()
 			if not frappe.has_permission("AI Document", "write", doc=document, user=requested_by):
 				raise DocumentSourcePermissionError(
 					_("User {0} cannot process AI Document {1}.").format(requested_by, document_name)
@@ -1233,6 +1234,7 @@ def reap_stale_in_flight_documents(limit: int = 20) -> list[dict]:
 			},
 			update_modified=False,
 		)
+		frappe.clear_document_cache("AI Document", row.name)
 		reaped.append(row)
 	return reaped
 
