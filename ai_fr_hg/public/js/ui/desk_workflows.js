@@ -26,7 +26,9 @@ export function reconnectTranslationFromServer(doc) {
 }
 
 export function patternExplorerPermissionDenied(error) {
-	return /permission|not permitted|not allowed|cannot explore/i.test((error && error.message) || "");
+	return /permission|not permitted|not allowed|cannot explore/i.test(
+		(error && error.message) || ""
+	);
 }
 
 export function patternExplorerErrorView(error) {

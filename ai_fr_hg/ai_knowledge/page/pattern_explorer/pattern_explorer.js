@@ -77,7 +77,9 @@ class PatternExplorer {
 			});
 			this.render(payload);
 		} catch (error) {
-			const denied = /permission|not permitted|not allowed|cannot explore/i.test(error.message || "");
+			const denied = /permission|not permitted|not allowed|cannot explore/i.test(
+				error.message || ""
+			);
 			const message = denied
 				? __("You do not have permission to list pattern entities.")
 				: error.message || __("Could not load pattern entities.");
