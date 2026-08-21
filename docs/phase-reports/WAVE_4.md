@@ -3,7 +3,9 @@
 **Objective:** make extraction the authoritative information layer: detect, resolve, extract, normalize, persist evidence, and fail visibly.
 
 **Opened:** 2026-08-21
-**Status:** COMPLETE — backend contracts implemented; hosted Frappe v17 verification required; browser E2E remains Phase 7
+**Status:** PASS — IMPLEMENTATION COMPLETE WITH DEFERRED RUNTIME QUALIFICATION
+
+Permanent close-out: [`WAVE_4_COMPLETION_CERTIFICATE.md`](WAVE_4_COMPLETION_CERTIFICATE.md).
 
 Phase 4 remaining evidence (ING-06 OS-level RQ kill, TRN-04 Desk Stop/reconnect) stays Phase 7, matching Phases 1–3.
 
