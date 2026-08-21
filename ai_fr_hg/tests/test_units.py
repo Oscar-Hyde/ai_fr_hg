@@ -312,7 +312,20 @@ class TestReaderRegistry(UnitTestCase):
 		from ai_fr_hg.ai.readers import supported_extensions
 
 		extensions = set(supported_extensions())
-		for expected in ("pdf", "docx", "xlsx", "pptx", "odt", "ods", "txt", "md", "csv", "json", "html"):
+		for expected in (
+			"pdf",
+			"docx",
+			"xlsx",
+			"pptx",
+			"odt",
+			"ods",
+			"odp",
+			"txt",
+			"md",
+			"csv",
+			"json",
+			"html",
+		):
 			self.assertIn(expected, extensions)
 
 	def test_reader_lookup_is_case_insensitive(self):

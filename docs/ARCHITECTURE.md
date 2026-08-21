@@ -32,10 +32,12 @@ ai_fr_hg/
 │   │   ├── ollama.py        Native Ollama API
 │   │   ├── openai_compatible.py   vLLM, LM Studio, llama.cpp, …
 │   │   └── __init__.py      Registry, merges the `ai_providers` hook
+│   ├── extraction.py        Format detection, reader resolution, extraction evidence
 │   ├── readers/             Document text extraction
 │   │   ├── base.py          BaseReader contract, ReadResult, MissingDependency
-│   │   ├── plain.py         Text, Markdown, CSV, JSON, XML, HTML, code, images
-│   │   ├── office.py        PDF, Word, Excel, PowerPoint, OpenDocument
+│   │   ├── archive.py       Single ZIP-container guard (bomb/traversal/encryption)
+│   │   ├── plain.py         Text, Markdown, JSON, XML, HTML, code, email, images
+│   │   ├── office.py        PDF, Word, Excel, PowerPoint, OpenDocument (incl. ODP)
 │   │   └── __init__.py      Registry, merges the `ai_document_readers` hook
 │   ├── tools/               Tool calling
 │   │   ├── builtin.py       Built-in handlers

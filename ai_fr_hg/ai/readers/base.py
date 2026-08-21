@@ -5,6 +5,7 @@
 
 import re
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 
 WHITESPACE = re.compile(r"[ \t\f\v]+")
 BLANK_LINES = re.compile(r"\n{3,}")
@@ -19,14 +20,16 @@ class ReadResult:
 	page_count: int = 0
 	pages: list[str] = field(default_factory=list)
 	warnings: list[str] = field(default_factory=list)
+	structure: list[dict] = field(default_factory=list)
+	embedded_objects: list[dict] = field(default_factory=list)
 
 	@property
 	def character_count(self) -> int:
 		return len(self.text)
 
-
-import json as _json
-from datetime import datetime, timezone
+	@property
+	def word_count(self) -> int:
+		return len(self.text.split())
 
 
 @dataclass
@@ -43,7 +46,7 @@ class StructuredWarning:
 	location: str | None  # page/sheet/slide/member/index
 	message: str  # human-readable
 	details: dict  # machine-readable
-	timestamp: str = field(default_factory=lambda: datetime.now(datetime.UTC).isoformat())
+	timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 	stage: str = "extraction"  # extraction | chunking | embedding
 
 	def as_dict(self) -> dict:
@@ -73,10 +76,6 @@ def coerce_warnings(
 				).as_dict()
 			)
 	return out
-
-	@property
-	def word_count(self) -> int:
-		return len(self.text.split())
 
 
 class MissingDependency(Exception):

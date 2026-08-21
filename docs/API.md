@@ -186,6 +186,8 @@ but nothing is persisted.
 | `reindex_knowledge_base(knowledge_base)` | `{knowledge_base, queued}` |
 | `add_text(text, knowledge_base, title)` | `{document, status}` |
 | `get_document_chunks(document, limit)` | List of chunks with embedding status. |
+| `get_document_warnings(document)` | Durable extraction warnings (ING-05). Read access. |
+| `get_document_evidence(document)` | Durable detection/structure/provenance JSON from `ai.extraction`. Read access. Bounded; no full text. |
 | `scan_pattern_entities(document)` | `{document, total, created, updated, removed, by_type}` — high-precision regex scan of the document's stored content into `AI Pattern Entity` rows. Requires write access, like the other intelligence actions. |
 | `get_pattern_entities(document, entity_type, limit)` | `{document, entities, entity_counts}` — occurrences-ordered rows with provenance quotes, grouped counts per type. Read access. |
 | `get_knowledge_overview()` | Counters, recent documents, failed documents. |

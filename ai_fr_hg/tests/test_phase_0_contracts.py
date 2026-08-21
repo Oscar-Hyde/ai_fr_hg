@@ -75,7 +75,17 @@ class TestUnsupportedCapabilityExposure(TestCase):
 
 		self.assertNotIn('"msg": EmailReader', registry)
 		self.assertIn('"eml": EmailReader', registry)
+		self.assertIn('"odp": OdpReader', registry)
 		self.assertIn("Scanned-PDF OCR is not supported", pdf_reader)
+
+	def test_extraction_evidence_is_a_durable_ai_document_field(self):
+		meta = load_doctype("ai_knowledge/doctype/ai_document/ai_document.json")
+		control = field(meta, "extraction_evidence")
+
+		self.assertEqual(control.get("fieldtype"), "Code")
+		self.assertEqual(control.get("options"), "JSON")
+		self.assertEqual(control.get("read_only"), 1)
+		self.assertIn("extraction_evidence", meta["field_order"])
 
 
 class TestControlledBaseline(TestCase):
@@ -93,7 +103,7 @@ class TestControlledBaseline(TestCase):
 	def test_architecture_decisions_cover_phase_zero_choices(self):
 		decisions = (ROOT / "docs/ARCHITECTURE_DECISIONS.md").read_text()
 
-		for decision in range(1, 8):
+		for decision in range(1, 9):
 			self.assertIn(f"ADR-{decision:03d}", decisions)
 		self.assertIn("MariaDB 11.8 only", decisions)
 		self.assertIn(FRAPPE_V17_SHA, decisions)
@@ -145,7 +155,7 @@ class TestControlledBaseline(TestCase):
 		translation = (ROOT / "docs/TRANSLATION.md").read_text()
 		project = (ROOT / "pyproject.toml").read_text()
 
-		self.assertIn("36 registered extensions", readme)
+		self.assertIn("37 registered extensions", readme)
 		self.assertIn("PostgreSQL is not currently supported", readme)
 		self.assertIn("scanned-pdf ocr", readme.lower())
 		self.assertIn("not supported", readme.lower())
@@ -153,7 +163,7 @@ class TestControlledBaseline(TestCase):
 		self.assertIn("not a complete backup/restore mechanism", readme)
 		self.assertRegex(translation, r"does not\s+reconstruct")
 		self.assertNotIn("A complete, fully local", project)
-		self.assertNotIn("37 registered", readme)
+		self.assertNotIn("36 registered", readme)
 		self.assertNotIn("37 ingestible", translation)
 		self.assertNotIn("Translation-memory isolation hardening remains open", readme)
 		self.assertNotIn("Connection-level network hardening is still tracked", readme)

@@ -13,6 +13,7 @@ These decisions make the supported product boundary explicit. They remain author
 | ADR-005 | Hide model versions until provider lifecycle exists | Accepted | Provider Operations | Phase 6 |
 | ADR-006 | Preserve extracted-text structure, not original binary format | Accepted | Translation | Phase 4 product review |
 | ADR-007 | Pin the Frappe v17 development revision until stable v17 exists | Accepted with pre-release limitation | Release Engineering | When upstream publishes stable v17 |
+| ADR-008 | File intelligence is custom extraction on native File bytes; advertise only real parsers | Accepted | Knowledge/Ingestion | When a real parser exists for a currently unsupported family |
 
 ## ADR-001 — MariaDB-only application support
 
@@ -83,3 +84,18 @@ These decisions make the supported product boundary explicit. They remain author
 **Decision.** CI initializes from `develop` and then checks out immutable Frappe revision `d7000da3d5862087d3df08e009fe76518ea649c4`. The supported pre-release toolchain is Python 3.14, Node 24, and MariaDB 11.8.
 
 **Consequences.** This is a reproducible v17 development baseline, not proof of compatibility with a future stable v17 release. Phase 7 must replace the pin with an approved stable v17 ref, rerun the full qualification matrix, and document supported v17 minors before a production verdict.
+
+## ADR-008 — File intelligence: native File + custom extraction, truthful formats
+
+**Context.** Wave 4 requires a file-intelligence pipeline: detect, resolve, extract, normalize, persist evidence, and fail visibly. A product that claims audio, video, database, OLE `.doc`/`.xls`/`.ppt`, Outlook `.msg`, scanned-PDF OCR, or generic archive-as-document support without a real parser would be a false capability.
+
+**Frappe v17 capability evaluated.** Frappe File owns bytes, folders, privacy, attachments, and file identity. It does not detect formats, parse Office/PDF/email, preserve extraction provenance, or enforce ZIP-bomb policy. Frappe has no substitute for a document-reader registry.
+
+**Decision.** Keep Frappe File as the only byte/folder/privacy authority. Own format detection, reader resolution, ZIP-container policy, and extraction evidence in `ai.extraction` + `ai.readers` + `ai.readers.archive`. Ingestion persists the outcome; it does not re-implement detection or archive policy. Advertised formats must have a real parser. The current boundary is:
+
+- **Implemented:** text-layer PDF, DOCX, XLSX/XLSM, PPTX, ODT, ODS, ODP, CSV/TSV, EML, HTML, XML, JSON, Markdown, text/code, images (vision or optional image OCR).
+- **Not implemented and not advertised:** audio, video, database files, OLE `.doc`/`.xls`/`.ppt`, Outlook `.msg`, scanned-PDF OCR, generic `zip`/`tar` as a document source.
+
+**Why no custom File replacement.** A second file store would duplicate privacy, attachments, and identity. Extraction evidence is JSON on `AI Document`; it is not a parallel File table.
+
+**Consequences.** 37 registered extensions. Extension/magic mismatches warn and prefer a real magic reader when one exists. ZIP bombs, traversal, and encryption fail closed through one archive guard. Extraction failures remain visible on the document (`error_message`, structured warnings, evidence). Browser E2E of the evidence UI remains Phase 7.

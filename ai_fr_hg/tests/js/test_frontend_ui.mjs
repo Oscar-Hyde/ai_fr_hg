@@ -17,6 +17,10 @@ import {
   normalizeRpcError,
 } from "../../public/js/ui/rpc.js";
 import {
+  parseExtractionEvidence,
+  summarizeExtractionEvidence,
+} from "../../public/js/ui/extraction_evidence.js";
+import {
   parseAssistantRoute,
   serializeAssistantHash,
 } from "../../public/js/ui/route_state.js";
@@ -155,6 +159,46 @@ describe("PIPE-03 run status contract", () => {
     assert.equal(pipelineRunIndicator("Waiting Approval"), "orange");
     assert.equal(pipelineCanCancel("Waiting Approval"), true);
     assert.equal(pipelineCanCancel("Completed"), false);
+  });
+});
+
+describe("Wave 4 extraction evidence summary", () => {
+  it("treats missing payload as empty", () => {
+    const summary = summarizeExtractionEvidence("");
+    assert.equal(summary.kind, "empty");
+    assert.equal(summary.empty, true);
+  });
+
+  it("flags extension/magic mismatch and counts embedded objects", () => {
+    const summary = summarizeExtractionEvidence({
+      detector: {
+        extension: "txt",
+        magic: "pdf",
+        family: "pdf",
+        mismatch: true,
+        reason: "extension_magic_mismatch",
+      },
+      reader: "PDF",
+      embedded_objects: [{ kind: "image", name: "p1" }],
+      structure: { block_count: 2, kinds: { page: 2 } },
+      provenance: {
+        bytes: 1200,
+        checksum_sha256: "abc",
+        word_count: 40,
+        page_count: 2,
+      },
+    });
+    assert.equal(summary.kind, "mismatch");
+    assert.equal(summary.reader, "PDF");
+    assert.equal(summary.embedded, 1);
+    assert.equal(summary.blocks, 2);
+    assert.equal(summary.word_count, 40);
+  });
+
+  it("parses JSON strings without throwing", () => {
+    const parsed = parseExtractionEvidence('{"reader":"Plain Text"}');
+    assert.equal(parsed.reader, "Plain Text");
+    assert.deepEqual(parseExtractionEvidence("not-json"), {});
   });
 });
 

@@ -127,6 +127,53 @@ function renderProcessingState(frm, update = {}) {
 	);
 }
 
+function renderEvidence(frm) {
+	const $area = frm.fields_dict.extraction_evidence
+		? frm.fields_dict.extraction_evidence.$wrapper
+		: null;
+	if (!$area) return;
+	const summarize = frappe.ai?.ui?.summarizeExtractionEvidence;
+	const summary = summarize
+		? summarize(frm.doc.extraction_evidence)
+		: { kind: "empty", empty: true };
+	if (summary.empty) {
+		$area.find(".ai-extraction-evidence-summary").remove();
+		$area.prepend(
+			`<div class="ai-extraction-evidence-summary text-muted small">${__(
+				"No extraction evidence yet. Process the document to persist detection, structure, and provenance."
+			)}</div>`
+		);
+		return;
+	}
+	const kinds = Object.entries(summary.kinds || {})
+		.map(([kind, count]) => `${frappe.utils.escape_html(kind)}:${count}`)
+		.join(", ");
+	const mismatch = summary.mismatch
+		? `<span class="indicator orange">${__("Extension / magic mismatch")}</span>`
+		: `<span class="indicator green">${__("Aligned")}</span>`;
+	const checksum = summary.checksum
+		? `<code>${frappe.utils.escape_html(summary.checksum.slice(0, 16))}…</code>`
+		: __("none");
+	$area.find(".ai-extraction-evidence-summary").remove();
+	$area.prepend(`<div class="ai-extraction-evidence-summary" style="margin-bottom:8px">
+		<div><b>${__("Extraction evidence")}</b> ${mismatch}</div>
+		<div class="text-muted small">
+			${__("Reader")}: ${frappe.utils.escape_html(summary.reader || "—")}
+			· ${__("Family")}: ${frappe.utils.escape_html(summary.family || "—")}
+			· ${__("Magic")}: ${frappe.utils.escape_html(summary.magic || "—")}
+			· .${frappe.utils.escape_html(summary.extension || "")}
+		</div>
+		<div class="text-muted small">
+			${__("Blocks")}: ${summary.blocks}${kinds ? ` (${frappe.utils.escape_html(kinds)})` : ""}
+			· ${__("Embedded objects")}: ${summary.embedded}
+			· ${__("Words")}: ${summary.word_count}
+			· ${__("Pages")}: ${summary.page_count}
+			· ${__("Bytes")}: ${summary.bytes}
+			· ${__("Checksum")}: ${checksum}
+		</div>
+	</div>`);
+}
+
 async function renderWarnings(frm) {
 	// ING-05 UI states: loading, empty, partial, failure, permission, retry, realtime
 	const $area = frm.fields_dict.extraction_warnings
@@ -221,6 +268,7 @@ frappe.ui.form.on("AI Document", {
 		frm.page.set_indicator(frm.doc.status, frappe.ai.status_color(frm.doc.status));
 		renderProcessingState(frm);
 		renderWarnings(frm);
+		renderEvidence(frm);
 		// Native realtime updates are authoritative; reload fallback handles a
 		// disconnected Desk session and makes recovery observable after reconnect.
 		frappe.realtime.on("ai_document_progress", (data) => {

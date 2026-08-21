@@ -43,6 +43,7 @@
   "metadata_cb",
   "character_count",
   "checksum",
+  "pattern_scan_checksum",
   "reader_used",
   "metadata",
   "tags_sec",
@@ -67,7 +68,8 @@
   "extraction_sec",
   "extraction_schema",
   "extracted_data",
-  "extraction_warnings"
+  "extraction_warnings",
+  "extraction_evidence"
  ],
  "fields": [
   {
@@ -468,6 +470,14 @@
    "options": "JSON",
    "read_only": 1,
    "description": "Structured warnings from extraction (ING-05): persisted via canonical reader manager. Empty array means clean extraction; partial extraction stores warnings while status remains Indexed."
+  },
+  {
+   "fieldname": "extraction_evidence",
+   "fieldtype": "Code",
+   "label": "Extraction Evidence",
+   "options": "JSON",
+   "read_only": 1,
+   "description": "Durable detection, reader, structure, embedded-object, and provenance summary from the canonical extraction owner. Bounded JSON; does not store full extracted text."
   }
  ],
  "index_web_pages_for_search": 1,
@@ -477,7 +487,7 @@
    "link_fieldname": "document"
   }
  ],
- "modified": "2026-08-16 09:00:00.000000",
+ "modified": "2026-08-21 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "AI Knowledge",
  "name": "AI Document",

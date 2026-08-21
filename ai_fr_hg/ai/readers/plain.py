@@ -30,6 +30,7 @@ class MarkdownReader(BaseReader):
 				"headings": headings[:50],
 				"title": headings[0] if headings else None,
 			},
+			structure=[{"kind": "heading", "text": heading} for heading in headings[:50]],
 		)
 
 
@@ -56,6 +57,7 @@ class JSONReader(BaseReader):
 				"root_type": type(data).__name__,
 				"keys": list(data)[:100] if isinstance(data, dict) else None,
 			},
+			structure=[{"kind": "root", "type": type(data).__name__}],
 		)
 
 	def _flatten(self, value, prefix: str = "", depth: int = 0) -> str:
@@ -105,6 +107,7 @@ class XMLReader(BaseReader):
 			text=self.clean("\n".join(parts)),
 			page_count=1,
 			metadata={"format": "xml", "root": root.tag},
+			structure=[{"kind": "root", "tag": root.tag}],
 		)
 
 
@@ -140,6 +143,7 @@ class HTMLReader(BaseReader):
 			text=self.clean(text),
 			page_count=1,
 			metadata={"format": "html", "title": title},
+			structure=[{"kind": "document", "title": title}] if title else [{"kind": "document"}],
 		)
 
 
@@ -171,10 +175,13 @@ class EmailReader(BaseReader):
 			body = message.get_content()
 
 		header_block = "\n".join(f"{key}: {value}" for key, value in headers.items() if value)
+		embedded = [{"kind": "attachment", "name": name, "location": "email"} for name in attachments if name]
 		return ReadResult(
 			text=self.clean(f"{header_block}\n\n{body}"),
 			page_count=1,
 			metadata={"format": "email", "attachments": attachments, **headers},
+			embedded_objects=embedded,
+			structure=[{"kind": "headers"}, {"kind": "body"}] + [{"kind": "attachment"} for _ in embedded],
 		)
 
 
