@@ -49,6 +49,9 @@
   "requested_on",
   "completed_on",
   "job_id",
+  "cancel_requested",
+  "processing_progress",
+  "processing_message",
   "error_message"
  ],
  "fields": [
@@ -356,7 +359,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-08-19 09:00:00.000000",
+ "modified": "2026-08-21 14:00:00.000000",
  "modified_by": "Administrator",
  "module": "AI Knowledge",
  "name": "AI Translation",

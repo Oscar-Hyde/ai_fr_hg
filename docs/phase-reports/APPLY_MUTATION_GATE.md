@@ -14,7 +14,23 @@ from re-entering the suite and inflating apparent coverage.
 It needs no MariaDB, Redis, or Frappe: the offline suite runs against the
 in-memory bench in `ai_fr_hg/tests/fakebench.py`.
 
-**Current local result:** 26/26 caught, 0 survived, 0 stale (~2m20s).
+**Current local result:** 30/30 caught, 0 survived, 0 stale (~2m40s).
+
+**Optional but recommended.** Set `FRAPPE_SOURCE` to a `frappe/develop`
+checkout in the job. `test_doctype_schema_against_frappe.py` then compares its
+transcribed constants against Frappe's actual source, so the schema rules
+cannot silently drift from the framework:
+
+```yaml
+      - name: Clone Frappe for schema cross-check
+        run: git clone --depth 1 --branch develop https://github.com/frappe/frappe.git /tmp/frappe-src
+      - name: Prove the suite can fail
+        env:
+          FRAPPE_SOURCE: /tmp/frappe-src
+        run: python scripts/mutation_check.py
+```
+
+Without it those two cross-check tests skip; the 865 schema subtests still run.
 
 ## Apply
 

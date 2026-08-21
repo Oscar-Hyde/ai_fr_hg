@@ -237,6 +237,35 @@ MUTATIONS: list[Mutation] = [
 		breaks="Evidence must record when extraction ran.",
 	),
 	# -- formula preservation (§6.2) --------------------------------------
+	# -- schema and wiring integrity (real-bench failure classes) ---------
+	Mutation(
+		name="hook-target-typo",
+		path="ai_fr_hg/hooks.py",
+		old="ai_fr_hg.ai.semantic.handle_document_trashed",
+		new="ai_fr_hg.ai.semantic.handle_document_trashed_typo",
+		breaks="A misspelled doc_event fails silently in a worker, not at install.",
+	),
+	Mutation(
+		name="permission-query-without-has-permission",
+		path="ai_fr_hg/hooks.py",
+		old='has_permission = {\n\tdoctype: "ai_fr_hg.utils.permissions.has_document_permission" for doctype in permission_query_conditions\n}',
+		new="has_permission = {}",
+		breaks="A row filter without a document check leaves direct reads unguarded.",
+	),
+	Mutation(
+		name="doctype-link-to-missing-target",
+		path="ai_fr_hg/ai_knowledge/doctype/ai_entity_relationship/ai_entity_relationship.json",
+		old='"options": "AI Knowledge Base"',
+		new='"options": "AI Knowledge Base Typo"',
+		breaks="A Link to a non-existent DocType fails at bench migrate.",
+	),
+	Mutation(
+		name="field-order-drops-a-field",
+		path="ai_fr_hg/ai_knowledge/doctype/ai_entity_relationship/ai_entity_relationship.json",
+		old='  "evidence_quote",\n  "first_offset",',
+		new='  "first_offset",',
+		breaks="A field missing from field_order is invisible in the Desk form.",
+	),
 	Mutation(
 		name="xlsx-formulas-dropped",
 		path="ai_fr_hg/ai/readers/office.py",
