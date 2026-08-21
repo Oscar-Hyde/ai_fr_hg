@@ -656,6 +656,30 @@ class TestBackTranslationAccounting(TranslationTestCase):
 			)
 		self.assertTrue(outcome.partial)
 
+	def test_provider_failure_does_not_drop_prior_token_count(self):
+		from ai_fr_hg.ai.translation import translate_text
+
+		state = {"calls": 0}
+
+		def fail_after_one(system, user, target):
+			from ai_fr_hg.tests.integration_test_case import _default_translation_reply
+
+			state["calls"] += 1
+			if state["calls"] > 1:
+				raise RuntimeError("provider failed after usage")
+			return _default_translation_reply(system, user, target)
+
+		with stub_translation_model(behaviour=fail_after_one):
+			with self.assertRaises(RuntimeError):
+				translate_text(
+					STRUCTURED_SOURCE,
+					"ar",
+					source_language="en",
+					knowledge_base=self.knowledge_base.name,
+					repair_pass=False,
+					quality_checks=False,
+				)
+
 
 class TestTranslationIntegrations(TranslationTestCase):
 	def test_the_pipeline_step_translates_its_input(self):

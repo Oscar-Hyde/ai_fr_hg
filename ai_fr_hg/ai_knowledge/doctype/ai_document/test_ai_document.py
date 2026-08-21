@@ -106,6 +106,29 @@ class TestIngestionProgressCancellation(AIPlatformTestCase):
 		self.assertEqual(document.status, "Cancelled")
 		self.assertNotEqual(document.status, "Failed")
 
+	def test_stale_in_flight_heartbeat_is_reaped_without_duplicate_start(self):
+		from ai_fr_hg.ai.ingestion import process_pending_documents, reap_stale_in_flight_documents
+
+		document = self.make_document("Stale Worker Document", "heartbeat expired")
+		document.db_set(
+			{
+				"status": "Extracting",
+				"processing_heartbeat": frappe.utils.add_to_date(frappe.utils.now_datetime(), minutes=-45),
+				"processing_requested_by": frappe.session.user,
+				"retry_count": 0,
+			},
+			update_modified=False,
+		)
+		reaped = reap_stale_in_flight_documents()
+		self.assertTrue(any(row.name == document.name for row in reaped))
+		document.reload()
+		self.assertEqual(document.status, "Failed")
+		self.assertEqual(document.error_type, "StaleWorker")
+
+		with patch("ai_fr_hg.ai.ingestion.frappe.enqueue") as enqueue:
+			process_pending_documents()
+		self.assertEqual(enqueue.call_count, 1)
+
 
 class TestIndexing(AIPlatformTestCase):
 	def test_document_is_chunked_and_embedded(self):

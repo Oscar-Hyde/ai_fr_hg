@@ -145,6 +145,9 @@ def get_translation(translation: str, include_segments: bool = True) -> dict:
 		"total_tokens": doc.total_tokens,
 		"translated_document": doc.translated_document,
 		"error_message": doc.error_message,
+		"processing_progress": doc.get("processing_progress"),
+		"processing_message": doc.get("processing_message"),
+		"cancel_requested": cint(doc.get("cancel_requested")),
 		"issues": json.loads(doc.issue_summary) if doc.issue_summary else {},
 	}
 	if cint(include_segments):

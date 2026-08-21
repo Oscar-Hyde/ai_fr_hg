@@ -1199,10 +1199,49 @@ def wait_for_indexed(document_names: list[str], timeout: float | None = None) ->
 		time.sleep(POLL_INTERVAL)
 
 
+STALE_IN_FLIGHT_MINUTES = 30
+
+
+def reap_stale_in_flight_documents(limit: int = 20) -> list[dict]:
+	"""Mark Extracting/Chunking/Embedding rows with a dead heartbeat as Failed.
+
+	A live worker refreshes ``processing_heartbeat``. When the worker dies the
+	lease/heartbeat ages out; this reaper does not start a second job while the
+	status is still in-flight — it only opens the existing retry path.
+	"""
+	cutoff = frappe.utils.add_to_date(now_datetime(), minutes=-STALE_IN_FLIGHT_MINUTES)
+	rows = frappe.get_all(
+		"AI Document",
+		filters=[
+			["status", "in", ["Extracting", "Chunking", "Embedding"]],
+			["processing_heartbeat", "<", cutoff],
+		],
+		fields=["name", "owner", "processing_requested_by", "status"],
+		limit=max(1, cint(limit)),
+	)
+	reaped: list[dict] = []
+	for row in rows:
+		frappe.db.set_value(
+			"AI Document",
+			row.name,
+			{
+				"status": "Failed",
+				"error_type": "StaleWorker",
+				"error_message": _("Processing heartbeat expired; worker is assumed dead."),
+				"processing_message": "Stale worker",
+				"processing_heartbeat": now_datetime(),
+			},
+			update_modified=False,
+		)
+		reaped.append(row)
+	return reaped
+
+
 def process_pending_documents() -> None:
-	"""Reconcile stale queue records and bounded retries as original users."""
+	"""Reconcile stale queue records, dead in-flight workers, and bounded retries."""
 	max_retries = _max_retries()
 	fields = ["name", "owner", "processing_requested_by"]
+	stale_in_flight = reap_stale_in_flight_documents(limit=20)
 	failed = frappe.get_all(
 		"AI Document",
 		filters=[
@@ -1211,9 +1250,9 @@ def process_pending_documents() -> None:
 			["modified", "<", frappe.utils.add_to_date(now_datetime(), minutes=-5)],
 		],
 		fields=fields,
-		limit_page_length=20,
+		limit=20,
 	)
-	remaining = max(20 - len(failed), 0)
+	remaining = max(20 - len(failed) - len(stale_in_flight), 0)
 	stale_queued = (
 		frappe.get_all(
 			"AI Document",
@@ -1222,13 +1261,17 @@ def process_pending_documents() -> None:
 				["modified", "<", frappe.utils.add_to_date(now_datetime(), hours=-2)],
 			],
 			fields=fields,
-			limit_page_length=remaining,
+			limit=remaining,
 		)
 		if remaining
 		else []
 	)
 
-	for row in [*failed, *stale_queued]:
+	seen: set[str] = set()
+	for row in [*stale_in_flight, *failed, *stale_queued]:
+		if row.name in seen:
+			continue
+		seen.add(row.name)
 		authority = row.processing_requested_by or row.owner
 		try:
 			enqueue_processing(row.name, requested_by=authority)
