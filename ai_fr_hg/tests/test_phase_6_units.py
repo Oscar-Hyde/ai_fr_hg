@@ -396,9 +396,11 @@ class TestChat02SequenceAllocatorContract(TestCase):
 		# 3. a subquery inside the UPDATE is a consistent read (1020 again) and
 		#    locks `tabAI Message`, deadlocking against concurrent inserts.
 		self.assertNotIn("max(sequence)", body)
-		self.assertNotIn("for update", body)
-		self.assertNotIn("select", body.lower().split("where name = %s")[0])
-		# The allocation must be a bare single-row DML current read.
+		self.assertNotIn("tabAI Message", body)
+		# The allocation must be a bare single-row DML current read, preceded
+		# by a locking read of the same row so a caller that already loaded the
+		# conversation cannot trip the 1020 version check.
+		self.assertIn("for update", body)
 		self.assertIn("update `tabAI Conversation`", body)
 		self.assertIn("message_sequence_counter", body)
 

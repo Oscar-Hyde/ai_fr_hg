@@ -116,7 +116,20 @@ def allocate_sequence(conversation: str) -> int:
 	``1213 Deadlock found``. Seeding belongs outside the hot path — the
 	migration backfills existing conversations and
 	:func:`bump_sequence_watermark` covers explicitly numbered inserts.
+
+	The locking read before the update is not redundant. A caller that has
+	already loaded the conversation (every agent turn does) holds a snapshot
+	version of that row; if another worker allocates in between, the update's
+	version check fails with ``1020 Record has changed since last read``. A
+	``for update`` read refreshes the row to its latest committed version and
+	holds the exclusive lock, so the update that follows cannot observe a
+	different version. Both statements touch the same single row, so the lock
+	order is trivially consistent and cannot deadlock.
 	"""
+	frappe.db.sql(
+		"select name from `tabAI Conversation` where name = %s for update",
+		(conversation,),
+	)
 	frappe.db.sql(
 		"""
 		update `tabAI Conversation`
@@ -144,6 +157,11 @@ def bump_sequence_watermark(conversation: str, sequence: int) -> None:
 	"""
 	if cint(sequence) <= 0:
 		return
+	# Same locking read as the allocator, for the same ER_CHECKREAD reason.
+	frappe.db.sql(
+		"select name from `tabAI Conversation` where name = %s for update",
+		(conversation,),
+	)
 	frappe.db.sql(
 		"""
 		update `tabAI Conversation`
