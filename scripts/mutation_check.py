@@ -237,6 +237,21 @@ MUTATIONS: list[Mutation] = [
 		breaks="Evidence must record when extraction ran.",
 	),
 	# -- formula preservation (§6.2) --------------------------------------
+	# -- conversation history (CHAT-01) -----------------------------------
+	Mutation(
+		name="history-selects-oldest",
+		path="ai_fr_hg/ai/conversation.py",
+		old='order_by="sequence desc, creation desc"',
+		new='order_by="sequence asc, creation asc"',
+		breaks="The original CHAT-01 bug: the model receives the oldest turns.",
+	),
+	Mutation(
+		name="history-replays-in-flight-turns",
+		path="ai_fr_hg/ai/conversation.py",
+		old='filters={"conversation": conversation, "status": ["in", list(HISTORY_STATUSES)]},\n\t\tfields=',
+		new='filters={"conversation": conversation},\n\t\tfields=',
+		breaks="Cancelled and running turns leak into context as if they had completed.",
+	),
 	# -- facade integrity (§21: one governed route per operation) ---------
 	Mutation(
 		name="domain-feedback-rewhitelisted",

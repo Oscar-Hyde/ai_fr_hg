@@ -888,3 +888,135 @@ class TestArchiveContainment(TestCase):
 		safe = self._safe()
 		self.assertIsNone(safe("..\\..\\etc\\passwd"))
 		self.assertEqual(safe("dir\\file.txt"), "dir/file.txt")
+
+
+class TestConversationHistoryBehaviour(TestCase):
+	"""CHAT-01 re-audit: run the real `get_conversation_history`, not its helper.
+
+	The existing coverage exercises `window_latest_messages` in isolation and
+	asserts the *source text* of `ai/conversation.py`. Neither observes the
+	function the application actually calls, so the status filter, the
+	newest-first ordering it depends on, and the tool-role mapping were all
+	unverified. This drives the real function against a bench.
+	"""
+
+	def _history(self, rows):
+		bench = install(FakeBench())
+		bench.register_doctype(
+			"AI Message",
+			[
+				"conversation",
+				"role",
+				"content",
+				"status",
+				"sequence",
+				"tool",
+				"tool_call_id",
+				"tool_arguments",
+				"tool_result",
+			],
+		)
+		for row in rows:
+			bench.db.insert_row("AI Message", row)
+		module = import_app("ai_fr_hg.ai.conversation")
+		return bench, module
+
+	def _message(self, seq, role, *, status="Completed", content=None, **extra):
+		row = {
+			"name": f"MSG-{seq:04d}",
+			"conversation": "CONV-1",
+			"role": role,
+			"content": content if content is not None else f"msg-{seq}",
+			"status": status,
+			"sequence": seq,
+		}
+		row.update(extra)
+		return row
+
+	def test_returns_the_latest_turns_not_the_oldest(self):
+		rows = [self._message(i, "User") for i in range(1, 101)]
+		_, module = self._history(rows)
+
+		history = module.get_conversation_history("CONV-1", limit=20)
+
+		contents = [message.content for message in history]
+		self.assertEqual(len(contents), 20)
+		self.assertEqual(contents[-1], "msg-100")
+		self.assertNotIn("msg-1", contents)
+		self.assertNotIn("msg-80", contents)
+
+	def test_history_is_returned_oldest_first_for_the_model(self):
+		"""The query is newest-first; the model must receive chronological order."""
+		rows = [self._message(i, "User") for i in range(1, 6)]
+		_, module = self._history(rows)
+
+		history = module.get_conversation_history("CONV-1", limit=5)
+
+		self.assertEqual([m.content for m in history], [f"msg-{i}" for i in range(1, 6)])
+
+	def test_in_flight_and_cancelled_turns_are_excluded(self):
+		"""Only Completed/Failed/Draft may be replayed as context."""
+		rows = [
+			self._message(1, "User", content="kept"),
+			self._message(2, "Assistant", status="Running", content="in-flight"),
+			self._message(3, "Assistant", status="Cancelled", content="cancelled"),
+			self._message(4, "Assistant", status="Failed", content="failed-but-kept"),
+		]
+		_, module = self._history(rows)
+
+		contents = [m.content for m in module.get_conversation_history("CONV-1", limit=20)]
+
+		self.assertIn("kept", contents)
+		self.assertIn("failed-but-kept", contents)
+		self.assertNotIn("in-flight", contents)
+		self.assertNotIn("cancelled", contents)
+
+	def test_other_conversations_never_leak_into_history(self):
+		rows = [
+			self._message(1, "User", content="mine"),
+			{
+				"name": "MSG-9999",
+				"conversation": "CONV-2",
+				"role": "User",
+				"content": "someone-else",
+				"status": "Completed",
+				"sequence": 2,
+			},
+		]
+		_, module = self._history(rows)
+
+		contents = [m.content for m in module.get_conversation_history("CONV-1", limit=20)]
+
+		self.assertEqual(contents, ["mine"])
+
+	def test_system_messages_are_dropped_and_tool_rows_carry_their_result(self):
+		rows = [
+			self._message(1, "System", content="hidden-system-prompt"),
+			self._message(2, "User", content="question"),
+			self._message(
+				3,
+				"Tool",
+				content="ignored",
+				tool="search",
+				tool_call_id="call-1",
+				tool_result="tool-output",
+			),
+		]
+		_, module = self._history(rows)
+
+		history = module.get_conversation_history("CONV-1", limit=20)
+
+		roles = [m.role for m in history]
+		self.assertNotIn("system", roles)
+		tool_message = next(m for m in history if m.role == "tool")
+		# The tool's payload is its result, never the content column.
+		self.assertEqual(tool_message.content, "tool-output")
+		self.assertEqual(tool_message.name, "search")
+		self.assertEqual(tool_message.tool_call_id, "call-1")
+
+	def test_limit_is_clamped_to_a_bounded_window(self):
+		rows = [self._message(i, "User") for i in range(1, 40)]
+		_, module = self._history(rows)
+
+		self.assertEqual(len(module.get_conversation_history("CONV-1", limit=0)), 20)
+		self.assertLessEqual(len(module.get_conversation_history("CONV-1", limit=10_000)), 200)
