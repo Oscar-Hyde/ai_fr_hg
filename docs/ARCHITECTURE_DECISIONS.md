@@ -338,3 +338,237 @@ next scheduled run rediscovers with the same query.
 worker restarts. A run that hits its ceiling logs that fact rather than
 appearing to have finished. `backup_knowledge` is *not* covered by this change
 and remains unbounded (OPS-06 stays open for that half).
+
+## ADR-015 — Verification is tiered, and the tiers are not interchangeable
+
+**Date.** 2026-08-21 (Part 2 §28, §29; written after the CLOSED-claim re-audit).
+
+**Context.** The Part 2 review found that 29 of 38 "tests" backing recently
+closed rows were `assertIn("field", source_text)` assertions. They pass when a
+value is written to the wrong row, when it is `None`, and when the function
+raises before reaching it; they fail only when a local variable is renamed.
+Worse, two rows (SEC-07, PIPE-04) were closed citing tests that had never been
+written at all, and one security claim (SEC-02) had no test referencing its
+function anywhere in the repository.
+
+The common failure is not laziness. It is that "there is a test" was treated as
+a single, uniform kind of evidence, so a weak form could be substituted for a
+strong one without anyone noticing. This ADR fixes the vocabulary so a claim
+must state what kind of evidence it rests on.
+
+**Frappe V17 capabilities evaluated.**
+
+- `bench run-tests` / `FrappeTestCase` — the native runner, and the correct
+  tool for the runtime tier. It requires a live site, MariaDB and Redis, none
+  of which can be installed in this environment (HTTP egress is filtered, so
+  `apt-get` cannot reach the Debian mirrors; no pip route exists for either
+  server). It remains the target for Phase 7, not a substitute for it.
+- `frappe.tests.utils` helpers — same dependency on a real site.
+- Frappe's own `validate_fields` in `core/doctype/doctype/doctype.py` — used
+  directly as the source of truth for the framework-validation tier rather
+  than reimplementing schema rules from memory.
+
+**Decision.** Five tiers, ordered by what they can prove. Every register row
+states its tier.
+
+| Tier | Proves | Cannot prove |
+| --- | --- | --- |
+| Static / AST | Structural invariants: wiring, reachability, one-route-per-operation, register honesty. | That the code behaves correctly when it runs. |
+| Framework validation | Conformance to real Frappe v17 rules, cross-checked against a pinned `frappe/develop` checkout. | Anything needing a database or a request. |
+| fakebench behaviour | Observable application logic — filters, ordering, permission scoping, persisted values — against a modelled bench. | SQL correctness, InnoDB isolation, index behaviour, concurrency, migrations. |
+| Mutation | That the suites above actually fail when the behaviour breaks. | Anything no mutation targets. |
+| Real runtime | MariaDB, Redis, workers, queues, `bench migrate`, browser Desk. | — |
+
+Two rules follow. A row may not claim a tier above the evidence that exists
+for it. And a row may not cite a symbol that no test references — enforced by
+`TestRegisterEvidenceIsReal`, which fails the build.
+
+**Consequences.** Closing a row is more expensive and states less. "CLOSED —
+IMPLEMENTED (tier: fakebench behaviour)" is a narrower claim than "CLOSED"
+was, and deliberately so: it says the logic is verified and the database
+behaviour is not. Nothing in this repository currently rests on the runtime
+tier, so no row may imply it.
+
+---
+
+## ADR-016 — fakebench: an in-memory Frappe substitute, and what it must never be trusted for
+
+**Date.** 2026-08-21 (Part 2 §28).
+
+**Context.** Behavioural testing needs a bench. No real one can exist here, and
+the alternative that had taken hold — asserting against source text — produced
+evidence that could not fail. A substitute was required that runs real
+application code and lets a test observe resulting state.
+
+**Frappe V17 capabilities evaluated.**
+
+- `FrappeTestCase`, `bench run-tests` — the right answer, unavailable here
+  (see ADR-015). The eight bench-only suites remain excluded from the offline
+  batch and are the Phase 7 entry point.
+- `unittest.mock` patching of `frappe` — rejected. Mocks assert that a call was
+  made, which is the same tautology as asserting on source text: it verifies
+  the code's shape, not its effect. fakebench instead *stores* the write so the
+  test can assert on the resulting row.
+- PyPI `frappe` — a 1.3 kB 0.0.1 stub, unrelated to the framework.
+
+**Decision.** `ai_fr_hg/tests/fakebench.py` models Frappe's observable
+semantics: documents and controllers, `get_all`/`get_list` with filters,
+`or_filters`, ordering, paging and `pluck`, singles, permission hooks,
+permitted-field policy, realtime and enqueue capture, commits and forced write
+failures. It mimics Frappe's *forgiving* behaviour deliberately — unset fields
+read as `None`, `frappe.db.delete` accepts a name string, `frappe.whitelist`
+works bare — because strict-Python fidelity would fail code the real framework
+accepts.
+
+Fidelity is itself a liability, so each gap found is recorded rather than
+patched silently. Four were found while re-auditing SEC-02 and RET-07, and
+three of them would have made a *permission* test pass vacuously:
+
+- `get_list` applied the row-permission hook after `pluck`/`fields`
+  projection, handing the hook a bare string, so every row passed — the exact
+  bypass SEC-02 describes, reproduced inside the harness.
+- `or_filters` was swallowed by `**kwargs`, so folder-subtree scoping was
+  tested against an unfiltered result set.
+- `LIKE` ignored MariaDB's backslash escaping, so `\_` and `\%` behaved as
+  wildcards.
+- `get_meta` had no `.fields` and `frappe.model.get_permitted_fields` did not
+  exist, so field-level policy could not run at all.
+
+**Non-claims.** fakebench proves nothing about SQL correctness, transactions,
+InnoDB isolation levels, index behaviour, deadlocks, concurrency, `bench
+migrate`, or browser behaviour. CHAT-09 is the standing illustration: the
+sequence-allocation defect is a REPEATABLE READ interaction that only a real
+database exhibits, and it is recorded as OPEN precisely because this tier
+cannot reach it.
+
+**Consequences.** A green fakebench suite is necessary and not sufficient. Any
+row whose risk is database behaviour must stay open until the runtime tier
+exists, however complete its logic looks here.
+
+---
+
+## ADR-017 — A mutation gate, because a test that cannot fail is not evidence
+
+**Date.** 2026-08-21 (Part 2 §28, §29).
+
+**Context.** Rewriting tautological tests raised an obvious question: how do we
+know the *replacements* are any better? Counting tests measures nothing —
+that metric is what produced 29 tautologies. The only direct evidence that a
+suite verifies behaviour is that it fails when the behaviour breaks.
+
+**Frappe V17 capabilities evaluated.** None applies; this is a CI concern, not
+a framework one. `mutmut` and `cosmic-ray` were considered and rejected: both
+mutate indiscriminately, producing mostly-equivalent mutants and long runtimes,
+and neither expresses *which product guarantee* a mutation is meant to break.
+
+**Decision.** `scripts/mutation_check.py` holds 44 hand-written mutations, each
+naming the guarantee it violates ("the original SEC-02 bug: the aggregate
+counts rows the caller cannot list"). Each is applied to real source, the
+offline suite is rerun, and the source is restored in a `finally`. The script
+exits non-zero if any mutation survives *or* is stale — a stale anchor means
+the source moved and the mutation silently verifies nothing, which is how a
+gate rots.
+
+Mutations earn their place by having caught something. Three findings came out
+of the campaign directly: VER-03 (a real archive bug, found because a mutation
+survived and investigation showed the guard was harmful), the missing
+`send()` facade assertion, and the untested `Password` fieldtype rule — where
+the mutation survived because the only Password field was *also* named
+`api_key` and caught by the substring policy, so a `vault_pin` field was added
+to isolate the type rule.
+
+**Consequences.** Adding a test is not enough; a corresponding mutation must
+fail without it. The gate takes roughly four minutes and is not yet mandatory
+in CI — the GitHub App cannot write `.github/workflows/`, so
+`docs/phase-reports/APPLY_MUTATION_GATE.md` carries the YAML for a maintainer,
+and VER-02 stays open on that wiring. Until then the campaign is run locally
+before every commit that touches verification.
+
+---
+
+## ADR-018 — Validate DocTypes against Frappe's own source, not against our reading of it
+
+**Date.** 2026-08-21 (Part 2 §28; Frappe V17 primacy).
+
+**Context.** A whole class of failure lands at `bench migrate` or on first
+DocType save and is invisible to any amount of application testing: a fieldname
+that collides with a framework column, a `Link` whose target does not exist, a
+field missing from `field_order`, a hidden+mandatory field with no default.
+fakebench cannot see these — it never reads DocType JSON as the framework does.
+
+**Frappe V17 capabilities evaluated.**
+
+- `bench migrate` — the authority, and unavailable here.
+- `frappe.model.meta` / `DocType.validate_fields` — the actual rules. Since
+  HTTPS egress works, `frappe/develop` clones cleanly even though `apt` does
+  not, so the real source is available to read.
+- Reimplementing the rules from documentation — rejected. Transcribed rules
+  drift from the framework, and a validator that is wrong in the same direction
+  as the code proves nothing.
+
+**Decision.** `test_doctype_schema_against_frappe.py` validates all 49 DocTypes
+against rules taken from `core/doctype/doctype/doctype.py`, `database/schema.py`
+and `model/__init__.py`. Critically, `TestFrappeSourceAlignment` compares the
+transcribed constants (`data_fieldtypes`, `no_value_fields`, `default_fields`,
+`SPECIAL_CHAR_PATTERN`) against a live checkout when `FRAPPE_SOURCE` points at
+one, so the copies cannot silently diverge from the framework. Without the
+checkout those two cross-checks skip and the 865 schema subtests still run.
+
+It found two real defects immediately. Six fields were absent from
+`field_order` and therefore unrenderable in Desk — including the operator
+controls behind SEC-03 and SEC-07, both marked CLOSED at the time, and TRN-04's
+Stop control. And `AI Document.organization_name_key` was `hidden` + `reqd`
+with no default, which Frappe rejects with
+`HiddenAndMandatoryWithoutDefaultError` outside `in_migrate`.
+
+**Consequences.** Schema conformance is now checked every run, and the
+`frappe/develop` clone is worth wiring into CI (the YAML in
+`APPLY_MUTATION_GATE.md` includes it). This tier still cannot prove a migration
+succeeds — only that the DocTypes satisfy the rules the framework applies. A
+real `bench migrate` remains required for that.
+
+---
+
+## ADR-019 — Capability is not delivered until something can reach it
+
+**Date.** 2026-08-21 (Part 2 §21, §29).
+
+**Context.** VER-05 showed a field that existed, was validated, was covered by
+tests and was documented — and could not be seen in the UI, because Desk
+renders only what `field_order` lists. Generalising that question to the RPC
+surface found more of the same: a "Preview Prompt" button that faked its
+server call in the browser, two domain functions published as a second
+unvalidated route, and eleven endpoints left published with no caller.
+
+The pattern is that each layer was correct in isolation and nothing checked
+the joins. Every one of these passed CI.
+
+**Frappe V17 capabilities evaluated.**
+
+- `frappe.whitelist` and `frm.call` — resolve their targets as strings at call
+  time, by design. Nothing fails at install; a typo becomes a 404 the user
+  finds, or a silent failure inside a worker.
+- Frappe's own hook resolution — equally lazy, for the same reason.
+- Desk form rendering — `field_order` is authoritative; a field absent from it
+  does not exist as far as the operator is concerned.
+
+**Decision.** Reachability is asserted structurally, in both directions.
+`test_rpc_contract_reachability.py` resolves every `ai_fr_hg.*` method string
+across all 60 JS files — including `frm.call` bare names, helper indirection,
+and `${PREFIX}.${method}` composition — against the whitelist, and inversely
+requires every whitelisted method to have a caller, a hook, a JSON action, a
+documented contract in `API.md`, or an explicit justified allow-list entry.
+`test_hook_targets_resolve.py` does the same for `hooks.py`, parsing it as
+Python so commented boilerplate is excluded by construction. Editable and
+settings fields must appear in `field_order`.
+
+An endpoint published without a caller is not waved through: it must still
+prove it scopes to the session user and refuses a hardcoded identity, because
+no UI test can demonstrate the safety of something no UI exercises.
+
+**Consequences.** "The backend exists" no longer closes a row. SEC-03, SEC-07
+and TRN-04 were reopened on exactly this basis — implementation present,
+acceptance criteria not met — and FILE-08 stays OPEN pending a real
+disposition (build the UI or delete the endpoints) rather than being deferred.
+Browser-level confirmation that a rendered control works is still Phase 7; this
+tier proves only that the wiring exists.

@@ -113,6 +113,27 @@ class TestControlledBaseline(TestCase):
 		self.assertIn("MariaDB 11.8 only", decisions)
 		self.assertIn(FRAPPE_V17_SHA, decisions)
 
+	def test_verification_model_is_documented_with_its_limits(self):
+		"""ADR-015..019 record the verification model and what it cannot prove.
+
+		The point of these ADRs is the non-claims. If the limitations were
+		dropped, the documents would read as a guarantee of production
+		readiness that no tier in this repository supports.
+		"""
+		decisions = (ROOT / "docs/ARCHITECTURE_DECISIONS.md").read_text()
+
+		for decision in range(15, 20):
+			self.assertIn(f"ADR-{decision:03d}", decisions)
+
+		# The runtime tier is unavailable, and nothing may imply otherwise.
+		for limitation in (
+			"InnoDB isolation",
+			"bench migrate",
+			"browser",
+			"CHAT-09",
+		):
+			self.assertIn(limitation, decisions)
+
 	def test_ci_targets_an_immutable_frappe_v17_development_revision(self):
 		workflow = (ROOT / ".github/workflows/ci.yml").read_text()
 
