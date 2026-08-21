@@ -133,6 +133,11 @@ Redis cache and queue services.
 | [32465400357](https://github.com/Oscar-Hyde/ai_fr_hg/actions/runs/32465400357) | `07ef911` | Server | **FAIL** — 8 Phase 6 tests |
 | [32465952941](https://github.com/Oscar-Hyde/ai_fr_hg/actions/runs/32465952941) | `fc8e50e` | Server (`Run server tests` step) | **PASS**, 2m47s |
 | [32465953238](https://github.com/Oscar-Hyde/ai_fr_hg/actions/runs/32465953238) | `fc8e50e` | Linter, Frontend static, Dependency audit | **PASS**, 1m12s |
+| [32467081049](https://github.com/Oscar-Hyde/ai_fr_hg/actions/runs/32467081049) | `bba3652` (docs) | Server — `Install application and migrate` **and** `Run server tests` both `success` | **PASS**, 2m41s |
+| [32467081027](https://github.com/Oscar-Hyde/ai_fr_hg/actions/runs/32467081027) | `bba3652` (docs) | Linter, Frontend static, Dependency audit | **PASS**, 51s |
+
+The docs run re-executes the whole suite and the `v0_0_21` migration on a fresh
+site, so the patch is exercised on every run, not only once.
 
 **The failing run is the evidence, not an embarrassment.** The directive
 requires every fix to ship with a test that demonstrably fails before the fix
