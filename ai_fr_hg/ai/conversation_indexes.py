@@ -33,7 +33,21 @@ MESSAGE_TABLE = "tabAI Message"
 
 def index_exists(name: str) -> bool:
 	try:
-		return bool(frappe.db.sql(f"SHOW INDEX FROM `{MESSAGE_TABLE}` WHERE Key_name=%s", (name,)))
+		return bool(frappe.db.sql("SHOW INDEX FROM `tabAI Message` WHERE Key_name=%s", (name,)))
+	except Exception:
+		return False
+
+
+def _schema_ready() -> bool:
+	"""True once the tables this function touches actually exist.
+
+	`on_doctype_update` fires during DocType synchronisation, including on a
+	fresh install where sibling tables may not have been created yet. Returning
+	early there is correct: Frappe calls the hook again on the next migrate,
+	and the patch calls it too.
+	"""
+	try:
+		return bool(frappe.db.table_exists("AI Message"))
 	except Exception:
 		return False
 
@@ -44,6 +58,9 @@ def renumber_duplicate_sequences() -> int:
 	Returns the number of conversations repaired. Idempotent: a conversation
 	whose sequences are already unique and positive is left untouched.
 	"""
+	if not frappe.db.table_exists("AI Conversation"):
+		return 0
+
 	repaired = 0
 	for (conversation,) in frappe.db.sql("select name from `tabAI Conversation`"):
 		rows = frappe.db.sql(
@@ -75,13 +92,15 @@ def ensure_sequence_constraints() -> None:
 	"""Repair sequence data if needed, then create the indexes."""
 	if getattr(frappe.db, "db_type", None) == "postgres":
 		return  # ADR-001: MariaDB is the supported engine.
+	if not _schema_ready():
+		return
 
 	if not index_exists(UNIQUE_SEQUENCE_INDEX):
 		renumber_duplicate_sequences()
 		try:
 			frappe.db.sql(
-				f"ALTER TABLE `{MESSAGE_TABLE}` "
-				f"ADD UNIQUE INDEX `{UNIQUE_SEQUENCE_INDEX}` (`conversation`, `sequence`)"
+				"ALTER TABLE `tabAI Message` "
+				"ADD UNIQUE INDEX `unique_conversation_sequence` (`conversation`, `sequence`)"
 			)
 		except Exception as exc:
 			# Never downgrade this to a log line. A previous version did, and a
@@ -104,7 +123,7 @@ def ensure_sequence_constraints() -> None:
 
 	if not index_exists(TURN_ID_INDEX):
 		try:
-			frappe.db.sql(f"ALTER TABLE `{MESSAGE_TABLE}` ADD INDEX `{TURN_ID_INDEX}` (`turn_id`)")
+			frappe.db.sql("ALTER TABLE `tabAI Message` ADD INDEX `turn_id_index` (`turn_id`)")
 		except Exception:
 			# A missing secondary index costs lookup speed, not correctness.
 			frappe.log_error(title="AI conversation turn_id index skipped", message=frappe.get_traceback())
