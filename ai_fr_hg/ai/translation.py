@@ -956,19 +956,23 @@ def _run_translation(doc, *, durable: bool) -> dict:
 		if durable:
 			frappe.db.rollback()
 		doc = frappe.get_doc("AI Translation", doc.name)
-		cancelled = bool(frappe.db.get_value("AI Translation", doc.name, "cancel_requested"))
+		cancelled = bool(frappe.db.get_value("AI Translation", doc.name, "cancel_requested")) or (
+			"cancelled" in str(error).lower()
+		)
+		status = "Cancelled" if cancelled else "Failed"
 		doc.db_set(
 			{
-				"status": "Cancelled" if cancelled else "Failed",
+				"status": status,
+				"cancel_requested": 1 if cancelled else cint(doc.cancel_requested),
 				"error_message": None if cancelled else str(error)[:1000],
 				"completed_on": now_datetime(),
-				"processing_message": "Cancelled" if cancelled else "Failed",
+				"processing_message": status,
 			},
 			update_modified=False,
 		)
 		frappe.log_error(title="AI translation failed", message=frappe.get_traceback())
 		write_audit_log(
-			action="Translation Failed",
+			action="Translation Cancelled" if cancelled else "Translation Failed",
 			category="Execution",
 			severity="Warning",
 			message=str(error)[:500],
@@ -977,7 +981,11 @@ def _run_translation(doc, *, durable: bool) -> dict:
 		)
 		if durable:
 			frappe.db.commit()  # nosemgrep: frappe-manual-commit
-		return {"translation": doc.name, "status": "Failed", "error": str(error)}
+		return {
+			"translation": doc.name,
+			"status": status,
+			"error": None if cancelled else str(error),
+		}
 
 	_persist_outcome(doc, outcome)
 

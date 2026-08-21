@@ -27,19 +27,16 @@ class PatternExplorer {
 
 	make() {
 		this.page.main.addClass("ai-ops-page");
+		const types = ["email", "url", "phone", "ip", "hash", "date", "identifier", "money"];
+		const options = types
+			.map((type) => `<option value="${type}">${type}</option>`)
+			.join("");
 		this.page.main.html(`
 			<div class="ai-explorer">
-				<div class="ai-search-options" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">
-					<select class="form-control ai-entity-type" aria-label="${__("Entity type")}" style="max-width:16rem">
+				<div class="ai-search-options">
+					<select class="form-control ai-entity-type" aria-label="${__("Entity type")}">
 						<option value="">${__("All types")}</option>
-						<option value="email">email</option>
-						<option value="url">url</option>
-						<option value="phone">phone</option>
-						<option value="ip">ip</option>
-						<option value="hash">hash</option>
-						<option value="date">date</option>
-						<option value="identifier">identifier</option>
-						<option value="money">money</option>
+						${options}
 					</select>
 					<div class="ai-kb-control"></div>
 				</div>
@@ -83,13 +80,12 @@ class PatternExplorer {
 			this.render(payload);
 		} catch (error) {
 			const denied = /permission|not permitted|not allowed/i.test(error.message || "");
+			const message = denied
+				? __("You do not have permission to list pattern entities.")
+				: error.message || __("Could not load pattern entities.");
 			this.$results.html(`
 				<div class="ai-ops-empty text-danger">
-					${frappe.utils.escape_html(
-						denied
-							? __("You do not have permission to list pattern entities.")
-							: error.message || __("Could not load pattern entities.")
-					)}
+					${frappe.utils.escape_html(message)}
 					<button type="button" class="btn btn-sm btn-default ai-retry">${__("Retry")}</button>
 				</div>
 			`);
@@ -110,7 +106,7 @@ class PatternExplorer {
 			.map((key) => `${frappe.utils.escape_html(key)}: ${counts[key]}`)
 			.join(" · ");
 		this.$results.html(`
-			<div class="text-muted small" style="margin-bottom:8px">${summary}</div>
+			<div class="text-muted small">${summary}</div>
 			${rows
 				.map(
 					(row) => `
@@ -131,13 +127,13 @@ class PatternExplorer {
 		const can_prev = start > 0;
 		const can_next = rows.length >= this.limit;
 		this.$pagination.removeClass("hidden").html(`
-			<button type="button" class="btn btn-sm btn-default ai-page-prev" ${can_prev ? "" : "disabled"}>${__(
-				"Previous"
-			)}</button>
+			<button type="button" class="btn btn-sm btn-default ai-page-prev" ${
+				can_prev ? "" : "disabled"
+			}>${__("Previous")}</button>
 			<span class="text-muted small">${start + 1}–${start + rows.length}</span>
-			<button type="button" class="btn btn-sm btn-default ai-page-next" ${can_next ? "" : "disabled"}>${__(
-				"Next"
-			)}</button>
+			<button type="button" class="btn btn-sm btn-default ai-page-next" ${
+				can_next ? "" : "disabled"
+			}>${__("Next")}</button>
 		`);
 		this.$pagination.find(".ai-page-prev").on("click", () => {
 			this.offset = Math.max(0, start - this.limit);

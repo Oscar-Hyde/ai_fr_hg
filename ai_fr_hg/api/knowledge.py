@@ -436,6 +436,43 @@ def get_pattern_entities(document: str, entity_type: str | None = None, limit: i
 
 
 @frappe.whitelist()
+def explore_pattern_entities(
+	knowledge_base: str | None = None,
+	entity_type: str | None = None,
+	document: str | None = None,
+	limit: int = 50,
+	offset: int = 0,
+) -> dict:
+	"""Paginated pattern explorer across documents the caller may read."""
+	from ai_fr_hg.ai.patterns import PATTERN_ENTITY_TYPES, list_pattern_entities
+	from ai_fr_hg.utils import api_validation
+	from ai_fr_hg.utils.permissions import _knowledge_base_access
+
+	frappe.has_permission("AI Pattern Entity", "read", throw=True)
+	knowledge_base = (
+		api_validation.valid_identifier(knowledge_base, label=_("Knowledge base")) if knowledge_base else None
+	)
+	if knowledge_base and not _knowledge_base_access(knowledge_base, frappe.session.user, write=False):
+		frappe.throw(_("You cannot explore patterns in that knowledge base."), frappe.PermissionError)
+	document = api_validation.valid_identifier(document, label=_("Document")) if document else None
+	entity_type = (
+		api_validation.enum_choice(entity_type, allowed=PATTERN_ENTITY_TYPES, label=_("Entity type"))
+		if entity_type
+		else None
+	)
+	limit, offset = api_validation.pagination(
+		limit, offset, default_limit=50, hard_limit=api_validation.MAX_CHUNK_ENTITY_PAGE
+	)
+	return list_pattern_entities(
+		knowledge_base=knowledge_base,
+		entity_type=entity_type,
+		document=document,
+		limit=limit,
+		offset=offset,
+	)
+
+
+@frappe.whitelist()
 def get_knowledge_overview() -> dict:
 	"""Summary counters for the knowledge dashboard."""
 	from ai_fr_hg.ai.knowledge import get_accessible_knowledge_bases
