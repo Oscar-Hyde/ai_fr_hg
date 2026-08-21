@@ -772,6 +772,12 @@ def import_app(module_path: str):
 	App modules do `import frappe` at import time, so a module imported before
 	`install()` keeps the previous bench. Always obtain modules through this
 	helper inside a test.
+
+	One consequence is easy to miss: each call rebuilds the module, so
+	importing a module *and* its exception module separately yields two
+	distinct classes with the same name. `assertRaises` will then fail to
+	match an exception the code raised correctly. Take exceptions off the
+	module under test (`module.PipelineError`), not from a second import.
 	"""
 	import importlib
 

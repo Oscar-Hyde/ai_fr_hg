@@ -237,6 +237,21 @@ MUTATIONS: list[Mutation] = [
 		breaks="Evidence must record when extraction ran.",
 	),
 	# -- formula preservation (§6.2) --------------------------------------
+	# -- pipeline step configuration contract (PIPE-04) -------------------
+	Mutation(
+		name="step-config-types-unenforced",
+		path="ai_fr_hg/ai/pipeline.py",
+		old="if expected is list and not isinstance(config[key], list):",
+		new="if False:",
+		breaks="A Classify step accepts a string where a list of categories is required.",
+	),
+	Mutation(
+		name="step-config-required-key-optional",
+		path="ai_fr_hg/ai/pipeline.py",
+		old="if key not in config:",
+		new="if False:",
+		breaks="A pipeline step saves without the configuration its type requires.",
+	),
 	# -- search telemetry redaction (SEC-07) ------------------------------
 	Mutation(
 		name="search-query-stored-unredacted",

@@ -1371,3 +1371,67 @@ class TestSearchTelemetryRedaction(TestCase):
 			len(logging_module.redact("y" * (logging_module.MAX_STORED_CHARACTERS + 500))),
 			logging_module.MAX_STORED_CHARACTERS,
 		)
+
+
+class TestPipelineStepConfigContract(TestCase):
+	"""PIPE-04 re-audit: the row names `validate_step_config` as its evidence.
+
+	That function was never referenced by a test. It is the server-side gate
+	behind the typed step dialogs, so it is what stops a malformed pipeline
+	being saved through the API rather than the builder.
+	"""
+
+	def _validate(self):
+		install(FakeBench())
+		module = import_app("ai_fr_hg.ai.pipeline")
+		# Take the exception from the module under test. A second
+		# `import_app("...exceptions")` would rebuild the module and return a
+		# *different* PipelineError class, which `assertRaises` would not
+		# match even though the code raised correctly.
+		return module, module.PipelineError
+
+	def test_required_keys_are_enforced_per_step_type(self):
+		module, PipelineError = self._validate()
+
+		with self.assertRaises(PipelineError):
+			module.validate_step_config("Classify", None)
+		with self.assertRaises(PipelineError):
+			module.validate_step_config("Translate", None)
+		# A step with no contract may legitimately have no configuration.
+		self.assertEqual(module.validate_step_config("Summarize", None), {})
+
+	def test_declared_types_are_enforced_not_merely_presence(self):
+		module, PipelineError = self._validate()
+
+		with self.assertRaises(PipelineError):
+			# `categories` must be a list, not a comma-separated string.
+			module.validate_step_config("Classify", json.dumps({"categories": "a,b"}))
+		with self.assertRaises(PipelineError):
+			module.validate_step_config("Translate", json.dumps({"target_language": ["fr"]}))
+
+		self.assertEqual(
+			module.validate_step_config("Classify", json.dumps({"categories": ["a", "b"]})),
+			{"categories": ["a", "b"]},
+		)
+
+	def test_missing_required_key_is_rejected_even_when_config_is_present(self):
+		module, PipelineError = self._validate()
+
+		with self.assertRaises(PipelineError):
+			module.validate_step_config("Classify", json.dumps({"unrelated": 1}))
+
+	def test_malformed_configuration_is_rejected_with_a_clear_error(self):
+		module, PipelineError = self._validate()
+
+		with self.assertRaises(PipelineError):
+			module.validate_step_config("Summarize", "{not json")
+		with self.assertRaises(PipelineError):
+			# A JSON array is valid JSON but not a configuration object.
+			module.validate_step_config("Summarize", json.dumps(["a"]))
+
+	def test_unknown_step_type_does_not_bypass_object_validation(self):
+		module, PipelineError = self._validate()
+
+		with self.assertRaises(PipelineError):
+			module.validate_step_config("Nonexistent", json.dumps(["still-not-an-object"]))
+		self.assertEqual(module.validate_step_config("Nonexistent", json.dumps({"x": 1})), {"x": 1})

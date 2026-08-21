@@ -455,3 +455,54 @@ class TestDeskFieldReachability(TestCase):
 				if field.get("fieldname") not in set(order):
 					stranded.append(f"{path}: settings field '{field.get('fieldname')}' is not rendered")
 		self.assertEqual(stranded, [])
+
+
+class TestRegisterEvidenceIsReal(TestCase):
+	"""A CLOSED row may not cite evidence that does not exist.
+
+	SEC-07 was CLOSED on "Redaction, bounded-snippet, disable-control, and
+	retention-contract tests" while `ai/logging.py::redact` was not referenced
+	by a single test, and PIPE-04 named `validate_step_config`, which was
+	equally untested. Both read as strong evidence and neither could fail.
+
+	This makes the register self-checking: every code symbol a closed row
+	names in its evidence column must appear somewhere in the test suite.
+	It cannot verify that the test is *good* — only mutation testing does
+	that — but it does stop a row from citing something that was never
+	written.
+	"""
+
+	@classmethod
+	def setUpClass(cls):
+		cls.tests_text = "\n".join(
+			path.read_text() for path in ROOT.rglob("test_*.py") if "__pycache__" not in path.parts
+		)
+		cls.register = (ROOT / "docs" / "GAP_REGISTER.md").read_text()
+
+	def test_discovery_found_the_suite(self):
+		self.assertGreater(len(self.tests_text), 100_000, "test discovery collapsed")
+		self.assertIn("| SEC-07 |", self.register)
+
+	def test_closed_rows_do_not_cite_symbols_that_no_test_exercises(self):
+		unproven: list[str] = []
+		for line in self.register.splitlines():
+			if not re.match(r"^\| [A-Z]+-\d+", line):
+				continue
+			columns = [column.strip() for column in line.split("|")]
+			status = next(
+				(c for c in columns if c.startswith(("CLOSED", "OPEN", "REOPENED", "IN PROGRESS"))),
+				"",
+			)
+			if not status.startswith("CLOSED"):
+				continue
+			evidence = columns[-2]
+			# Backticked identifiers that look like code, not prose.
+			symbols = [
+				symbol
+				for symbol in re.findall(r"`([A-Za-z_][A-Za-z0-9_]*)`", evidence)
+				if "_" in symbol or symbol[0].isupper()
+			]
+			for symbol in symbols:
+				if not re.search(rf"\b{re.escape(symbol)}\b", self.tests_text):
+					unproven.append(f"{columns[1]}: cites `{symbol}`, which no test references")
+		self.assertEqual(unproven, [])
