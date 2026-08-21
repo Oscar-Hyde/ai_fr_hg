@@ -181,16 +181,22 @@ frappe.ui.form.on("AI Translation", {
 				frm.reload_doc();
 			}).addClass("btn-danger");
 			if (!frm._ai_translation_realtime) {
-				frm._ai_translation_realtime = frappe.realtime.on("ai_translation_progress", (data) => {
-					if (data && data.translation === frm.doc.name) {
-						frm.reload_doc();
+				frm._ai_translation_realtime = frappe.realtime.on(
+					"ai_translation_progress",
+					(data) => {
+						if (data && data.translation === frm.doc.name) {
+							frm.reload_doc();
+						}
 					}
-				});
+				);
 				frm.script_manager &&
 					frm.script_manager.extend &&
 					$(frm.wrapper).on("hide", () => {
 						if (frm._ai_translation_realtime) {
-							frappe.realtime.off("ai_translation_progress", frm._ai_translation_realtime);
+							frappe.realtime.off(
+								"ai_translation_progress",
+								frm._ai_translation_realtime
+							);
 							frm._ai_translation_realtime = null;
 						}
 					});

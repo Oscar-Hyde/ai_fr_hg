@@ -102,7 +102,9 @@ class TestDocumentTranslation(TranslationTestCase):
 		user = self.make_ai_user("disabled-translator@example.com", "Disabled Translator")
 		user.enabled = 0
 		user.save(ignore_permissions=True)
-		document = self.make_document("Disabled Authority", "The contractor shall deliver the works on time.\n")
+		document = self.make_document(
+			"Disabled Authority", "The contractor shall deliver the works on time.\n"
+		)
 		translation = self.make_translation(document, "ar")
 
 		with self.assertRaises(frappe.PermissionError):

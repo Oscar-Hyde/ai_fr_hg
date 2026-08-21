@@ -28,9 +28,7 @@ class PatternExplorer {
 	make() {
 		this.page.main.addClass("ai-ops-page");
 		const types = ["email", "url", "phone", "ip", "hash", "date", "identifier", "money"];
-		const options = types
-			.map((type) => `<option value="${type}">${type}</option>`)
-			.join("");
+		const options = types.map((type) => `<option value="${type}">${type}</option>`).join("");
 		this.page.main.html(`
 			<div class="ai-explorer">
 				<div class="ai-search-options">
@@ -96,7 +94,9 @@ class PatternExplorer {
 		const rows = payload.entities || [];
 		if (!rows.length) {
 			this.$results.html(
-				`<div class="ai-ops-empty text-muted">${__("No pattern entities match these filters.")}</div>`
+				`<div class="ai-ops-empty text-muted">${__(
+					"No pattern entities match these filters."
+				)}</div>`
 			);
 			this.$pagination.addClass("hidden").empty();
 			return;
@@ -113,8 +113,8 @@ class PatternExplorer {
 				<div class="ai-result-card">
 					<div class="ai-result-head">
 						<a href="/app/ai-document/${encodeURIComponent(row.document)}">${frappe.utils.escape_html(
-							row.document
-						)}</a>
+						row.document
+					)}</a>
 						<span class="indicator-pill grey">${frappe.utils.escape_html(row.entity_type)}</span>
 					</div>
 					<div><code>${frappe.utils.escape_html(row.value)}</code> × ${row.occurrences || 1}</div>
