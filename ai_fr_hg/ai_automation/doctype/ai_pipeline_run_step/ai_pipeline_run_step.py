@@ -21,7 +21,7 @@ class AIPipelineRunStep(Document):
 		parent: DF.Data
 		parentfield: DF.Data
 		parenttype: DF.Data
-		status: DF.Literal["Pending", "Running", "Success", "Failed", "Skipped"]
+		status: DF.Literal["Pending", "Running", "Waiting Approval", "Success", "Failed", "Skipped"]
 		step_name: DF.Data | None
 		step_type: DF.Data | None
 	# end: auto-generated types

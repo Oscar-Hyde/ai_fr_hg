@@ -23,3 +23,4 @@ ai_fr_hg.patches.v0_0_16_retrieval_indexes
 ai_fr_hg.patches.v0_0_15_extraction_warnings
 ai_fr_hg.patches.v0_0_17_conversation_turn_identity
 ai_fr_hg.patches.v0_0_18_document_processing_progress
+ai_fr_hg.patches.v0_0_19_phase_5_automation

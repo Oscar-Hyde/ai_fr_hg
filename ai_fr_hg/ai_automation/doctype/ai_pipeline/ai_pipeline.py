@@ -24,6 +24,8 @@ class AIPipeline(Document):
 		failure_count: DF.Int
 		knowledge_base: DF.Link | None
 		last_run_on: DF.Datetime | None
+		misfire_policy: DF.Literal["Run Once", "Skip"]
+		next_run_on: DF.Datetime | None
 		pipeline_name: DF.Data
 		queue: DF.Literal["default", "short", "long"]
 		run_count: DF.Int
@@ -79,15 +81,13 @@ class AIPipeline(Document):
 				except Exception as exc:
 					frappe.throw(_("Row {0}: {1}").format(step.idx, str(exc)))
 
-			if step.config:
-				import json
+			if step.config or step.step_type in {"Classify", "Translate"}:
+				from ai_fr_hg.ai.pipeline import validate_step_config
 
 				try:
-					json.loads(step.config)
-				except ValueError as exc:
-					frappe.throw(
-						_("Row {0}: Configuration is not valid JSON: {1}").format(step.idx, str(exc))
-					)
+					validate_step_config(step.step_type, step.config)
+				except Exception as exc:
+					frappe.throw(_("Row {0}: {1}").format(step.idx, str(exc)))
 
 		try:
 			validate_pipeline_dependencies(self.name, dependencies)
@@ -95,7 +95,11 @@ class AIPipeline(Document):
 			frappe.throw(str(exc))
 
 	def validate_schedule(self):
+		if self.trigger_type == "Document Ingest" and not self.knowledge_base:
+			# Empty knowledge base means "any KB"; that is an explicit operator choice.
+			pass
 		if self.trigger_type != "Scheduled":
+			self.next_run_on = None
 			return
 		if not self.schedule_cron:
 			frappe.throw(_("A cron schedule is required for a scheduled pipeline."))
@@ -107,6 +111,9 @@ class AIPipeline(Document):
 			pass
 		except Exception:
 			frappe.throw(_("{0} is not a valid cron expression.").format(self.schedule_cron))
+		from ai_fr_hg.ai.pipeline import compute_next_run
+
+		self.next_run_on = compute_next_run(self.schedule_cron) or self.next_run_on
 
 	@frappe.whitelist()
 	def run_now(self, input_data: str | None = None) -> dict:

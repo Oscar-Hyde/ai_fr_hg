@@ -117,29 +117,24 @@ def run_scheduled_pipelines() -> None:
 	if not frappe.db.get_single_value("AI Platform Settings", "platform_enabled"):
 		return
 
-	try:
-		from croniter import croniter
-	except ImportError:
-		return
+	from ai_fr_hg.ai.pipeline import claim_due_scheduled_pipelines, run_pipeline
 
-	from ai_fr_hg.ai.pipeline import run_pipeline
-
-	now = now_datetime()
-	for pipeline in frappe.get_all(
-		"AI Pipeline",
-		filters={"enabled": 1, "trigger_type": "Scheduled"},
-		fields=["name", "schedule_cron", "last_run_on"],
-	):
-		if not pipeline.schedule_cron:
-			continue
+	for name in claim_due_scheduled_pipelines():
 		try:
-			base = pipeline.last_run_on or add_days(now, -1)
-			if croniter(pipeline.schedule_cron, base).get_next(type(now)) <= now:
-				run_pipeline(pipeline.name)
+			run_pipeline(name, trigger_source="Schedule")
 		except Exception:
 			frappe.log_error(
-				title=f"AI scheduled pipeline failed: {pipeline.name}", message=frappe.get_traceback()
+				title=f"AI scheduled pipeline failed: {name}", message=frappe.get_traceback()
 			)
+
+
+def run_due_tasks() -> None:
+	"""Claim Open AI Tasks whose due date has passed."""
+	if not frappe.db.get_single_value("AI Platform Settings", "platform_enabled"):
+		return
+	from ai_fr_hg.ai.tasks import claim_due_tasks
+
+	claim_due_tasks()
 
 
 def rollup_usage() -> None:

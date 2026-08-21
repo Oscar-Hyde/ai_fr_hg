@@ -16,6 +16,8 @@
   "schedule_cron",
   "knowledge_base",
   "queue",
+  "next_run_on",
+  "misfire_policy",
   "steps_sec",
   "steps",
   "pipeline_stats_sec",
@@ -79,6 +81,21 @@
    "fieldtype": "Select",
    "label": "Queue",
    "options": "default\nshort\nlong"
+  },
+  {
+   "fieldname": "next_run_on",
+   "fieldtype": "Datetime",
+   "label": "Next Run On",
+   "read_only": 1
+  },
+  {
+   "default": "Run Once",
+   "depends_on": "eval:doc.trigger_type=='Scheduled'",
+   "description": "Skip jumps to the next future slot without running missed work. Run Once executes a single catch-up run, then jumps to the next future slot.",
+   "fieldname": "misfire_policy",
+   "fieldtype": "Select",
+   "label": "Misfire Policy",
+   "options": "Run Once\nSkip"
   },
   {
    "fieldname": "steps_sec",

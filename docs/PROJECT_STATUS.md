@@ -78,9 +78,9 @@ Green tests prove the covered paths. They do not cover browser behavior, real ru
 | Translation | **PARTIAL** | Strong segmentation, masking, quality checks, repair, review, memory, and indexing core. Memory requires authorized KB scope and policy identity (SEC-01/TRN-01). Worker restoration, glossary/KB parity, index default, and usage accounting (TRN-05) are closed on hosted Server. Progress/cancel Desk Stop/reconnect remains Phase 7. |
 | Assistant/agents | **READY / HARDENING REQUIRED** | Latest-N history, locked sequence + turn_id, route-state restore, focused document, fallback answer, footnote citations, rename/pin/archive/export, negative-feedback reason/correction, cooperative cancel/reconnect, and stable File identity on upload. Browser E2E remains Phase 7. |
 | Tools/approvals | **PARTIAL / HARDENING REQUIRED** | Approval, audit, argument validation, permissions, and runtime limit exist. Generic count/field isolation, defaults, expiry, async approval execution, and pipeline resume remain. |
-| Pipelines | **PARTIAL** | Ordered/nested execution, cycle guards, step logs, retries, cancel, and provenance exist. Trigger wiring, schedule claiming, resumable approval, and visual builder remain. |
-| Automation | **PARTIAL** | Cached event dispatch and main actions exist. Delete-event snapshots, source validation, atomic counters, revision-aware dedupe, and execution coverage remain. |
-| AI Tasks | **PARTIAL / DECLARED ONLY** | Several paths execute, but Compare/Custom, due date, priority, execution log, secure approval transitions, and matching UI are unfinished. |
+| Pipelines | **READY / HARDENING REQUIRED** | API, Document Ingest, and Scheduled triggers are wired. Atomic `next_run_on` claims with misfire policy. Waiting Approval pauses and resumes exactly once after tool approval. Typed step config on the form. Browser builder/run E2E remains Phase 7. |
+| Automation | **READY / HARDENING REQUIRED** | Immutable event snapshots (including `on_trash`), source-field contracts, atomic counters, and revision/coalesce dedupe. Browser wizard E2E remains Phase 7. |
+| AI Tasks | **READY / HARDENING REQUIRED** | Every task type has an explicit contract. Status is server-authorized; AI Users cannot self-approve. Form actions match canonical states. Browser workflow remains Phase 7. |
 | Governance | **PARTIAL — enforcement work required** | Request/token/document limits and capabilities exist. User/provider/model concurrency, rate limiting, and atomic quota reservations are not implemented. |
 | Learning | **PARTIAL** | Candidate validation/promotion/recall/feedback core is strong. Learning dashboard, report wiring, semantic recall, skill relevance, and lifecycle maintenance remain. |
 | Operations | **PARTIAL** | Readiness, health, usage snapshot, failures, approvals, and queues are visible. SLOs, charts, job detail, stale-state reconciliation, and timer lifecycle remain. |
@@ -105,7 +105,7 @@ Phase 1 isolation/API safety, Phase 2 retrieval correctness, and Phase 3 convers
 2. Keep removed Folder/`.msg`/reranker/target-mapping controls absent; implement translation/ingestion progress, parser hardening, and provider model lifecycle. Scanned-PDF OCR and original-format reconstruction remain intentionally unsupported unless a future decision supersedes Phase 0.
 3. Add pipeline API/document-ingest triggers, atomic schedule claims, waiting-approval resume, and a typed builder.
 4. Complete AI Task types, state transitions, scheduling, audit links, and UI.
-5. Phase 4 backend progress/cancel exists; remaining proof is Phase 7 browser/chaos (ING-06/TRN-04/PAT-04). Do not start Phase 5 until that gate is accepted.
+5. Phase 4 remaining proof is Phase 7 browser/chaos (ING-06/TRN-04/PAT-04). Phase 5 automation/pipeline/task contracts are implemented on this branch; hosted Server verification is required before a Phase 5 PASS.
 6. Build Learning dashboard and fix reports (Phase 6); Pattern Explorer backend exists.
 7. Make export/import a versioned, tested restore path.
 8. Add browser, real-runtime, optional dependency, load, concurrency, security, and migration tests.

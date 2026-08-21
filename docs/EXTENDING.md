@@ -11,6 +11,7 @@ ai_providers = {"My Runtime": "your_app.ai.providers.MyRuntimeProvider"}
 ai_document_readers = {"dwg": "your_app.ai.readers.DWGReader"}
 ai_tools = {"lookup_customer": "your_app.ai.tools.lookup_customer"}
 ai_pipeline_methods = {"enrich_erp": "your_app.ai.steps.enrich_with_erp_data"}
+ai_task_methods = {"close_ticket": "your_app.ai.tasks.close_ticket"}
 ```
 
 ---
@@ -272,6 +273,10 @@ elevate privileges.
 
 The return value is written into the run context under the step's **Output
 Field**, where later steps read it via their **Input Field**.
+
+Custom **AI Task** type `Custom` uses the same trust model: decorate with
+`@task_method` or register the dotted path in `ai_task_methods`. The callable
+signature is `method(task, payload)` and it runs as the task requester.
 
 ---
 

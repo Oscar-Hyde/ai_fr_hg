@@ -361,6 +361,29 @@ answer.
 
 ---
 
+## Pipelines
+
+### `ai_fr_hg.api.pipeline.trigger`
+
+Start a pipeline whose trigger type is `API`. Requires pipeline read permission
+and the `pipeline` capability. Optional idempotency key returns the original
+run when reused.
+
+| Parameter | Type | Notes |
+| --- | --- | --- |
+| `pipeline` | string | Required pipeline name. |
+| `input_data` | string | JSON object, max 32 KB. |
+| `idempotency_key` | string | Optional 64-character correlation token. |
+
+```json
+{ "run": "AIRUN-2026-00001", "status": "Queued", "pipeline": "Invoice Enrichment" }
+```
+
+Document Ingest pipelines start from the canonical ingestion path after a
+document reaches `Indexed`. Scheduled pipelines are claimed atomically by
+`ai_fr_hg.tasks.run_scheduled_pipelines`. Approving a pending tool invocation
+resumes a `Waiting Approval` run exactly once.
+
 ## Tools
 
 | Method | Purpose |

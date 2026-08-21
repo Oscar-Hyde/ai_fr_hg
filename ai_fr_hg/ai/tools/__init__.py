@@ -632,6 +632,10 @@ def approve_invocation(invocation: str) -> dict:
 		reference_name=invocation,
 		raise_on_error=True,
 	)
+	if doc.pipeline_run and outcome.get("status") == "Success":
+		from ai_fr_hg.ai.pipeline import resume_after_approval
+
+		resume_after_approval(doc.pipeline_run, invocation=invocation)
 	return outcome
 
 
@@ -662,4 +666,8 @@ def reject_invocation(invocation: str) -> dict:
 		reference_name=invocation,
 		raise_on_error=True,
 	)
+	if doc.pipeline_run:
+		from ai_fr_hg.ai.pipeline import fail_waiting_run
+
+		fail_waiting_run(doc.pipeline_run, _("Tool invocation {0} was rejected.").format(invocation))
 	return {"status": "Rejected", "invocation": invocation}

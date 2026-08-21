@@ -3,7 +3,10 @@ import { describe, it } from "node:test";
 
 import {
   patternExplorerErrorView,
+  pipelineCanCancel,
+  pipelineRunIndicator,
   reconnectTranslationFromServer,
+  taskActionsFor,
   translationRealtimeShouldReload,
   translationShouldShowStop,
 } from "../../public/js/ui/desk_workflows.js";
@@ -115,6 +118,43 @@ describe("PAT-04 pattern explorer permission view", () => {
     });
     assert.equal(view.kind, "permission-denied");
     assert.deepEqual(view.entities, []);
+  });
+});
+
+describe("TASK-03 task action parity", () => {
+  it("hides approve from the requester even when they are a manager", () => {
+    const actions = taskActionsFor("Pending Approval", {
+      isManager: true,
+      isRequester: true,
+    });
+    assert.equal(actions.includes("approve"), false);
+    assert.equal(actions.includes("reject"), true);
+  });
+
+  it("lets a manager who is not the requester approve", () => {
+    const actions = taskActionsFor("Pending Approval", {
+      isManager: true,
+      isRequester: false,
+    });
+    assert.deepEqual(actions, ["approve", "reject", "cancel"]);
+  });
+
+  it("blocks run for users when approval is required", () => {
+    const actions = taskActionsFor("Open", {
+      isManager: false,
+      isRequester: true,
+      requiresApproval: true,
+    });
+    assert.equal(actions.includes("run"), false);
+    assert.equal(actions.includes("submit"), true);
+  });
+});
+
+describe("PIPE-03 run status contract", () => {
+  it("uses orange for waiting approval and allows cancel", () => {
+    assert.equal(pipelineRunIndicator("Waiting Approval"), "orange");
+    assert.equal(pipelineCanCancel("Waiting Approval"), true);
+    assert.equal(pipelineCanCancel("Completed"), false);
   });
 });
 

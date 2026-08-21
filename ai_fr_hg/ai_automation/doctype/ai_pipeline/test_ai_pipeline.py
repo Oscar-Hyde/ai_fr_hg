@@ -301,12 +301,28 @@ class TestPipeline(AIPlatformTestCase):
 			),
 		)
 		parent_run.reload()
-		self.assertEqual(child_run.status, "Failed")
-		self.assertEqual(parent_run.status, "Failed")
+		self.assertEqual(child_run.status, "Waiting Approval")
+		self.assertEqual(parent_run.status, "Waiting Approval")
 		self.assertEqual(invocation.user, frappe.session.user)
 		self.assertFalse(frappe.db.exists("ToDo", {"description": "Nested pipeline approved write"}))
-		self.assertIn("requires approval", child_run.error_message)
 		self.assertEqual(invocation.status, "Pending Approval")
+
+		from ai_fr_hg.ai.tools import approve_invocation
+
+		approve_invocation(invocation.name)
+		child_run.reload()
+		parent_run.reload()
+		self.assertEqual(child_run.status, "Completed")
+		self.assertEqual(parent_run.status, "Completed")
+		self.assertTrue(frappe.db.exists("ToDo", {"description": "Nested pipeline approved write"}))
+
+		approve_invocation_again = frappe.db.get_value("AI Tool Invocation", invocation.name, "status")
+		self.assertEqual(approve_invocation_again, "Success")
+		# A second resume must not duplicate the child work.
+		from ai_fr_hg.ai.pipeline import resume_run
+
+		skipped = resume_run(child_run.name)
+		self.assertTrue(skipped.get("skipped") or skipped.get("status") == "Completed")
 
 	def test_configuration_rejects_indirect_nested_pipeline_cycle(self):
 		pipeline_a = frappe.get_doc(
@@ -493,6 +509,111 @@ class TestPipeline(AIPlatformTestCase):
 		self.assertEqual(run.status, "Completed")
 		self.assertEqual(run.step_logs[0].status, "Failed")
 		self.assertEqual(run.step_logs[1].status, "Success")
+
+
+	def test_api_trigger_requires_api_type_and_is_idempotent(self):
+		from ai_fr_hg.api.pipeline import trigger
+
+		pipeline = frappe.get_doc(
+			{
+				"doctype": "AI Pipeline",
+				"pipeline_name": "API Trigger Pipeline",
+				"enabled": 1,
+				"trigger_type": "Manual",
+				"steps": [
+					{
+						"step_name": "Work",
+						"step_type": "Custom Method",
+						"method": "ai_fr_hg.ai_automation.doctype.ai_pipeline.test_ai_pipeline.always_works",
+						"enabled": 1,
+					}
+				],
+			}
+		).insert(ignore_permissions=True)
+		with self.assertRaises(frappe.ValidationError):
+			trigger(pipeline.name, input_data="{}")
+		pipeline.db_set("trigger_type", "API")
+		first = trigger(pipeline.name, input_data='{"content": "one"}', idempotency_key="api-key-1")
+		second = trigger(pipeline.name, input_data='{"content": "two"}', idempotency_key="api-key-1")
+		self.assertEqual(first["run"], second["run"])
+
+	def test_scheduled_claim_is_atomic_and_honours_skip(self):
+		from frappe.utils import add_to_date, now_datetime
+
+		from ai_fr_hg.ai.pipeline import claim_due_scheduled_pipelines
+
+		now = now_datetime()
+		pipeline = frappe.get_doc(
+			{
+				"doctype": "AI Pipeline",
+				"pipeline_name": "Scheduled Claim Pipeline",
+				"enabled": 1,
+				"trigger_type": "Scheduled",
+				"schedule_cron": "*/5 * * * *",
+				"misfire_policy": "Skip",
+				"steps": [
+					{
+						"step_name": "Work",
+						"step_type": "Custom Method",
+						"method": "ai_fr_hg.ai_automation.doctype.ai_pipeline.test_ai_pipeline.always_works",
+						"enabled": 1,
+					}
+				],
+			}
+		).insert(ignore_permissions=True)
+		frappe.db.set_value(
+			"AI Pipeline",
+			pipeline.name,
+			{"next_run_on": add_to_date(now, minutes=-30)},
+			update_modified=False,
+		)
+		claimed = claim_due_scheduled_pipelines(now=now)
+		self.assertNotIn(pipeline.name, claimed)
+		pipeline.reload()
+		self.assertTrue(pipeline.next_run_on > now)
+
+		frappe.db.set_value(
+			"AI Pipeline",
+			pipeline.name,
+			{"misfire_policy": "Run Once", "next_run_on": add_to_date(now, minutes=-30)},
+			update_modified=False,
+		)
+		claimed = claim_due_scheduled_pipelines(now=now)
+		self.assertIn(pipeline.name, claimed)
+		claimed_again = claim_due_scheduled_pipelines(now=now)
+		self.assertNotIn(pipeline.name, claimed_again)
+
+	def test_document_ingest_trigger_starts_matching_pipeline(self):
+		from ai_fr_hg.ai.pipeline import trigger_document_ingest_pipelines
+
+		pipeline = frappe.get_doc(
+			{
+				"doctype": "AI Pipeline",
+				"pipeline_name": "Ingest Trigger Pipeline",
+				"enabled": 1,
+				"trigger_type": "Document Ingest",
+				"knowledge_base": self.knowledge_base.name,
+				"steps": [
+					{
+						"step_name": "Work",
+						"step_type": "Custom Method",
+						"method": "ai_fr_hg.ai_automation.doctype.ai_pipeline.test_ai_pipeline.always_works",
+						"enabled": 1,
+					}
+				],
+			}
+		).insert(ignore_permissions=True)
+		document = self.make_document("Ingest Trigger Doc", "body")
+		started = trigger_document_ingest_pipelines(document.name, self.knowledge_base.name, "Administrator")
+		self.assertIn(pipeline.name, started)
+		run = frappe.get_all(
+			"AI Pipeline Run",
+			filters={"pipeline": pipeline.name, "reference_name": document.name},
+			fields=["name", "trigger_source"],
+			limit=1,
+		)
+		self.assertTrue(run)
+		self.assertEqual(run[0].trigger_source, "Document Ingest")
 
 
 def unmarked_pipeline_method(context=None, step=None, config=None):

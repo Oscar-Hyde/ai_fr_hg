@@ -38,6 +38,7 @@ class AIAutomationRule(Document):
 		last_run_on: DF.Datetime | None
 		pipeline: DF.Link | None
 		prompt_template: DF.Link | None
+		coalesce_events: DF.Check
 		queue: DF.Literal["default", "short", "long"]
 		rule_name: DF.Data
 		run_count: DF.Int
@@ -49,7 +50,10 @@ class AIAutomationRule(Document):
 	def validate(self):
 		self.validate_action()
 		self.validate_condition()
-		self.validate_target_field()
+		from ai_fr_hg.ai.automation import validate_source_field, validate_target_field
+
+		validate_source_field(self.document_type, self.source_field)
+		validate_target_field(self.document_type, self.target_field, self.event)
 
 	def validate_action(self):
 		required = {
@@ -78,12 +82,6 @@ class AIAutomationRule(Document):
 		except SyntaxError as exc:
 			frappe.throw(_("Condition has a syntax error: {0}").format(str(exc)))
 
-	def validate_target_field(self):
-		if not self.target_field or not self.document_type:
-			return
-		if not frappe.get_meta(self.document_type).has_field(self.target_field):
-			frappe.throw(_("{0} has no field named {1}.").format(self.document_type, self.target_field))
-
 	def on_update(self):
 		from ai_fr_hg.ai.automation import clear_rule_cache
 
@@ -97,6 +95,13 @@ class AIAutomationRule(Document):
 	@frappe.whitelist()
 	def test_rule(self, docname: str) -> dict:
 		"""Run this rule against an existing document."""
-		from ai_fr_hg.ai.automation import execute_rule
+		from ai_fr_hg.ai.automation import execute_rule, trigger_rule
 
+		doc = frappe.get_doc(self.document_type, docname)
+		doc.check_permission("read")
+		outcome = trigger_rule(self.name, doc, method=self.event, enqueue=False)
+		if outcome and outcome.get("event") and not outcome.get("skipped"):
+			return execute_rule(self.name, self.document_type, docname, event_name=outcome["event"])
+		if outcome and outcome.get("skipped"):
+			return {"rule": self.name, "status": outcome.get("status"), "skipped": True}
 		return execute_rule(self.name, self.document_type, docname)

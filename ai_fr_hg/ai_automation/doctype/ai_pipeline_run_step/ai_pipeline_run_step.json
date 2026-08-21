@@ -37,7 +37,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Status",
-   "options": "Pending\nRunning\nSuccess\nFailed\nSkipped",
+   "options": "Pending\nRunning\nWaiting Approval\nSuccess\nFailed\nSkipped",
    "read_only": 1
   },
   {

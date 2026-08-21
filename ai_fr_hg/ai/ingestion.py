@@ -539,6 +539,17 @@ def process_document(
 					{"document": document_name, "status": "Indexed"},
 					user=authority,
 				)
+				try:
+					from ai_fr_hg.ai.pipeline import trigger_document_ingest_pipelines
+
+					trigger_document_ingest_pipelines(
+						document_name, document.knowledge_base, authority
+					)
+				except Exception:
+					frappe.log_error(
+						title="AI document-ingest pipeline trigger failed",
+						message=frappe.get_traceback(),
+					)
 				return {
 					"document": document_name,
 					"status": "Indexed",
