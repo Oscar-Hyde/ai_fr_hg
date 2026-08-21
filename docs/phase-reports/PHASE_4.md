@@ -1,22 +1,22 @@
 # Phase 4 — Ingestion, Intelligence, Patterns, and Translation
 
 **Status date:** 2026-08-21  
-**Phase verdict:** `FAIL` as a close — TRN-05 accounting is now on a green hosted Server run, but Desk/browser and live RQ evidence remain.
+**Phase verdict:** `FAIL` as a close — backend ING-06/TRN-05 contracts are on a green hosted Server run, but OS-level RQ kill and Desk/browser evidence remain.
 
 ## Hosted Frappe v17 bench (authoritative)
 
-Commit `8564db6` on [PR #40](https://github.com/Oscar-Hyde/ai_fr_hg/pull/40):
+Commit `09b5a1f` on [PR #40](https://github.com/Oscar-Hyde/ai_fr_hg/pull/40):
 
 | Check | Result | Run |
 | --- | --- | --- |
-| Server | **pass** 2m19s | [32454131712](https://github.com/Oscar-Hyde/ai_fr_hg/actions/runs/32454131712) |
-| Linter | **pass** 1m0s | [32454131635](https://github.com/Oscar-Hyde/ai_fr_hg/actions/runs/32454131635) |
+| Server | **pass** 2m23s | [32454916140](https://github.com/Oscar-Hyde/ai_fr_hg/actions/runs/32454916140) |
+| Linter | **pass** 48s | [32454916101](https://github.com/Oscar-Hyde/ai_fr_hg/actions/runs/32454916101) |
 | Frontend static | **pass** | same Quality run |
 | Dependency audit | **pass** | same Quality run |
 
 This is `bench --site test_site run-tests --app ai_fr_hg` on the pinned Frappe v17 CI bench, not a sandbox `compileall`.
 
-Prior green code baseline for stale-worker/cancel status: `5b256d1` Server [32453526161](https://github.com/Oscar-Hyde/ai_fr_hg/actions/runs/32453526161).
+Prior green baselines: TRN-05 accounting `8564db6` Server [32454131712](https://github.com/Oscar-Hyde/ai_fr_hg/actions/runs/32454131712); stale-worker/cancel `5b256d1` Server [32453526161](https://github.com/Oscar-Hyde/ai_fr_hg/actions/runs/32453526161).
 
 ## Inventory
 
