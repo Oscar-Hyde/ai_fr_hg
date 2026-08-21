@@ -107,7 +107,7 @@ class TestIngestionProgressCancellation(AIPlatformTestCase):
 		self.assertNotEqual(document.status, "Failed")
 
 	def test_stale_in_flight_heartbeat_is_reaped_without_duplicate_start(self):
-		from ai_fr_hg.ai.ingestion import process_pending_documents, reap_stale_in_flight_documents
+		from ai_fr_hg.ai.ingestion import process_pending_documents
 
 		document = self.make_document("Stale Worker Document", "heartbeat expired")
 		document.db_set(
@@ -119,15 +119,17 @@ class TestIngestionProgressCancellation(AIPlatformTestCase):
 			},
 			update_modified=False,
 		)
-		reaped = reap_stale_in_flight_documents()
-		self.assertTrue(any(row.name == document.name for row in reaped))
+
+		with patch("ai_fr_hg.ai.ingestion.enqueue_processing") as enqueue:
+			process_pending_documents()
+
 		document.reload()
 		self.assertEqual(document.status, "Failed")
 		self.assertEqual(document.error_type, "StaleWorker")
-
-		with patch("ai_fr_hg.ai.ingestion.frappe.enqueue") as enqueue:
-			process_pending_documents()
-		self.assertEqual(enqueue.call_count, 1)
+		called = [
+			call.args[0] if call.args else call.kwargs.get("document_name") for call in enqueue.call_args_list
+		]
+		self.assertEqual(called.count(document.name), 1)
 
 
 class TestIndexing(AIPlatformTestCase):
