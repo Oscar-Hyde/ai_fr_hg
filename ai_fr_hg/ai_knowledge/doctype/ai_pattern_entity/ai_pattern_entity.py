@@ -46,6 +46,7 @@ class AIPatternEntity(Document):
 		extraction_method: DF.Literal["pattern", "semantic"]
 		first_offset: DF.Int
 		knowledge_base: DF.Link
+		last_scanned_on: DF.Datetime | None
 		model_used: DF.Data | None
 		normalized_value: DF.Data | None
 		occurrences: DF.Int

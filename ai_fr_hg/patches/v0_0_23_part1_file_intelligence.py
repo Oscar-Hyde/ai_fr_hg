@@ -25,6 +25,7 @@ import frappe
 
 def execute():
 	_backfill_pattern_entity_columns()
+	_backfill_relationship_columns()
 	_backfill_platform_settings()
 	_flag_unversioned_extraction_evidence()
 
@@ -41,6 +42,18 @@ def _backfill_pattern_entity_columns() -> None:
 		frappe.db.sql("ALTER TABLE `tabAI Pattern Entity` ADD COLUMN `confidence` decimal(21,9) DEFAULT 0")
 	if not frappe.db.has_column("AI Pattern Entity", "model_used"):
 		frappe.db.sql("ALTER TABLE `tabAI Pattern Entity` ADD COLUMN `model_used` varchar(140)")
+	if not frappe.db.has_column("AI Pattern Entity", "last_scanned_on"):
+		frappe.db.sql("ALTER TABLE `tabAI Pattern Entity` ADD COLUMN `last_scanned_on` datetime(6)")
+
+	# Existing rows were written before scan time was recorded. `creation` is
+	# the only defensible approximation, and it is never in the future.
+	frappe.db.sql(
+		"""
+		update `tabAI Pattern Entity`
+		set last_scanned_on = creation
+		where last_scanned_on is null
+		"""
+	)
 
 	# Every pre-existing row was produced by the deterministic regex layer.
 	frappe.db.sql(
@@ -56,6 +69,21 @@ def _backfill_pattern_entity_columns() -> None:
 		update `tabAI Pattern Entity`
 		set confidence = 0
 		where extraction_method = 'pattern' and confidence is not null and confidence <> 0
+		"""
+	)
+
+
+def _backfill_relationship_columns() -> None:
+	"""`AI Entity Relationship` is new, but a partially-migrated site may exist."""
+	if not frappe.db.table_exists("AI Entity Relationship"):
+		return
+	if not frappe.db.has_column("AI Entity Relationship", "last_scanned_on"):
+		frappe.db.sql("ALTER TABLE `tabAI Entity Relationship` ADD COLUMN `last_scanned_on` datetime(6)")
+	frappe.db.sql(
+		"""
+		update `tabAI Entity Relationship`
+		set last_scanned_on = creation
+		where last_scanned_on is null
 		"""
 	)
 

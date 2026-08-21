@@ -690,6 +690,21 @@ class AIAssistant {
 			this.render_context(message.citations);
 		}
 
+		// §15.3: an answer with no supporting source must say so. Without this
+		// a model's own recollection is visually indistinguishable from a
+		// result backed by the corpus.
+		if (!isUser && message.grounding && message.grounding.basis !== "sources") {
+			const label =
+				message.grounding.basis === "fallback"
+					? __("Configured reply — not generated from sources")
+					: __("No supporting source — model interpretation");
+			$footer.append(
+				`<div class="ai-grounding-note text-muted small" title="${__(
+					"This statement is not backed by an indexed document."
+				)}">⚠ ${label}</div>`
+			);
+		}
+
 		if (!isUser) {
 			const meta = [];
 			if (message.model) meta.push(message.model);
@@ -844,6 +859,7 @@ class AIAssistant {
 				role: "Assistant",
 				content: response.answer,
 				citations: response.citations,
+				grounding: response.grounding,
 				name: response.message,
 				model: response.model,
 				total_tokens: response.total_tokens,

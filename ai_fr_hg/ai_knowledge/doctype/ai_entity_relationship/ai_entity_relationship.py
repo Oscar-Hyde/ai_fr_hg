@@ -25,6 +25,7 @@ class AIEntityRelationship(Document):
 		evidence_quote: DF.SmallText | None
 		first_offset: DF.Int
 		knowledge_base: DF.Link
+		last_scanned_on: DF.Datetime | None
 		model_used: DF.Data | None
 		object: DF.Data
 		object_entity: DF.Link | None

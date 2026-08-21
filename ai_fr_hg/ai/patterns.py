@@ -33,7 +33,7 @@ import re
 
 import frappe
 from frappe import _
-from frappe.utils import cint
+from frappe.utils import cint, now_datetime
 
 # ---------------------------------------------------------------------------
 # Pattern registry — ported verbatim from the reference tokenizer. Bounded
@@ -360,6 +360,7 @@ def scan_document(document: str, *, max_entities: int | None = None) -> dict:
 		row.content or "", max_entities=max_entities or max_pattern_entities()
 	)
 	checksum = row.checksum or ""
+	scanned_at = now_datetime()
 
 	existing: dict[tuple[str, str], str] = {
 		(candidate.entity_type, candidate.normalized_value): candidate.name
@@ -387,6 +388,10 @@ def scan_document(document: str, *, max_entities: int | None = None) -> dict:
 			"first_offset": entity.get("first_offset"),
 			"context_quote": entity.get("context_quote"),
 			"source_checksum": checksum,
+			# A pattern result must state when it was produced. Rows are written
+			# with update_modified=False for concurrency safety, so `modified`
+			# cannot carry this.
+			"last_scanned_on": scanned_at,
 		}
 		name = existing.get(key)
 		if name:
@@ -404,6 +409,7 @@ def scan_document(document: str, *, max_entities: int | None = None) -> dict:
 		entity_doc.first_offset = patch["first_offset"]
 		entity_doc.context_quote = patch["context_quote"]
 		entity_doc.source_checksum = checksum
+		entity_doc.last_scanned_on = scanned_at
 		try:
 			entity_doc.insert(ignore_permissions=True)
 		except frappe.DuplicateEntryError:
@@ -526,6 +532,7 @@ def list_pattern_entities(
 			"extraction_method",
 			"confidence",
 			"model_used",
+			"last_scanned_on",
 		],
 		order_by="occurrences desc, modified desc",
 		limit=page,

@@ -49,7 +49,7 @@ import re
 
 import frappe
 from frappe import _
-from frappe.utils import cint, flt
+from frappe.utils import cint, flt, now_datetime
 
 # ---------------------------------------------------------------------------
 # Registries
@@ -393,6 +393,7 @@ def scan_document_semantic(document: str, *, model: str | None = None) -> dict:
 	outcome = extract_semantic(row.content or "", model=model, document=document)
 	checksum = row.checksum or ""
 	model_used = outcome.get("model")
+	scanned_at = now_datetime()
 
 	created = updated = 0
 	existing_entities = {
@@ -415,6 +416,7 @@ def scan_document_semantic(document: str, *, model: str | None = None) -> dict:
 			"confidence": entity["confidence"],
 			"model_used": model_used,
 			"source_checksum": checksum,
+			"last_scanned_on": scanned_at,
 		}
 		name = existing_entities.get(key)
 		if name:
@@ -457,23 +459,58 @@ def scan_document_semantic(document: str, *, model: str | None = None) -> dict:
 			removed += 1
 
 	relationships_written = _sync_relationships(
-		document, row.knowledge_base, outcome["relationships"], checksum, model_used
+		document, row.knowledge_base, outcome["relationships"], checksum, model_used, scanned_at
 	)
 
-	return {
+	rejected = outcome.get("rejected", {})
+	result = {
 		"document": document,
 		"entities": len(outcome["entities"]),
 		"created": created,
 		"updated": updated,
 		"removed": removed,
 		"relationships": relationships_written,
-		"rejected": outcome.get("rejected", {}),
+		"rejected": rejected,
 		"model": model_used,
 	}
 
+	# §24: semantic extraction is an AI interaction that spends model quota and
+	# writes inferred rows. Record what was produced *and* what was discarded,
+	# so a reviewer can see the grounding filter working rather than trusting it.
+	from ai_fr_hg.ai.logging import write_audit_log
+
+	write_audit_log(
+		action="Semantic Entities Extracted",
+		category="Execution",
+		message=(
+			f"{len(outcome['entities'])} entities, {relationships_written} relationships from {document}"
+		),
+		details={
+			"document": document,
+			"knowledge_base": row.knowledge_base,
+			"model": model_used,
+			"entities": len(outcome["entities"]),
+			"relationships": relationships_written,
+			"created": created,
+			"updated": updated,
+			"removed": removed,
+			"rejected": rejected,
+			"confidence_floor": confidence_floor(),
+		},
+		reference_doctype="AI Document",
+		reference_name=document,
+	)
+
+	return result
+
 
 def _sync_relationships(
-	document: str, knowledge_base: str, relationships: list[dict], checksum: str, model_used
+	document: str,
+	knowledge_base: str,
+	relationships: list[dict],
+	checksum: str,
+	model_used,
+	scanned_at=None,
 ) -> int:
 	"""Replace this document's relationship rows with the current extraction."""
 	existing = {
@@ -499,6 +536,7 @@ def _sync_relationships(
 			"confidence": relationship["confidence"],
 			"model_used": model_used,
 			"source_checksum": checksum,
+			"last_scanned_on": scanned_at,
 		}
 		name = existing.get(key)
 		if name:

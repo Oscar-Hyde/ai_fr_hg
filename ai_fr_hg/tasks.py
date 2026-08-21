@@ -203,25 +203,91 @@ def rollup_usage() -> None:
 	frappe.db.commit()  # nosemgrep: frappe-manual-commit
 
 
+#: Rows deleted per statement during retention enforcement.
+CLEANUP_BATCH_SIZE = 500
+#: Ceiling per DocType per run. Work that remains is picked up by the next
+#: run, so a large backlog drains over several runs instead of one unbounded
+#: transaction that can exhaust memory or hold locks for minutes.
+CLEANUP_MAX_PER_RUN = 20_000
+
+
+def delete_expired_rows(
+	doctype: str,
+	cutoff: str,
+	*,
+	batch_size: int = CLEANUP_BATCH_SIZE,
+	max_rows: int = CLEANUP_MAX_PER_RUN,
+) -> dict:
+	"""Delete rows older than `cutoff` in committed batches.
+
+	Frappe V17 capability evaluated: `frappe.db.delete` issues one unbounded
+	`DELETE ... WHERE`, and `frappe.get_all` provides the paging primitive.
+	There is no native batched-retention utility, so this composes the two
+	rather than reimplementing either. Each batch is committed so an
+	interruption keeps the work already done and the next run resumes.
+	"""
+	deleted = 0
+	batches = 0
+	while deleted < max_rows:
+		names = frappe.get_all(
+			doctype,
+			filters={"creation": ["<", cutoff]},
+			pluck="name",
+			order_by="creation asc",
+			limit_page_length=min(batch_size, max_rows - deleted),
+		)
+		if not names:
+			break
+		frappe.db.delete(doctype, {"name": ["in", names]})
+		# Commit per batch: bounded transactions, and resumable on failure.
+		frappe.db.commit()  # nosemgrep: frappe-manual-commit
+		deleted += len(names)
+		batches += 1
+		if len(names) < batch_size:
+			break
+	return {
+		"doctype": doctype,
+		"deleted": deleted,
+		"batches": batches,
+		"remaining": deleted >= max_rows,
+	}
+
+
 def cleanup_logs() -> None:
-	"""Enforce the retention windows configured in AI Platform Settings."""
+	"""Enforce the retention windows configured in AI Platform Settings.
+
+	Deletion is batched and bounded per run so a site with millions of log
+	rows cannot produce a single multi-minute locking transaction.
+	"""
 	settings = frappe.get_cached_doc("AI Platform Settings")
 
 	retention = {
 		"AI Execution Log": cint(settings.execution_log_retention_days),
 		"AI Service Health Log": cint(settings.health_log_retention_days),
 		"AI Audit Log": cint(settings.audit_log_retention_days),
+		# Search queries are diagnostic only; keep a short fixed window.
+		"AI Search Query": 30,
 	}
 
+	summary = []
 	for doctype, days in retention.items():
 		if not days:
 			continue
-		cutoff = add_days(today(), -days)
-		frappe.db.delete(doctype, {"creation": ["<", cutoff]})
+		try:
+			result = delete_expired_rows(doctype, add_days(today(), -days))
+		except Exception:
+			frappe.log_error(title=f"AI retention cleanup failed: {doctype}", message=frappe.get_traceback())
+			continue
+		if result["deleted"]:
+			summary.append(result)
 
-	# Search queries are diagnostic only; keep a short window.
-	frappe.db.delete("AI Search Query", {"creation": ["<", add_days(today(), -30)]})
-	frappe.db.commit()  # nosemgrep: frappe-manual-commit
+	# A run that hits its ceiling must be visible, not silently partial.
+	for result in summary:
+		if result["remaining"]:
+			frappe.logger("ai_fr_hg").info(
+				f"Retention for {result['doctype']} hit the {CLEANUP_MAX_PER_RUN}-row "
+				"per-run ceiling; the next run continues."
+			)
 
 
 def backup_knowledge() -> None:

@@ -24,7 +24,8 @@
   "first_offset",
   "context_quote",
   "scan_sec",
-  "source_checksum"
+  "source_checksum",
+  "last_scanned_on"
  ],
  "fields": [
   {
@@ -157,11 +158,18 @@
    "label": "Source Checksum",
    "read_only": 1,
    "search_index": 1
+  },
+  {
+   "description": "When this row was last confirmed by a scan. Required by the pattern-result contract: a result must state when it was produced.",
+   "fieldname": "last_scanned_on",
+   "fieldtype": "Datetime",
+   "label": "Last Scanned On",
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-08-21 12:00:00.000000",
+ "modified": "2026-08-21 13:00:00.000000",
  "modified_by": "Administrator",
  "module": "AI Knowledge",
  "name": "AI Pattern Entity",

@@ -518,13 +518,16 @@ def _install_frappe_stub() -> None:
 	needs_real_utils = True
 	if utils is not None:
 		try:
-			needs_real_utils = not isinstance(utils.flt("1.5"), float)
+			needs_real_utils = not isinstance(utils.flt("1.5"), float) or not hasattr(utils, "now_datetime")
 		except Exception:
 			needs_real_utils = True
 	if needs_real_utils:
+		import datetime as _datetime
+
 		replacement = types.ModuleType("frappe.utils")
 		replacement.flt = _flt
 		replacement.cint = int
+		replacement.now_datetime = _datetime.datetime.now
 		sys.modules["frappe.utils"] = replacement
 		sys.modules["frappe"].utils = replacement
 

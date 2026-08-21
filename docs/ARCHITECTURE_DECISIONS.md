@@ -19,6 +19,7 @@ These decisions make the supported product boundary explicit. They remain author
 | ADR-011 | Semantic entities are model-inferred and mechanically grounded | Accepted | Knowledge/Intelligence | When a local NER runtime is approved |
 | ADR-012 | Legacy binary Office formats (DOC/XLS/PPT) remain unsupported | Accepted | Knowledge/Ingestion | When an OLE2 parser or sandboxed converter is approved |
 | ADR-013 | A user archive is one document, not a synthetic folder tree | Accepted | Knowledge/Ingestion | If per-member citation granularity is required |
+| ADR-014 | Retention deletion is batched on native primitives, not a custom queue | Accepted | Operations | If retention volume outgrows a scheduled batch drain |
 
 ## ADR-001 — MariaDB-only application support
 
@@ -293,3 +294,47 @@ the same authority module.
 **Consequence.** Members are searchable through the parent document, and the
 containment tree is fully reconstructable from evidence. Per-member retrieval
 citation granularity is a future enhancement and is not claimed today.
+
+## ADR-014 — Batched retention on native primitives
+
+**Date.** 2026-08-21 (Part 2 §20.4, §26, §27).
+
+**Context.** `cleanup_logs` issued one unbounded `DELETE ... WHERE creation <
+cutoff` per DocType. On a site with millions of execution-log rows that is a
+single multi-minute transaction: unbounded memory, long lock hold, and total
+loss of progress if the worker is killed. Part 2 requires bounded resource
+behaviour, checkpoints, and recovery for long-running work.
+
+**Frappe V17 capabilities evaluated.**
+
+- `frappe.db.delete` — issues the unbounded statement; it is the problem, not
+  the fix, but it is still the correct way to *execute* each bounded batch.
+- `frappe.get_all` with `limit_page_length` / `order_by` — the native paging
+  primitive; used to select each batch.
+- Scheduler events — already provide the periodic trigger and the natural
+  continuation point between runs.
+- Background jobs / `frappe.enqueue` — evaluated and rejected: retention is
+  already a scheduled task, and fanning it into child jobs would add queue
+  pressure and failure modes without improving boundedness.
+- `frappe.db.savepoint` — evaluated and rejected: savepoints bound a rollback
+  inside one transaction, but the requirement is to *commit* completed work so
+  it survives a killed worker. Per-batch commit is the correct primitive.
+
+**Decision.** `delete_expired_rows` composes `frappe.get_all` (select a bounded
+page of names, oldest first) with `frappe.db.delete` (delete exactly that page)
+and commits per batch. Defaults: 500 rows per batch, 20,000 per DocType per
+run. Ordering by `creation asc` makes progress monotonic; the per-run ceiling
+means the scheduler drains a backlog over several runs instead of one long
+transaction. A failing DocType is logged and skipped so one bad table cannot
+block retention for the others.
+
+**Why this is not duplicating the framework.** No Frappe API performs batched,
+committed, resumable retention. This is ~30 lines composing two native calls;
+it introduces no scheduler, no queue, no cursor table, and no state of its own.
+The continuation point is simply "rows still older than the cutoff", which the
+next scheduled run rediscovers with the same query.
+
+**Consequence.** Retention is bounded in memory and lock duration, and survives
+worker restarts. A run that hits its ceiling logs that fact rather than
+appearing to have finished. `backup_knowledge` is *not* covered by this change
+and remains unbounded (OPS-06 stays open for that half).

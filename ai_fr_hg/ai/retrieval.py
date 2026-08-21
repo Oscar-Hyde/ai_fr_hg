@@ -23,6 +23,7 @@ Reranking remains intentionally unsupported (ADR-004).
 
 from __future__ import annotations
 
+import json
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -61,6 +62,13 @@ class RetrievedChunk:
 	language: str | None = None
 	token_count: int = 0
 	embedding_model: str | None = None
+	#: Extraction origin, so a retrieved answer can be traced back to the
+	#: reader and extractor version that produced the text it quotes.
+	reader_used: str | None = None
+	extractor_version: dict = field(default_factory=dict)
+	extracted_on: str | None = None
+	#: Which retrieval path surfaced this chunk: semantic, keyword, or both.
+	retrieval_method: str = "unknown"
 
 	def as_dict(self) -> dict:
 		return {
@@ -77,6 +85,10 @@ class RetrievedChunk:
 			"language": self.language,
 			"token_count": self.token_count,
 			"embedding_model": self.embedding_model,
+			"reader_used": self.reader_used,
+			"extractor_version": self.extractor_version,
+			"extracted_on": self.extracted_on,
+			"retrieval_method": self.retrieval_method,
 		}
 
 
@@ -836,7 +848,9 @@ def _hydrate(ordered, semantic, keyword) -> list[RetrievedChunk]:
 		for row in frappe.get_all(
 			"AI Document",
 			filters={"name": ["in", list({r.document for r in rows.values()})]},
-			fields=["name", "title", "language"],
+			# reader_used and extraction_evidence carry the extraction origin
+			# and version that produced this text.
+			fields=["name", "title", "language", "reader_used", "extraction_evidence"],
 		)
 	}
 
@@ -846,6 +860,7 @@ def _hydrate(ordered, semantic, keyword) -> list[RetrievedChunk]:
 		if not row:
 			continue
 		meta = titles.get(row.document)
+		versions, extracted_on = _extraction_provenance(meta)
 		results.append(
 			RetrievedChunk(
 				chunk=name,
@@ -861,9 +876,48 @@ def _hydrate(ordered, semantic, keyword) -> list[RetrievedChunk]:
 				language=resolve_document_language(meta.language if meta else None, row.content) or None,
 				token_count=cint(row.token_count) or estimate_tokens(row.content or ""),
 				embedding_model=row.embedding_model,
+				reader_used=(meta.reader_used if meta else None) or None,
+				extractor_version=versions,
+				extracted_on=extracted_on,
+				retrieval_method=_retrieval_method(name, semantic, keyword),
 			)
 		)
 	return results
+
+
+def _retrieval_method(name: str, semantic: dict, keyword: dict) -> str:
+	"""Which path surfaced this chunk. Part of the §13.3 traceability contract."""
+	in_semantic = name in semantic
+	in_keyword = name in keyword
+	if in_semantic and in_keyword:
+		return "hybrid"
+	if in_semantic:
+		return "semantic"
+	if in_keyword:
+		return "keyword"
+	return "unknown"
+
+
+def _extraction_provenance(meta) -> tuple[dict, str | None]:
+	"""Read the extractor version and timestamp from stored evidence.
+
+	Never raises: a malformed or legacy evidence blob degrades to empty
+	provenance rather than failing a search.
+	"""
+	if not meta:
+		return {}, None
+	raw = getattr(meta, "extraction_evidence", None)
+	if not raw:
+		return {}, None
+	try:
+		evidence = json.loads(raw) if isinstance(raw, str) else raw
+	except (ValueError, TypeError):
+		return {}, None
+	if not isinstance(evidence, dict):
+		return {}, None
+	versions = evidence.get("versions")
+	extracted_on = evidence.get("extracted_on")
+	return (versions if isinstance(versions, dict) else {}), (extracted_on or None)
 
 
 def _log_search(query, targets, search_type, results, started) -> None:

@@ -394,6 +394,16 @@ def run_agent_turn(
 			"agent": agent_doc.name,
 			"model": model_doc.name,
 			"citations": [],
+			# The fallback is the agent's own configured text, not a model
+			# answer and not a sourced one. Naming that basis explicitly keeps
+			# a canned reply from looking like a grounded result.
+			"grounding": {
+				"has_context": False,
+				"citation_count": 0,
+				"strict": True,
+				"knowledge_enabled": bool(agent_doc.use_knowledge),
+				"basis": "fallback",
+			},
 			"tool_invocations": [],
 			"timed_out": False,
 			"cancelled": False,
@@ -632,6 +642,19 @@ def run_agent_turn(
 		"agent": agent_doc.name,
 		"model": model_doc.name,
 		"citations": citations,
+		# §15.3: a consumer must be able to tell source-derived information from
+		# model interpretation. Citations alone do not say this -- an answer can
+		# be produced with no retrieved context at all. `grounding` states what
+		# actually backed this specific reply.
+		"grounding": {
+			"has_context": bool((context or "").strip()),
+			"citation_count": len(citations),
+			"strict": bool(agent_doc.strict_grounding),
+			"knowledge_enabled": bool(agent_doc.use_knowledge),
+			# "unsupported" means the model answered from its own parameters:
+			# nothing in this application's corpus backs the statement.
+			"basis": "sources" if citations else "unsupported",
+		},
 		"tool_invocations": tool_invocations,
 		"timed_out": timed_out,
 		"cancelled": cancelled,

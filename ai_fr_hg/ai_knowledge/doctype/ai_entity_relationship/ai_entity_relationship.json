@@ -25,7 +25,8 @@
   "first_offset",
   "model_used",
   "scan_sec",
-  "source_checksum"
+  "source_checksum",
+  "last_scanned_on"
  ],
  "fields": [
   {
@@ -160,6 +161,13 @@
    "label": "Source Checksum",
    "read_only": 1,
    "search_index": 1
+  },
+  {
+   "description": "When this relationship was last confirmed by a scan.",
+   "fieldname": "last_scanned_on",
+   "fieldtype": "Datetime",
+   "label": "Last Scanned On",
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,
