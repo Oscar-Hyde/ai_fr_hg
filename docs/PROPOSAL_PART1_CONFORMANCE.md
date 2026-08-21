@@ -5,7 +5,11 @@
 **Codebase reviewed:** branch `arena/01a024b6-ai-fr-hg`, from `7abc3c9`
 **Method:** clause-by-clause reading of the proposal against source, DocType JSON, and the existing audit artifacts (`DEVELOPMENT_PLAN.md`, `GAP_REGISTER.md`, `ARCHITECTURE_DECISIONS.md`).
 
-**Status of this document:** assessment only. No code has been changed. Part 1 defines Domains 1–5 but only specifies Domain 1 (File Intelligence) in requirement detail; Domains 2–5 are named and are deferred to Part 2. This document therefore scopes to §6–§12.
+**Status of this document:** **superseded by execution.** This was written as a pre-implementation assessment; the directive that followed instructed that every gap be treated as an implementation task. All 15 findings below (P1-01…P1-15) have since been implemented, tested, and closed — see [`GAP_REGISTER.md`](GAP_REGISTER.md) for the disposition table with evidence, and the "Part 1 File Intelligence directive" section of [`PROJECT_STATUS.md`](PROJECT_STATUS.md) for the before/after summary.
+
+The analysis is retained unedited below because it records *why* each change was made and which alternatives were rejected. Where it says "decision required" or "deferred", that decision has now been made and recorded as ADR-011, ADR-012, or ADR-013.
+
+Part 1 defines Domains 1–5 but only specifies Domain 1 (File Intelligence) in requirement detail; Domains 2–5 are named and await Part 2. This document therefore scopes to §6–§12.
 
 ---
 
@@ -235,9 +239,34 @@ P1-01 through P1-08 and P1-15 are mechanical and carry no architectural risk. P1
 
 ---
 
-## 7. Awaiting Part 2
+## 7. Execution outcome
 
-Part 2 is expected to cover retrieval, AI capabilities, chat/agents, model management, Frappe architecture, security, jobs, monitoring, testing, phasing, milestones, and acceptance criteria. Two Part 1 items should be held open until then:
+Every finding in §6 was executed rather than deferred. Summary of what changed:
 
-- **The entity model (P1-13, P1-14)** — Domain 2 (knowledge representation, contextual linking, knowledge relationships) will constrain the relationship schema. Designing it against Part 1 alone risks rework.
-- **Deterministic-output carve-out (§8)** — if semantic extraction is LLM-based, §8's determinism requirement needs an explicit exception that Part 2's testing strategy must accommodate.
+| ID | Outcome |
+| --- | --- |
+| P1-01, P1-02 | `extracted_on` + `versions` triple; §8 contract now 6 of 6 |
+| P1-03 | XLSX/ODS formulas preserved; uncached values detected and warned |
+| P1-04 | PPTX pictures/charts/OLE/media recorded |
+| P1-05 | Threading headers + normalized thread block |
+| P1-06 | OCR per-word confidence via `image_to_data` |
+| P1-07 | Provenance immutability enforced in `validate()` |
+| P1-08, P1-09 | `CodeReader`: 40+ languages, Python via `ast`, fidelity declared |
+| P1-10, P1-15 | ADR-012 / ADR-013: scoped with reasons, not silently skipped |
+| P1-11 | `ArchiveReader` + cumulative `ArchiveBudget` |
+| P1-12 | Email attachment content extracted |
+| P1-13, P1-14 | `ai.semantic` + `AI Entity Relationship`, mechanically grounded |
+
+Two things worth flagging that emerged **during** implementation rather than analysis:
+
+- **A permission gap I nearly shipped.** `AI Entity Relationship` initially had no `permission_query_conditions` entry, which would have leaked relationships across knowledge bases. Caught before commit and closed with an isolation contract test.
+- **A latent robustness bug.** `get_readers()` raised `AttributeError` when `frappe` existed without a hook registry. Fixing it also resolved four *pre-existing* `test_document_tree_units` failures that were present at the base commit.
+
+## 8. Awaiting Part 2
+
+Part 2 is expected to cover retrieval, AI capabilities, chat/agents, model management, Frappe architecture, security, jobs, monitoring, testing, phasing, milestones, and acceptance criteria. Two Part 1 outcomes will need revisiting against it:
+
+- **The relationship schema.** Built now with a closed predicate vocabulary and mandatory evidence. Domain 2 (knowledge representation, contextual linking) may require additional predicates or a graph traversal API; the vocabulary is intentionally easy to extend.
+- **The determinism carve-out.** ADR-011 excludes semantic extraction from §8's "deterministic where possible" clause, substituting grounding, confidence, and evidence. Part 2's testing strategy must accommodate a layer whose output varies between runs.
+
+**Remaining Part 1 scope that genuinely requires a bench or browser:** semantic persistence round-trips, OCR against a real Tesseract runtime, provenance immutability under concurrent saves, and archive ingestion through the full worker path. These are Phase 7 qualification items, not gaps in the implementation.
