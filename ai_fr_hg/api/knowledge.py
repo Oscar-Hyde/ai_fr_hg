@@ -366,6 +366,7 @@ def get_document_warnings(document: str) -> dict:
 	return {"document": document, "warnings": warnings, "status": doc.status, "reader_used": doc.reader_used}
 
 
+@frappe.whitelist()
 def scan_pattern_entities(document: str) -> dict:
 	"""Extract high-precision pattern entities from a document's stored content.
 

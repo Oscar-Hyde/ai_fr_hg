@@ -44,7 +44,6 @@ from frappe.utils import cint, flt, now_datetime
 from ai_fr_hg.ai.deadline import get_deadline
 from ai_fr_hg.ai.engine import resolve_model, run_chat
 from ai_fr_hg.ai.exceptions import DeadlineExceededError
-from ai_fr_hg.utils.authority import as_user, assert_valid_authority
 from ai_fr_hg.ai.language import detect_languages
 from ai_fr_hg.ai.translation_utils import (
 	DEFAULT_SEGMENT_CHARACTERS,
@@ -76,6 +75,7 @@ from ai_fr_hg.ai.translation_utils import (
 	summarise_issues,
 	text_direction,
 )
+from ai_fr_hg.utils.authority import as_user, assert_valid_authority
 
 #: A translation call needs at least this much of the remaining turn budget.
 MIN_CALL_SECONDS = 8.0
@@ -712,11 +712,13 @@ def verify_by_back_translation(
 	)
 
 	checked: list[dict] = []
+	tokens_used = 0
 	for segment in sample:
 		try:
-			content, _tokens = _call_model(
+			content, used = _call_model(
 				reverse_prompt, build_single_prompt(segment.translated), model_doc, None, None
 			)
+			tokens_used += used
 			vectors = run_embedding([segment.source, strip_model_preamble(content)], operation="Embedding")
 			if len(vectors) != 2:
 				continue
@@ -725,7 +727,7 @@ def verify_by_back_translation(
 			frappe.log_error(title="AI translation verification", message=str(error))
 			continue
 
-		checked.append({"segment": segment.index, "similarity": similarity})
+		checked.append({"segment": segment.index, "similarity": similarity, "tokens": used})
 		if similarity < 0.75:
 			segment.status = "Flagged"
 			message = _("Back-translation similarity is only {0}.").format(similarity)
@@ -733,11 +735,16 @@ def verify_by_back_translation(
 				segment.issues.append(message)
 
 	if not checked:
-		return {}
+		return {
+			"sampled": 0,
+			"tokens": tokens_used,
+			"issues": ["verification produced no comparable samples"],
+		}
 	return {
 		"sampled": len(checked),
 		"mean_similarity": round(sum(item["similarity"] for item in checked) / len(checked), 4),
 		"segments": checked,
+		"tokens": tokens_used,
 	}
 
 
@@ -904,7 +911,12 @@ def _run_translation(doc, *, durable: bool) -> dict:
 	from ai_fr_hg.ai.logging import write_audit_log
 
 	doc.db_set(
-		{"status": "Translating", "error_message": None, "processing_message": "Translating", "processing_progress": 1},
+		{
+			"status": "Translating",
+			"error_message": None,
+			"processing_message": "Translating",
+			"processing_progress": 1,
+		},
 		update_modified=False,
 	)
 	source_text = doc.source_text or frappe.db.get_value("AI Document", doc.source_document, "content")

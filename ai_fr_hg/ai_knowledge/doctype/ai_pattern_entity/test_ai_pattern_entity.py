@@ -138,6 +138,22 @@ class TestPatternEntityScan(AIPlatformTestCase):
 		self.assertTrue(has_document_permission(row, "read", user="someone@example.com"))
 		self.assertFalse(has_document_permission(row, "write", user="someone@example.com"))
 
+	def test_explorer_lists_across_documents_with_pagination(self):
+		from ai_fr_hg.api.knowledge import explore_pattern_entities
+		from ai_fr_hg.ai.patterns import scan_document
+
+		first = self.make_document("Explorer One", ENTITY_CONTENT)
+		second = self.make_document("Explorer Two", "Contact zed@corp.example about INV-2099-0001.")
+		scan_document(first.name)
+		scan_document(second.name)
+		page = explore_pattern_entities(limit=2, offset=0)
+		self.assertEqual(page["limit"], 2)
+		self.assertEqual(len(page["entities"]), 2)
+		self.assertTrue(page["entity_counts"])
+		emails = explore_pattern_entities(entity_type="email", limit=50, offset=0)
+		self.assertTrue(emails["entities"])
+		self.assertTrue({row["entity_type"] for row in emails["entities"]} <= {"email"})
+
 	def test_api_scan_and_listing(self):
 		from ai_fr_hg.api.knowledge import get_pattern_entities, scan_pattern_entities
 

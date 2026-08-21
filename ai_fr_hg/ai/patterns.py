@@ -196,7 +196,8 @@ def _passes_semantic_check(entity_type: str, value: str) -> bool:
 	if entity_type == "ip":
 		return _is_valid_ipv4(value)
 	if entity_type == "date":
-		return bool(_to_iso_date(" ".join((value or "").strip().casefold().split())) or _to_iso_date(value.strip()))
+		cleaned = " ".join((value or "").strip().split())
+		return bool(_to_iso_date(cleaned.casefold()) or _MONTH_DATE_RE.match(cleaned))
 	if entity_type == "money":
 		return _is_valid_money(value)
 	return True
@@ -245,6 +246,24 @@ def _guard_passes(entity_type: str, scan_text: str, folded: str) -> bool:
 			sign in scan_text for sign in _CURRENCY_SIGNS
 		)
 	return True
+
+
+def _scan_window(text: str):
+	"""Head+tail sample with a mapper from scan offsets back to source offsets."""
+	if len(text) <= MAX_SCAN_CHARS:
+		return text, lambda pos: pos
+	half = MAX_SCAN_CHARS // 2
+	tail_start = len(text) - half
+	scan = text[:half] + "\n" + text[tail_start:]
+
+	def to_source(pos: int) -> int:
+		if pos < half:
+			return pos
+		if pos == half:
+			return half
+		return tail_start + (pos - half - 1)
+
+	return scan, to_source
 
 
 def extract_pattern_entities(text: str, max_entities: int = DEFAULT_MAX_PATTERN_ENTITIES) -> list[dict]:
@@ -464,6 +483,58 @@ def _was_scanned(document: str, checksum: str) -> bool:
 		return False
 
 
+def list_pattern_entities(
+	*,
+	knowledge_base: str | None = None,
+	entity_type: str | None = None,
+	document: str | None = None,
+	limit: int = 50,
+	offset: int = 0,
+) -> dict:
+	"""Permission-aware explorer listing. Uses Frappe get_list row filters."""
+	filters: dict = {}
+	if knowledge_base:
+		filters["knowledge_base"] = knowledge_base
+	if entity_type:
+		filters["entity_type"] = entity_type
+	if document:
+		filters["document"] = document
+	page = max(1, min(cint(limit) or 50, 200))
+	start = max(0, cint(offset))
+	rows = frappe.get_list(
+		"AI Pattern Entity",
+		filters=filters,
+		fields=[
+			"name",
+			"document",
+			"knowledge_base",
+			"entity_type",
+			"value",
+			"normalized_value",
+			"occurrences",
+			"first_offset",
+			"context_quote",
+		],
+		order_by="occurrences desc, modified desc",
+		limit=page,
+		start=start,
+	)
+	counts = frappe.get_list(
+		"AI Pattern Entity",
+		filters=filters,
+		fields=["entity_type", {"COUNT": "*", "as": "total"}],
+		group_by="entity_type",
+		order_by="total desc",
+	)
+	return {
+		"entities": rows,
+		"offset": start,
+		"limit": page,
+		"count": len(rows),
+		"entity_counts": {row.entity_type: cint(row.total) for row in counts},
+	}
+
+
 def scan_pending_documents(limit: int = _SCHEDULER_BATCH) -> list[dict]:
 	"""Scan indexed documents whose stored content has not been scanned yet.
 
@@ -476,6 +547,7 @@ def scan_pending_documents(limit: int = _SCHEDULER_BATCH) -> list[dict]:
 		from `tabAI Document` doc
 		where doc.status = 'Indexed'
 		  and ifnull(doc.content, '') != ''
+		  and ifnull(doc.pattern_scan_checksum, '') != ifnull(doc.checksum, '')
 		  and not exists (
 			select 1 from `tabAI Pattern Entity` pe
 			where pe.document = doc.name and pe.source_checksum = ifnull(doc.checksum, '')
