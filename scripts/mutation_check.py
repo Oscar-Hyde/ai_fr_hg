@@ -237,6 +237,28 @@ MUTATIONS: list[Mutation] = [
 		breaks="Evidence must record when extraction ran.",
 	),
 	# -- formula preservation (§6.2) --------------------------------------
+	# -- URL ingestion gate (SEC-04 application layer) --------------------
+	Mutation(
+		name="fetch-url-allows-embedded-credentials",
+		path="ai_fr_hg/ai/ingestion.py",
+		old='raise DocumentFetchError(_("Source URLs must not contain embedded credentials."))',
+		new="pass",
+		breaks="A URL carrying credentials is fetched, leaking them to the peer.",
+	),
+	Mutation(
+		name="fetch-url-skips-ssrf-check",
+		path="ai_fr_hg/ai/ingestion.py",
+		old='enforce_local_only(url, _("Document source URL"))',
+		new="pass",
+		breaks="The SSRF gate is skipped; only the transport layer would refuse.",
+	),
+	Mutation(
+		name="fetch-url-ignores-host-allowlist",
+		path="ai_fr_hg/ai/ingestion.py",
+		old="if not _is_manager(user) and parsed.hostname.lower() not in get_allowed_hosts():",
+		new="if False and parsed.hostname.lower() not in get_allowed_hosts():",
+		breaks="A non-manager may fetch any host, not just the allowlisted ones.",
+	),
 	# -- pipeline step configuration contract (PIPE-04) -------------------
 	Mutation(
 		name="step-config-types-unenforced",
@@ -393,9 +415,13 @@ def run_suite() -> bool:
 			"--no-header",
 			"-p",
 			"no:cacheprovider",
+			# These seven genuinely require a live bench (they import frappe at
+			# module scope and hit a real site). test_netguard_units.py used to
+			# be listed here too, but it is bench-free -- it stands up a real
+			# loopback HTTP/TLS server -- and excluding it meant SEC-04's only
+			# evidence never ran outside the CI bench job.
 			"--ignore=ai_fr_hg/tests/test_units.py",
 			"--ignore=ai_fr_hg/tests/test_pattern_units.py",
-			"--ignore=ai_fr_hg/tests/test_netguard_units.py",
 			"--ignore=ai_fr_hg/tests/test_api_validation_units.py",
 			"--ignore=ai_fr_hg/tests/test_int02_validation.py",
 			"--ignore=ai_fr_hg/tests/test_int03_hierarchical.py",

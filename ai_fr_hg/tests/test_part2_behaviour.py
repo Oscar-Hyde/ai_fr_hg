@@ -21,6 +21,7 @@ isolation levels, index usage, or migrations — that remains bench work.
 from __future__ import annotations
 
 import json
+import types
 from pathlib import Path
 from unittest import TestCase
 
@@ -1435,3 +1436,107 @@ class TestPipelineStepConfigContract(TestCase):
 		with self.assertRaises(PipelineError):
 			module.validate_step_config("Nonexistent", json.dumps(["still-not-an-object"]))
 		self.assertEqual(module.validate_step_config("Nonexistent", json.dumps({"x": 1})), {"x": 1})
+
+
+class TestUrlIngestionGate(TestCase):
+	"""SEC-04 re-audit: the 17 cited tests never touch this function.
+
+	SEC-04 is closed on "17 runtime tests against a real loopback HTTP/TLS
+	server". Those tests are real and good, but they exercise
+	`utils/netguard.py` — the transport: pinned dial, redirect refusal, DNS
+	rebinding, peer revalidation. The *application's* URL gate,
+	`ingestion._validate_fetch_url`, is never called by any of them.
+
+	Deleting the embedded-credentials check and the `enforce_local_only` call
+	both left all 17 passing. These tests close that gap: they assert the
+	policy decisions the gate makes before a socket is ever opened.
+	"""
+
+	def _gate(self, *, user="alice@example.com", roles=(), allowed_hosts=(), enabled=1):
+		bench = install(FakeBench())
+		bench.register_doctype("User", ["enabled"])
+		bench.db.insert_row("User", {"name": user, "enabled": enabled})
+		bench.db.insert_row("User", {"name": "Administrator", "enabled": 1})
+		bench.roles[user] = list(roles)
+		bench.session.user = user
+
+		module = import_app("ai_fr_hg.ai.ingestion")
+		# Isolate the gate's own policy from the transport layer and from DNS.
+		# The netguard suite already covers resolution and dialling against a
+		# live server; what is untested is the policy this function applies
+		# before any socket is opened.
+		module.get_allowed_hosts = lambda: set(allowed_hosts)
+		module.enforce_local_only = lambda url, label: None
+		module.socket = types.SimpleNamespace(
+			getaddrinfo=lambda host, port: [(2, 1, 6, "", ("203.0.113.1", port))]
+		)
+		return bench, module
+
+	def _reject(self, module, url, user=None):
+		with self.assertRaises(module.DocumentFetchError):
+			module._validate_fetch_url(url, user)
+
+	def test_embedded_credentials_are_refused(self):
+		"""A URL carrying credentials must never be fetched."""
+		_, module = self._gate(roles=["System Manager"])
+
+		self._reject(module, "https://user:pass@example.com/doc.pdf")
+
+	def test_non_http_schemes_are_refused(self):
+		_, module = self._gate(roles=["System Manager"])
+
+		for url in (
+			"file:///etc/passwd",
+			"ftp://example.com/doc.pdf",
+			"gopher://example.com/",
+			"data:text/plain;base64,AAAA",
+		):
+			self._reject(module, url)
+
+	def test_relative_and_empty_urls_are_refused(self):
+		_, module = self._gate(roles=["System Manager"])
+
+		for url in ("", None, "/local/path", "notaurl"):
+			self._reject(module, url)
+
+	def test_non_manager_is_confined_to_the_allowlist(self):
+		"""The allowlist is the whole authorization boundary for normal users."""
+		_, module = self._gate(roles=[], allowed_hosts={"trusted.example.com"})
+
+		self._reject(module, "https://evil.example.com/doc.pdf")
+		# The permitted host passes the policy gate.
+		module._validate_fetch_url("https://trusted.example.com/doc.pdf")
+
+	def test_manager_is_not_confined_to_the_allowlist(self):
+		_, module = self._gate(roles=["AI Manager"], allowed_hosts=set())
+
+		module._validate_fetch_url("https://anywhere.example.com/doc.pdf")
+
+	def test_allowlist_match_is_case_insensitive_on_host_only(self):
+		_, module = self._gate(roles=[], allowed_hosts={"trusted.example.com"})
+
+		module._validate_fetch_url("https://TRUSTED.example.com/doc.pdf")
+		# A lookalike host that merely contains the allowed name is refused.
+		self._reject(module, "https://trusted.example.com.evil.net/doc.pdf")
+
+	def test_guest_and_disabled_users_cannot_fetch(self):
+		_, module = self._gate(roles=["System Manager"])
+		with self.assertRaises(module.DocumentSourcePermissionError):
+			module._validate_fetch_url("https://example.com/d.pdf", "Guest")
+
+		_, module = self._gate(user="dormant@example.com", roles=["System Manager"], enabled=0)
+		with self.assertRaises(module.DocumentSourcePermissionError):
+			module._validate_fetch_url("https://example.com/d.pdf", "dormant@example.com")
+
+	def test_local_only_enforcement_is_invoked(self):
+		"""The gate must delegate to the SSRF check, not just resolve DNS."""
+		_, module = self._gate(roles=["System Manager"])
+		calls = []
+
+		def record(url, label):
+			calls.append(url)
+
+		module.enforce_local_only = record
+		module._validate_fetch_url("https://example.com/doc.pdf")
+
+		self.assertEqual(calls, ["https://example.com/doc.pdf"])

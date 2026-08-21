@@ -536,6 +536,31 @@ class FakeBench:
 			return [_Row({f: row.get(f) for f in plain}) for row in allowed]
 		return allowed
 
+	def get_roles(self, user=None):
+		"""Roles for a user, from `bench.roles`.
+
+		Frappe always includes the implicit roles, and Administrator holds
+		every role. `bench.roles` existed but nothing exposed it, so any code
+		branching on roles silently hit an AttributeError instead of being
+		tested.
+		"""
+		user = user or self.session.user
+		if user == "Guest":
+			return ["Guest"]
+		roles = list(self.roles.get(user, []))
+		if user == "Administrator":
+			roles = sorted({*roles, "Administrator", "System Manager"})
+		return [*roles, "All"]
+
+	def only_for(self, roles, message=False):
+		"""Raise unless the session user holds one of `roles`."""
+		if isinstance(roles, str):
+			roles = (roles,)
+		if self.session.user == "Administrator":
+			return
+		if not set(roles).intersection(self.get_roles(self.session.user)):
+			raise PermissionError_(f"Not permitted; requires one of {sorted(roles)}")
+
 	def has_permission(self, doctype, ptype="read", doc=None, user=None, throw=False):
 		hook = self.permission_hooks.get(doctype)
 		allowed = True
@@ -652,6 +677,8 @@ class FakeBench:
 			"get_all",
 			"get_list",
 			"has_permission",
+			"get_roles",
+			"only_for",
 			"throw",
 			"log_error",
 			"get_traceback",
