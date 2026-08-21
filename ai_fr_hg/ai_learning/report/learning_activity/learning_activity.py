@@ -6,10 +6,33 @@ from __future__ import annotations
 import frappe
 from frappe import _
 
+from ai_fr_hg.ai.learning_utils import REPORT_ROW_LIMIT, normalise_report_filters
+
+
+def _authorise(ref_doctype: str) -> None:
+	"""Service-layer authorization, not only the Report wrapper's role check.
+
+	Frappe checks the Report's roles before calling ``execute``. This repeats
+	the check against the referenced DocType so the function is safe if it is
+	ever invoked directly (background job, another report, a test).
+	"""
+	if not frappe.has_permission(ref_doctype, "report"):
+		frappe.throw(
+			_("You are not permitted to run reports on {0}.").format(_(ref_doctype)),
+			frappe.PermissionError,
+		)
+
 
 def execute(filters: dict | None = None) -> tuple[list, list]:
-	"""Learning Activity report showing candidate lifecycle information."""
-	filters = filters or {}
+	"""Learning Activity report showing candidate lifecycle information.
+
+	LEARN-01: this is a **Script Report**. It used to be registered as a Query
+	Report with static SQL, so Frappe ran the SQL and never called this
+	function - every filter in the sidebar was inert. Filters are validated
+	against a declared contract before they reach the query builder.
+	"""
+	_authorise("AI Knowledge Candidate")
+	filters = normalise_report_filters("Learning Activity", filters)
 	candidate = frappe.qb.DocType("AI Knowledge Candidate")
 	query = (
 		frappe.qb.from_(candidate)
@@ -30,7 +53,7 @@ def execute(filters: dict | None = None) -> tuple[list, list]:
 			candidate.approved_by.as_("Approved By"),
 		)
 		.orderby(candidate.creation, order=frappe.qb.desc)
-		.limit(500)
+		.limit(REPORT_ROW_LIMIT)
 	)
 	if filters.get("status"):
 		query = query.where(candidate.status == filters["status"])

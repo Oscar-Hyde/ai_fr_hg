@@ -5,12 +5,31 @@ from __future__ import annotations
 
 import frappe
 from frappe import _
-from frappe.utils import cint
+
+from ai_fr_hg.ai.learning_utils import REPORT_ROW_LIMIT, normalise_report_filters
+
+
+def _authorise(ref_doctype: str) -> None:
+	"""Service-layer authorization, not only the Report wrapper's role check.
+
+	Frappe checks the Report's roles before calling ``execute``. This repeats
+	the check against the referenced DocType so the function is safe if it is
+	ever invoked directly (background job, another report, a test).
+	"""
+	if not frappe.has_permission(ref_doctype, "report"):
+		frappe.throw(
+			_("You are not permitted to run reports on {0}.").format(_(ref_doctype)),
+			frappe.PermissionError,
+		)
 
 
 def execute(filters: dict | None = None) -> tuple[list, list]:
-	"""Skill Summary report showing all learned procedures."""
-	filters = filters or {}
+	"""Skill Summary report showing all learned procedures.
+
+	LEARN-01: registered as a Script Report so these filters actually run.
+	"""
+	_authorise("AI Skill")
+	filters = normalise_report_filters("Skill Summary", filters)
 	skill = frappe.qb.DocType("AI Skill")
 	query = (
 		frappe.qb.from_(skill)
@@ -29,12 +48,12 @@ def execute(filters: dict | None = None) -> tuple[list, list]:
 		)
 		.orderby(skill.usage_count, order=frappe.qb.desc)
 		.orderby(skill.creation, order=frappe.qb.desc)
-		.limit(500)
+		.limit(REPORT_ROW_LIMIT)
 	)
 	if filters.get("skill_type"):
 		query = query.where(skill.skill_type == filters["skill_type"])
 	if filters.get("enabled") is not None:
-		query = query.where(skill.enabled == cint(filters["enabled"]))
+		query = query.where(skill.enabled == filters["enabled"])
 	if filters.get("scope"):
 		query = query.where(skill.scope == filters["scope"])
 

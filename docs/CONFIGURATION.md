@@ -175,12 +175,50 @@ or a single user:
 
 - Requests per hour, tokens per day, and documents per day
 - Capability flags: tools, document upload, pipeline execution, model management
-- A declared concurrent-request value that is **not yet enforced** (GOV-01)
+- **Max Concurrent Requests** — enforced (GOV-01)
 
 Resolution order: a policy naming the user beats a policy naming one of their
 roles; among equals the lowest `priority` wins; if nothing matches, the global
-settings apply. Administrator bypasses current checks. Quota reservation and
-distributed concurrency/rate enforcement remain Phase 6 work.
+settings apply. Administrator bypasses policy enforcement.
+
+### Enforced runtime limits
+
+| Control | Where | Behaviour |
+| --- | --- | --- |
+| `AI Resource Policy.max_concurrent_requests` | per user | Held for the whole request, across failover. Exceeding it fails the call with a named policy error. |
+| `AI Provider.max_concurrent_requests` | per provider | Held per attempt. A saturated provider causes failover to the next equivalent target rather than an outright failure. |
+| `AI Model.max_concurrent_requests` | per model | Held per attempt, same failover behaviour. |
+| `AI Provider.rate_limit_per_minute` | per provider | Sliding 60-second window. The rejection carries the measured retry delay. |
+| `Max Requests Per User Per Hour` / `Max Tokens Per User Per Day` | per user | **Reserved** before the call, not counted after it. The reservation holds the request plus the call's `max_tokens` ceiling, and is released only once the execution log and usage snapshot are written. |
+
+`0` means unlimited for every control above.
+
+Concurrency slots, rate windows and quota reservations are Redis structures
+carrying a TTL bounded by **Request Timeout (s)**. A worker that is killed
+mid-call therefore releases its slot automatically; nothing needs sweeping.
+Reservations are deliberately counted twice for the short moment between the
+usage being committed to the database and the reservation being released —
+over-counting briefly is the safe direction for a limit.
+
+If Redis is unreachable the platform is already degraded (Frappe's own cache,
+queue and realtime depend on it). Admission control then logs once per hour and
+allows the call, and quota falls back to the committed-usage comparison. See
+ADR-009.
+
+### Model capabilities
+
+`Supports Tool Calling`, `Supports Streaming`, `Supports JSON Mode` and
+`Supports Vision` on **AI Model** are enforced (PROV-02). A request is refused
+before the runtime is contacted when the model does not declare the capability
+it needs; streaming is the exception and degrades to a blocking call. The
+effective capability is the provider adapter's transport capability AND the
+model's declaration AND the last runtime probe — a runtime that explicitly
+refuses a capability is remembered for an hour.
+
+Model discovery seeds these flags from what the adapter can transport, and the
+Phase 6 migration backfills existing records the same way, so enabling
+enforcement does not disable anything that previously worked. Clearing a flag
+is how an operator imposes a restriction.
 
 Installation seeds a `Standard AI User` policy: 200 requests/hour,
 500k tokens/day, 100 documents/day, tools and uploads allowed, pipelines and

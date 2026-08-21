@@ -38,6 +38,9 @@ class OpenAICompatibleProvider(BaseProvider):
 	supports_tools = True
 	supports_embeddings = True
 	supports_model_pull = False
+	# `response_format` carries the schema; images are sent as content parts.
+	supports_json_mode = True
+	supports_vision = True
 
 	#: Some runtimes are served at the root, others under /v1.
 	def url(self, path: str) -> str:

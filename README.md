@@ -2,11 +2,13 @@
 
 A feature-rich, local-first enterprise AI platform, built as a native Frappe app.
 
-> **Project status:** technical beta, not production-ready. Phases 0–3 closed
+> **Project status:** technical beta, not production-ready. Phases 0–5 closed
 > isolation, API bounds, connection-level provider transport, retrieval
-> correctness, and conversation/turn contracts on the pinned Frappe v17 bench.
-> Ingestion/translation cancellation, automation state machines, governance
-> enforcement, browser E2E, load, upgrade, and restore qualification remain.
+> correctness, conversation/turn contracts, ingestion and translation
+> completion, and the automation/pipeline/task state machines on the pinned
+> Frappe v17 bench. Phase 6 has closed governance and provider enforcement;
+> operations dashboards, backup/restore, and the learning lifecycle are still
+> open, as are browser E2E, load, upgrade, and restore qualification.
 > See the [audited project status](docs/PROJECT_STATUS.md), [controlled gap register](docs/GAP_REGISTER.md),
 > and [completion roadmap](docs/DEVELOPMENT_PLAN.md) before any deployment.
 
@@ -34,7 +36,7 @@ explicit human or operator concerns.
 | **Knowledge & search** | Hybrid retrieval (dense vectors + keyword, fused with RRF) scans every eligible chunk, groups mixed embedding models, and applies per-KB top-k, threshold and weight. A configurable brute-force ceiling flags large corpora as degraded without dropping results. Reranking is not implemented. |
 | **Conversational AI** | Multi-session chat with retrieval grounding, inline/footnote citations, tool calling, latest-N history, turn identity, cooperative cancel/reconnect, and conversation rename/pin/archive/export. Browser E2E remains Phase 7. |
 | **Automation** | Event rules use immutable snapshots (including delete), atomic counters, and revision-aware dedupe. Pipelines support API/ingest/schedule triggers, atomic schedule claims, and Waiting Approval resume. AI Task types and server-authorized approval transitions are enforced. Browser E2E remains Phase 7. |
-| **Governance** | Quota checks, capability gates, prompt redaction, write-tool approvals, and audit records exist. Distributed concurrency/rate enforcement, quota reservations, and complete trace linkage remain open. |
+| **Governance** | User/provider/model concurrency limits, provider rate limits, and reservation-based quotas are enforced through Redis-backed admission control. Model type and capability are validated before a runtime is contacted, and failover selects an equivalent model on the target provider. Operations dashboards, backup/restore, learning lifecycle, and complete trace linkage remain open (Phase 6 part B). |
 | **Extensibility** | Three hooks — `ai_providers`, `ai_document_readers`, `ai_tools` — let any app add runtimes, formats and tools without touching this one. |
 
 ---

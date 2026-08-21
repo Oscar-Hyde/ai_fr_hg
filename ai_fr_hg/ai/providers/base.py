@@ -113,11 +113,19 @@ class BaseProvider:
 	and :meth:`health_check`. Everything else has a working default.
 	"""
 
+	#: Transport-level capabilities of the adapter itself (PROV-02). These say
+	#: what this class knows how to *send*, not what any particular model can
+	#: do. Effective capability is this AND the AI Model declaration AND the
+	#: last runtime probe - see :mod:`ai_fr_hg.ai.capability`.
 	provider_type: str = "Custom"
 	supports_streaming: bool = True
 	supports_tools: bool = False
 	supports_embeddings: bool = True
 	supports_model_pull: bool = False
+	#: Whether the adapter can ask the runtime for schema-constrained JSON.
+	supports_json_mode: bool = False
+	#: Whether the adapter serialises `ChatMessage.images` onto the wire.
+	supports_vision: bool = False
 
 	def __init__(self, provider_doc):
 		self.doc = provider_doc

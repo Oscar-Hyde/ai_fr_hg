@@ -38,7 +38,12 @@ class TestLogging(AIPlatformTestCase):
 		document = self.make_document("Malformed Embedding Audit", "Audit provider failures.")
 		provider = SimpleNamespace(embed=lambda texts, model: [[1.0, 2.0]])
 		with (
-			patch("ai_fr_hg.ai.engine.get_settings", return_value=SimpleNamespace(platform_enabled=1)),
+			patch(
+				"ai_fr_hg.ai.engine.get_settings",
+				# `request_timeout` bounds the GOV-01 concurrency lease the
+				# embedding path now takes, so the stub must carry it.
+				return_value=SimpleNamespace(platform_enabled=1, request_timeout=120),
+			),
 			patch("ai_fr_hg.ai.engine.get_provider", return_value=provider),
 			self.assertRaises(ProviderError),
 		):

@@ -97,8 +97,21 @@ def start_execution_log(
 	return log
 
 
-def finish_execution_log(log, result, provider: str | None = None, error=None, retry_count: int = 0):
-	"""Close an execution log with either a result or an error."""
+def finish_execution_log(
+	log,
+	result,
+	provider: str | None = None,
+	error=None,
+	retry_count: int = 0,
+	model: str | None = None,
+):
+	"""Close an execution log with either a result or an error.
+
+	`provider` and `model` record the target that *actually* served the call.
+	PROV-01 failover can move a request to an equivalent model on another
+	runtime, and an audit trail that still names the originally requested model
+	would be wrong.
+	"""
 	if not log:
 		return
 
@@ -109,6 +122,8 @@ def finish_execution_log(log, result, provider: str | None = None, error=None, r
 	}
 	if provider:
 		values["provider"] = provider
+	if model:
+		values["model"] = model
 
 	if error is not None:
 		values.update(

@@ -145,12 +145,15 @@
   {
    "fieldname": "supports_tools",
    "fieldtype": "Check",
-   "label": "Supports Tool Calling"
+   "label": "Supports Tool Calling",
+   "description": "Enforced (PROV-02). Cleared here, the platform refuses tool-calling requests for this model before contacting the runtime.",
+   "default": "1"
   },
   {
    "fieldname": "supports_vision",
    "fieldtype": "Check",
-   "label": "Supports Vision"
+   "label": "Supports Vision",
+   "description": "Enforced (PROV-02). Required before image content is sent to this model."
   },
   {
    "fieldname": "capability_cb",
@@ -160,12 +163,15 @@
    "default": "1",
    "fieldname": "supports_streaming",
    "fieldtype": "Check",
-   "label": "Supports Streaming"
+   "label": "Supports Streaming",
+   "description": "Enforced (PROV-02). Cleared here, streamed turns degrade to a single blocking response."
   },
   {
    "fieldname": "supports_json_mode",
    "fieldtype": "Check",
-   "label": "Supports JSON Mode"
+   "label": "Supports JSON Mode",
+   "description": "Enforced (PROV-02). Cleared here, schema-constrained JSON requests are refused before contacting the runtime.",
+   "default": "1"
   },
   {
    "fieldname": "generation_sec",

@@ -45,6 +45,9 @@ class OllamaProvider(BaseProvider):
 	supports_tools = True
 	supports_embeddings = True
 	supports_model_pull = True
+	# `format` accepts a JSON Schema, and `images` is a native message field.
+	supports_json_mode = True
+	supports_vision = True
 
 	def build_options(self, options: dict | None) -> dict:
 		options = options or {}

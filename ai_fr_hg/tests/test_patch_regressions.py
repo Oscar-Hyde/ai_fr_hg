@@ -30,6 +30,10 @@ from unittest import TestCase
 
 ROOT = Path(__file__).resolve().parents[2]
 PATCHES_DIR = ROOT / "ai_fr_hg" / "patches"
+#: CHAT-02's DDL moved out of the patch and into a single dependency-light
+#: owner that `AI Message.on_doctype_update` also calls, so a *fresh* install
+#: gets the unique index too. The harness follows it there.
+AI_DIR = ROOT / "ai_fr_hg" / "ai"
 
 MESSAGE_TABLE = "tabAI Message"
 CONVERSATION_TABLE = "tabAI Conversation"
@@ -131,12 +135,17 @@ def _make_state(**overrides):
 
 def _load_patch(filename, state):
 	"""Load a patch module with a fake ``frappe`` bound, leaving global state restored."""
+	return _load_module(PATCHES_DIR / filename, state)
+
+
+def _load_module(path, state):
+	"""Load any frappe-only module with a fake ``frappe`` bound."""
 	fake = ModuleType("frappe")
 	fake.db = _FakeDB(state)
 	fake.log_error = lambda **kwargs: state.logged_errors.append(kwargs)
 	fake.get_traceback = lambda: ""
 
-	path = PATCHES_DIR / filename
+	path = Path(path)
 	spec = importlib.util.spec_from_file_location(f"ai_fr_hg_patch_reg_{path.stem}", path)
 	module = importlib.util.module_from_spec(spec)
 
@@ -158,7 +167,19 @@ def _message(name, conversation, sequence, creation):
 
 
 class TestConversationTurnIdentityPatch(TestCase):
-	FILENAME = "v0_0_17_conversation_turn_identity.py"
+	"""CHAT-02 migration behaviour, exercised on its canonical owner.
+
+	The patch is now a two-line delegate to
+	``ai_fr_hg/ai/conversation_indexes.py``; that module is what has to behave
+	correctly, so it is what these tests execute.
+	"""
+
+	MODULE = "conversation_indexes.py"
+
+	def _execute(self, state):
+		module = _load_module(AI_DIR / self.MODULE, state)
+		module.ensure_sequence_constraints()
+		return module
 
 	def test_patch_compiles_and_runs_without_type_error(self):
 		"""Reproduces the bench crash: execute() must complete end to end."""
@@ -170,8 +191,7 @@ class TestConversationTurnIdentityPatch(TestCase):
 				_message("MSG-3", "CONV-1", 0, "2026-01-01 00:00:03"),
 			],
 		)
-		module = _load_patch(self.FILENAME, state)
-		module.execute()  # failed here with TypeError before the fix
+		self._execute(state)  # failed here with TypeError before the fix
 
 		sequences = {message["name"]: message["sequence"] for message in state.messages}
 		self.assertEqual(sequences, {"MSG-1": 1, "MSG-2": 2, "MSG-3": 3})
@@ -195,8 +215,7 @@ class TestConversationTurnIdentityPatch(TestCase):
 			],
 			indexes={MESSAGE_TABLE: {"unique_conversation_sequence"}},
 		)
-		module = _load_patch(self.FILENAME, state)
-		module.execute()
+		self._execute(state)
 
 		self.assertEqual(state.set_values, [])
 		self.assertEqual(len(state.alters), 1)
@@ -212,16 +231,14 @@ class TestConversationTurnIdentityPatch(TestCase):
 			],
 			indexes={MESSAGE_TABLE: {"unique_conversation_sequence", "turn_id_index"}},
 		)
-		module = _load_patch(self.FILENAME, state)
-		module.execute()
+		self._execute(state)
 
 		self.assertEqual(state.alters, [])
 		self.assertEqual(state.set_values, [])
 
 	def test_postgres_is_skipped_entirely(self):
 		state = _make_state(db_type="postgres", conversations=["CONV-1"])
-		module = _load_patch(self.FILENAME, state)
-		module.execute()
+		self._execute(state)
 		self.assertEqual(state.sql_log, [])
 
 

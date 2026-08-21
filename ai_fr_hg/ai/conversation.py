@@ -83,16 +83,93 @@ def raise_if_cancelled(turn_id: str | None, partial: str = "") -> None:
 
 
 def allocate_sequence(conversation: str) -> int:
-	"""Reserve the next sequence under a conversation row lock (CHAT-02)."""
+	"""Reserve the next message sequence atomically (CHAT-02).
+
+	Two earlier designs failed on a real bench, and both failures are worth
+	recording because they look correct in review:
+
+	1. ``select ... for update`` on the conversation row, then a plain
+	   ``select max(sequence)``. The lock serialized the writers correctly,
+	   but InnoDB's default REPEATABLE READ serves a plain ``SELECT`` from the
+	   transaction's consistent snapshot — established at the transaction's
+	   first read, inside ``frappe.connect()``, long before the lock. Each
+	   serialized writer therefore read a *stale* maximum and reissued a
+	   sequence another writer had already committed. A 100-worker run
+	   produced ``[1, 1, 2, ... 99]``.
+	2. Making that aggregate a locking read (``max(sequence) ... for update``).
+	   MariaDB resolves ``MAX()`` on an indexed column with a single index-entry
+	   lookup, and that optimization combined with a locking read raises
+	   ``1020 Record has changed since last read``.
+
+	The fix avoids reading a maximum at all. An ``UPDATE`` is always a *current*
+	read in InnoDB: it takes an exclusive row lock and sees the latest committed
+	value regardless of the transaction's snapshot. Incrementing a counter on
+	the parent conversation row is therefore both the lock and the allocation,
+	in one statement that cannot interleave.
+
+	The statement is deliberately a bare single-row increment, matching
+	``engine.update_model_metrics``. An earlier version re-seeded the counter
+	inline with ``greatest(..., (select max(sequence) ...))`` and failed on the
+	bench two ways at once: the subquery is a consistent read, so updating the
+	row raised ``1020 Record has changed since last read``, and it took locks on
+	``tabAI Message`` that inverted against the concurrent inserts, producing
+	``1213 Deadlock found``. Seeding belongs outside the hot path — the
+	migration backfills existing conversations and
+	:func:`bump_sequence_watermark` covers explicitly numbered inserts.
+
+	The locking read before the update is not redundant. A caller that has
+	already loaded the conversation (every agent turn does) holds a snapshot
+	version of that row; if another worker allocates in between, the update's
+	version check fails with ``1020 Record has changed since last read``. A
+	``for update`` read refreshes the row to its latest committed version and
+	holds the exclusive lock, so the update that follows cannot observe a
+	different version. Both statements touch the same single row, so the lock
+	order is trivially consistent and cannot deadlock.
+	"""
 	frappe.db.sql(
 		"select name from `tabAI Conversation` where name = %s for update",
 		(conversation,),
 	)
-	last = frappe.db.sql(
-		"select coalesce(max(sequence), 0) from `tabAI Message` where conversation = %s",
+	frappe.db.sql(
+		"""
+		update `tabAI Conversation`
+		set message_sequence_counter = coalesce(message_sequence_counter, 0) + 1
+		where name = %s
+		""",
 		(conversation,),
-	)[0][0]
-	return cint(last) + 1
+	)
+	allocated = frappe.db.sql(
+		"select message_sequence_counter from `tabAI Conversation` where name = %s",
+		(conversation,),
+	)
+	if not allocated:
+		frappe.throw(_("Conversation {0} does not exist.").format(conversation))
+	return cint(allocated[0][0])
+
+
+def bump_sequence_watermark(conversation: str, sequence: int) -> None:
+	"""Raise the allocator's watermark to cover an explicitly numbered message.
+
+	``save_message`` accepts a caller-supplied ``sequence``. Without this the
+	counter would still hand that number out again later. Single row, no
+	subquery, no locks on ``tabAI Message`` — the constraints that the
+	allocator itself has to satisfy.
+	"""
+	if cint(sequence) <= 0:
+		return
+	# Same locking read as the allocator, for the same ER_CHECKREAD reason.
+	frappe.db.sql(
+		"select name from `tabAI Conversation` where name = %s for update",
+		(conversation,),
+	)
+	frappe.db.sql(
+		"""
+		update `tabAI Conversation`
+		set message_sequence_counter = greatest(coalesce(message_sequence_counter, 0), %s)
+		where name = %s
+		""",
+		(cint(sequence), conversation),
+	)
 
 
 def save_message(conversation: str, role: str, content: str, **kwargs):
@@ -100,6 +177,10 @@ def save_message(conversation: str, role: str, content: str, **kwargs):
 	sequence = kwargs.pop("sequence", None)
 	if sequence is None:
 		sequence = allocate_sequence(conversation)
+	else:
+		# An explicitly numbered message must still move the allocator's
+		# watermark, or the counter hands the same number out again later.
+		bump_sequence_watermark(conversation, sequence)
 
 	payload = {
 		"doctype": "AI Message",

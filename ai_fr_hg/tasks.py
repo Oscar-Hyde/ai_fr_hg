@@ -20,15 +20,15 @@ def health_check() -> None:
 		if not settings.platform_enabled or not settings.health_check_enabled:
 			return
 
+		# OPS-02: the cron fires every 5 minutes, but eligibility is decided
+		# from each provider's own `last_health_check` timestamp and claimed
+		# atomically. Minute-modulo arithmetic silently mis-scheduled every
+		# interval that is not a divisor of five.
 		interval = cint(settings.health_check_interval_minutes) or 15
-		minute = now_datetime().minute
-		# The cron fires every 5 minutes; only act on the configured cadence.
-		if interval > 5 and minute % interval >= 5:
-			return
 
 		from ai_fr_hg.ai.monitoring import check_all_providers
 
-		check_all_providers()
+		check_all_providers(interval_minutes=interval)
 	except Exception:
 		try:
 			frappe.log_error(title="AI health_check failed", message=frappe.get_traceback())

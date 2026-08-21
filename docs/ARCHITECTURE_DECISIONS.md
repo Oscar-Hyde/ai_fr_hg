@@ -14,6 +14,8 @@ These decisions make the supported product boundary explicit. They remain author
 | ADR-006 | Preserve extracted-text structure, not original binary format | Accepted | Translation | Phase 4 product review |
 | ADR-007 | Pin the Frappe v17 development revision until stable v17 exists | Accepted with pre-release limitation | Release Engineering | When upstream publishes stable v17 |
 | ADR-008 | File intelligence is custom extraction on native File bytes; advertise only real parsers | Accepted | Knowledge/Ingestion | When a real parser exists for a currently unsupported family |
+| ADR-009 | Runtime admission control is Redis/Lua on `frappe.cache()`, and fails open when Redis is down | Accepted | Governance | If a non-Redis deployment target is ever supported |
+| ADR-010 | Enforced model capability defaults to the adapter's transport capability | Accepted | Provider + Governance | When a capability probe protocol exists for every supported runtime |
 
 ## ADR-001 — MariaDB-only application support
 
@@ -99,3 +101,65 @@ These decisions make the supported product boundary explicit. They remain author
 **Why no custom File replacement.** A second file store would duplicate privacy, attachments, and identity. Extraction evidence is JSON on `AI Document`; it is not a parallel File table.
 
 **Consequences.** 37 registered extensions. Extension/magic mismatches warn and prefer a real magic reader when one exists. ZIP bombs, traversal, and encryption fail closed through one archive guard. Extraction failures remain visible on the document (`error_message`, structured warnings, evidence). Browser E2E of the evidence UI remains Phase 7.
+
+## ADR-009 — Redis-backed admission control, degrading open
+
+**Context.** GOV-01, GOV-02 and GOV-03 require concurrency limits, provider
+rate limits, and quota reservations to be enforced across every bench process:
+web workers, background workers, and the scheduler. The decision has to be
+atomic (a check that does not claim cannot stop a race), it has to expire on
+its own (a killed worker must not hold a slot), and it sits on the hot path of
+every model call.
+
+**Frappe v17 capability evaluated.** Frappe provides `frappe.cache()` (a Redis
+handle every process already shares), database row locks (`for_update`),
+`frappe.enqueue` deduplication, and document locking. Row locks and document
+locks are the right tool for *claiming a record* — which is why PIPE-02 and
+OPS-02 use them — but they are the wrong tool for a shared counter: they
+require a transaction per call, leave orphaned state behind a killed worker,
+and would put write traffic inside a transaction the caller may roll back.
+`frappe.rate_limiter` exists but is request-scoped for web requests, not a
+distributed semaphore over providers and models.
+
+**Decision.** Concurrency leases, rate windows and quota reservations are Redis
+sorted sets manipulated by single Lua scripts through `frappe.cache()`. Each
+decision — reap expired entries, compare against the limit, claim — happens
+inside one server-side script, so it cannot interleave. Every entry carries an
+expiry, which is what releases a dead worker's slot.
+
+**Degradation.** If Redis is unreachable, admission control logs once per hour
+and **allows** the call, marking the decision `degraded`. Quota falls back to
+the committed-usage comparison, which still refuses a user already over the
+limit. Failing closed was rejected: Frappe's own sessions, queues and realtime
+already depend on Redis, so a Redis outage is a platform outage, and turning it
+into a total AI outage adds no safety while removing every diagnostic path.
+
+**Why not a new DocType.** A counter table would be a second scheduling and
+locking subsystem beside Frappe's, would need its own sweeper for abandoned
+rows, and would duplicate a responsibility Redis already owns for this app.
+
+## ADR-010 — Enforced capability defaults to adapter transport
+
+**Context.** PROV-02 makes `AI Model.supports_tools`, `supports_streaming`,
+`supports_json_mode` and `supports_vision` real controls. Those fields were
+cosmetic: nothing read them, and model discovery never populated them, so on
+every existing installation they are `0`. Enforcing them literally would have
+disabled tool calling, JSON mode and streaming everywhere on upgrade.
+
+**Decision.** Effective capability is *adapter transport* AND *model
+declaration* AND *last runtime probe*. Discovery seeds a new model's flags from
+what its adapter can transport, and patch `v0_0_21_phase_6_governance`
+backfills existing rows the same way. That is precisely the behaviour that
+applied before enforcement, so nothing regresses; the migration only ever
+raises a flag, never lowers one an operator set. Clearing a flag is now the
+supported way to impose a restriction. Vision is seeded conservatively: only
+for Vision-typed models or recognised vision model names.
+
+**Probe.** When a runtime refuses a capability outright, the refusal is cached
+against that model for an hour and the capability is treated as unavailable.
+An unrecognised error never marks a capability missing.
+
+**Consequence.** These flags are honest defaults, not verified facts. A model
+that declares tool support and cannot deliver it fails at the runtime once, and
+is then refused locally until the probe expires. A full pre-flight capability
+probe per model is Phase 7 real-runtime matrix work.

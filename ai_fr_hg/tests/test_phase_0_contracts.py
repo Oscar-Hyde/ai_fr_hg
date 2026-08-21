@@ -95,7 +95,9 @@ class TestControlledBaseline(TestCase):
 		audit_ids = AUDIT_ID_PATTERN.findall(audit)
 		registered_ids = REGISTER_ID_PATTERN.findall(register)
 
-		self.assertEqual(len(audit_ids), 79)
+		# 79 original findings plus CHAT-09, amended into the baseline on
+		# 2026-08-21 when the CHAT-02 reopening exposed it.
+		self.assertEqual(len(audit_ids), 80)
 		self.assertEqual(len(audit_ids), len(set(audit_ids)))
 		self.assertEqual(len(registered_ids), len(set(registered_ids)))
 		self.assertEqual(set(audit_ids), set(registered_ids))

@@ -359,3 +359,89 @@ def build_skill_block(skills: list[dict], max_characters: int | None = None) -> 
 		lines.append(line)
 		used += len(line)
 	return "\n\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# LEARN-01 — validated report filters
+# ---------------------------------------------------------------------------
+
+#: Hard ceiling on rows any learning report returns. Reports are read by
+#: managers and auditors over the whole corpus; an unbounded result set is a
+#: denial-of-service vector against the Desk, not a feature.
+REPORT_ROW_LIMIT = 500
+
+#: Filter contract per report. ``("choice", allowed)`` accepts one of a fixed
+#: set, ``("int", low, high)`` clamps a whole number, ``("date",)`` accepts an
+#: ISO date string. Anything not named here is discarded rather than passed to
+#: the query builder, so a crafted filter payload cannot reach SQL.
+REPORT_FILTER_SPECS: dict[str, dict[str, tuple]] = {
+	"Learning Activity": {
+		"status": ("choice", ("Draft", "Validated", "Conflict", "Approved", "Rejected")),
+		"candidate_type": ("choice", ("Fact", "Preference", "Instruction", "Feedback", "Document")),
+		"from_date": ("date",),
+		"to_date": ("date",),
+	},
+	"Memory Usage": {
+		"memory_type": ("choice", ("Fact", "Preference", "Instruction", "Feedback")),
+		"status": ("choice", ("Active", "Archived")),
+		"scope": ("choice", ("Global", "User", "Role", "Agent")),
+		"min_usage": ("int", 0, 1_000_000),
+	},
+	"Skill Summary": {
+		"skill_type": ("choice", ("Procedural", "Formatting", "Workflow")),
+		"enabled": ("int", 0, 1),
+		"scope": ("choice", ("Global", "User", "Role", "Agent")),
+	},
+}
+
+_ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)?$")
+
+
+class ReportFilterError(ValueError):
+	"""A report filter value is outside its declared contract."""
+
+
+def normalise_report_filters(report: str, raw: dict | None) -> dict:
+	"""Validate and coerce report filters against :data:`REPORT_FILTER_SPECS`.
+
+	Empty strings and ``None`` mean "no filter" and are dropped, which is how
+	Frappe's Select filters signal a cleared control. Unknown keys are dropped
+	silently; a *known* key with an invalid value raises, because silently
+	ignoring it would show the operator unfiltered data under a filtered label.
+	"""
+	spec = REPORT_FILTER_SPECS.get(report)
+	if spec is None:
+		raise ReportFilterError(f"Unknown report {report}")
+
+	cleaned: dict = {}
+	for field, rule in spec.items():
+		if not raw:
+			continue
+		value = raw.get(field)
+		if value is None or (isinstance(value, str) and not value.strip()):
+			continue
+
+		kind = rule[0]
+		if kind == "choice":
+			text = str(value).strip()
+			if text not in rule[1]:
+				raise ReportFilterError(f"{field}={value!r} is not an accepted value")
+			cleaned[field] = text
+		elif kind == "int":
+			try:
+				number = int(str(value).strip())
+			except (TypeError, ValueError) as exc:
+				raise ReportFilterError(f"{field}={value!r} is not a whole number") from exc
+			low, high = rule[1], rule[2]
+			cleaned[field] = max(low, min(number, high))
+		elif kind == "date":
+			text = str(value).strip()
+			if not _ISO_DATE.match(text):
+				raise ReportFilterError(f"{field}={value!r} is not an ISO date")
+			cleaned[field] = text
+
+	from_date, to_date = cleaned.get("from_date"), cleaned.get("to_date")
+	if from_date and to_date and from_date > to_date:
+		raise ReportFilterError("from_date is after to_date")
+
+	return cleaned

@@ -17,6 +17,7 @@
   "model",
   "pinned",
   "message_count",
+  "message_sequence_counter",
   "total_tokens",
   "last_message_on",
   "context_sec",
@@ -89,6 +90,16 @@
    "read_only": 1
   },
   {
+   "fieldname": "message_sequence_counter",
+   "fieldtype": "Int",
+   "label": "Message Sequence Counter",
+   "read_only": 1,
+   "hidden": 1,
+   "no_copy": 1,
+   "default": "0",
+   "description": "CHAT-02 allocator high-water mark. Incremented atomically on the conversation row so sequence allocation never depends on a snapshot read."
+  },
+  {
    "fieldname": "total_tokens",
    "fieldtype": "Int",
    "label": "Total Tokens",
@@ -148,7 +159,7 @@
    "link_fieldname": "conversation"
   }
  ],
- "modified": "2026-08-16 09:00:00.000000",
+ "modified": "2026-08-21 13:00:00.000000",
  "modified_by": "Administrator",
  "module": "AI Conversation",
  "name": "AI Conversation",

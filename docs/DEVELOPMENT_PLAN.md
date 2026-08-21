@@ -356,6 +356,16 @@ The Assistant upload call omits `file_record`, while other upload surfaces pass 
 
 **Required revision:** Always pass `file.name`, preserve pending attachments until a successful response, show removable attachment chips, and support multiple files explicitly.
 
+### CHAT-09 — Sequence allocation under a stale row snapshot is not transparent
+
+*Added 2026-08-21 as an amendment to this baseline, from the CHAT-02 reopening. Pre-existing behaviour, not introduced by that fix.*
+
+`allocate_sequence` locks and increments a counter on the `AI Conversation` row. Under MariaDB's default REPEATABLE READ isolation, a transaction that has already performed a consistent read of that row — which every agent turn does when it loads the conversation — cannot subsequently lock or update it once another transaction has committed a change. MariaDB raises `1020 Record has changed since last read; try restarting transaction`, which Frappe surfaces as `QueryDeadlockError`.
+
+**Impact:** correctness is preserved — the caller receives a retryable error and never a duplicate sequence — but a concurrent send can fail a request that a retry would have completed.
+
+**Required revision:** Make the allocation transparent to the caller, by either (a) moving the counter onto a dedicated allocator record that no request path ever reads, so the consistent-read conflict cannot arise, or (b) adding a bounded transaction-level retry around the turn. Measure the real contention rate first; this belongs with Phase 7 concurrency and chaos testing, where the retry budget can be set from observed behaviour rather than guessed.
+
 ---
 
 ## 5.4 Ingestion and document intelligence
