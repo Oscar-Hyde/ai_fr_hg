@@ -362,7 +362,7 @@ def translate_text(
 	*,
 	reference_doctype: str | None = None,
 	reference_name: str | None = None,
-	progress: Callable[[int, int], None] | None = None,
+	progress: Callable[..., None] | None = None,
 	**overrides,
 ) -> TranslationOutcome:
 	"""Translate arbitrary text, segment by segment, with quality gating."""
@@ -448,7 +448,10 @@ def translate_text(
 			break
 		if progress:
 			done = sum(1 for segment in segments if segment.translated)
-			progress(done, len(segments))
+			try:
+				progress(done, len(segments), tokens_used)
+			except TypeError:
+				progress(done, len(segments))
 
 	if options.quality_checks:
 		_score(prepared, options)
@@ -463,6 +466,7 @@ def translate_text(
 			model_doc,
 			samples=options.back_translation_samples,
 		)
+		tokens_used += cint(verification.get("tokens"))
 
 	flagged = sum(
 		1
@@ -921,18 +925,28 @@ def _run_translation(doc, *, durable: bool) -> dict:
 	)
 	source_text = doc.source_text or frappe.db.get_value("AI Document", doc.source_document, "content")
 
-	def _progress(done: int, total: int) -> None:
+	def _progress(done: int, total: int, tokens: int = 0) -> None:
 		_assert_not_cancelled(doc.name)
 		pct = 5 + int(90 * done / max(total, 1))
 		frappe.db.set_value(
 			"AI Translation",
 			doc.name,
-			{"processing_progress": pct, "processing_message": f"{done}/{total} segments"},
+			{
+				"processing_progress": pct,
+				"processing_message": f"{done}/{total} segments",
+				"total_tokens": cint(tokens),
+			},
 			update_modified=False,
 		)
 		frappe.publish_realtime(
 			"ai_translation_progress",
-			{"translation": doc.name, "progress": pct, "done": done, "total": total},
+			{
+				"translation": doc.name,
+				"progress": pct,
+				"done": done,
+				"total": total,
+				"total_tokens": cint(tokens),
+			},
 			user=frappe.session.user,
 		)
 

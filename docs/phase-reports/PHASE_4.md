@@ -26,7 +26,7 @@ This is `bench --site test_site run-tests --app ai_fr_hg` on the pinned Frappe v
 | TRN-01–02, 06 | Memory policy, index default, text-structure | CLOSED earlier | Register | — |
 | TRN-03 | Worker `as_user` | CLOSED — IMPLEMENTED | Disabled requester + restore-after-failure | — |
 | TRN-04 | Progress/cancel/realtime | IN PROGRESS | Cancel not Failed; `get_translation` returns progress fields | Browser Stop/reconnect → Phase 7 |
-| TRN-05 | Back-translation accounting | IN PROGRESS | Verification tokens; failed run keeps `total_tokens`; deadline → `partial` | Timeout-after-generation / cancel-after-partial usage matrix |
+| TRN-05 | Back-translation accounting | IN PROGRESS | Verification tokens add to `total_tokens`; failed run keeps usage; deadline → `partial`; timeout-after-generation and cancel-after-partial tests persist usage | Hosted Server confirmation of the new matrix tests |
 | TRN-07 | Glossary KB parity | CLOSED — IMPLEMENTED | Unauthorized glossary use raises `PermissionError` | — |
 | PAT-01–03 | Durable empty scan, offsets, validators | CLOSED — IMPLEMENTED | Integration + unit tests on Server | — |
 | PAT-04 | Pattern Explorer | CLOSED — IMPLEMENTED (backend+page) | `explore_pattern_entities` + Desk page | Browser workflow → Phase 7 |
@@ -41,7 +41,7 @@ This is `bench --site test_site run-tests --app ai_fr_hg` on the pinned Frappe v
 ## Not completed (not dropped)
 
 1. Desk/browser E2E for ING-06, TRN-04, PAT-04 — Phase 7.
-2. TRN-05 timeout/cancel-after-partial token persistence matrix.
+2. TRN-05 matrix tests are in tree; hosted Server confirmation pending.
 3. Live RQ worker-death (heartbeat test is synthetic).
 
 ## Phase verdict

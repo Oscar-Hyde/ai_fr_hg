@@ -655,6 +655,70 @@ class TestBackTranslationAccounting(TranslationTestCase):
 				knowledge_base=self.knowledge_base.name,
 			)
 		self.assertTrue(outcome.partial)
+		self.assertGreaterEqual(cint(outcome.total_tokens), 0)
+
+	def test_timeout_after_generation_persists_tokens(self):
+		"""TRN-05: a deadline after at least one billed call must keep usage."""
+		from ai_fr_hg.ai.exceptions import DeadlineExceededError
+		from ai_fr_hg.ai.translation import run_translation
+
+		document = self.make_document(
+			"Timeout After Generation",
+			"The contractor shall deliver the works on time.\n\nPayment follows each accepted milestone.\n",
+		)
+		translation = self.make_translation(document, "ar")
+		batches = {"n": 0}
+
+		def first_then_timeout(items, *args, **kwargs):
+			batches["n"] += 1
+			if batches["n"] == 1:
+				for item in items:
+					item.segment.translated = "المقاول يسلم الأعمال."
+					item.segment.status = "Translated"
+				return 11
+			raise DeadlineExceededError("budget exhausted after generation")
+
+		def one_segment_batches(segments, **kwargs):
+			for segment in segments:
+				yield [segment]
+
+		with (
+			patch("ai_fr_hg.ai.translation._translate_batch", side_effect=first_then_timeout),
+			patch("ai_fr_hg.ai.translation.plan_batches", side_effect=one_segment_batches),
+			patch("ai_fr_hg.ai.translation._repair", return_value=0),
+			patch("ai_fr_hg.ai.translation.resolve_model", return_value=frappe._dict(name="stub-chat")),
+		):
+			run_translation(translation.name)
+
+		translation.reload()
+		self.assertEqual(translation.status, "Needs Review")
+		self.assertGreaterEqual(cint(translation.total_tokens), 11)
+
+	def test_cancel_after_partial_keeps_token_total(self):
+		"""TRN-05: cancel mid-run must not erase usage already written to the row."""
+		from ai_fr_hg.ai.translation import cancel_translation, run_translation
+
+		document = self.make_document("Cancel After Partial", STRUCTURED_SOURCE)
+		translation = self.make_translation(document, "ar")
+
+		def fake_translate(*args, **kwargs):
+			progress = kwargs.get("progress")
+			if progress:
+				progress(1, 4, 19)
+			cancel_translation(translation.name)
+			if progress:
+				progress(2, 4, 19)
+			from ai_fr_hg.ai.translation import TranslationOutcome
+
+			return TranslationOutcome(text="x", source_language="en", target_language="ar", total_tokens=19)
+
+		with patch("ai_fr_hg.ai.translation.translate_text", side_effect=fake_translate):
+			result = run_translation(translation.name)
+
+		self.assertEqual(result["status"], "Cancelled")
+		translation.reload()
+		self.assertEqual(translation.status, "Cancelled")
+		self.assertEqual(cint(translation.total_tokens), 19)
 
 	def test_failed_run_keeps_existing_token_total(self):
 		from ai_fr_hg.ai.translation import run_translation
