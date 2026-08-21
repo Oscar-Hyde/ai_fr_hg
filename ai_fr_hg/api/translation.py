@@ -17,6 +17,7 @@ from frappe.utils import cint
 from ai_fr_hg.ai.translation import (
 	MAX_INLINE_CHARACTERS,
 	authorized_memory_scope,
+	cancel_translation,
 	create_translation,
 	enqueue_translation,
 	index_translation,
@@ -144,6 +145,9 @@ def get_translation(translation: str, include_segments: bool = True) -> dict:
 		"total_tokens": doc.total_tokens,
 		"translated_document": doc.translated_document,
 		"error_message": doc.error_message,
+		"processing_progress": doc.get("processing_progress"),
+		"processing_message": doc.get("processing_message"),
+		"cancel_requested": cint(doc.get("cancel_requested")),
 		"issues": json.loads(doc.issue_summary) if doc.issue_summary else {},
 	}
 	if cint(include_segments):
@@ -228,15 +232,30 @@ def index_output(translation: str) -> dict:
 
 
 @frappe.whitelist()
+def cancel(translation: str) -> dict:
+	"""Cancel a queued or in-flight translation."""
+	from ai_fr_hg.utils import api_validation
+
+	name = api_validation.valid_identifier(translation, label=_("Translation"), required=True)
+	return cancel_translation(name)
+
+
+@frappe.whitelist()
 def get_glossaries(knowledge_base: str | None = None) -> list:
-	"""Enabled glossaries, optionally scoped to a knowledge base."""
+	"""Enabled glossaries the caller may read, optionally filtered to a KB."""
+	from ai_fr_hg.utils import api_validation
+	from ai_fr_hg.utils.permissions import _knowledge_base_access
+
 	filters: dict = {"enabled": 1}
 	if knowledge_base:
-		filters["knowledge_base"] = ["in", [knowledge_base, ""]]
+		scope = api_validation.valid_identifier(knowledge_base, label=_("Knowledge base"))
+		if not _knowledge_base_access(scope, frappe.session.user, write=False):
+			frappe.throw(_("You cannot list glossaries for that knowledge base."), frappe.PermissionError)
+		filters["knowledge_base"] = ["in", [scope, ""]]
 	return frappe.get_list(
 		"AI Translation Glossary",
 		filters=filters,
 		fields=["name", "glossary_name", "knowledge_base", "description"],
 		order_by="glossary_name asc",
-		limit_page_length=100,
+		limit=api_validation.bounded_integer(100, label=_("limit"), default=100, maximum=100),
 	)

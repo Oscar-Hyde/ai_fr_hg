@@ -6,10 +6,12 @@
 from unittest.mock import MagicMock, call, patch
 
 import frappe
+from frappe.utils import cint
 
 from ai_fr_hg.tests.integration_test_case import (
 	AIPlatformTestCase,
 	pseudo_translate,
+	stub_embeddings,
 	stub_translation_model,
 )
 
@@ -72,18 +74,19 @@ class TranslationTestCase(AIPlatformTestCase):
 
 class TestDocumentTranslation(TranslationTestCase):
 	def test_worker_authority_is_restored_after_failure(self):
-		from ai_fr_hg.ai.translation import _translation_user
+		from ai_fr_hg.utils.authority import as_user
 
 		worker_frappe = MagicMock()
 		worker_frappe.session.user = "background-worker@example.com"
+		worker_frappe.db.exists.return_value = True
 		worker_frappe.db.get_value.return_value = 1
 		worker_frappe.set_user.side_effect = lambda user: setattr(worker_frappe.session, "user", user)
 
 		with (
-			patch("ai_fr_hg.ai.translation.frappe", worker_frappe),
+			patch("ai_fr_hg.utils.authority.frappe", worker_frappe),
 			self.assertRaisesRegex(RuntimeError, "provider failed"),
 		):
-			with _translation_user("requester@example.com"):
+			with as_user("requester@example.com"):
 				self.assertEqual(worker_frappe.session.user, "requester@example.com")
 				raise RuntimeError("provider failed")
 
@@ -92,6 +95,81 @@ class TestDocumentTranslation(TranslationTestCase):
 			worker_frappe.set_user.call_args_list,
 			[call("requester@example.com"), call("background-worker@example.com")],
 		)
+
+	def test_run_translation_rejects_disabled_requester(self):
+		from ai_fr_hg.ai.translation import run_translation
+
+		user = self.make_ai_user("disabled-translator@example.com", "Disabled Translator")
+		user.enabled = 0
+		user.save(ignore_permissions=True)
+		document = self.make_document(
+			"Disabled Authority", "The contractor shall deliver the works on time.\n"
+		)
+		translation = self.make_translation(document, "ar")
+
+		with self.assertRaises(frappe.PermissionError):
+			run_translation(translation.name, requested_by=user.name)
+
+	def test_cancel_marks_translation_cancelled(self):
+		from ai_fr_hg.ai.translation import cancel_translation
+
+		document = self.make_document("Cancellable", "The contractor shall deliver the works on time.\n")
+		translation = self.make_translation(document, "ar")
+		translation.db_set("status", "Queued")
+		result = cancel_translation(translation.name)
+		self.assertTrue(result["cancelled"])
+		translation.reload()
+		self.assertEqual(translation.status, "Cancelled")
+		self.assertEqual(cint(translation.cancel_requested), 1)
+
+	def test_duplicate_cancel_is_idempotent(self):
+		from ai_fr_hg.ai.translation import cancel_translation
+
+		document = self.make_document("Cancel Twice", "The contractor shall deliver the works on time.\n")
+		translation = self.make_translation(document, "ar")
+		translation.db_set("status", "Translating")
+		first = cancel_translation(translation.name)
+		second = cancel_translation(translation.name)
+		self.assertTrue(first["cancelled"])
+		self.assertFalse(second["cancelled"])
+
+	def test_get_translation_after_cancel_is_reconnect_source_of_truth(self):
+		"""TRN-04: a reconnecting Desk must read Cancelled from the DocType API."""
+		from ai_fr_hg.ai.translation import cancel_translation
+		from ai_fr_hg.api.translation import get_translation
+
+		document = self.make_document(
+			"Reconnect Translation", "The contractor shall deliver the works on time.\n"
+		)
+		translation = self.make_translation(document, "ar")
+		translation.db_set("status", "Translating", update_modified=False)
+		cancel_translation(translation.name)
+		payload = get_translation(translation.name, include_segments=False)
+		self.assertEqual(payload["status"], "Cancelled")
+		self.assertEqual(cint(payload["cancel_requested"]), 1)
+		self.assertIn("processing_progress", payload)
+		self.assertIn("processing_message", payload)
+
+	def test_run_observes_cancel_and_does_not_mark_failed(self):
+		from ai_fr_hg.ai.translation import TranslationOutcome, cancel_translation, run_translation
+
+		document = self.make_document("Cancel During Run", STRUCTURED_SOURCE)
+		translation = self.make_translation(document, "ar")
+
+		def fake_translate(*args, **kwargs):
+			progress = kwargs.get("progress")
+			cancel_translation(translation.name)
+			if progress:
+				progress(1, 2)
+			return TranslationOutcome(text="x", source_language="en", target_language="ar", quality_score=100)
+
+		with patch("ai_fr_hg.ai.translation.translate_text", side_effect=fake_translate):
+			result = run_translation(translation.name)
+
+		translation.reload()
+		self.assertEqual(result["status"], "Cancelled")
+		self.assertEqual(translation.status, "Cancelled")
+		self.assertNotEqual(translation.status, "Failed")
 
 	def test_translation_preserves_document_structure(self):
 		from ai_fr_hg.ai.translation import run_translation
@@ -434,6 +512,22 @@ class TestGlossary(TranslationTestCase):
 		doc.insert(ignore_permissions=True)
 		return doc
 
+	def test_glossary_use_requires_knowledge_base_access(self):
+		from ai_fr_hg.ai.translation import load_glossary
+
+		self.make_ai_user("translator-b@example.com", "Translator B")
+		private = self.ensure_private_knowledge_base()
+		glossary = self.ensure_glossary()
+		glossary.db_set("knowledge_base", private.name)
+		frappe.clear_document_cache("AI Translation Glossary", glossary.name)
+
+		frappe.set_user("translator-b@example.com")
+		try:
+			with self.assertRaises(frappe.PermissionError):
+				load_glossary(glossary.name, "en", "ar")
+		finally:
+			frappe.set_user("Administrator")
+
 	def test_protected_terms_survive_translation(self):
 		from ai_fr_hg.ai.translation import run_translation
 
@@ -547,6 +641,117 @@ class TestTranslationRecord(TranslationTestCase):
 		self.assertEqual(ingest.call_args.kwargs["language"], "he")
 		translation.reload()
 		self.assertEqual(translation.translated_document, created.name)
+
+
+class TestBackTranslationAccounting(TranslationTestCase):
+	def test_back_translation_tokens_are_included_in_outcome(self):
+		from ai_fr_hg.ai.translation import translate_text
+
+		with stub_translation_model(), stub_embeddings():
+			outcome = translate_text(
+				"The contractor shall deliver the works on time before the agreed completion date.\n",
+				"ar",
+				source_language="en",
+				back_translation_samples=1,
+				knowledge_base=self.knowledge_base.name,
+			)
+		self.assertGreater(outcome.total_tokens, 0)
+		self.assertIn("tokens", outcome.verification)
+		self.assertGreaterEqual(cint(outcome.verification.get("tokens")), 0)
+		self.assertGreaterEqual(cint(outcome.verification.get("sampled")), 0)
+
+	def test_deadline_marks_partial_without_dropping_usage(self):
+		from ai_fr_hg.ai.deadline import turn_budget
+		from ai_fr_hg.ai.translation import translate_text
+
+		with stub_translation_model(), turn_budget(0.01):
+			outcome = translate_text(
+				STRUCTURED_SOURCE,
+				"he",
+				source_language="en",
+				knowledge_base=self.knowledge_base.name,
+			)
+		self.assertTrue(outcome.partial)
+		self.assertGreaterEqual(cint(outcome.total_tokens), 0)
+
+	def test_timeout_after_generation_persists_tokens(self):
+		"""TRN-05: a deadline after at least one billed call must keep usage."""
+		from ai_fr_hg.ai.exceptions import DeadlineExceededError
+		from ai_fr_hg.ai.translation import run_translation
+
+		document = self.make_document(
+			"Timeout After Generation",
+			"The contractor shall deliver the works on time.\n\nPayment follows each accepted milestone.\n",
+		)
+		translation = self.make_translation(document, "ar")
+		batches = {"n": 0}
+
+		def first_then_timeout(items, *args, **kwargs):
+			batches["n"] += 1
+			if batches["n"] == 1:
+				for item in items:
+					item.segment.translated = "المقاول يسلم الأعمال."
+					item.segment.status = "Translated"
+				return 11
+			raise DeadlineExceededError("budget exhausted after generation")
+
+		def one_segment_batches(segments, **kwargs):
+			for segment in segments:
+				yield [segment]
+
+		with (
+			patch("ai_fr_hg.ai.translation._translate_batch", side_effect=first_then_timeout),
+			patch("ai_fr_hg.ai.translation.plan_batches", side_effect=one_segment_batches),
+			patch("ai_fr_hg.ai.translation._repair", return_value=0),
+			patch("ai_fr_hg.ai.translation.resolve_model", return_value=frappe._dict(name="stub-chat")),
+		):
+			run_translation(translation.name)
+
+		translation.reload()
+		self.assertEqual(translation.status, "Needs Review")
+		self.assertGreaterEqual(cint(translation.total_tokens), 11)
+
+	def test_cancel_after_partial_keeps_token_total(self):
+		"""TRN-05: cancel mid-run must not erase usage already written to the row."""
+		from ai_fr_hg.ai.translation import cancel_translation, run_translation
+
+		document = self.make_document("Cancel After Partial", STRUCTURED_SOURCE)
+		translation = self.make_translation(document, "ar")
+
+		def fake_translate(*args, **kwargs):
+			progress = kwargs.get("progress")
+			if progress:
+				progress(1, 4, 19)
+			cancel_translation(translation.name)
+			if progress:
+				progress(2, 4, 19)
+			from ai_fr_hg.ai.translation import TranslationOutcome
+
+			return TranslationOutcome(text="x", source_language="en", target_language="ar", total_tokens=19)
+
+		with patch("ai_fr_hg.ai.translation.translate_text", side_effect=fake_translate):
+			result = run_translation(translation.name)
+
+		self.assertEqual(result["status"], "Cancelled")
+		translation.reload()
+		self.assertEqual(translation.status, "Cancelled")
+		self.assertEqual(cint(translation.total_tokens), 19)
+
+	def test_failed_run_keeps_existing_token_total(self):
+		from ai_fr_hg.ai.translation import run_translation
+
+		document = self.make_document("Retain Tokens", "The contractor shall deliver the works on time.\n")
+		translation = self.make_translation(document, "ar")
+		translation.db_set("total_tokens", 42, update_modified=False)
+
+		with patch(
+			"ai_fr_hg.ai.translation.translate_text", side_effect=RuntimeError("provider failed after usage")
+		):
+			result = run_translation(translation.name)
+
+		self.assertEqual(result["status"], "Failed")
+		translation.reload()
+		self.assertEqual(cint(translation.total_tokens), 42)
 
 
 class TestTranslationIntegrations(TranslationTestCase):

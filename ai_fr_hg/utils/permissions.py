@@ -142,6 +142,26 @@ def document_query(user: str) -> str:
 	)
 
 
+def glossary_query(user: str) -> str:
+	"""Glossaries are readable with the same KB grant as documents.
+
+	A glossary with no knowledge base is a global termbase: readable by any
+	AI role, writable only by managers.
+	"""
+	if _is_manager(user):
+		return ""
+	return (
+		"(`tabAI Translation Glossary`.`knowledge_base` is null "
+		"or `tabAI Translation Glossary`.`knowledge_base` = '' "
+		"or `tabAI Translation Glossary`.`knowledge_base` in ("
+		"select kb.name from `tabAI Knowledge Base` kb "
+		"where kb.is_public = 1 or exists ("
+		"select 1 from `tabAI Knowledge Base Role` kb_role "
+		"where kb_role.parent = kb.name and kb_role.parenttype = 'AI Knowledge Base' "
+		f"and kb_role.role in ({_role_sql(user)}))))"
+	)
+
+
 def translation_query(user: str) -> str:
 	if _is_manager(user):
 		return ""
@@ -304,6 +324,7 @@ message_query = _safe_condition(message_query)
 knowledge_base_query = _safe_condition(knowledge_base_query)
 document_query = _safe_condition(document_query)
 translation_query = _safe_condition(translation_query)
+glossary_query = _safe_condition(glossary_query)
 chunk_query = _safe_condition(chunk_query)
 agent_query = _safe_condition(agent_query)
 candidate_query = _safe_condition(candidate_query)

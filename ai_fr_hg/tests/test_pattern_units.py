@@ -93,6 +93,13 @@ class TestPatternExtraction(UnitTestCase):
 		entities = extract_pattern_entities(text)
 		identifiers = {entity["value"].upper() for entity in _by_type(entities, "identifier")}
 		self.assertEqual(identifiers, {"INV-0001", "PO-9001"})
+		tail = next(entity for entity in entities if entity["value"].upper() == "PO-9001")
+		self.assertEqual(text[tail["first_offset"] :].index("PO-9001"), 0)
+
+	def test_invalid_ip_and_calendar_dates_are_rejected(self):
+		entities = extract_pattern_entities("Host 999.999.999.999 on 2024-13-40 billed $not-money")
+		self.assertEqual(_by_type(entities, "ip"), [])
+		self.assertEqual(_by_type(entities, "date"), [])
 
 	def test_provenance_quote_is_bounded_and_located(self):
 		text = "Invoice INV-2024-0817 was issued to the department on file."

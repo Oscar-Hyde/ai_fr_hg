@@ -41,6 +41,188 @@ class TestIngestionProgressCancellation(AIPlatformTestCase):
 		self.assertEqual(frappe.db.get_value("AI Document", document.name, "processing_progress"), 0)
 		enqueue.assert_called_once()
 
+	def test_duplicate_cancel_is_idempotent(self):
+		from ai_fr_hg.ai.ingestion import cancel_processing
+
+		document = self.make_document("Duplicate Cancel Document", "cancel twice")
+		document.db_set(
+			{"status": "Queued", "processing_requested_by": frappe.session.user}, update_modified=False
+		)
+		first = cancel_processing(document.name)
+		second = cancel_processing(document.name)
+		self.assertTrue(first["cancelled"])
+		self.assertFalse(second["cancelled"])
+		self.assertEqual(second["status"], "Cancelled")
+
+	def test_worker_observes_cancel_before_extraction(self):
+		from ai_fr_hg.ai.ingestion import process_document
+
+		document = self.make_document("Cancel Before Extract", "worker should stop")
+		document.db_set(
+			{
+				"status": "Queued",
+				"cancel_requested": 1,
+				"processing_requested_by": frappe.session.user,
+			},
+			update_modified=False,
+		)
+		result = process_document(document.name, requested_by=frappe.session.user)
+		self.assertEqual(result["status"], "Cancelled")
+		document.reload()
+		self.assertEqual(document.status, "Cancelled")
+
+	def test_worker_observes_cancel_mid_extraction(self):
+		from ai_fr_hg.ai.ingestion import process_document
+
+		document = self.make_document("Cancel Mid Extract", "worker should stop after extract")
+		document.db_set(
+			{
+				"status": "Queued",
+				"processing_requested_by": frappe.session.user,
+			},
+			update_modified=False,
+		)
+
+		def extract_then_cancel(doc, authority):
+			frappe.db.set_value("AI Document", doc.name, "cancel_requested", 1, update_modified=False)
+			reader = type("R", (), {"label": "Text"})()
+			result = frappe._dict(
+				text=doc.content or "x",
+				page_count=1,
+				word_count=1,
+				character_count=len(doc.content or "x"),
+				metadata={},
+				warnings=[],
+			)
+			return result, reader, b"x", "cancel.txt", "text/plain"
+
+		with (
+			patch("ai_fr_hg.ai.ingestion._extract_source", side_effect=extract_then_cancel),
+			patch("ai_fr_hg.ai.ingestion.validate_source_access"),
+		):
+			result = process_document(document.name, requested_by=frappe.session.user)
+		self.assertEqual(result["status"], "Cancelled")
+		document.reload()
+		self.assertEqual(document.status, "Cancelled")
+		self.assertNotEqual(document.status, "Failed")
+
+	def test_unrelated_user_cannot_cancel_processing(self):
+		from ai_fr_hg.ai.exceptions import DocumentSourcePermissionError
+		from ai_fr_hg.ai.ingestion import cancel_processing
+
+		document = self.make_document("Foreign Cancel Document", "not yours")
+		document.db_set(
+			{"status": "Extracting", "processing_requested_by": frappe.session.user},
+			update_modified=False,
+		)
+		email = "ing06-stranger@example.com"
+		if not frappe.db.exists("User", email):
+			frappe.get_doc(
+				{
+					"doctype": "User",
+					"email": email,
+					"first_name": "Stranger",
+					"send_welcome_email": 0,
+				}
+			).insert(ignore_permissions=True)
+		with self.assertRaises(DocumentSourcePermissionError):
+			cancel_processing(document.name, requested_by=email)
+		document.reload()
+		self.assertEqual(document.status, "Extracting")
+
+	def test_stale_in_flight_heartbeat_is_reaped_without_duplicate_start(self):
+		from ai_fr_hg.ai.ingestion import process_pending_documents
+
+		document = self.make_document("Stale Worker Document", "heartbeat expired")
+		document.db_set(
+			{
+				"status": "Extracting",
+				"processing_heartbeat": frappe.utils.add_to_date(frappe.utils.now_datetime(), minutes=-45),
+				"processing_requested_by": frappe.session.user,
+				"retry_count": 0,
+			},
+			update_modified=False,
+		)
+
+		with patch("ai_fr_hg.ai.ingestion.enqueue_processing") as enqueue:
+			process_pending_documents()
+
+		document.reload()
+		self.assertEqual(document.status, "Failed")
+		self.assertEqual(document.error_type, "StaleWorker")
+		called = [
+			call.args[0] if call.args else call.kwargs.get("document_name") for call in enqueue.call_args_list
+		]
+		self.assertEqual(called.count(document.name), 1)
+
+	def test_live_heartbeat_is_not_reaped_or_requeued(self):
+		"""ING-06: a worker still refreshing heartbeat must not be treated as dead."""
+		from ai_fr_hg.ai.ingestion import process_pending_documents
+
+		document = self.make_document("Live Worker Document", "heartbeat current")
+		document.db_set(
+			{
+				"status": "Extracting",
+				"processing_heartbeat": frappe.utils.now_datetime(),
+				"processing_requested_by": frappe.session.user,
+				"retry_count": 0,
+			},
+			update_modified=False,
+		)
+
+		with patch("ai_fr_hg.ai.ingestion.enqueue_processing") as enqueue:
+			process_pending_documents()
+
+		document.reload()
+		self.assertEqual(document.status, "Extracting")
+		self.assertNotEqual(document.error_type, "StaleWorker")
+		called = [
+			call.args[0] if call.args else call.kwargs.get("document_name") for call in enqueue.call_args_list
+		]
+		self.assertEqual(called.count(document.name), 0)
+
+	def test_queued_job_missing_from_rq_is_re_enqueued_once(self):
+		"""ING-06: if RQ no longer has the job, recovery uses the same enqueue path once."""
+		from ai_fr_hg.ai.ingestion import enqueue_processing
+
+		document = self.make_document("Vanished RQ Job", "queue lost the worker")
+		document.db_set(
+			{
+				"status": "Queued",
+				"processing_job_id": f"ai-document::{document.name}",
+				"processing_requested_by": frappe.session.user,
+			},
+			update_modified=False,
+		)
+		with (
+			patch("frappe.utils.background_jobs.is_job_enqueued", return_value=False),
+			patch("ai_fr_hg.ai.ingestion.frappe.enqueue") as enqueue,
+		):
+			result = enqueue_processing(document.name, requested_by=frappe.session.user)
+		self.assertEqual(result["status"], "Queued")
+		enqueue.assert_called_once()
+
+	def test_in_flight_enqueue_does_not_start_a_second_job(self):
+		"""ING-06: recovery never duplicates while status is still in-flight."""
+		from ai_fr_hg.ai.ingestion import enqueue_processing
+
+		document = self.make_document("In Flight No Duplicate", "still extracting")
+		document.db_set(
+			{
+				"status": "Chunking",
+				"processing_job_id": f"ai-document::{document.name}",
+				"processing_requested_by": frappe.session.user,
+				"processing_heartbeat": frappe.utils.now_datetime(),
+			},
+			update_modified=False,
+		)
+		with patch("ai_fr_hg.ai.ingestion.frappe.enqueue") as enqueue:
+			result = enqueue_processing(document.name, requested_by=frappe.session.user)
+		self.assertEqual(result["status"], "Chunking")
+		enqueue.assert_not_called()
+		document.reload()
+		self.assertEqual(document.status, "Chunking")
+
 
 class TestIndexing(AIPlatformTestCase):
 	def test_document_is_chunked_and_embedded(self):

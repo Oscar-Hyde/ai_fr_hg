@@ -1,523 +1,531 @@
 {
-    "actions": [],
-    "allow_import": 1,
-    "allow_rename": 0,
-    "autoname": "naming_series:",
-    "creation": "2026-08-16 09:00:00.000000",
-    "doctype": "DocType",
-    "editable_grid": 1,
-    "engine": "InnoDB",
-    "field_order": [
-        "naming_series",
-        "title",
-        "knowledge_base",
-        "status",
-        "document_type",
-        "doc_cb",
-        "source_type",
-        "source_file",
-        "source_url",
-        "source_doctype",
-        "source_name",
-        "language",
-        "folder_sec",
-        "folder",
-        "organization_name",
-        "organization_name_key",
-        "source_file_record",
-        "source_folder",
-        "folder_cb",
-        "is_private",
-        "organization_revision",
-        "copied_from",
-        "copied_on",
-        "content_sec",
-        "content",
-        "summary_sec",
-        "summary",
-        "metadata_sec",
-        "mime_type",
-        "file_size",
-        "page_count",
-        "word_count",
-        "metadata_cb",
-        "character_count",
-        "checksum",
-        "reader_used",
-        "metadata",
-        "tags_sec",
-        "tags",
-        "confidence",
-        "index_sec",
-        "chunk_count",
-        "embedded_chunk_count",
-        "indexed_on",
-        "index_cb",
-        "processing_duration_ms",
-        "processing_progress",
-        "processing_message",
-        "processing_heartbeat",
-        "cancel_requested",
-        "retry_count",
-        "processing_requested_by",
-        "processing_requested_on",
-        "processing_job_id",
-        "error_type",
-        "error_message",
-        "extraction_sec",
-        "extraction_schema",
-        "extracted_data",
-        "extraction_warnings"
-    ],
-    "fields": [
-        {
-            "default": "AIDOC-.YYYY.-",
-            "fieldname": "naming_series",
-            "fieldtype": "Select",
-            "hidden": 1,
-            "label": "Series",
-            "options": "AIDOC-.YYYY.-",
-            "print_hide": 1
-        },
-        {
-            "fieldname": "title",
-            "fieldtype": "Data",
-            "in_list_view": 1,
-            "label": "Title",
-            "reqd": 1
-        },
-        {
-            "fieldname": "knowledge_base",
-            "fieldtype": "Link",
-            "in_list_view": 1,
-            "in_standard_filter": 1,
-            "label": "Knowledge Base",
-            "options": "AI Knowledge Base",
-            "reqd": 1
-        },
-        {
-            "default": "Draft",
-            "fieldname": "status",
-            "fieldtype": "Select",
-            "in_list_view": 1,
-            "in_standard_filter": 1,
-            "label": "Status",
-            "options": "Draft\nQueued\nCancelled\nExtracting\nChunking\nEmbedding\nIndexed\nFailed\nArchived"
-        },
-        {
-            "fieldname": "document_type",
-            "fieldtype": "Data",
-            "in_standard_filter": 1,
-            "label": "Document Type"
-        },
-        {
-            "fieldname": "doc_cb",
-            "fieldtype": "Column Break"
-        },
-        {
-            "default": "File",
-            "fieldname": "source_type",
-            "fieldtype": "Select",
-            "label": "Source Type",
-            "options": "File\nText\nURL\nDocType Record"
-        },
-        {
-            "depends_on": "eval:doc.source_type=='File'",
-            "fieldname": "source_file",
-            "fieldtype": "Attach",
-            "label": "Source File"
-        },
-        {
-            "depends_on": "eval:doc.source_type=='URL'",
-            "fieldname": "source_url",
-            "fieldtype": "Data",
-            "label": "Source URL"
-        },
-        {
-            "depends_on": "eval:doc.source_type=='DocType Record'",
-            "fieldname": "source_doctype",
-            "fieldtype": "Link",
-            "label": "Source DocType",
-            "options": "DocType"
-        },
-        {
-            "depends_on": "eval:doc.source_type=='DocType Record'",
-            "fieldname": "source_name",
-            "fieldtype": "Dynamic Link",
-            "label": "Source Name",
-            "options": "source_doctype"
-        },
-        {
-            "description": "Detected written language(s) as ISO 639-1 codes (en, ar, he, or en,ar,he when mixed). Filled when text is extracted; you can correct it.",
-            "fieldname": "language",
-            "fieldtype": "Data",
-            "in_standard_filter": 1,
-            "label": "Language"
-        },
-        {
-            "fieldname": "folder_sec",
-            "fieldtype": "Section Break",
-            "label": "Folder Organization"
-        },
-        {
-            "description": "Canonical parent in Frappe's native File folder hierarchy. Home represents the tree root.",
-            "fieldname": "folder",
-            "fieldtype": "Link",
-            "in_standard_filter": 1,
-            "label": "Folder",
-            "options": "File",
-            "in_list_view": 1,
-            "default": "Home",
-            "reqd": 1,
-            "search_index": 1
-        },
-        {
-            "description": "Stable display name within the parent folder. Tree operations enforce uniqueness without conflating it with the document ID or checksum.",
-            "fieldname": "organization_name",
-            "fieldtype": "Data",
-            "label": "Organization Name",
-            "read_only": 1,
-            "search_index": 1
-        },
-        {
-            "description": "Normalized case-folded SHA-256 location-local identity used for collation-independent cross-database collision enforcement.",
-            "fieldname": "organization_name_key",
-            "fieldtype": "Data",
-            "hidden": 1,
-            "label": "Organization Name Key",
-            "length": 64,
-            "read_only": 1,
-            "reqd": 1,
-            "search_index": 1
-        },
-        {
-            "description": "Stable File record identity for file-backed documents; source_file remains the canonical attachment URL.",
-            "fieldname": "source_file_record",
-            "fieldtype": "Link",
-            "label": "Source File Record",
-            "options": "File",
-            "read_only": 1,
-            "search_index": 1
-        },
-        {
-            "description": "Denormalised path of the folder for fast filtering and provenance.",
-            "fieldname": "source_folder",
-            "fieldtype": "Data",
-            "in_standard_filter": 1,
-            "label": "Source Folder Path",
-            "read_only": 1,
-            "in_list_view": 1
-        },
-        {
-            "fieldname": "folder_cb",
-            "fieldtype": "Column Break"
-        },
-        {
-            "description": "Follows the folder's privacy setting at creation.",
-            "fieldname": "is_private",
-            "fieldtype": "Check",
-            "label": "Is Private"
-        },
-        {
-            "default": "0",
-            "fieldname": "organization_revision",
-            "fieldtype": "Int",
-            "hidden": 1,
-            "label": "Organization Revision",
-            "read_only": 1
-        },
-        {
-            "description": "Immutable source identity retained for provenance without changing source-document deletion policy.",
-            "fieldname": "copied_from",
-            "fieldtype": "Data",
-            "label": "Copied From",
-            "read_only": 1
-        },
-        {
-            "fieldname": "copied_on",
-            "fieldtype": "Datetime",
-            "label": "Copied On",
-            "read_only": 1
-        },
-        {
-            "fieldname": "content_sec",
-            "fieldtype": "Section Break",
-            "label": "Content"
-        },
-        {
-            "fieldname": "content",
-            "fieldtype": "Long Text",
-            "label": "Extracted Text"
-        },
-        {
-            "collapsible": 1,
-            "collapsible_depends_on": "summary",
-            "fieldname": "summary_sec",
-            "fieldtype": "Section Break",
-            "label": "Summary"
-        },
-        {
-            "fieldname": "summary",
-            "fieldtype": "Long Text",
-            "label": "Summary"
-        },
-        {
-            "collapsible": 1,
-            "fieldname": "metadata_sec",
-            "fieldtype": "Section Break",
-            "label": "Metadata"
-        },
-        {
-            "fieldname": "mime_type",
-            "fieldtype": "Data",
-            "label": "MIME Type",
-            "read_only": 1
-        },
-        {
-            "fieldname": "file_size",
-            "fieldtype": "Float",
-            "label": "File Size (bytes)",
-            "read_only": 1,
-            "precision": "0"
-        },
-        {
-            "fieldname": "page_count",
-            "fieldtype": "Int",
-            "label": "Pages",
-            "read_only": 1
-        },
-        {
-            "fieldname": "word_count",
-            "fieldtype": "Int",
-            "label": "Words",
-            "read_only": 1
-        },
-        {
-            "fieldname": "metadata_cb",
-            "fieldtype": "Column Break"
-        },
-        {
-            "fieldname": "character_count",
-            "fieldtype": "Float",
-            "label": "Characters",
-            "read_only": 1,
-            "precision": "0"
-        },
-        {
-            "fieldname": "checksum",
-            "fieldtype": "Data",
-            "label": "Checksum",
-            "read_only": 1
-        },
-        {
-            "fieldname": "reader_used",
-            "fieldtype": "Data",
-            "label": "Reader Used",
-            "read_only": 1
-        },
-        {
-            "fieldname": "metadata",
-            "fieldtype": "Code",
-            "label": "Metadata",
-            "options": "JSON",
-            "read_only": 1
-        },
-        {
-            "collapsible": 1,
-            "fieldname": "tags_sec",
-            "fieldtype": "Section Break",
-            "label": "Classification"
-        },
-        {
-            "fieldname": "tags",
-            "fieldtype": "Table",
-            "label": "Tags",
-            "options": "AI Document Tag"
-        },
-        {
-            "fieldname": "confidence",
-            "fieldtype": "Percent",
-            "label": "Classification Confidence"
-        },
-        {
-            "fieldname": "index_sec",
-            "fieldtype": "Section Break",
-            "label": "Indexing"
-        },
-        {
-            "fieldname": "chunk_count",
-            "fieldtype": "Int",
-            "label": "Chunks",
-            "read_only": 1
-        },
-        {
-            "fieldname": "embedded_chunk_count",
-            "fieldtype": "Int",
-            "label": "Embedded Chunks",
-            "read_only": 1
-        },
-        {
-            "fieldname": "indexed_on",
-            "fieldtype": "Datetime",
-            "label": "Indexed On",
-            "read_only": 1
-        },
-        {
-            "fieldname": "index_cb",
-            "fieldtype": "Column Break"
-        },
-        {
-            "fieldname": "processing_duration_ms",
-            "fieldtype": "Int",
-            "label": "Processing Duration (ms)",
-            "read_only": 1
-        },
-        {
-            "fieldname": "processing_progress",
-            "fieldtype": "Percent",
-            "label": "Processing Progress",
-            "read_only": 1
-        },
-        {
-            "fieldname": "processing_message",
-            "fieldtype": "Small Text",
-            "label": "Processing Status",
-            "read_only": 1
-        },
-        {
-            "fieldname": "processing_heartbeat",
-            "fieldtype": "Datetime",
-            "label": "Processing Heartbeat",
-            "read_only": 1
-        },
-        {
-            "fieldname": "cancel_requested",
-            "fieldtype": "Check",
-            "hidden": 1,
-            "label": "Cancel Requested",
-            "read_only": 1
-        },
-        {
-            "fieldname": "retry_count",
-            "fieldtype": "Int",
-            "label": "Retries",
-            "read_only": 1
-        },
-        {
-            "fieldname": "processing_requested_by",
-            "fieldtype": "Link",
-            "label": "Processing Requested By",
-            "options": "User",
-            "read_only": 1
-        },
-        {
-            "fieldname": "processing_requested_on",
-            "fieldtype": "Datetime",
-            "label": "Processing Requested On",
-            "read_only": 1
-        },
-        {
-            "fieldname": "processing_job_id",
-            "fieldtype": "Data",
-            "label": "Processing Job ID",
-            "read_only": 1
-        },
-        {
-            "fieldname": "error_type",
-            "fieldtype": "Data",
-            "label": "Error Type",
-            "read_only": 1
-        },
-        {
-            "fieldname": "error_message",
-            "fieldtype": "Small Text",
-            "label": "Error Message",
-            "read_only": 1
-        },
-        {
-            "collapsible": 1,
-            "fieldname": "extraction_sec",
-            "fieldtype": "Section Break",
-            "label": "Structured Extraction"
-        },
-        {
-            "fieldname": "extraction_schema",
-            "fieldtype": "Link",
-            "label": "Extraction Schema",
-            "options": "AI Extraction Schema"
-        },
-        {
-            "fieldname": "extracted_data",
-            "fieldtype": "Code",
-            "label": "Extracted Data",
-            "options": "JSON",
-            "read_only": 1
-        },
-        {
-            "fieldname": "extraction_warnings",
-            "fieldtype": "Code",
-            "label": "Extraction Warnings",
-            "options": "JSON",
-            "read_only": 1,
-            "description": "Structured warnings from extraction (ING-05): persisted via canonical reader manager. Empty array means clean extraction; partial extraction stores warnings while status remains Indexed."
-        }
-    ],
-    "index_web_pages_for_search": 1,
-    "links": [
-        {
-            "link_doctype": "AI Document Chunk",
-            "link_fieldname": "document"
-        }
-    ],
-    "modified": "2026-08-16 09:00:00.000000",
-    "modified_by": "Administrator",
-    "module": "AI Knowledge",
-    "name": "AI Document",
-    "naming_rule": "By \"Naming Series\" field",
-    "owner": "Administrator",
-    "permissions": [
-        {
-            "role": "System Manager",
-            "create": 1,
-            "delete": 1,
-            "email": 1,
-            "export": 1,
-            "print": 1,
-            "read": 1,
-            "report": 1,
-            "share": 1,
-            "write": 1
-        },
-        {
-            "role": "AI Manager",
-            "create": 1,
-            "delete": 1,
-            "email": 1,
-            "export": 1,
-            "print": 1,
-            "read": 1,
-            "report": 1,
-            "share": 1,
-            "write": 1
-        },
-        {
-            "role": "AI User",
-            "create": 1,
-            "email": 1,
-            "export": 1,
-            "print": 1,
-            "read": 1,
-            "report": 1,
-            "share": 1,
-            "write": 1
-        }
-    ],
-    "row_format": "Dynamic",
-    "search_fields": "title,organization_name,knowledge_base,status,document_type,folder,source_folder,source_file_record",
-    "show_title_field_in_link": 1,
-    "sort_field": "creation",
-    "sort_order": "DESC",
-    "states": [],
-    "title_field": "title",
-    "track_changes": 1
+ "actions": [],
+ "allow_import": 1,
+ "allow_rename": 0,
+ "autoname": "naming_series:",
+ "creation": "2026-08-16 09:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "title",
+  "knowledge_base",
+  "status",
+  "document_type",
+  "doc_cb",
+  "source_type",
+  "source_file",
+  "source_url",
+  "source_doctype",
+  "source_name",
+  "language",
+  "folder_sec",
+  "folder",
+  "organization_name",
+  "organization_name_key",
+  "source_file_record",
+  "source_folder",
+  "folder_cb",
+  "is_private",
+  "organization_revision",
+  "copied_from",
+  "copied_on",
+  "content_sec",
+  "content",
+  "summary_sec",
+  "summary",
+  "metadata_sec",
+  "mime_type",
+  "file_size",
+  "page_count",
+  "word_count",
+  "metadata_cb",
+  "character_count",
+  "checksum",
+  "reader_used",
+  "metadata",
+  "tags_sec",
+  "tags",
+  "confidence",
+  "index_sec",
+  "chunk_count",
+  "embedded_chunk_count",
+  "indexed_on",
+  "index_cb",
+  "processing_duration_ms",
+  "processing_progress",
+  "processing_message",
+  "processing_heartbeat",
+  "cancel_requested",
+  "retry_count",
+  "processing_requested_by",
+  "processing_requested_on",
+  "processing_job_id",
+  "error_type",
+  "error_message",
+  "extraction_sec",
+  "extraction_schema",
+  "extracted_data",
+  "extraction_warnings"
+ ],
+ "fields": [
+  {
+   "default": "AIDOC-.YYYY.-",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Series",
+   "options": "AIDOC-.YYYY.-",
+   "print_hide": 1
+  },
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Title",
+   "reqd": 1
+  },
+  {
+   "fieldname": "knowledge_base",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Knowledge Base",
+   "options": "AI Knowledge Base",
+   "reqd": 1
+  },
+  {
+   "default": "Draft",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Draft\nQueued\nCancelled\nExtracting\nChunking\nEmbedding\nIndexed\nFailed\nArchived"
+  },
+  {
+   "fieldname": "document_type",
+   "fieldtype": "Data",
+   "in_standard_filter": 1,
+   "label": "Document Type"
+  },
+  {
+   "fieldname": "doc_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "File",
+   "fieldname": "source_type",
+   "fieldtype": "Select",
+   "label": "Source Type",
+   "options": "File\nText\nURL\nDocType Record"
+  },
+  {
+   "depends_on": "eval:doc.source_type=='File'",
+   "fieldname": "source_file",
+   "fieldtype": "Attach",
+   "label": "Source File"
+  },
+  {
+   "depends_on": "eval:doc.source_type=='URL'",
+   "fieldname": "source_url",
+   "fieldtype": "Data",
+   "label": "Source URL"
+  },
+  {
+   "depends_on": "eval:doc.source_type=='DocType Record'",
+   "fieldname": "source_doctype",
+   "fieldtype": "Link",
+   "label": "Source DocType",
+   "options": "DocType"
+  },
+  {
+   "depends_on": "eval:doc.source_type=='DocType Record'",
+   "fieldname": "source_name",
+   "fieldtype": "Dynamic Link",
+   "label": "Source Name",
+   "options": "source_doctype"
+  },
+  {
+   "description": "Detected written language(s) as ISO 639-1 codes (en, ar, he, or en,ar,he when mixed). Filled when text is extracted; you can correct it.",
+   "fieldname": "language",
+   "fieldtype": "Data",
+   "in_standard_filter": 1,
+   "label": "Language"
+  },
+  {
+   "fieldname": "folder_sec",
+   "fieldtype": "Section Break",
+   "label": "Folder Organization"
+  },
+  {
+   "description": "Canonical parent in Frappe's native File folder hierarchy. Home represents the tree root.",
+   "fieldname": "folder",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Folder",
+   "options": "File",
+   "in_list_view": 1,
+   "default": "Home",
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "description": "Stable display name within the parent folder. Tree operations enforce uniqueness without conflating it with the document ID or checksum.",
+   "fieldname": "organization_name",
+   "fieldtype": "Data",
+   "label": "Organization Name",
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "description": "Normalized case-folded SHA-256 location-local identity used for collation-independent cross-database collision enforcement.",
+   "fieldname": "organization_name_key",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Organization Name Key",
+   "length": 64,
+   "read_only": 1,
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "description": "Stable File record identity for file-backed documents; source_file remains the canonical attachment URL.",
+   "fieldname": "source_file_record",
+   "fieldtype": "Link",
+   "label": "Source File Record",
+   "options": "File",
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "description": "Denormalised path of the folder for fast filtering and provenance.",
+   "fieldname": "source_folder",
+   "fieldtype": "Data",
+   "in_standard_filter": 1,
+   "label": "Source Folder Path",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "folder_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Follows the folder's privacy setting at creation.",
+   "fieldname": "is_private",
+   "fieldtype": "Check",
+   "label": "Is Private"
+  },
+  {
+   "default": "0",
+   "fieldname": "organization_revision",
+   "fieldtype": "Int",
+   "hidden": 1,
+   "label": "Organization Revision",
+   "read_only": 1
+  },
+  {
+   "description": "Immutable source identity retained for provenance without changing source-document deletion policy.",
+   "fieldname": "copied_from",
+   "fieldtype": "Data",
+   "label": "Copied From",
+   "read_only": 1
+  },
+  {
+   "fieldname": "copied_on",
+   "fieldtype": "Datetime",
+   "label": "Copied On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "content_sec",
+   "fieldtype": "Section Break",
+   "label": "Content"
+  },
+  {
+   "fieldname": "content",
+   "fieldtype": "Long Text",
+   "label": "Extracted Text"
+  },
+  {
+   "collapsible": 1,
+   "collapsible_depends_on": "summary",
+   "fieldname": "summary_sec",
+   "fieldtype": "Section Break",
+   "label": "Summary"
+  },
+  {
+   "fieldname": "summary",
+   "fieldtype": "Long Text",
+   "label": "Summary"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "metadata_sec",
+   "fieldtype": "Section Break",
+   "label": "Metadata"
+  },
+  {
+   "fieldname": "mime_type",
+   "fieldtype": "Data",
+   "label": "MIME Type",
+   "read_only": 1
+  },
+  {
+   "fieldname": "file_size",
+   "fieldtype": "Float",
+   "label": "File Size (bytes)",
+   "read_only": 1,
+   "precision": "0"
+  },
+  {
+   "fieldname": "page_count",
+   "fieldtype": "Int",
+   "label": "Pages",
+   "read_only": 1
+  },
+  {
+   "fieldname": "word_count",
+   "fieldtype": "Int",
+   "label": "Words",
+   "read_only": 1
+  },
+  {
+   "fieldname": "metadata_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "character_count",
+   "fieldtype": "Float",
+   "label": "Characters",
+   "read_only": 1,
+   "precision": "0"
+  },
+  {
+   "fieldname": "checksum",
+   "fieldtype": "Data",
+   "label": "Checksum",
+   "read_only": 1
+  },
+  {
+   "fieldname": "pattern_scan_checksum",
+   "fieldtype": "Data",
+   "label": "Pattern Scan Checksum",
+   "read_only": 1,
+   "hidden": 1,
+   "description": "Durable checksum of the last completed pattern scan, including empty results (PAT-01)."
+  },
+  {
+   "fieldname": "reader_used",
+   "fieldtype": "Data",
+   "label": "Reader Used",
+   "read_only": 1
+  },
+  {
+   "fieldname": "metadata",
+   "fieldtype": "Code",
+   "label": "Metadata",
+   "options": "JSON",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "tags_sec",
+   "fieldtype": "Section Break",
+   "label": "Classification"
+  },
+  {
+   "fieldname": "tags",
+   "fieldtype": "Table",
+   "label": "Tags",
+   "options": "AI Document Tag"
+  },
+  {
+   "fieldname": "confidence",
+   "fieldtype": "Percent",
+   "label": "Classification Confidence"
+  },
+  {
+   "fieldname": "index_sec",
+   "fieldtype": "Section Break",
+   "label": "Indexing"
+  },
+  {
+   "fieldname": "chunk_count",
+   "fieldtype": "Int",
+   "label": "Chunks",
+   "read_only": 1
+  },
+  {
+   "fieldname": "embedded_chunk_count",
+   "fieldtype": "Int",
+   "label": "Embedded Chunks",
+   "read_only": 1
+  },
+  {
+   "fieldname": "indexed_on",
+   "fieldtype": "Datetime",
+   "label": "Indexed On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "index_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "processing_duration_ms",
+   "fieldtype": "Int",
+   "label": "Processing Duration (ms)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "processing_progress",
+   "fieldtype": "Percent",
+   "label": "Processing Progress",
+   "read_only": 1
+  },
+  {
+   "fieldname": "processing_message",
+   "fieldtype": "Small Text",
+   "label": "Processing Status",
+   "read_only": 1
+  },
+  {
+   "fieldname": "processing_heartbeat",
+   "fieldtype": "Datetime",
+   "label": "Processing Heartbeat",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cancel_requested",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Cancel Requested",
+   "read_only": 1
+  },
+  {
+   "fieldname": "retry_count",
+   "fieldtype": "Int",
+   "label": "Retries",
+   "read_only": 1
+  },
+  {
+   "fieldname": "processing_requested_by",
+   "fieldtype": "Link",
+   "label": "Processing Requested By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "processing_requested_on",
+   "fieldtype": "Datetime",
+   "label": "Processing Requested On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "processing_job_id",
+   "fieldtype": "Data",
+   "label": "Processing Job ID",
+   "read_only": 1
+  },
+  {
+   "fieldname": "error_type",
+   "fieldtype": "Data",
+   "label": "Error Type",
+   "read_only": 1
+  },
+  {
+   "fieldname": "error_message",
+   "fieldtype": "Small Text",
+   "label": "Error Message",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "extraction_sec",
+   "fieldtype": "Section Break",
+   "label": "Structured Extraction"
+  },
+  {
+   "fieldname": "extraction_schema",
+   "fieldtype": "Link",
+   "label": "Extraction Schema",
+   "options": "AI Extraction Schema"
+  },
+  {
+   "fieldname": "extracted_data",
+   "fieldtype": "Code",
+   "label": "Extracted Data",
+   "options": "JSON",
+   "read_only": 1
+  },
+  {
+   "fieldname": "extraction_warnings",
+   "fieldtype": "Code",
+   "label": "Extraction Warnings",
+   "options": "JSON",
+   "read_only": 1,
+   "description": "Structured warnings from extraction (ING-05): persisted via canonical reader manager. Empty array means clean extraction; partial extraction stores warnings while status remains Indexed."
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [
+  {
+   "link_doctype": "AI Document Chunk",
+   "link_fieldname": "document"
+  }
+ ],
+ "modified": "2026-08-16 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Knowledge",
+ "name": "AI Document",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI User",
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "search_fields": "title,organization_name,knowledge_base,status,document_type,folder,source_folder,source_file_record",
+ "show_title_field_in_link": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "title",
+ "track_changes": 1
 }

@@ -90,7 +90,7 @@
    "in_standard_filter": 1,
    "label": "Status",
    "no_copy": 1,
-   "options": "Draft\nQueued\nTranslating\nCompleted\nNeeds Review\nFailed",
+   "options": "Draft\nQueued\nTranslating\nCompleted\nNeeds Review\nFailed\nCancelled",
    "read_only": 1
   },
   {
@@ -323,6 +323,28 @@
    "label": "Job ID",
    "no_copy": 1,
    "read_only": 1
+  },
+  {
+   "fieldname": "cancel_requested",
+   "fieldtype": "Check",
+   "label": "Cancel Requested",
+   "hidden": 1,
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "processing_progress",
+   "fieldtype": "Float",
+   "label": "Processing Progress",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "processing_message",
+   "fieldtype": "Data",
+   "label": "Processing Message",
+   "read_only": 1,
+   "no_copy": 1
   },
   {
    "fieldname": "error_message",

@@ -1,6 +1,6 @@
 # AI Fr HG — audited project status
 
-**Status date:** 2026-08-20
+**Status date:** 2026-08-21
 **App version:** `0.0.1`
 **Framework baseline:** pinned Frappe `17.0.0-dev`, Python `>=3.14,<3.15`, Node 24, MariaDB 11.8
 **Release qualification:** not production-ready; upstream stable Frappe v17 does not yet exist
@@ -66,7 +66,7 @@ Green tests prove the covered paths. They do not cover browser behavior, real ru
 | --- | --- | --- |
 | Provider adapters | **PARTIAL / HARDENING REQUIRED** | Ollama and OpenAI-compatible paths work. Provider/model concurrency, provider rate limits, capability enforcement, equivalent-model failover, versions, and full model lifecycle remain. |
 | Network guard | **READY / HARDENING REQUIRED** | Connection-level transport hardening is implemented and runtime-tested (pinned dial, no env proxies, redirect refusal, peer revalidation, allowlist policy). Browser/E2E remains Phase 7. |
-| Ingestion | **PARTIAL** | File, text, URL, and DocType-record main paths exist. Unsupported Folder source and `.msg` exposure were removed; scanned-PDF OCR is explicitly unsupported; warnings/progress/cancel remain. |
+| Ingestion | **PARTIAL** | File, text, URL, and DocType-record main paths exist. Unsupported Folder source and `.msg` exposure were removed; scanned-PDF OCR is explicitly unsupported. Progress/cancel and heartbeat reaper are on hosted Server; OS-level RQ kill remains Phase 7. |
 | Readers | **PARTIAL** | 36 extensions are registered with optional dependency degradation. PDF means text-layer extraction; OCR applies to image files, not scanned PDFs. |
 | Document tree | **READY / HARDENING REQUIRED** | Strong identity, locking, permissions, bulk operations, concurrency checks, and tests. Deep/large tree browser and load validation remain. |
 | File/folder organization | **READY / HARDENING REQUIRED** | Canonical service is the sole mutation owner: native paste fallback removed, stable File identity enforced, storage folder is a validated File Link, “Shared Uploads”/“Public” naming is truthful, uploader uses a lazy native Link picker, and Desk patches are version-gated. Browser verification remains Phase 7. |
@@ -74,8 +74,8 @@ Green tests prove the covered paths. They do not cover browser behavior, real ru
 | Retrieval | **READY / HARDENING REQUIRED** | Complete brute-force hybrid retrieval, mixed-model grouping, per-KB policy, folder descendants, context packing, and diagnostics. Browser E2E and 100k-chunk load remain Phase 7. |
 | Knowledge Explorer | **PARTIAL** | Search/ask/upload/overview, diagnostics, pagination, folder and entity filters. Upload progress and browser E2E remain Phase 7. |
 | Intelligence | **PARTIAL** | Summary/classify/extract/compare main paths exist. Extraction is explicitly JSON-only and the dormant target DocType field is hidden; whole-document strategies and strict local schema validation remain. |
-| Pattern extraction | **PARTIAL** | Strong deterministic extraction and tests. Durable zero-result scan state, correct tail offsets, semantic value validation, and aggregate explorer remain. |
-| Translation | **PARTIAL** | Strong segmentation, masking, quality checks, repair, review, memory, and indexing core. Memory requires authorized KB scope and policy identity (SEC-01/TRN-01). Progress/cancel, default index setting, glossary/KB parity, and worker restoration remain Phase 4. |
+| Pattern extraction | **PARTIAL** | Durable zero-result scan, original-document tail offsets, semantic IP/date/money validators, and Pattern Explorer API/page are on hosted Server. Browser explorer UX remains Phase 7. |
+| Translation | **PARTIAL** | Strong segmentation, masking, quality checks, repair, review, memory, and indexing core. Memory requires authorized KB scope and policy identity (SEC-01/TRN-01). Worker restoration, glossary/KB parity, index default, and usage accounting (TRN-05) are closed on hosted Server. Progress/cancel Desk Stop/reconnect remains Phase 7. |
 | Assistant/agents | **READY / HARDENING REQUIRED** | Latest-N history, locked sequence + turn_id, route-state restore, focused document, fallback answer, footnote citations, rename/pin/archive/export, negative-feedback reason/correction, cooperative cancel/reconnect, and stable File identity on upload. Browser E2E remains Phase 7. |
 | Tools/approvals | **PARTIAL / HARDENING REQUIRED** | Approval, audit, argument validation, permissions, and runtime limit exist. Generic count/field isolation, defaults, expiry, async approval execution, and pipeline resume remain. |
 | Pipelines | **PARTIAL** | Ordered/nested execution, cycle guards, step logs, retries, cancel, and provenance exist. Trigger wiring, schedule claiming, resumable approval, and visual builder remain. |
@@ -105,8 +105,8 @@ Phase 1 isolation/API safety, Phase 2 retrieval correctness, and Phase 3 convers
 2. Keep removed Folder/`.msg`/reranker/target-mapping controls absent; implement translation/ingestion progress, parser hardening, and provider model lifecycle. Scanned-PDF OCR and original-format reconstruction remain intentionally unsupported unless a future decision supersedes Phase 0.
 3. Add pipeline API/document-ingest triggers, atomic schedule claims, waiting-approval resume, and a typed builder.
 4. Complete AI Task types, state transitions, scheduling, audit links, and UI.
-5. Add translation/pattern/ingestion progress and cancellation.
-6. Build Learning and Pattern Explorer dashboards and fix reports.
+5. Phase 4 backend progress/cancel exists; remaining proof is Phase 7 browser/chaos (ING-06/TRN-04/PAT-04). Do not start Phase 5 until that gate is accepted.
+6. Build Learning dashboard and fix reports (Phase 6); Pattern Explorer backend exists.
 7. Make export/import a versioned, tested restore path.
 8. Add browser, real-runtime, optional dependency, load, concurrency, security, and migration tests.
 

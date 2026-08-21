@@ -35,7 +35,6 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
-from contextlib import contextmanager
 from dataclasses import dataclass, field
 
 import frappe
@@ -76,6 +75,7 @@ from ai_fr_hg.ai.translation_utils import (
 	summarise_issues,
 	text_direction,
 )
+from ai_fr_hg.utils.authority import as_user, assert_valid_authority
 
 #: A translation call needs at least this much of the remaining turn budget.
 MIN_CALL_SECONDS = 8.0
@@ -221,6 +221,13 @@ def load_glossary(glossary: str | None, source_language: str, target_language: s
 		return []
 	if not doc.enabled:
 		return []
+	from ai_fr_hg.utils.permissions import has_document_permission
+
+	if not has_document_permission(doc, "read", user=frappe.session.user):
+		frappe.throw(
+			_("You cannot use glossary {0}.").format(glossary),
+			frappe.PermissionError,
+		)
 	rows = [
 		{
 			"term_en": row.term_en,
@@ -355,7 +362,7 @@ def translate_text(
 	*,
 	reference_doctype: str | None = None,
 	reference_name: str | None = None,
-	progress: Callable[[int, int], None] | None = None,
+	progress: Callable[..., None] | None = None,
 	**overrides,
 ) -> TranslationOutcome:
 	"""Translate arbitrary text, segment by segment, with quality gating."""
@@ -441,7 +448,10 @@ def translate_text(
 			break
 		if progress:
 			done = sum(1 for segment in segments if segment.translated)
-			progress(done, len(segments))
+			try:
+				progress(done, len(segments), tokens_used)
+			except TypeError:
+				progress(done, len(segments))
 
 	if options.quality_checks:
 		_score(prepared, options)
@@ -456,6 +466,7 @@ def translate_text(
 			model_doc,
 			samples=options.back_translation_samples,
 		)
+		tokens_used += cint(verification.get("tokens"))
 
 	flagged = sum(
 		1
@@ -705,11 +716,13 @@ def verify_by_back_translation(
 	)
 
 	checked: list[dict] = []
+	tokens_used = 0
 	for segment in sample:
 		try:
-			content, _tokens = _call_model(
+			content, used = _call_model(
 				reverse_prompt, build_single_prompt(segment.translated), model_doc, None, None
 			)
+			tokens_used += used
 			vectors = run_embedding([segment.source, strip_model_preamble(content)], operation="Embedding")
 			if len(vectors) != 2:
 				continue
@@ -718,7 +731,7 @@ def verify_by_back_translation(
 			frappe.log_error(title="AI translation verification", message=str(error))
 			continue
 
-		checked.append({"segment": segment.index, "similarity": similarity})
+		checked.append({"segment": segment.index, "similarity": similarity, "tokens": used})
 		if similarity < 0.75:
 			segment.status = "Flagged"
 			message = _("Back-translation similarity is only {0}.").format(similarity)
@@ -726,11 +739,16 @@ def verify_by_back_translation(
 				segment.issues.append(message)
 
 	if not checked:
-		return {}
+		return {
+			"sampled": 0,
+			"tokens": tokens_used,
+			"issues": ["verification produced no comparable samples"],
+		}
 	return {
 		"sampled": len(checked),
 		"mean_similarity": round(sum(item["similarity"] for item in checked) / len(checked), 4),
 		"segments": checked,
+		"tokens": tokens_used,
 	}
 
 
@@ -842,21 +860,41 @@ def _owns_worker_transaction(translation: str) -> bool:
 	)
 
 
-@contextmanager
 def _translation_user(user: str):
-	"""Run translation work under one validated durable requester."""
-	if not user or user == "Guest" or not frappe.db.get_value("User", user, "enabled"):
-		frappe.throw(_("A valid enabled translation requester is required."), frappe.PermissionError)
-	previous = frappe.session.user
-	if previous != user:
-		# Security-reviewed worker boundary: the durable requester is validated,
-		# permissions are checked after switching, and authority is always restored.
-		frappe.set_user(user)  # nosemgrep
-	try:
-		yield
-	finally:
-		if frappe.session.user != previous:
-			frappe.set_user(previous)  # nosemgrep
+	"""Canonical worker identity: same ``as_user`` as ingestion and pipelines."""
+	return as_user(user)
+
+
+def _assert_not_cancelled(translation: str) -> None:
+	if frappe.db.get_value("AI Translation", translation, "cancel_requested"):
+		frappe.throw(_("Translation was cancelled."), frappe.ValidationError)
+
+
+def cancel_translation(translation: str, requested_by: str | None = None) -> dict:
+	"""Cancel a queued or in-flight translation under requester authority."""
+	user = assert_valid_authority(requested_by or frappe.session.user)
+	with as_user(user):
+		doc = frappe.get_doc("AI Translation", translation)
+		doc.check_permission("write")
+		if doc.status in {"Completed", "Needs Review", "Failed", "Cancelled"}:
+			return {"translation": translation, "status": doc.status, "cancelled": False}
+		frappe.db.set_value(
+			"AI Translation",
+			translation,
+			{
+				"cancel_requested": 1,
+				"status": "Cancelled",
+				"processing_message": "Cancellation requested",
+				"completed_on": now_datetime(),
+			},
+			update_modified=False,
+		)
+		frappe.publish_realtime(
+			"ai_translation_progress",
+			{"translation": translation, "status": "Cancelled", "message": "Cancellation requested"},
+			user=user,
+		)
+	return {"translation": translation, "status": "Cancelled", "cancelled": True}
 
 
 def run_translation(translation: str, requested_by: str | None = None) -> dict:
@@ -864,10 +902,11 @@ def run_translation(translation: str, requested_by: str | None = None) -> dict:
 	authority = frappe.db.get_value("AI Translation", translation, ["requested_by", "owner"], as_dict=True)
 	if not authority:
 		frappe.throw(_("Translation {0} does not exist.").format(translation), frappe.DoesNotExistError)
-	user = requested_by or authority.requested_by or authority.owner
-	with _translation_user(user):
+	user = assert_valid_authority(requested_by or authority.requested_by or authority.owner)
+	with as_user(user):
 		doc = frappe.get_doc("AI Translation", translation)
 		doc.check_permission("write")
+		_assert_not_cancelled(translation)
 		return _run_translation(doc, durable=_owns_worker_transaction(translation))
 
 
@@ -875,9 +914,44 @@ def _run_translation(doc, *, durable: bool) -> dict:
 	"""Persist one translation while the caller owns the requester context."""
 	from ai_fr_hg.ai.logging import write_audit_log
 
-	doc.db_set({"status": "Translating", "error_message": None}, update_modified=False)
+	doc.db_set(
+		{
+			"status": "Translating",
+			"error_message": None,
+			"processing_message": "Translating",
+			"processing_progress": 1,
+		},
+		update_modified=False,
+	)
 	source_text = doc.source_text or frappe.db.get_value("AI Document", doc.source_document, "content")
+
+	def _progress(done: int, total: int, tokens: int = 0) -> None:
+		_assert_not_cancelled(doc.name)
+		pct = 5 + int(90 * done / max(total, 1))
+		frappe.db.set_value(
+			"AI Translation",
+			doc.name,
+			{
+				"processing_progress": pct,
+				"processing_message": f"{done}/{total} segments",
+				"total_tokens": cint(tokens),
+			},
+			update_modified=False,
+		)
+		frappe.publish_realtime(
+			"ai_translation_progress",
+			{
+				"translation": doc.name,
+				"progress": pct,
+				"done": done,
+				"total": total,
+				"total_tokens": cint(tokens),
+			},
+			user=frappe.session.user,
+		)
+
 	try:
+		_assert_not_cancelled(doc.name)
 		outcome = translate_text(
 			source_text,
 			doc.target_language,
@@ -890,18 +964,29 @@ def _run_translation(doc, *, durable: bool) -> dict:
 			knowledge_base=doc.knowledge_base,
 			reference_doctype="AI Translation",
 			reference_name=doc.name,
+			progress=_progress,
 		)
 	except Exception as error:
 		if durable:
 			frappe.db.rollback()
 		doc = frappe.get_doc("AI Translation", doc.name)
+		cancelled = bool(frappe.db.get_value("AI Translation", doc.name, "cancel_requested")) or (
+			"cancelled" in str(error).lower()
+		)
+		status = "Cancelled" if cancelled else "Failed"
 		doc.db_set(
-			{"status": "Failed", "error_message": str(error)[:1000], "completed_on": now_datetime()},
+			{
+				"status": status,
+				"cancel_requested": 1 if cancelled else cint(doc.cancel_requested),
+				"error_message": None if cancelled else str(error)[:1000],
+				"completed_on": now_datetime(),
+				"processing_message": status,
+			},
 			update_modified=False,
 		)
 		frappe.log_error(title="AI translation failed", message=frappe.get_traceback())
 		write_audit_log(
-			action="Translation Failed",
+			action="Translation Cancelled" if cancelled else "Translation Failed",
 			category="Execution",
 			severity="Warning",
 			message=str(error)[:500],
@@ -910,7 +995,11 @@ def _run_translation(doc, *, durable: bool) -> dict:
 		)
 		if durable:
 			frappe.db.commit()  # nosemgrep: frappe-manual-commit
-		return {"translation": doc.name, "status": "Failed", "error": str(error)}
+		return {
+			"translation": doc.name,
+			"status": status,
+			"error": None if cancelled else str(error),
+		}
 
 	_persist_outcome(doc, outcome)
 
@@ -975,6 +1064,9 @@ def _persist_outcome(doc, outcome: TranslationOutcome) -> None:
 	doc.update(
 		{
 			"status": status,
+			"processing_progress": 100,
+			"processing_message": status,
+			"cancel_requested": 0,
 			"translated_text": outcome.text,
 			"source_language": outcome.source_language,
 			"direction": outcome.direction,

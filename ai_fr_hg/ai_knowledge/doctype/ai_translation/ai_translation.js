@@ -172,6 +172,37 @@ frappe.ui.form.on("AI Translation", {
 			"gray"
 		);
 
+		if (["Queued", "Translating"].includes(frm.doc.status)) {
+			frm.add_custom_button(__("Cancel"), async () => {
+				await frappe.xcall("ai_fr_hg.api.translation.cancel", {
+					translation: frm.doc.name,
+				});
+				frappe.show_alert({ message: __("Cancellation requested"), indicator: "orange" });
+				frm.reload_doc();
+			}).addClass("btn-danger");
+			if (!frm._ai_translation_realtime) {
+				frm._ai_translation_realtime = frappe.realtime.on(
+					"ai_translation_progress",
+					(data) => {
+						if (data && data.translation === frm.doc.name) {
+							frm.reload_doc();
+						}
+					}
+				);
+				frm.script_manager &&
+					frm.script_manager.extend &&
+					$(frm.wrapper).on("hide", () => {
+						if (frm._ai_translation_realtime) {
+							frappe.realtime.off(
+								"ai_translation_progress",
+								frm._ai_translation_realtime
+							);
+							frm._ai_translation_realtime = null;
+						}
+					});
+			}
+		}
+
 		if (["Draft", "Failed", "Completed", "Needs Review"].includes(frm.doc.status)) {
 			frm.add_custom_button(__("Translate Now"), async () => {
 				await frm.call("translate", { background: true });
