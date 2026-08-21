@@ -1,6 +1,6 @@
 # AI Fr HG — audited project status
 
-**Status date:** 2026-08-20
+**Status date:** 2026-08-21
 **App version:** `0.0.1`
 **Framework baseline:** pinned Frappe `17.0.0-dev`, Python `>=3.14,<3.15`, Node 24, MariaDB 11.8
 **Release qualification:** not production-ready; upstream stable Frappe v17 does not yet exist
