@@ -110,7 +110,60 @@ class TestConversationHistory(AIPlatformTestCase):
 		self.assertEqual(sequences, list(range(1, 101)))
 		self.assertEqual(len(sequences), len(set(sequences)))
 
-	def test_duplicate_sequence_is_rejected_when_index_exists(self):
+	def test_allocator_sees_commits_made_after_this_transaction_started(self):
+		"""Deterministic reproduction of the CHAT-02 snapshot-isolation defect.
+
+		The 100-worker test above catches this only probabilistically. This one
+		forces the exact interleaving every time:
+
+		1. pin this transaction's REPEATABLE READ snapshot with a read;
+		2. let an independent connection commit sequence 1;
+		3. allocate.
+
+		With a plain ``select max(sequence)`` the allocator reads the snapshot
+		from step 1, still sees an empty conversation, and returns 1 — handing
+		out a sequence that is already committed. The allocator must return 2.
+		"""
+		import threading
+
+		from ai_fr_hg.ai.agent import save_message
+		from ai_fr_hg.ai.conversation import allocate_sequence
+
+		conversation = self._conversation()
+		frappe.db.commit()  # nosemgrep: frappe-manual-commit
+		site = frappe.local.site
+
+		# Step 1: any read pins the snapshot. In production this is whatever
+		# `frappe.connect()` and session loading already read.
+		frappe.db.sql("select count(*) from `tabAI Message` where conversation = %s", (conversation.name,))
+
+		committed: dict = {}
+
+		def other_worker():
+			frappe.init(site=site)
+			frappe.connect()
+			frappe.set_user("Administrator")
+			try:
+				message = save_message(conversation.name, role="User", content="from another worker")
+				frappe.db.commit()  # nosemgrep: frappe-manual-commit
+				committed["sequence"] = message.sequence
+			finally:
+				frappe.destroy()
+
+		worker = threading.Thread(target=other_worker)
+		worker.start()
+		worker.join()
+
+		self.assertEqual(committed.get("sequence"), 1)
+		self.assertEqual(allocate_sequence(conversation.name), 2)
+
+	def test_duplicate_sequence_is_rejected_by_the_database(self):
+		"""The unique index is a required backstop, so its absence is a failure.
+
+		This assertion used to `skipTest` when the index was missing, which
+		meant a site running without the guarantee reported a green test. A
+		test that cannot fail when the thing it guards is gone is not a test.
+		"""
 		from ai_fr_hg.ai.agent import save_message
 
 		conversation = self._conversation()
@@ -119,8 +172,11 @@ class TestConversationHistory(AIPlatformTestCase):
 			"SHOW INDEX FROM `tabAI Message` WHERE Key_name=%s",
 			("unique_conversation_sequence",),
 		)
-		if not indexes:
-			self.skipTest("unique_conversation_sequence index is not present on this site")
+		self.assertTrue(
+			indexes,
+			"unique_conversation_sequence is missing: message ordering has no database-level "
+			"guarantee. Run `bench migrate` and check patch v0_0_17_conversation_turn_identity.",
+		)
 		duplicate = frappe.get_doc(
 			{
 				"doctype": "AI Message",

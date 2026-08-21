@@ -50,6 +50,20 @@ def _renumber_duplicate_sequences() -> None:
 			frappe.db.set_value("AI Message", name, "sequence", index, update_modified=False)
 
 
+def _remaining_duplicates() -> list[tuple]:
+	"""Conversations that still hold a duplicate or non-positive sequence."""
+	return frappe.db.sql(
+		"""
+		select conversation, sequence, count(*) as copies
+		from `tabAI Message`
+		where conversation is not null
+		group by conversation, sequence
+		having count(*) > 1
+		limit 20
+		"""
+	)
+
+
 def execute() -> None:
 	if getattr(frappe.db, "db_type", None) == "postgres":
 		return
@@ -57,18 +71,32 @@ def execute() -> None:
 	_renumber_duplicate_sequences()
 
 	if not _index_exists(UNIQUE_NAME):
+		# CHAT-02: this index is the database-level backstop for message
+		# sequence uniqueness. A previous version of this patch swallowed the
+		# failure into `frappe.log_error`, and a real site was later found
+		# running *without* the index and without anyone knowing — while the
+		# test that was supposed to catch it skipped itself because the index
+		# was missing. A backstop that can vanish silently is not a backstop.
+		#
+		# If the ALTER cannot be applied the migration now fails loudly with
+		# the offending rows named, because the allocator's correctness
+		# guarantee is weaker without it.
 		try:
 			frappe.db.sql(
 				"ALTER TABLE `tabAI Message` "
 				"ADD UNIQUE INDEX `unique_conversation_sequence` (`conversation`, `sequence`)"
 			)
-		except Exception:
-			frappe.log_error(
-				title="AI conversation unique sequence index skipped", message=frappe.get_traceback()
-			)
+		except Exception as exc:
+			duplicates = _remaining_duplicates()
+			raise RuntimeError(
+				"Could not create the unique (conversation, sequence) index on `tabAI Message`. "
+				"Message ordering has no database-level guarantee until this is resolved. "
+				f"Remaining duplicate (conversation, sequence) groups: {duplicates or 'none found'}."
+			) from exc
 
 	if not _index_exists(TURN_INDEX):
 		try:
 			frappe.db.sql("ALTER TABLE `tabAI Message` ADD INDEX `turn_id_index` (`turn_id`)")
 		except Exception:
+			# A missing secondary index costs lookup speed, not correctness.
 			frappe.log_error(title="AI conversation turn_id index skipped", message=frappe.get_traceback())

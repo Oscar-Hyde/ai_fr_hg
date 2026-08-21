@@ -83,13 +83,32 @@ def raise_if_cancelled(turn_id: str | None, partial: str = "") -> None:
 
 
 def allocate_sequence(conversation: str) -> int:
-	"""Reserve the next sequence under a conversation row lock (CHAT-02)."""
+	"""Reserve the next sequence under a conversation row lock (CHAT-02).
+
+	Both statements below are **locking** reads, and the second one is the
+	whole point of this docstring.
+
+	InnoDB's default isolation level is REPEATABLE READ, under which a plain
+	``SELECT`` is served from the transaction's consistent snapshot. That
+	snapshot is established at the transaction's *first* read — for a Frappe
+	worker, somewhere inside ``frappe.connect()``, long before this function
+	runs. So an ordinary ``select max(sequence)`` here would return the value
+	as of transaction start, not as of lock acquisition.
+
+	The effect was subtle and real: the ``for update`` on the conversation row
+	correctly serialized competing writers, then each one read a *stale* max
+	and handed out a sequence another writer had already committed. A real
+	100-worker bench run produced ``[1, 1, 2, ... 99]``.
+
+	``for update`` on the aggregate makes it a current read, so it observes
+	every transaction that committed before this one acquired the lock.
+	"""
 	frappe.db.sql(
 		"select name from `tabAI Conversation` where name = %s for update",
 		(conversation,),
 	)
 	last = frappe.db.sql(
-		"select coalesce(max(sequence), 0) from `tabAI Message` where conversation = %s",
+		"select coalesce(max(sequence), 0) from `tabAI Message` where conversation = %s for update",
 		(conversation,),
 	)[0][0]
 	return cint(last) + 1
