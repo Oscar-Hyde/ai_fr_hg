@@ -39,4 +39,6 @@ class TestSnapshotSanitization(TestCase):
 		self.assertNotIn("api_key", clean)
 		self.assertNotIn("password", clean)
 		self.assertNotIn("assignments", clean)
-		self.assertEqual(event_revision_key("Rule", "ToDo", "TODO-1", "2026-01-01"), "Rule::ToDo::TODO-1::2026-01-01")
+		self.assertEqual(
+			event_revision_key("Rule", "ToDo", "TODO-1", "2026-01-01"), "Rule::ToDo::TODO-1::2026-01-01"
+		)

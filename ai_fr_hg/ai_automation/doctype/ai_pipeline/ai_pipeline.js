@@ -21,8 +21,18 @@ const STEP_CONFIG_FIELDS = {
 		{ fieldtype: "Int", fieldname: "chunk_overlap", label: __("Overlap"), default: 150 },
 	],
 	Compare: [
-		{ fieldtype: "Data", fieldname: "document_a", label: __("Context key A"), default: "document_a" },
-		{ fieldtype: "Data", fieldname: "document_b", label: __("Context key B"), default: "document_b" },
+		{
+			fieldtype: "Data",
+			fieldname: "document_a",
+			label: __("Context key A"),
+			default: "document_a",
+		},
+		{
+			fieldtype: "Data",
+			fieldname: "document_b",
+			label: __("Context key B"),
+			default: "document_b",
+		},
 	],
 	Translate: [
 		{
@@ -39,9 +49,23 @@ const STEP_CONFIG_FIELDS = {
 			options: "Neutral\nFormal\nInformal\nTechnical\nLegal",
 			default: "Neutral",
 		},
-		{ fieldtype: "Select", fieldname: "return", label: __("Return"), options: "text\nobject", default: "text" },
+		{
+			fieldtype: "Select",
+			fieldname: "return",
+			label: __("Return"),
+			options: "text\nobject",
+			default: "text",
+		},
 	],
-	Tool: [{ fieldtype: "Code", fieldname: "arguments", label: __("Arguments"), options: "JSON", default: "{}" }],
+	Tool: [
+		{
+			fieldtype: "Code",
+			fieldname: "arguments",
+			label: __("Arguments"),
+			options: "JSON",
+			default: "{}",
+		},
+	],
 };
 
 function parseConfig(raw) {
@@ -178,7 +202,8 @@ frappe.ui.form.on("AI Pipeline Step", {
 			Summarize: '{\n  "max_words": 200,\n  "instructions": ""\n}',
 			Chunk: '{\n  "chunk_size": 1200,\n  "chunk_overlap": 150\n}',
 			Compare: '{\n  "document_a": "document_a",\n  "document_b": "document_b"\n}',
-			Translate: '{\n  "target_language": "ar",\n  "tone": "Neutral",\n  "return": "text"\n}',
+			Translate:
+				'{\n  "target_language": "ar",\n  "tone": "Neutral",\n  "return": "text"\n}',
 			Tool: '{\n  "arguments": {}\n}',
 		};
 		if (templates[row.step_type] && !row.config) {

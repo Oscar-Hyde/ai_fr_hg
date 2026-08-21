@@ -264,9 +264,7 @@ def skill_query(user: str) -> str:
 def task_query(user: str) -> str:
 	if _is_manager(user) or _is_auditor(user):
 		return ""
-	return (
-		f"(`tabAI Task`.`owner` = {_escape(user)} or `tabAI Task`.`requested_by` = {_escape(user)})"
-	)
+	return f"(`tabAI Task`.`owner` = {_escape(user)} or `tabAI Task`.`requested_by` = {_escape(user)})"
 
 
 def automation_event_query(user: str) -> str:

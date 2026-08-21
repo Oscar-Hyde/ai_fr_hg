@@ -85,7 +85,9 @@ class PipelineStepRecordedError(PipelineError):
 class PipelineApprovalRequired(PipelineStepRecordedError):
 	"""A pipeline tool step created a durable approval request and must pause."""
 
-	def __init__(self, message: str | None = None, invocation: str | None = None, child_run: str | None = None):
+	def __init__(
+		self, message: str | None = None, invocation: str | None = None, child_run: str | None = None
+	):
 		self.invocation = invocation
 		self.child_run = child_run
 		super().__init__(message or _("A pipeline step is waiting for approval."))

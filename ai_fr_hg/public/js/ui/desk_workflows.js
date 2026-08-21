@@ -50,7 +50,10 @@ const TASK_ACTIONS = {
 	Failed: ["retry"],
 };
 
-export function taskActionsFor(status, { isManager = false, isRequester = false, requiresApproval = false } = {}) {
+export function taskActionsFor(
+	status,
+	{ isManager = false, isRequester = false, requiresApproval = false } = {}
+) {
 	const allowed = TASK_ACTIONS[status] || [];
 	return allowed.filter((action) => {
 		if (action === "approve") return isManager && !isRequester;
@@ -61,14 +64,16 @@ export function taskActionsFor(status, { isManager = false, isRequester = false,
 }
 
 export function pipelineRunIndicator(status) {
-	return {
-		Queued: "grey",
-		Running: "blue",
-		"Waiting Approval": "orange",
-		Completed: "green",
-		Failed: "red",
-		Cancelled: "orange",
-	}[status] || "grey";
+	return (
+		{
+			Queued: "grey",
+			Running: "blue",
+			"Waiting Approval": "orange",
+			Completed: "green",
+			Failed: "red",
+			Cancelled: "orange",
+		}[status] || "grey"
+	);
 }
 
 export function pipelineCanCancel(status) {

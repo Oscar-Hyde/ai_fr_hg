@@ -123,9 +123,7 @@ def run_scheduled_pipelines() -> None:
 		try:
 			run_pipeline(name, trigger_source="Schedule")
 		except Exception:
-			frappe.log_error(
-				title=f"AI scheduled pipeline failed: {name}", message=frappe.get_traceback()
-			)
+			frappe.log_error(title=f"AI scheduled pipeline failed: {name}", message=frappe.get_traceback())
 
 
 def run_due_tasks() -> None:

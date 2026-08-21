@@ -13,7 +13,9 @@ const TASK_COLORS = {
 };
 
 function isManager() {
-	return frappe.user_roles.some((role) => ["AI Manager", "System Manager", "Administrator"].includes(role));
+	return frappe.user_roles.some((role) =>
+		["AI Manager", "System Manager", "Administrator"].includes(role)
+	);
 }
 
 frappe.ui.form.on("AI Task", {
@@ -44,7 +46,8 @@ frappe.ui.form.on("AI Task", {
 			if (mine || manager) add("Cancel", "cancel_task", "btn-danger");
 		}
 		if (frm.doc.status === "Pending Approval") {
-			if (manager && frappe.session.user !== requester) add("Approve", "approve", "btn-primary");
+			if (manager && frappe.session.user !== requester)
+				add("Approve", "approve", "btn-primary");
 			if (manager) add("Reject", "reject");
 			if (mine || manager) add("Cancel", "cancel_task", "btn-danger");
 		}
@@ -71,7 +74,9 @@ frappe.ui.form.on("AI Task", {
 		}
 		if (frm.doc.error_message) {
 			frm.dashboard.set_headline(
-				`<span class="text-danger">${frappe.utils.escape_html(frm.doc.error_message)}</span>`
+				`<span class="text-danger">${frappe.utils.escape_html(
+					frm.doc.error_message
+				)}</span>`
 			);
 		}
 		frappe.realtime.on("ai_task_progress", (data) => {

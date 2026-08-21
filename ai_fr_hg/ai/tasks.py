@@ -58,9 +58,7 @@ def _requester(doc) -> str:
 def assert_transition(current: str, target: str) -> None:
 	allowed = LEGAL_TRANSITIONS.get(current) or set()
 	if target not in allowed:
-		raise TaskIllegalTransition(
-			_("Cannot move an AI Task from {0} to {1}.").format(current, target)
-		)
+		raise TaskIllegalTransition(_("Cannot move an AI Task from {0} to {1}.").format(current, target))
 
 
 def validate_task_contract(doc) -> None:
@@ -322,7 +320,9 @@ def execute_task(task: str) -> dict:
 				right = payload.get("document_b")
 				if not left or not right:
 					raise TaskError(_("A Compare task needs document_a and document_b."))
-				result_data = compare_documents(left, right, model=doc.model, instructions=doc.instruction or "")
+				result_data = compare_documents(
+					left, right, model=doc.model, instructions=doc.instruction or ""
+				)
 				result_text = result_data.get("comparison") or frappe.as_json(result_data)
 			elif doc.task_type == "Custom":
 				method = resolve_task_method(doc.custom_method)
@@ -394,7 +394,9 @@ def claim_due_tasks(limit: int = 20) -> list[str]:
 	return claimed
 
 
-def task_actions_for(status: str, *, is_manager: bool, is_requester: bool, requires_approval: bool) -> list[str]:
+def task_actions_for(
+	status: str, *, is_manager: bool, is_requester: bool, requires_approval: bool
+) -> list[str]:
 	"""Frontend contract: which buttons the current actor may see."""
 	actions: list[str] = []
 	if status == "Open":

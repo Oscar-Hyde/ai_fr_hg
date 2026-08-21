@@ -10,8 +10,8 @@ import json
 import frappe
 from frappe import _
 
-from ai_fr_hg.utils.api_validation import bounded_payload, idempotency_key as parse_idempotency_key
-from ai_fr_hg.utils.api_validation import valid_identifier
+from ai_fr_hg.utils.api_validation import bounded_payload, valid_identifier
+from ai_fr_hg.utils.api_validation import idempotency_key as parse_idempotency_key
 
 
 @frappe.whitelist()

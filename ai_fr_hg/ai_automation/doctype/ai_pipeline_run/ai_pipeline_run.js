@@ -15,7 +15,9 @@ frappe.ui.form.on("AI Pipeline Run", {
 		};
 		frm.page.set_indicator(__(frm.doc.status), colors[frm.doc.status] || "grey");
 
-		frm.add_custom_button(__("Pipeline"), () => frappe.set_route("Form", "AI Pipeline", frm.doc.pipeline));
+		frm.add_custom_button(__("Pipeline"), () =>
+			frappe.set_route("Form", "AI Pipeline", frm.doc.pipeline)
+		);
 
 		if (["Queued", "Running", "Waiting Approval"].includes(frm.doc.status)) {
 			frm.add_custom_button(__("Cancel"), async () => {
@@ -49,15 +51,17 @@ frappe.ui.form.on("AI Pipeline Run", {
 											s.status === "Success"
 												? "green"
 												: s.status === "Failed"
-													? "red"
-													: s.status === "Waiting Approval"
-														? "orange"
-														: "grey"
+												? "red"
+												: s.status === "Waiting Approval"
+												? "orange"
+												: "grey"
 										}">
 											${__(s.status)}
 										</span>
 									</div>
-									<div class="col-sm-6 text-muted small">${frappe.utils.escape_html(s.output || s.error_message || "")}</div>
+									<div class="col-sm-6 text-muted small">${frappe.utils.escape_html(
+										s.output || s.error_message || ""
+									)}</div>
 								</div>`
 						)
 						.join("")}

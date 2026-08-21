@@ -427,7 +427,12 @@ def _persist_checkpoint(run_doc, context: dict | None = None, *, durable: bool) 
 	if current == "Cancelled" and run_doc.status != "Cancelled":
 		run_doc.status = "Cancelled"
 		return False
-	if current == "Waiting Approval" and run_doc.status not in {"Waiting Approval", "Running", "Cancelled", "Failed"}:
+	if current == "Waiting Approval" and run_doc.status not in {
+		"Waiting Approval",
+		"Running",
+		"Cancelled",
+		"Failed",
+	}:
 		run_doc.status = current
 		return False
 	if context is not None:
@@ -956,7 +961,9 @@ def claim_due_scheduled_pipelines(now=None) -> list[str]:
 	return claimed
 
 
-def trigger_document_ingest_pipelines(document_name: str, knowledge_base: str | None, requested_by: str) -> list[str]:
+def trigger_document_ingest_pipelines(
+	document_name: str, knowledge_base: str | None, requested_by: str
+) -> list[str]:
 	"""Start Document Ingest pipelines after a successful canonical index."""
 	started: list[str] = []
 	pipelines = frappe.get_all(

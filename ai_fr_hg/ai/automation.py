@@ -360,7 +360,12 @@ def _register_event(rule, doc, event: str) -> dict | None:
 		as_dict=True,
 	)
 	if existing and existing.status in {"Queued", "Running", "Success"}:
-		return {"event": existing.name, "status": existing.status, "skipped": True, "reason": "duplicate_revision"}
+		return {
+			"event": existing.name,
+			"status": existing.status,
+			"skipped": True,
+			"reason": "duplicate_revision",
+		}
 
 	coalesce = True if rule.get("coalesce_events") in (None, "") else bool(cint(rule.coalesce_events))
 	if coalesce:
@@ -459,7 +464,11 @@ class SnapshotDocument:
 
 	@property
 	def meta(self):
-		return frappe.get_meta(self.doctype) if self.doctype else frappe._dict(fields=[], has_field=lambda *_: False)
+		return (
+			frappe.get_meta(self.doctype)
+			if self.doctype
+			else frappe._dict(fields=[], has_field=lambda *_: False)
+		)
 
 
 def _get_source_text(rule, doc) -> str:

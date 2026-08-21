@@ -510,7 +510,6 @@ class TestPipeline(AIPlatformTestCase):
 		self.assertEqual(run.step_logs[0].status, "Failed")
 		self.assertEqual(run.step_logs[1].status, "Success")
 
-
 	def test_api_trigger_requires_api_type_and_is_idempotent(self):
 		from ai_fr_hg.api.pipeline import trigger
 
