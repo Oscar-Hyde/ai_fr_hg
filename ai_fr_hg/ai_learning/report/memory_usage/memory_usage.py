@@ -5,12 +5,34 @@ from __future__ import annotations
 
 import frappe
 from frappe import _
-from frappe.utils import cint
+
+from ai_fr_hg.ai.learning_utils import REPORT_ROW_LIMIT, normalise_report_filters
+
+
+def _authorise(ref_doctype: str) -> None:
+	"""Service-layer authorization, not only the Report wrapper's role check.
+
+	Frappe checks the Report's roles before calling ``execute``. This repeats
+	the check against the referenced DocType so the function is safe if it is
+	ever invoked directly (background job, another report, a test).
+	"""
+	if not frappe.has_permission(ref_doctype, "report"):
+		frappe.throw(
+			_("You are not permitted to run reports on {0}.").format(_(ref_doctype)),
+			frappe.PermissionError,
+		)
 
 
 def execute(filters: dict | None = None) -> tuple[list, list]:
-	"""Memory Usage report showing how approved memories are performing."""
-	filters = filters or {}
+	"""Memory Usage report showing how approved memories are performing.
+
+	LEARN-01: registered as a Script Report so these filters actually run, and
+	ordered through the query builder so no engine-specific ``NULLS LAST``
+	clause is emitted (ADR-001 supports MariaDB, but portable ordering costs
+	nothing here).
+	"""
+	_authorise("AI Memory")
+	filters = normalise_report_filters("Memory Usage", filters)
 	memory = frappe.qb.DocType("AI Memory")
 	query = (
 		frappe.qb.from_(memory)
@@ -32,7 +54,7 @@ def execute(filters: dict | None = None) -> tuple[list, list]:
 		)
 		.orderby(memory.usage_count, order=frappe.qb.desc)
 		.orderby(memory.last_used_on, order=frappe.qb.desc)
-		.limit(500)
+		.limit(REPORT_ROW_LIMIT)
 	)
 	if filters.get("memory_type"):
 		query = query.where(memory.memory_type == filters["memory_type"])
@@ -41,7 +63,7 @@ def execute(filters: dict | None = None) -> tuple[list, list]:
 	if filters.get("scope"):
 		query = query.where(memory.scope == filters["scope"])
 	if filters.get("min_usage") is not None:
-		query = query.where(memory.usage_count >= max(0, cint(filters["min_usage"])))
+		query = query.where(memory.usage_count >= filters["min_usage"])
 
 	columns = [
 		{"fieldname": "Memory ID", "fieldtype": "Data", "label": _("Memory ID"), "width": 140},

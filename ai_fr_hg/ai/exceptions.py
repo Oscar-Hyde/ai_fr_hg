@@ -42,6 +42,28 @@ class QuotaExceededError(AIError):
 	"""Raised when a resource policy limit is hit."""
 
 
+class ConcurrencyLimitError(QuotaExceededError):
+	"""GOV-01: a user, provider, or model is at its concurrent request limit.
+
+	Derives from :class:`QuotaExceededError` so existing policy handling keeps
+	working, but is distinct enough for the caller to report honestly: nothing
+	failed, the request simply arrived while every slot was busy.
+	"""
+
+
+class RateLimitExceededError(QuotaExceededError):
+	"""GOV-02: a provider's requests-per-minute window is full.
+
+	``retry_after_ms`` is the measured time until the oldest request leaves the
+	sliding window, so callers and UIs can show a real delay instead of a
+	guess.
+	"""
+
+	def __init__(self, message: str | None = None, retry_after_ms: int = 0):
+		self.retry_after_ms = int(retry_after_ms or 0)
+		super().__init__(message or _("Provider rate limit exceeded."))
+
+
 class ToolExecutionError(AIError):
 	"""Raised when a tool invocation fails."""
 

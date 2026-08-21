@@ -7,8 +7,9 @@ from uuid import uuid4
 
 import frappe
 from frappe import _
-from frappe.utils import cint, now_datetime
+from frappe.utils import add_to_date, cint, get_datetime, now_datetime
 
+from ai_fr_hg.ai import capability
 from ai_fr_hg.utils.db import safe_set_value
 
 DEGRADED_THRESHOLD = 3
@@ -88,10 +89,75 @@ def check_provider_health(provider: str, log: bool = True) -> dict:
 	}
 
 
-def check_all_providers() -> list[dict]:
-	"""Probe every enabled provider. Used by the scheduler."""
+def claim_due_providers(interval_minutes: int, tolerance_seconds: int = 30) -> list[str]:
+	"""OPS-02: atomically claim the providers whose health check is due.
+
+	The previous implementation compared ``now().minute % interval`` against
+	the five-minute cron. Any interval that is not a divisor of five (7, 20,
+	45 ...) therefore ran at the wrong cadence or not at all, and two
+	schedulers firing in the same minute both ran the same probe.
+
+	This selects on the real ``last_health_check`` timestamp and then claims
+	each row with a conditional ``UPDATE``. Only the worker whose update
+	affects a row proceeds, so overlapping schedulers, a manual run, and a
+	restarted bench cannot probe the same provider twice.
+
+	The claim is written *before* the probe: a provider whose runtime hangs is
+	retried on the next interval, never in a hot loop.
+	"""
+	interval_minutes = max(1, cint(interval_minutes))
+	threshold = add_to_date(
+		now_datetime(), seconds=-(interval_minutes * 60 - max(0, cint(tolerance_seconds)))
+	)
+
+	due = frappe.get_all(
+		"AI Provider",
+		filters={"enabled": 1},
+		or_filters=[
+			["last_health_check", "is", "not set"],
+			["last_health_check", "<=", threshold],
+		],
+		pluck="name",
+		order_by="last_health_check asc",
+	)
+
+	claimed: list[str] = []
+	stamp = now_datetime()
+	for provider in due:
+		# Same claim pattern as PIPE-02's scheduled-pipeline claim: take the
+		# row lock, re-read under it, and only then write. One canonical way of
+		# claiming scheduled work in this application, not two.
+		locked = frappe.db.get_value(
+			"AI Provider",
+			provider,
+			["name", "enabled", "last_health_check"],
+			as_dict=True,
+			for_update=True,
+		)
+		if not locked or not locked.enabled:
+			continue
+		if locked.last_health_check and get_datetime(locked.last_health_check) > threshold:
+			continue  # another scheduler claimed it between the scan and the lock
+
+		frappe.db.set_value("AI Provider", provider, "last_health_check", stamp, update_modified=False)
+		claimed.append(provider)
+	return claimed
+
+
+def check_all_providers(interval_minutes: int | None = None) -> list[dict]:
+	"""Probe providers. With `interval_minutes`, only those actually due.
+
+	Called with no interval (manual "Check Now", tests) it probes every enabled
+	provider, which is the behaviour an operator expects from an explicit
+	action. Called by the scheduler it probes only claimed, due providers.
+	"""
+	if interval_minutes:
+		providers = claim_due_providers(interval_minutes)
+	else:
+		providers = frappe.get_all("AI Provider", filters={"enabled": 1}, pluck="name")
+
 	results = []
-	for provider in frappe.get_all("AI Provider", filters={"enabled": 1}, pluck="name"):
+	for provider in providers:
 		save_point = f"ai_health_{uuid4().hex}"
 		frappe.db.savepoint(save_point)
 		try:
@@ -207,6 +273,11 @@ def sync_provider_models(provider: str, create_missing: bool = True) -> dict:
 					"status": "Available",
 					"last_checked": now_datetime(),
 					"enabled": 1,
+					# PROV-02: capability fields used to be left at their
+					# defaults and were never enforced. Seed them from what
+					# this adapter can actually transport so the fields mean
+					# something the operator can then narrow.
+					**capability.discovery_capability_defaults(adapter, model_type, model.name),
 				}
 			)
 			doc.flags.ignore_permissions = True

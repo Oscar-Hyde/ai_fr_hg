@@ -26,7 +26,7 @@ from ai_fr_hg.ai.exceptions import (
 	ProviderError,
 	TurnCancelledError,
 )
-from ai_fr_hg.ai.providers import get_failover_providers, get_provider
+from ai_fr_hg.ai.providers import get_provider
 from ai_fr_hg.ai.providers.base import ChatMessage, CompletionResult
 from ai_fr_hg.utils.db import safe_set_value
 
@@ -59,12 +59,23 @@ def resolve_model(model: str | None = None, model_type: str = "Chat"):
 	"""Resolve a model name, the configured default, or the best candidate.
 
 	Raises when nothing suitable is enabled, so callers never operate on an
-	implicit or missing model.
+	implicit or missing model. GOV-04: an explicitly requested model must also
+	be *type compatible* with the operation. Before this check an API caller
+	could pass an Embedding model to a chat endpoint and receive whatever the
+	runtime happened to return.
 	"""
+	from ai_fr_hg.ai import capability
+
 	if model:
 		doc = frappe.get_cached_doc("AI Model", model)
 		if not doc.enabled:
 			frappe.throw(_("AI Model {0} is disabled.").format(model))
+		if reason := capability.model_type_error(model_type, doc):
+			frappe.throw(
+				_model_type_message(reason, doc, model_type),
+				exc=ModelNotAvailableError,
+				title=_("Incompatible Model"),
+			)
 		return doc
 
 	settings = get_settings()
@@ -77,16 +88,27 @@ def resolve_model(model: str | None = None, model_type: str = "Chat"):
 
 	if default_field and (configured := settings.get(default_field)):
 		doc = frappe.get_cached_doc("AI Model", configured)
-		if doc.enabled:
+		# A misconfigured default is skipped rather than used: falling through
+		# to a compatible candidate is safer than serving the wrong model type.
+		if doc.enabled and not capability.model_type_error(model_type, doc):
 			return doc
 
-	candidates = frappe.get_all(
-		"AI Model",
-		filters={"enabled": 1, "model_type": model_type},
-		fields=["name"],
-		order_by="is_default desc, creation asc",
-		limit=1,
-	)
+	# Prefer a model of exactly the requested type; only then accept a merely
+	# compatible one (a Vision model answering a Chat request, for example).
+	candidates = []
+	for allowed in (
+		[model_type],
+		list(capability.COMPATIBLE_MODEL_TYPES.get(model_type, (model_type,))),
+	):
+		candidates = frappe.get_all(
+			"AI Model",
+			filters={"enabled": 1, "model_type": ["in", allowed]},
+			fields=["name"],
+			order_by="is_default desc, creation asc",
+			limit=1,
+		)
+		if candidates:
+			break
 	if not candidates:
 		frappe.throw(
 			_("No enabled {0} model is available. Register one in the AI Models workspace.").format(
@@ -96,6 +118,41 @@ def resolve_model(model: str | None = None, model_type: str = "Chat"):
 			title=_("No Model"),
 		)
 	return frappe.get_cached_doc("AI Model", candidates[0].name)
+
+
+def _model_type_message(reason: str, model_doc, model_type: str) -> str:
+	"""Translate a GOV-04 policy reason into an operator-readable message."""
+	if reason == "unknown_operation_type":
+		return _("Unknown AI operation type {0}.").format(model_type)
+	if reason == "unknown_model_type":
+		return _("AI Model {0} has no model type and cannot be used.").format(model_doc.name)
+	if reason == "vision_not_supported":
+		return _("AI Model {0} does not accept image input.").format(model_doc.name)
+	return _("AI Model {0} is a {1} model and cannot serve a {2} request.").format(
+		model_doc.name, model_doc.model_type, model_type
+	)
+
+
+def effective_capabilities(model_doc, provider: str | None = None) -> dict[str, bool]:
+	"""PROV-02: provider transport AND model declaration AND runtime probes."""
+	from ai_fr_hg.ai import capability
+	from ai_fr_hg.ai.providers import get_provider_class_for
+
+	provider_class = get_provider_class_for(provider or model_doc.provider)
+	return capability.effective_capabilities(
+		provider_class, model_doc, failed_probes=capability.failed_probes(model_doc.name)
+	)
+
+
+def _capability_message(missing: str, model_doc) -> str:
+	return {
+		"tools": _("AI Model {0} on provider {1} cannot execute tool calls."),
+		"json_mode": _("AI Model {0} on provider {1} cannot produce schema-constrained JSON."),
+		"vision": _("AI Model {0} on provider {1} cannot accept image input."),
+		"embeddings": _("AI Model {0} on provider {1} cannot produce embeddings."),
+	}.get(missing, _("AI Model {0} on provider {1} does not support this request.")).format(
+		model_doc.name, model_doc.provider
+	)
 
 
 def build_options(model_doc, overrides: dict | None = None) -> dict:
@@ -184,7 +241,16 @@ def run_chat(
 	turn_id: str | None = None,
 ) -> CompletionResult:
 	"""Execute a chat completion with full logging, quota checks and failover."""
-	from ai_fr_hg.ai.governance import check_quota, record_usage
+	from ai_fr_hg.ai import capability
+	from ai_fr_hg.ai.exceptions import ConcurrencyLimitError, RateLimitExceededError
+	from ai_fr_hg.ai.governance import (
+		provider_rate_limit,
+		record_usage,
+		reserve_request_quota,
+		runtime_concurrency_limits,
+		user_concurrency_limits,
+	)
+	from ai_fr_hg.ai.limits import acquire_leases, check_rate_limit
 	from ai_fr_hg.ai.logging import finish_execution_log, start_execution_log
 
 	settings = get_settings()
@@ -192,78 +258,234 @@ def run_chat(
 		frappe.throw(_("The AI Platform is disabled in AI Platform Settings."))
 
 	model_doc = resolve_model(model, "Chat")
-	check_quota(model_doc)
 
 	chat_messages = normalise_messages(messages)
 	merged_options = build_options(model_doc, options)
+	wants_images = any(getattr(message, "images", None) for message in chat_messages)
 
-	log = start_execution_log(
-		operation=operation,
-		model=model_doc,
-		messages=chat_messages,
-		options=merged_options,
-		reference_doctype=reference_doctype,
-		reference_name=reference_name,
-		conversation=conversation,
-		pipeline_run=pipeline_run,
+	# PROV-02: refuse an unsupported combination here, with an accurate reason,
+	# rather than sending it and reporting whatever HTTP error comes back.
+	capabilities = effective_capabilities(model_doc)
+	if missing := capability.capability_error(
+		capabilities, tools=bool(tools), json_schema=bool(json_schema), images=wants_images
+	):
+		frappe.throw(
+			_capability_message(missing, model_doc),
+			exc=ModelNotAvailableError,
+			title=_("Capability Not Available"),
+		)
+
+	required = capability.required_capabilities(
+		tools=bool(tools), json_schema=bool(json_schema), images=wants_images
 	)
 
-	attempts = [model_doc.provider]
-	if allow_failover:
-		attempts += get_failover_providers(exclude=model_doc.provider)
-
-	last_error: Exception | None = None
 	max_retries = cint(settings.max_retries)
 	deadline = get_deadline()
+	lease_ttl = cint(settings.request_timeout) or 300
 
-	for attempt_index, provider_name in enumerate(attempts):
-		# Failing over costs at least another full round trip. If the budget
-		# cannot fund one, stop here and report the failure we already have
-		# rather than burning the remaining time on a call we must abandon.
-		if deadline and attempt_index and not deadline.allows(MIN_ATTEMPT_SECONDS):
-			break
+	# GOV-03: claim the request and its worst-case token budget atomically,
+	# before any log row exists, so a refused call leaves no stale Running log.
+	reservation = reserve_request_quota(
+		model_doc, estimated_tokens=cint(merged_options.get("max_tokens")), ttl=lease_ttl
+	)
+	# GOV-01: the caller's own concurrency slot is held for the whole call, not
+	# per attempt - releasing it between failover attempts would let a
+	# competing request take it and starve this one mid-flight.
+	try:
+		user_leases = acquire_leases(user_concurrency_limits(), ttl=lease_ttl)
+	except Exception:
+		reservation.release()
+		raise
 
-		for retry in range(max_retries + 1):
-			try:
-				provider = get_provider(provider_name)
-				result = _complete_chat(
-					provider,
-					chat_messages,
-					model=model_doc.model_name,
-					options=merged_options,
-					tools=tools,
-					json_schema=json_schema,
-					on_token=on_token,
-					turn_id=turn_id,
-				)
-				finish_execution_log(log, result, provider=provider_name, retry_count=retry)
-				update_model_metrics(model_doc.name, result)
-				record_usage(model_doc.name, result.total_tokens)
-				return result
-			except TurnCancelledError as exc:
-				last_error = exc
+	try:
+		log = start_execution_log(
+			operation=operation,
+			model=model_doc,
+			messages=chat_messages,
+			options=merged_options,
+			reference_doctype=reference_doctype,
+			reference_name=reference_name,
+			conversation=conversation,
+			pipeline_run=pipeline_run,
+		)
+
+		attempts = [{"provider": model_doc.provider, "model": model_doc}]
+		if allow_failover:
+			attempts += resolve_failover_attempts(model_doc, required=required)
+
+		last_error: Exception | None = None
+
+		for attempt_index, attempt in enumerate(attempts):
+			provider_name = attempt["provider"]
+			attempt_model = attempt["model"]
+
+			# Failing over costs at least another full round trip. If the budget
+			# cannot fund one, stop here and report the failure we already have
+			# rather than burning the remaining time on a call we must abandon.
+			if deadline and attempt_index and not deadline.allows(MIN_ATTEMPT_SECONDS):
 				break
-			except Exception as exc:
+
+			# GOV-02: a saturated provider window is a reason to try the next
+			# provider, not a reason to fail the user's request outright.
+			try:
+				check_rate_limit(f"provider:{provider_name}", provider_rate_limit(provider_name))
+			except RateLimitExceededError as exc:
 				last_error = exc
-				if not (retry < max_retries and _is_retryable(exc)):
-					break
-				# Never sleep away time the request no longer has, and never
-				# retry into a budget too small to hold the attempt.
-				backoff = min(2**retry, 8)
-				if deadline and not deadline.allows(backoff + MIN_ATTEMPT_SECONDS):
-					break
-				time.sleep(backoff)
+				continue
 
-		if isinstance(last_error, (DeadlineExceededError, TurnCancelledError)):
-			break  # out of time or cancelled; further providers would fail identically
-		if attempt_index < len(attempts) - 1:
-			frappe.log_error(
-				title="AI failover",
-				message=f"Provider {provider_name} failed ({last_error}); trying the next provider.",
-			)
+			try:
+				runtime_leases = acquire_leases(
+					runtime_concurrency_limits(attempt_model, provider_name), ttl=lease_ttl
+				)
+			except ConcurrencyLimitError as exc:
+				last_error = exc
+				continue
 
-	finish_execution_log(log, None, error=last_error)
-	raise last_error or ProviderError(_("Chat completion failed."))
+			try:
+				attempt_options = (
+					merged_options
+					if attempt_model.name == model_doc.name
+					else build_options(attempt_model, options)
+				)
+				attempt_capabilities = (
+					capabilities
+					if attempt_model.name == model_doc.name
+					else effective_capabilities(attempt_model, provider_name)
+				)
+				if capability.capability_error(
+					attempt_capabilities,
+					tools=bool(tools),
+					json_schema=bool(json_schema),
+					images=wants_images,
+				):
+					continue
+
+				for retry in range(max_retries + 1):
+					try:
+						provider = get_provider(provider_name)
+						result = _complete_chat(
+							provider,
+							chat_messages,
+							model=attempt_model.model_name,
+							options=attempt_options,
+							tools=tools,
+							json_schema=json_schema,
+							on_token=on_token,
+							turn_id=turn_id,
+							allow_streaming=bool(attempt_capabilities.get("streaming")),
+						)
+						# PROV-01: the log records the model that actually
+						# answered, which may not be the one first requested.
+						finish_execution_log(
+							log,
+							result,
+							provider=provider_name,
+							model=attempt_model.name,
+							retry_count=retry,
+						)
+						update_model_metrics(attempt_model.name, result)
+						record_usage(attempt_model.name, result.total_tokens)
+						return result
+					except TurnCancelledError as exc:
+						last_error = exc
+						break
+					except Exception as exc:
+						last_error = exc
+						# PROV-02: a runtime that explicitly refuses a
+						# capability updates the probe cache so the next
+						# request is rejected before it is sent.
+						if refused := capability.classify_capability_failure(str(exc)):
+							capability.record_probe_failure(attempt_model.name, refused)
+						if not (retry < max_retries and _is_retryable(exc)):
+							break
+						# Never sleep away time the request no longer has, and
+						# never retry into a budget too small for the attempt.
+						backoff = min(2**retry, 8)
+						if deadline and not deadline.allows(backoff + MIN_ATTEMPT_SECONDS):
+							break
+						time.sleep(backoff)
+			finally:
+				runtime_leases.release()
+
+			if isinstance(last_error, (DeadlineExceededError, TurnCancelledError)):
+				break  # out of time or cancelled; further providers would fail identically
+			if attempt_index < len(attempts) - 1:
+				frappe.log_error(
+					title="AI failover",
+					message=(
+						f"Provider {provider_name} model {attempt_model.name} failed "
+						f"({last_error}); trying the next equivalent target."
+					),
+				)
+
+		finish_execution_log(log, None, error=last_error)
+		raise last_error or ProviderError(_("Chat completion failed."))
+	finally:
+		user_leases.release()
+		# Released only after the execution log and usage snapshot are written,
+		# so committed usage is already visible when the in-flight claim goes.
+		reservation.release()
+
+
+def resolve_failover_attempts(model_doc, required: set[str] | None = None) -> list[dict]:
+	"""PROV-01: equivalent models on other providers, best substitute first.
+
+	Before this, failover swapped the provider adapter but kept the original
+	provider's runtime model name - a name that usually does not exist on the
+	target runtime, so the "failover" produced a second failure. Candidate
+	selection now enforces model-type compatibility, embedding-dimension
+	equality, and the capabilities the in-flight call actually needs.
+	"""
+	from ai_fr_hg.ai import capability
+	from ai_fr_hg.ai.providers import get_failover_provider_rows
+
+	provider_rows = get_failover_provider_rows(exclude=model_doc.provider)
+	if not provider_rows:
+		return []
+
+	priorities = {row["name"]: cint(row["priority"]) for row in provider_rows}
+	candidates = frappe.get_all(
+		"AI Model",
+		filters={"enabled": 1, "provider": ["in", list(priorities)]},
+		fields=[
+			"name",
+			"provider",
+			"model_name",
+			"model_type",
+			"family",
+			"parameter_size",
+			"context_window",
+			"embedding_dimensions",
+			"is_default",
+			"enabled",
+			"supports_tools",
+			"supports_vision",
+			"supports_streaming",
+			"supports_json_mode",
+		],
+		limit=500,
+	)
+	for candidate in candidates:
+		candidate["provider_priority"] = priorities.get(candidate["provider"], 0)
+
+	source = {
+		"provider": model_doc.provider,
+		"model_name": model_doc.model_name,
+		"model_type": model_doc.model_type,
+		"family": model_doc.family,
+		"parameter_size": model_doc.parameter_size,
+		"context_window": model_doc.context_window,
+		"embedding_dimensions": model_doc.embedding_dimensions,
+	}
+	ranked = capability.rank_failover_candidates(source, candidates, required=required or set())
+	return [
+		{
+			"provider": row["provider"],
+			"model": frappe.get_cached_doc("AI Model", row["model"]),
+			"score": row["score"],
+		}
+		for row in ranked
+	]
 
 
 def _complete_chat(
@@ -276,9 +498,16 @@ def _complete_chat(
 	json_schema: dict | None,
 	on_token: Callable[[str], None] | None,
 	turn_id: str | None = None,
+	allow_streaming: bool = True,
 ) -> CompletionResult:
-	"""Use the provider stream when requested; fall back to blocking chat."""
-	if on_token and getattr(provider, "supports_streaming", False) and not json_schema:
+	"""Use the provider stream when requested; fall back to blocking chat.
+
+	`allow_streaming` is the PROV-02 *effective* capability - provider adapter
+	AND model declaration AND probe - not just the adapter class flag. A model
+	whose record says it cannot stream now degrades to a blocking call instead
+	of opening a stream the runtime will not honour.
+	"""
+	if on_token and allow_streaming and not json_schema:
 		streamed: list[str] = []
 
 		def emit(delta: str) -> None:
@@ -356,6 +585,13 @@ def run_embedding(
 	reference_name: str | None = None,
 ) -> list[list[float]]:
 	"""Embed a batch of texts using the configured embedding model."""
+	from ai_fr_hg.ai import capability
+	from ai_fr_hg.ai.governance import (
+		provider_rate_limit,
+		runtime_concurrency_limits,
+		user_concurrency_limits,
+	)
+	from ai_fr_hg.ai.limits import acquire_leases, check_rate_limit
 	from ai_fr_hg.ai.logging import finish_execution_log, start_execution_log
 
 	if not texts:
@@ -365,7 +601,25 @@ def run_embedding(
 	if not settings.platform_enabled:
 		frappe.throw(_("The AI Platform is disabled in AI Platform Settings."))
 
+	# GOV-04 rejects a non-Embedding model here; PROV-02 rejects a provider
+	# adapter that cannot embed at all.
 	model_doc = resolve_model(model, "Embedding")
+	capabilities = effective_capabilities(model_doc)
+	if missing := capability.capability_error(capabilities, embeddings=True):
+		frappe.throw(
+			_capability_message(missing, model_doc),
+			exc=ModelNotAvailableError,
+			title=_("Capability Not Available"),
+		)
+
+	lease_ttl = cint(settings.request_timeout) or 300
+	# Embedding a corpus is the platform's heaviest sustained load, so it is
+	# admitted through exactly the same GOV-01/GOV-02 gates as chat rather than
+	# being an unbounded side channel around them. Admission runs before the
+	# log row exists, so a refused batch leaves no stale Running log behind.
+	check_rate_limit(f"provider:{model_doc.provider}", provider_rate_limit(model_doc.provider))
+	leases = acquire_leases(user_concurrency_limits() + runtime_concurrency_limits(model_doc), ttl=lease_ttl)
+
 	log = start_execution_log(
 		operation=operation,
 		model=model_doc,
@@ -386,6 +640,8 @@ def run_embedding(
 	except Exception as exc:
 		finish_execution_log(log, None, error=exc)
 		raise
+	finally:
+		leases.release()
 
 	duration_ms = int((time.monotonic() - started) * 1000)
 	result = CompletionResult(

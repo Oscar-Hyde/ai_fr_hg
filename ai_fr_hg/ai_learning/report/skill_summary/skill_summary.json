@@ -2,23 +2,31 @@
  "add_total_row": 0,
  "columns": [],
  "creation": "2026-08-17 10:00:00.000000",
+ "disable_prepared_report": 0,
  "disabled": 0,
  "docstatus": 0,
  "doctype": "Report",
+ "is_standard": "Yes",
  "json": "{}",
- "modified": "2026-08-17 10:00:00.000000",
+ "modified": "2026-08-21 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "AI Learning",
  "name": "Skill Summary",
  "owner": "Administrator",
  "prepared_report": 0,
- "query": "SELECT\n    `tabAI Skill`.name AS \"Skill ID:Data:140\",\n    `tabAI Skill`.skill_name AS \"Skill Name:Data:200\",\n    `tabAI Skill`.skill_type AS \"Type:Data:100\",\n    `tabAI Skill`.scope AS \"Scope:Data:80\",\n    `tabAI Skill`.scope_value AS \"Scope Value:Data:120\",\n    `tabAI Skill`.enabled AS \"Enabled:Check:60\",\n    `tabAI Skill`.version AS \"Version:Int:60\",\n    `tabAI Skill`.usage_count AS \"Used:Int:60\",\n    `tabAI Skill`.source_user AS \"Source User:Link/User:120\",\n    `tabAI Skill`.description AS \"Description:Small Text:250\",\n    `tabAI Skill`.creation AS \"Created:Datetime:150\"\nFROM\n    `tabAI Skill`\nORDER BY\n    `tabAI Skill`.usage_count DESC, `tabAI Skill`.creation DESC\nLIMIT 500",
+ "query": "",
  "ref_doctype": "AI Skill",
  "report_name": "Skill Summary",
- "report_type": "Query Report",
+ "report_type": "Script Report",
  "roles": [
-  {"role": "AI Manager"},
-  {"role": "System Manager"},
-  {"role": "AI Auditor"}
+  {
+   "role": "AI Manager"
+  },
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "AI Auditor"
+  }
  ]
 }
