@@ -3089,6 +3089,289 @@ class TestLearningTrustBoundary(TestCase):
 		self.assertIn("AI Manager", str(caught.exception))
 
 
+def _visible_by_scope_sql(condition: str, user: str, row: dict, roles: set[str]) -> bool:
+	"""Decide whether `row` survives a learning scope `condition`.
+
+	NON-CLAIM, stated plainly: this interprets the generated condition, it
+	does not execute it. No MariaDB is available offline, so this cannot
+	prove operator precedence, collation, NULL semantics or the correlated
+	`AI Agent Role` subquery. What it does prove is that the *scope policy*
+	encoded in the string admits and denies the rows we expect, and that the
+	policy matches the Python predicate used for prompt injection.
+
+	The Agent branch is deliberately not interpreted -- its SQL resolves an
+	agent's roles through a subquery this cannot model, so treating it as a
+	simple comparison would fake agreement rather than test it.
+	"""
+	if not condition.strip():
+		return True  # Frappe's contract: empty condition means no restriction.
+	scope = row.get("scope") or "Global"
+	value = row.get("scope_value")
+	if "'Global'" in condition and scope == "Global":
+		return True
+	if scope == "User":
+		return bool(value) and f"= {value!r}".replace('"', "'") in condition.replace('"', "'")
+	if scope == "Role":
+		return bool(value) and value in roles and f"'{value}'" in condition
+	return False
+
+
+class TestLearningRetrievalBoundary(TestCase):
+	"""SEC-08 follow-up: can knowledge escape its audience on the way *out*?
+
+	Creation authority is only half the trust boundary. These tests attack
+	the retrieval direction: the RPC entry point that lists memories, the
+	revocation path, and the fact that two independent authority models
+	govern the same rows -- a SQL `permission_query_conditions` hook for
+	Desk/`get_list` reads, and a Python predicate for prompt injection.
+	"""
+
+	def _bench(self, *, user="alice@example.com", roles=(), memories=()):
+		bench = install(FakeBench())
+		bench.register_doctype("User", ["enabled"])
+		bench.register_doctype("Role", [])
+		bench.register_doctype("AI Agent", [])
+		settings_meta = bench.load_doctype_json(
+			APP / "ai_core" / "doctype" / "ai_platform_settings" / "ai_platform_settings.json"
+		)
+		settings_meta.is_single = True
+		bench.db.singles["AI Platform Settings"] = dict.fromkeys(settings_meta.fieldnames(), 0)
+		bench.db.singles["AI Platform Settings"].update(
+			{"memory_top_k": 10, "learning_enabled": 1, "enable_learning": 1}
+		)
+		bench.register_doctype(
+			"AI Memory",
+			[
+				"content",
+				"memory_type",
+				"scope",
+				"scope_value",
+				"status",
+				"confidence",
+				"usage_count",
+				"helpful_count",
+				"not_helpful_count",
+				"last_used_on",
+				"source_candidate",
+				"source_user",
+			],
+		)
+		bench.register_doctype(
+			"AI Skill",
+			["skill_name", "description", "instructions", "skill_type", "enabled", "scope", "scope_value"],
+		)
+		for name in ("alice@example.com", "bob@example.com", "boss@example.com"):
+			bench.db.insert_row("User", {"name": name, "enabled": 1})
+		bench.db.insert_row("Role", {"name": "Legal"})
+		bench.db.insert_row("AI Agent", {"name": "AGENT-1"})
+		bench.roles[user] = list(roles)
+		bench.session.user = user
+		for row in memories:
+			bench.db.insert_row("AI Memory", row)
+		return bench, import_app("ai_fr_hg.ai.learning")
+
+	def _memory(self, name, scope, value, content, status="Active"):
+		return {
+			"name": name,
+			"content": content,
+			"memory_type": "Fact",
+			"scope": scope,
+			"scope_value": value,
+			"status": status,
+			"confidence": 1,
+		}
+
+	# -- the RPC entry point, not just the service ------------------------
+
+	def test_the_list_memories_endpoint_filters_by_scope(self):
+		"""The trust boundary is the RPC entry point, not the helper.
+
+		`api.learning.list_memories` is whitelisted and takes no scope
+		argument, so its only protection is that it uses `frappe.get_list`
+		(which applies `permission_query_conditions`) rather than
+		`frappe.get_all` (which does not). A future edit swapping one for
+		the other would publish every user's memories to every caller and
+		break no other test, so assert the endpoint's observable output.
+		"""
+		bench, _learning = self._bench(
+			user="bob@example.com",
+			memories=[
+				self._memory("M-MINE", "User", "bob@example.com", "bob private"),
+				self._memory("M-THEIRS", "User", "alice@example.com", "alice private"),
+				self._memory("M-GLOBAL", "Global", None, "shared policy"),
+			],
+		)
+		permissions = import_app("ai_fr_hg.utils.permissions")
+		# Apply the application's real scope SQL as the row filter. The
+		# harness cannot execute SQL, so the condition is interpreted (see
+		# `_visible_by_scope_sql`) rather than run by MariaDB -- the boundary
+		# is stated in that helper's docstring.
+		condition = permissions.memory_query("bob@example.com")
+		bench.permission_hooks["AI Memory"] = lambda user, row: _visible_by_scope_sql(
+			condition, user, row, roles=set()
+		)
+		api = import_app("ai_fr_hg.api.learning")
+
+		contents = {row.get("content") for row in api.list_memories()}
+
+		self.assertIn("bob private", contents)
+		self.assertIn("shared policy", contents)
+		self.assertNotIn("alice private", contents)
+
+	def test_the_endpoint_uses_a_permission_aware_read(self):
+		"""`get_all` ignores permissions by default; `get_list` does not.
+
+		Verified against the real framework source: `frappe.get_all` sets
+		`ignore_permissions = True`. This asserts the endpoint actually
+		routes through the permission-aware call, because with no rows
+		present the output test above would pass either way.
+		"""
+		bench, _learning = self._bench(user="bob@example.com")
+		seen = []
+		bench.permission_hooks["AI Memory"] = lambda user, row: seen.append(row) or True
+		bench.db.insert_row("AI Memory", self._memory("M-1", "User", "bob@example.com", "anything"))
+		api = import_app("ai_fr_hg.api.learning")
+
+		api.list_memories()
+
+		self.assertTrue(seen, "list_memories bypassed the row permission hook")
+
+	# -- revocation --------------------------------------------------------
+
+	def test_archiving_a_memory_removes_it_from_recall(self):
+		"""Archived is the revocation mechanism; it must actually revoke.
+
+		`status` has only Active and Archived, so archiving is the only way
+		to withdraw knowledge that should no longer shape answers.
+		"""
+		_bench, learning = self._bench(
+			user="bob@example.com",
+			memories=[
+				self._memory("M-LIVE", "Global", None, "quarterly revenue current"),
+				self._memory("M-GONE", "Global", None, "quarterly revenue retracted", status="Archived"),
+			],
+		)
+
+		memories, _skills = learning.recall("quarterly revenue", user="bob@example.com", track_usage=False)
+
+		contents = {m.get("content") for m in memories}
+		self.assertIn("quarterly revenue current", contents)
+		self.assertNotIn("quarterly revenue retracted", contents)
+
+	def test_archived_memories_are_not_injected_into_a_prompt(self):
+		"""The consequence that matters is prompt injection, not the list.
+
+		`prepare_memory_context` is what actually reaches the model, and it
+		reports the memory names it used. A revoked memory must appear in
+		neither the rendered block nor the reported provenance.
+		"""
+		_bench, learning = self._bench(
+			user="bob@example.com",
+			memories=[
+				self._memory("M-GONE", "Global", None, "quarterly revenue retracted", status="Archived"),
+			],
+		)
+
+		context = learning.prepare_memory_context("quarterly revenue", user="bob@example.com")
+
+		self.assertNotIn("retracted", context["memory_block"])
+		self.assertEqual(context["memories"], [])
+
+	# -- the two authority models must agree -------------------------------
+
+	def test_the_sql_scope_filter_denies_the_same_rows_as_the_predicate(self):
+		"""Two authority models govern these rows; they must not disagree.
+
+		Desk and `list_memories` are filtered by the SQL
+		`permission_query_conditions` hook. Prompt injection is filtered by
+		the Python `_memory_applies` predicate. Nothing structurally forces
+		them to agree, so a row denied to a user by one must be denied by
+		the other. Divergence is how a memory becomes invisible in the UI
+		while still steering the model's answers.
+		"""
+		_bench, learning = self._bench(user="bob@example.com", roles=["Legal"])
+		permissions = import_app("ai_fr_hg.utils.permissions")
+		cases = [
+			("Global", None, True),
+			("User", "bob@example.com", True),
+			("User", "alice@example.com", False),
+			("Role", "Legal", True),
+			("Role", "Finance", False),
+			("Everyone", None, False),
+		]
+		for scope, value, expected in cases:
+			with self.subTest(scope=scope, value=value):
+				row = {"scope": scope, "scope_value": value}
+				predicate = learning._memory_applies(row, "bob@example.com", {"Legal"}, None)
+				sql_side = _visible_by_scope_sql(
+					permissions.memory_query("bob@example.com"),
+					"bob@example.com",
+					row,
+					roles={"Legal"},
+				)
+				self.assertEqual(predicate, expected)
+				self.assertEqual(
+					predicate,
+					sql_side,
+					f"scope {scope}/{value}: prompt injection and Desk disagree",
+				)
+
+	def test_a_manager_reading_the_list_still_sees_every_scope(self):
+		"""Fail-closed must not become fail-useless for the governance role.
+
+		AI Managers curate this store, so the scope filter deliberately
+		returns no restriction for them. Asserting this keeps a future
+		tightening from silently blinding the people who moderate memories.
+		"""
+		_bench, _learning = self._bench(user="boss@example.com", roles=["AI Manager"])
+		permissions = import_app("ai_fr_hg.utils.permissions")
+
+		# An empty condition is Frappe's contract for "no restriction".
+		self.assertEqual(permissions.memory_query("boss@example.com").strip(), "")
+		# ...and an ordinary user must NOT get the unrestricted form.
+		self.assertNotEqual(permissions.memory_query("bob@example.com").strip(), "")
+
+	def test_a_role_lookup_failure_still_restricts_the_query(self):
+		"""A degraded role lookup must narrow access, never widen it.
+
+		`_roles` swallows its own exceptions and returns an empty set, so a
+		failing role backend does not reach `_learning_scope_query`'s
+		`except` handler -- it silently produces a *no-roles* user. That is
+		the reachable failure mode, and the safe outcome is a condition that
+		still restricts: Global stays visible, Role-scoped rows do not.
+
+		Recorded honestly: the `except Exception: return "1=0"` handler below
+		it is currently unreachable, because every frappe call in the try
+		block is made through helpers that catch their own errors. A
+		mutation flipping that handler to `""` survives for this reason. It
+		is defence in depth, not a tested control.
+		"""
+		_bench, _learning = self._bench(user="bob@example.com", roles=["Legal"])
+		permissions = import_app("ai_fr_hg.utils.permissions")
+
+		def explode(_user):
+			raise RuntimeError("role lookup unavailable")
+
+		# Patch the module's own frappe reference: assigning to the bench
+		# object does not affect the already-bound `frappe.get_roles` the
+		# application module resolved at import time.
+		permissions.frappe.get_roles = explode
+		condition = permissions.memory_query("bob@example.com")
+
+		# Still a restriction, and it must not have become the manager's
+		# unrestricted empty string.
+		self.assertNotEqual(condition.strip(), "")
+		# No role survived the failure, so no real role name can be matched.
+		self.assertNotIn("'Legal'", condition)
+		# The role list must degrade to a literal that matches nothing. A
+		# fallback naming a column instead would make every Role-scoped row
+		# self-match (scope_value IN (scope_value)) and quietly grant them
+		# all, so assert the empty-string literal specifically.
+		role_clause = condition.split("`scope` = 'Role' and ")[1].split(")")[0]
+		self.assertIn("''", role_clause)
+		self.assertNotIn("`scope_value`", role_clause.split(" in ")[1])
+
+
 if _SKIP_UNDER_BENCH:
 
 	def load_tests(loader, tests, pattern):

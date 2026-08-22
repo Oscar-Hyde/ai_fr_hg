@@ -292,6 +292,27 @@ MUTATIONS: list[Mutation] = [
 		breaks="An ordinary user can attach a memory to a colleague's scope.",
 	),
 	Mutation(
+		name="list-memories-ignores-permissions",
+		path="ai_fr_hg/api/learning.py",
+		old='\treturn frappe.get_list(\n\t\t"AI Memory",\n\t\tfilters={"status": status},',
+		new='\treturn frappe.get_all(\n\t\t"AI Memory",\n\t\tfilters={"status": status},',
+		breaks="Every user's private memories are published through the whitelisted list endpoint.",
+	),
+	Mutation(
+		name="archived-memories-still-recalled",
+		path="ai_fr_hg/ai/learning.py",
+		old='\tfilters = {"status": "Active"} if active_only else {}\n\treturn [\n\t\tlearning_utils.memory_to_dict(row)',
+		new="\tfilters = {}\n\treturn [\n\t\tlearning_utils.memory_to_dict(row)",
+		breaks="Revoked (Archived) knowledge keeps steering answers; retraction does nothing.",
+	),
+	Mutation(
+		name="degraded-role-lookup-grants-everything",
+		path="ai_fr_hg/utils/permissions.py",
+		old='\treturn ", ".join(_escape(role) for role in roles) or "\'\'"',
+		new='\treturn ", ".join(_escape(role) for role in roles) or "`tabAI Memory`.`scope_value`"',
+		breaks="A user with no resolvable roles matches every Role-scoped memory.",
+	),
+	Mutation(
 		name="reconciliation-enqueues-duplicates",
 		path="ai_fr_hg/ai/ingestion.py",
 		old="\t\tif row.name in seen:\n\t\t\tcontinue\n\t\tseen.add(row.name)",
