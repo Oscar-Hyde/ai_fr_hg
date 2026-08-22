@@ -334,6 +334,13 @@ MUTATIONS: list[Mutation] = [
 		breaks="A stray commit makes test fixtures durable and breaks rollback isolation.",
 	),
 	Mutation(
+		name="chat-failover-rejects-vision-models",
+		path="ai_fr_hg/ai/capability.py",
+		old='\t"Chat": ("Chat", "Completion", "Vision"),',
+		new='\t"Chat": ("Chat", "Completion"),',
+		breaks="A site whose only spare capacity is a vision model loses chat failover entirely.",
+	),
+	Mutation(
 		name="reconciliation-enqueues-duplicates",
 		path="ai_fr_hg/ai/ingestion.py",
 		old="\t\tif row.name in seen:\n\t\t\tcontinue\n\t\tseen.add(row.name)",

@@ -157,6 +157,22 @@ class TestFailoverEquivalence(TestCase):
 		candidate = _model(name="E1", provider="Backup", model_type="Embedding")
 		self.assertIsNone(capability.score_failover_candidate(source, candidate))
 
+	def test_a_vision_candidate_can_serve_chat_failover(self):
+		"""Failover must follow COMPATIBLE_MODEL_TYPES, not a narrower guess.
+
+		Reported from a real bench: the integration test asserted every Chat
+		failover target had model_type == "Chat", which contradicted the
+		declared policy (Vision serves Chat) and only passed on sites with no
+		Vision model installed. A bench carrying llava:7b failed. This pins
+		the acceptance offline, where the exclusion cases were already
+		covered but the admission case was not.
+		"""
+		source = _model()
+		vision = _model(name="V1", provider="Backup", model_type="Vision")
+
+		self.assertIsNotNone(capability.score_failover_candidate(source, vision))
+		self.assertIsNone(capability.model_type_error("Chat", vision))
+
 	def test_disabled_candidate_is_excluded(self):
 		source = _model()
 		candidate = _model(name="B1", provider="Backup", enabled=0)
