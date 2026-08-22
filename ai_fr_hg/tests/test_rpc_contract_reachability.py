@@ -506,3 +506,69 @@ class TestRegisterEvidenceIsReal(TestCase):
 				if not re.search(rf"\b{re.escape(symbol)}\b", self.tests_text):
 					unproven.append(f"{columns[1]}: cites `{symbol}`, which no test references")
 		self.assertEqual(unproven, [])
+
+
+class TestMutatingEndpointsAreGuarded(TestCase):
+	"""Every whitelisted endpoint that writes must authorize or delegate.
+
+	The generalisation of API-01. That finding was two domain functions
+	published as a second, unvalidated route; the same shape would occur if a
+	facade mutated state directly without a permission check. This sweeps the
+	whole surface so the next one is caught by CI rather than by an audit.
+
+	An endpoint satisfies the rule by checking permissions itself, or by
+	handing off to a service module that does. Delegation is recognised
+	through function-local imports, `from ... import x as y` aliases, and
+	module-level service aliases (`from ai_fr_hg.ai import document_tree as
+	service`), all of which are used in this codebase — an earlier version of
+	this check missed the last form and produced two false positives.
+	"""
+
+	GUARD_MARKERS = (
+		"check_permission",
+		"has_permission",
+		"only_for",
+		"PermissionError",
+		"_assert",
+		"require_",
+		"session.user",
+		"valid_identifier",
+		"api_validation",
+	)
+	WRITE_MARKERS = ("db_set", ".insert(", ".save(", ".delete(", "set_value", "enqueue", "db.sql")
+
+	@staticmethod
+	def _service_aliases(tree: ast.AST) -> set[str]:
+		"""Module-level names bound to an in-app module."""
+		aliases = set()
+		for node in tree.body:
+			if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("ai_fr_hg"):
+				aliases.update(alias.asname or alias.name for alias in node.names)
+		return aliases
+
+	def test_no_whitelisted_endpoint_writes_without_authorization(self):
+		unguarded = []
+		checked = 0
+		for py in sorted(APP.rglob("*.py")):
+			if any(part in py.parts for part in ("tests", "__pycache__")) or py.name.startswith("test_"):
+				continue
+			tree = ast.parse(py.read_text())
+			aliases = self._service_aliases(tree)
+			for node in ast.walk(tree):
+				if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+					continue
+				if not any("whitelist" in ast.unparse(d) for d in node.decorator_list):
+					continue
+				checked += 1
+				body = ast.unparse(node)
+				if not any(marker in body for marker in self.WRITE_MARKERS):
+					continue
+				if any(marker in body for marker in self.GUARD_MARKERS):
+					continue
+				if re.search(r"from ai_fr_hg\.[\w.]+ import", body):
+					continue
+				if any(re.search(rf"\b{re.escape(alias)}\.", body) for alias in aliases):
+					continue
+				unguarded.append(f"{py.relative_to(ROOT)}:{node.lineno} {node.name}")
+		self.assertGreater(checked, 100, "endpoint discovery collapsed")
+		self.assertEqual(unguarded, [], "whitelisted endpoints that write without authorizing")

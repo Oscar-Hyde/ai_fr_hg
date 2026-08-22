@@ -237,6 +237,42 @@ MUTATIONS: list[Mutation] = [
 		breaks="Evidence must record when extraction ran.",
 	),
 	# -- formula preservation (§6.2) --------------------------------------
+	# -- permission authorities (SEC-01, agent/tool role gates) -----------
+	Mutation(
+		name="kb-role-grant-ignored",
+		path="ai_fr_hg/ai/knowledge.py",
+		old="\t\tif roles.intersection(allowed):",
+		new="\t\tif True:",
+		breaks="Every private knowledge base becomes searchable by every user.",
+	),
+	Mutation(
+		name="kb-disabled-corpora-searchable",
+		path="ai_fr_hg/ai/knowledge.py",
+		old='filters={"enabled": 1}, fields=["name", "is_public"]',
+		new='fields=["name", "is_public"]',
+		breaks="Retired corpora are searched again after being disabled.",
+	),
+	Mutation(
+		name="agent-role-gate-removed",
+		path="ai_fr_hg/ai/agent.py",
+		old="\tif not set(frappe.get_roles()).intersection(allowed):",
+		new="\tif False:",
+		breaks="A restricted agent becomes usable by any signed-in user.",
+	),
+	Mutation(
+		name="tool-role-gate-removed",
+		path="ai_fr_hg/ai/tools/__init__.py",
+		old="\tif not set(frappe.get_roles()).intersection(allowed):",
+		new="\tif False:",
+		breaks="A restricted tool becomes invokable by any signed-in user.",
+	),
+	Mutation(
+		name="translation-memory-scope-unauthorized",
+		path="ai_fr_hg/ai/translation.py",
+		old="\tif not _knowledge_base_access(scope, frappe.session.user, write=False):",
+		new="\tif False:",
+		breaks="SEC-01: one tenant's translation memory leaks into another's output.",
+	),
 	# -- task lifecycle governance (TASK-02) ------------------------------
 	Mutation(
 		name="task-actor-authority-dropped",

@@ -1749,3 +1749,219 @@ class TestTaskLifecycleGovernance(TestCase):
 
 		bench.db.get_value = moved_on
 		self.assertEqual(tasks.claim_due_tasks(limit=10), [])
+
+
+class TestKnowledgeBaseVisibility(TestCase):
+	"""`get_accessible_knowledge_bases` decides which corpora a user can search.
+
+	It is the filter behind every retrieval call, and no test named it. A
+	fault here does not raise — it silently widens the search to corpora the
+	user may not read, which is the worst failure mode for a permission
+	function: invisible, and it looks like the feature working.
+	"""
+
+	def _bench(self, *, user="alice@example.com", roles=()):
+		bench = install(FakeBench())
+		bench.register_doctype("AI Knowledge Base", ["enabled", "is_public"])
+		bench.register_doctype("AI Knowledge Base Role", ["parent", "parenttype", "role", "can_write"])
+		bench.session.user = user
+		bench.roles[user] = list(roles)
+
+		for name, enabled, public in (
+			("KB-PUBLIC", 1, 1),
+			("KB-PRIVATE", 1, 0),
+			("KB-RESTRICTED", 1, 0),
+			("KB-DISABLED", 0, 1),
+		):
+			bench.db.insert_row("AI Knowledge Base", {"name": name, "enabled": enabled, "is_public": public})
+		bench.db.insert_row(
+			"AI Knowledge Base Role",
+			{
+				"name": "KBR-1",
+				"parent": "KB-RESTRICTED",
+				"parenttype": "AI Knowledge Base",
+				"role": "Legal",
+				"can_write": 0,
+			},
+		)
+		return bench, import_app("ai_fr_hg.ai.knowledge")
+
+	def test_a_plain_user_sees_only_public_corpora(self):
+		_, knowledge = self._bench(roles=[])
+
+		self.assertEqual(knowledge.get_accessible_knowledge_bases(), ["KB-PUBLIC"])
+
+	def test_a_role_grant_opens_exactly_one_private_corpus(self):
+		_, knowledge = self._bench(roles=["Legal"])
+
+		self.assertEqual(sorted(knowledge.get_accessible_knowledge_bases()), ["KB-PUBLIC", "KB-RESTRICTED"])
+		# KB-PRIVATE has no grant at all and must stay invisible.
+		self.assertNotIn("KB-PRIVATE", knowledge.get_accessible_knowledge_bases())
+
+	def test_disabled_corpora_are_never_returned(self):
+		"""Even a manager must not search a disabled knowledge base."""
+		_, knowledge = self._bench(roles=["AI Manager"])
+
+		self.assertNotIn("KB-DISABLED", knowledge.get_accessible_knowledge_bases())
+
+	def test_a_manager_sees_every_enabled_corpus(self):
+		_, knowledge = self._bench(roles=["AI Manager"])
+
+		self.assertEqual(
+			sorted(knowledge.get_accessible_knowledge_bases()),
+			["KB-PRIVATE", "KB-PUBLIC", "KB-RESTRICTED"],
+		)
+
+	def test_a_grant_for_a_role_the_user_lacks_grants_nothing(self):
+		_, knowledge = self._bench(roles=["Finance"])
+
+		self.assertEqual(knowledge.get_accessible_knowledge_bases(), ["KB-PUBLIC"])
+
+	def test_the_query_is_evaluated_for_the_named_user_not_the_session(self):
+		"""Background jobs pass a user explicitly; it must be honoured."""
+		bench, knowledge = self._bench(user="alice@example.com", roles=[])
+		bench.roles["boss@example.com"] = ["AI Manager"]
+
+		self.assertEqual(
+			sorted(knowledge.get_accessible_knowledge_bases("boss@example.com")),
+			["KB-PRIVATE", "KB-PUBLIC", "KB-RESTRICTED"],
+		)
+
+
+class TestAgentAndToolAccess(TestCase):
+	"""`check_agent_access` and `_check_tool_access` gate model-facing capability.
+
+	Both are role gates with a deliberate fail-open default: an agent or tool
+	that lists no roles is unrestricted. That is a defensible product choice,
+	but it means the *restricted* case is the only thing standing between a
+	user and a capability, and neither function was tested.
+	"""
+
+	def _agent(self, allowed_roles, *, user="alice@example.com", roles=()):
+		bench = install(FakeBench())
+		bench.session.user = user
+		bench.roles[user] = list(roles)
+		agent_module = import_app("ai_fr_hg.ai.agent")
+		doc = types.SimpleNamespace(
+			name="AGENT-1",
+			get=lambda field: (
+				[types.SimpleNamespace(role=role) for role in allowed_roles]
+				if field == "allowed_roles"
+				else None
+			),
+		)
+		return bench, agent_module, doc
+
+	def test_a_user_without_the_listed_role_is_refused(self):
+		_, agent, doc = self._agent(["Legal"], roles=["Finance"])
+		import frappe
+
+		with self.assertRaises(frappe.PermissionError):
+			agent.check_agent_access(doc)
+
+	def test_a_user_holding_one_listed_role_is_allowed(self):
+		_, agent, doc = self._agent(["Legal", "Finance"], roles=["Finance"])
+
+		agent.check_agent_access(doc)
+
+	def test_an_agent_listing_no_roles_is_open_by_design(self):
+		"""Documented fail-open: no roles means no restriction, not no access."""
+		_, agent, doc = self._agent([], roles=[])
+
+		agent.check_agent_access(doc)
+
+	def test_administrator_bypasses_the_role_gate(self):
+		_, agent, doc = self._agent(["Legal"], user="Administrator", roles=[])
+
+		agent.check_agent_access(doc)
+
+	def _tool(self, allowed_roles, *, user="alice@example.com", roles=()):
+		bench = install(FakeBench())
+		bench.session.user = user
+		bench.roles[user] = list(roles)
+		tools = import_app("ai_fr_hg.ai.tools")
+		doc = types.SimpleNamespace(
+			name="TOOL-1",
+			get=lambda field: (
+				[types.SimpleNamespace(role=role) for role in allowed_roles]
+				if field == "allowed_roles"
+				else None
+			),
+		)
+		return bench, tools, doc
+
+	def test_tool_role_gate_refuses_an_unlisted_user(self):
+		_, tools, doc = self._tool(["Legal"], roles=["Finance"])
+		import frappe
+
+		with self.assertRaises(frappe.PermissionError):
+			tools._check_tool_access(doc)
+
+	def test_tool_role_gate_admits_a_listed_user(self):
+		_, tools, doc = self._tool(["Legal"], roles=["Legal"])
+
+		tools._check_tool_access(doc)
+
+
+class TestTranslationMemoryScope(TestCase):
+	"""SEC-01: `authorized_memory_scope` decides whose translations are reused.
+
+	SEC-01 is "translation memory can be unscoped". The rule is that an empty
+	or unauthorized scope yields *no* memory rather than every corpus — a
+	failure here leaks one tenant's translated content into another's output.
+	"""
+
+	def _scope(self, *, user="alice@example.com", roles=(), public=0, grant_role=None):
+		bench = install(FakeBench())
+		bench.register_doctype("AI Knowledge Base", ["enabled", "is_public"])
+		bench.register_doctype("AI Knowledge Base Role", ["parent", "parenttype", "role", "can_write"])
+		bench.session.user = user
+		bench.roles[user] = list(roles)
+		bench.db.insert_row("AI Knowledge Base", {"name": "KB-1", "enabled": 1, "is_public": public})
+		if grant_role:
+			bench.db.insert_row(
+				"AI Knowledge Base Role",
+				{
+					"name": "KBR-1",
+					"parent": "KB-1",
+					"parenttype": "AI Knowledge Base",
+					"role": grant_role,
+					"can_write": 0,
+				},
+			)
+		return bench, import_app("ai_fr_hg.ai.translation")
+
+	def test_no_knowledge_base_means_no_memory_not_global_memory(self):
+		_, translation = self._scope()
+
+		self.assertIsNone(translation.authorized_memory_scope(None))
+		self.assertIsNone(translation.authorized_memory_scope(""))
+		self.assertIsNone(translation.authorized_memory_scope("   "))
+
+	def test_an_unauthorized_scope_is_dropped_rather_than_honoured(self):
+		_, translation = self._scope(roles=["Finance"], public=0, grant_role="Legal")
+
+		self.assertIsNone(translation.authorized_memory_scope("KB-1"))
+
+	def test_an_authorized_scope_is_returned(self):
+		_, translation = self._scope(roles=["Legal"], public=0, grant_role="Legal")
+
+		self.assertEqual(translation.authorized_memory_scope("KB-1"), "KB-1")
+
+	def test_a_manager_scope_is_returned_verbatim_and_stays_a_filter(self):
+		"""A manager is not re-checked against the KB row, by design.
+
+		`_knowledge_base_access` short-circuits for managers before looking
+		the record up, so a name that does not exist is returned unchanged.
+		That is safe *because* the value is only ever used as an equality
+		filter downstream (`_memory_lookup` filters `knowledge_base = scope`),
+		so a bogus name matches nothing rather than widening the query. This
+		test pins that reasoning: if the scope ever became something other
+		than a filter value, the missing existence check would matter.
+		"""
+		_, translation = self._scope(roles=["AI Manager"])
+
+		self.assertEqual(translation.authorized_memory_scope("KB-DOES-NOT-EXIST"), "KB-DOES-NOT-EXIST")
+
+		source = (Path(__file__).resolve().parents[1] / "ai/translation.py").read_text()
+		self.assertIn('"knowledge_base": scope', source)
