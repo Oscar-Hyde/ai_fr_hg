@@ -237,6 +237,28 @@ MUTATIONS: list[Mutation] = [
 		breaks="Evidence must record when extraction ran.",
 	),
 	# -- formula preservation (§6.2) --------------------------------------
+	# -- automation event claim and counters (AUTO-03 / AUTO-04) ----------
+	Mutation(
+		name="automation-event-claimed-twice",
+		path="ai_fr_hg/ai/automation.py",
+		old='\tif status != "Queued":\n\t\treturn False',
+		new="\tif False:\n\t\treturn False",
+		breaks="One document change runs the rule twice: double writes and double audit.",
+	),
+	Mutation(
+		name="automation-counter-not-relative",
+		path="ai_fr_hg/ai/automation.py",
+		old="set run_count = coalesce(run_count, 0) + 1,",
+		new="set run_count = 1,",
+		breaks="AUTO-03: concurrent runs lose increments instead of accumulating.",
+	),
+	Mutation(
+		name="automation-error-unbounded",
+		path="ai_fr_hg/ai/automation.py",
+		old='(now_datetime(), (error or "")[:1000], rule_name),',
+		new='(now_datetime(), (error or ""), rule_name),',
+		breaks="An unbounded traceback is written into a length-limited column.",
+	),
 	# -- permission authorities (SEC-01, agent/tool role gates) -----------
 	Mutation(
 		name="kb-role-grant-ignored",

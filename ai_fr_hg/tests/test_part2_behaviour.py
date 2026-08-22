@@ -1965,3 +1965,79 @@ class TestTranslationMemoryScope(TestCase):
 
 		source = (Path(__file__).resolve().parents[1] / "ai/translation.py").read_text()
 		self.assertIn('"knowledge_base": scope', source)
+
+
+class TestAutomationEventClaim(TestCase):
+	"""AUTO-03/AUTO-04: an event must run once, and counters must not race.
+
+	`_claim_event` is the once-only guarantee for automation. It was not
+	named by any test. A failure here runs a rule twice for one document
+	change — writing a field twice, charging a model twice, and emitting two
+	audit entries for one cause.
+	"""
+
+	def _bench(self, *, status="Queued"):
+		bench = install(FakeBench())
+		bench.register_doctype(
+			"AI Automation Event",
+			["status", "started_on", "finished_on", "error_message", "snapshot"],
+		)
+		bench.db.insert_row("AI Automation Event", {"name": "EVT-1", "status": status})
+		return bench, import_app("ai_fr_hg.ai.automation")
+
+	def _status(self, bench):
+		return bench.db.tables["AI Automation Event"]["EVT-1"]["status"]
+
+	def test_a_queued_event_is_claimed_once(self):
+		bench, automation = self._bench()
+
+		self.assertTrue(automation._claim_event("EVT-1"))
+		self.assertEqual(self._status(bench), "Running")
+
+	def test_a_second_worker_cannot_claim_the_same_event(self):
+		"""The AUTO-04 guarantee: one event, one execution."""
+		_, automation = self._bench()
+		automation._claim_event("EVT-1")
+
+		self.assertFalse(automation._claim_event("EVT-1"))
+
+	def test_an_event_in_any_non_queued_state_is_refused(self):
+		for status in ("Running", "Completed", "Failed", "Skipped"):
+			bench, automation = self._bench(status=status)
+			self.assertFalse(automation._claim_event("EVT-1"), status)
+			self.assertEqual(self._status(bench), status)
+
+	def test_the_claim_reads_status_under_a_lock(self):
+		bench, automation = self._bench()
+		bench.db.for_update_reads.clear()
+
+		automation._claim_event("EVT-1")
+
+		self.assertIn(("AI Automation Event", True), bench.db.for_update_reads)
+
+	def test_counters_are_incremented_by_the_database_not_read_modify_write(self):
+		"""AUTO-03: the increment must be relative, so two workers cannot lose one.
+
+		`fakebench` records SQL without executing it, so the resulting count
+		cannot be asserted here — that is runtime-tier work. What *can* be
+		asserted is the shape: a self-referential `coalesce(col, 0) + 1`
+		rather than a Python-side read, add, write, which is the pattern that
+		loses increments under concurrency.
+		"""
+		bench, automation = self._bench()
+
+		automation._record_success("RULE-1")
+		automation._record_failure("RULE-1", "boom")
+
+		statements = " ".join(bench.db.sql_log).lower()
+		self.assertIn("run_count = coalesce(run_count, 0) + 1", statements)
+		self.assertIn("failure_count = coalesce(failure_count, 0) + 1", statements)
+
+	def test_failure_detail_is_bounded_before_storage(self):
+		bench, automation = self._bench()
+
+		automation._record_failure("RULE-1", "x" * 5000)
+
+		stored = [value for stmt in bench.db.sql_values for value in stmt if isinstance(value, str)]
+		longest = max((len(value) for value in stored), default=0)
+		self.assertLessEqual(longest, 1000)

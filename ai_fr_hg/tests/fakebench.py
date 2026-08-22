@@ -351,6 +351,7 @@ class FakeDB:
 		self.rolled_back = 0
 		self.savepoints: list[str] = []
 		self.sql_log: list[str] = []
+		self.sql_values: list[tuple] = []
 		#: (doctype, used_for_update) per get_value, so a test can assert that a
 		#: claim path took the lock even though the lock itself is not modelled.
 		self.for_update_reads: list[tuple[str, bool]] = []
@@ -474,6 +475,10 @@ class FakeDB:
 		least lets a test assert that the call was made.
 		"""
 		self.sql_log.append(" ".join(str(query).split()))
+		# Bound parameters are recorded too: a statement's *values* carry the
+		# truncation and escaping decisions the caller made, which is often
+		# the only thing an offline test can check about a raw-SQL path.
+		self.sql_values.append(tuple(values) if isinstance(values, (list, tuple)) else (values,))
 		return []
 
 	def table_exists(self, doctype):
