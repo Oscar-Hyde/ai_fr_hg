@@ -205,3 +205,121 @@ class TestEvidenceTierHonesty(TestCase):
 			):
 				unproven.append(f"{columns[1]}: cites {cited} — none exercised by the offline batch")
 		self.assertEqual(unproven, [])
+
+
+def _clears_fixtures_in_setup(source: str) -> bool:
+	"""True when a setUp/setUpClass deletes or skips pre-existing records.
+
+	Fixed-name fixtures must be cleared per test, not merely somewhere in the
+	module, so this inspects the setUp bodies rather than the whole file.
+	Generating unique names per run is an equally valid strategy.
+	"""
+	import ast
+
+	try:
+		tree = ast.parse(source)
+	except SyntaxError:
+		return False
+	for node in ast.walk(tree):
+		if not isinstance(node, ast.FunctionDef) or node.name not in ("setUp", "setUpClass"):
+			continue
+		body = ast.dump(node)
+		if "delete_doc" in body or "exists" in body or "uuid" in body:
+			return True
+	return False
+
+
+class TestFixedNameFixtureHygiene(TestCase):
+	"""A suite that inserts fixed-name records must be able to run twice.
+
+	Frappe's IntegrationTestCase isolates by rolling back, which only undoes
+	rows the current transaction created. When a DocType uses
+	`autoname: field:<x>` the name is the primary key, so any row committed by
+	an interrupted run -- a crashed process, a failed migrate, or an
+	application bug that commits mid-test -- survives and makes every later
+	run fail with DuplicateEntryError. The operator's only escape is manual
+	SQL, which is not an acceptable state for a test suite to leave behind.
+
+	This is not hypothetical: it stranded the AI Pipeline suite on a real
+	bench for three consecutive runs.
+	"""
+
+	@classmethod
+	def setUpClass(cls):
+		import json
+
+		cls.autonamed = {}
+		for path in (ROOT / "ai_fr_hg").rglob("*/doctype/*/*.json"):
+			try:
+				meta = json.loads(path.read_text())
+			except ValueError:
+				continue
+			autoname = str(meta.get("autoname") or "")
+			if meta.get("name") and autoname.startswith("field:"):
+				cls.autonamed[meta["name"]] = autoname.split(":", 1)[1]
+
+	def test_discovery_found_the_autonamed_doctypes(self):
+		self.assertGreaterEqual(len(self.autonamed), 5, "autoname discovery collapsed")
+
+	def test_the_shared_base_actually_clears_fixtures_in_setupclass(self):
+		"""Inheritance only helps if the base really does the cleanup.
+
+		The suite check below accepts `AIPlatformTestCase` as sufficient
+		protection, so that acceptance has to be earned. Deleting the call
+		from setUpClass previously left every suite reported as guarded while
+		none of them were.
+		"""
+		import ast
+
+		source = (ROOT / "ai_fr_hg" / "tests" / "integration_test_case.py").read_text()
+		tree = ast.parse(source)
+		base = next(
+			node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "AIPlatformTestCase"
+		)
+		setup = next(
+			node for node in base.body if isinstance(node, ast.FunctionDef) and node.name == "setUpClass"
+		)
+		called = {
+			node.func.attr
+			for node in ast.walk(setup)
+			if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+		}
+		self.assertIn("clear_fixed_name_fixtures", called)
+
+		# ...and the cleanup must be scoped, not a blanket table wipe.
+		cleanup = next(
+			node
+			for node in base.body
+			if isinstance(node, ast.FunctionDef) and node.name == "clear_fixed_name_fixtures"
+		)
+		body = ast.dump(cleanup)
+		self.assertIn("_declared_fixture_names", body)
+		self.assertIn("exists", body)
+
+	def test_suites_inserting_fixed_names_clean_up_first(self):
+		import re
+
+		offenders: list[str] = []
+		for path in (ROOT / "ai_fr_hg").rglob("test_*.py"):
+			if "__pycache__" in path.parts:
+				continue
+			source = path.read_text()
+			inserts = {
+				doctype
+				for doctype, field in self.autonamed.items()
+				if f'"{doctype}"' in source and re.search(rf'"{re.escape(field)}":\s*"', source)
+			}
+			if not inserts:
+				continue
+			# The guard must run *before every test*, so require it inside
+			# setUp/setUpClass. Checking the whole file was too weak: an
+			# unrelated `db.exists` elsewhere satisfied it, so deleting the
+			# real cleanup still passed. Parse the setUp body instead of
+			# grepping, so this tracks structure rather than substrings.
+			# The cleanup lives in the shared AIPlatformTestCase base, so a
+			# suite is guarded either by inheriting it or by handling fixed
+			# names itself (unique per-run names, or its own setUp cleanup).
+			guarded = "AIPlatformTestCase" in source or _clears_fixtures_in_setup(source)
+			if not guarded:
+				offenders.append(f"{path.name}: inserts {sorted(inserts)} with no cleanup")
+		self.assertEqual(offenders, [])

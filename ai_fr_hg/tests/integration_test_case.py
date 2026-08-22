@@ -107,16 +107,100 @@ def stub_translation_model(behaviour=None):
 		yield mock
 
 
+#: DocTypes these suites create under fixed, human-readable names.
+#:
+#: Each uses ``autoname: field:<x>``, so the name IS the primary key and two
+#: runs cannot coexist. ``IntegrationTestCase`` normally hides that by rolling
+#: back, but a rollback only undoes rows *this* transaction created. Anything
+#: committed by an earlier run — a crashed process, an interrupted migrate, or
+#: an application bug that commits mid-test — survives and makes every later
+#: run fail with ``DuplicateEntryError``, permanently, with no escape but
+#: manual SQL. That stranded the AI Pipeline suite on a real bench for three
+#: consecutive runs.
+#:
+#: Records seeded by ``setUpClass`` below are deliberately absent: they are
+#: reused across the session via ``db.exists`` and must survive.
+FIXED_NAME_FIXTURE_DOCTYPES = (
+	"AI Pipeline",
+	"AI Tool",
+	"AI Automation Rule",
+	"AI Extraction Schema",
+	"AI Translation Glossary",
+	"AI Agent",
+)
+
+
 class AIPlatformTestCase(IntegrationTestCase):
 	"""Shared fixtures for the platform's integration tests."""
 
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
+		cls.clear_fixed_name_fixtures()
 		cls.provider = cls.ensure_provider()
 		cls.chat_model = cls.ensure_model("Test Chat Model", "Chat")
 		cls.embedding_model = cls.ensure_model("Test Embedding Model", "Embedding")
 		cls.knowledge_base = cls.ensure_knowledge_base()
+
+	@classmethod
+	def clear_fixed_name_fixtures(cls):
+		"""Delete fixed-name leftovers a rollback cannot reach.
+
+		Runs once per class, before any fixture is seeded, so an interrupted
+		earlier run cannot strand the suite.
+
+		**Scoped to names this app's own tests declare**, harvested from the
+		test sources themselves. Deleting every row of these DocTypes would
+		destroy an operator's real pipelines and agents — `bench run-tests`
+		is routinely pointed at a site that holds production data, so a
+		blanket delete is not acceptable. Reading the names from source also
+		means the set cannot drift as tests are added or renamed.
+
+		Tolerant by design: a row that will not delete must not stop the run,
+		because the insert that follows reports the real conflict far more
+		clearly than a teardown traceback would.
+		"""
+		for doctype, names in cls._declared_fixture_names().items():
+			if not names or not frappe.db.table_exists(doctype):
+				continue
+			for name in names:
+				if not frappe.db.exists(doctype, name):
+					continue
+				try:
+					frappe.delete_doc(
+						doctype, name, force=True, ignore_permissions=True, delete_permanently=True
+					)
+				except Exception:
+					continue
+		frappe.db.commit()
+
+	@classmethod
+	def _declared_fixture_names(cls) -> dict[str, set[str]]:
+		"""Map each fixed-name DocType to the names this app's tests insert."""
+		import json
+		from pathlib import Path
+
+		app_root = Path(__file__).resolve().parents[1]
+		name_fields: dict[str, str] = {}
+		for schema in app_root.rglob("*/doctype/*/*.json"):
+			try:
+				meta = json.loads(schema.read_text())
+			except ValueError:
+				continue
+			autoname = str(meta.get("autoname") or "")
+			if meta.get("name") in FIXED_NAME_FIXTURE_DOCTYPES and autoname.startswith("field:"):
+				name_fields[meta["name"]] = autoname.split(":", 1)[1]
+
+		declared: dict[str, set[str]] = {doctype: set() for doctype in name_fields}
+		for test_file in app_root.rglob("test_*.py"):
+			if "__pycache__" in test_file.parts:
+				continue
+			source = test_file.read_text()
+			for doctype, field in name_fields.items():
+				if f'"{doctype}"' not in source:
+					continue
+				declared[doctype].update(re.findall(rf'"{re.escape(field)}":\s*"([^"]+)"', source))
+		return declared
 
 	@classmethod
 	def ensure_provider(cls):

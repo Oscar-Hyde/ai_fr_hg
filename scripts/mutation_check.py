@@ -341,6 +341,20 @@ MUTATIONS: list[Mutation] = [
 		breaks="A site whose only spare capacity is a vision model loses chat failover entirely.",
 	),
 	Mutation(
+		name="fixture-cleanup-not-called",
+		path="ai_fr_hg/tests/integration_test_case.py",
+		old="\t\tcls.clear_fixed_name_fixtures()\n",
+		new="",
+		breaks="An interrupted run permanently strands every fixed-name suite with DuplicateEntryError.",
+	),
+	Mutation(
+		name="fixture-cleanup-wipes-real-data",
+		path="ai_fr_hg/tests/integration_test_case.py",
+		old="\t\tfor doctype, names in cls._declared_fixture_names().items():",
+		new="\t\tfor doctype, names in {d: None for d in FIXED_NAME_FIXTURE_DOCTYPES}.items():",
+		breaks="Running tests deletes an operator's real pipelines, agents and tools.",
+	),
+	Mutation(
 		name="reconciliation-enqueues-duplicates",
 		path="ai_fr_hg/ai/ingestion.py",
 		old="\t\tif row.name in seen:\n\t\t\tcontinue\n\t\tseen.add(row.name)",
