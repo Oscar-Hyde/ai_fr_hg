@@ -23,7 +23,8 @@ export function summarizeExtractionEvidence(raw) {
 	const structure = evidence.structure || {};
 	const provenance = evidence.provenance || {};
 	const embedded = Array.isArray(evidence.embedded_objects) ? evidence.embedded_objects : [];
-	const versions = evidence.versions && typeof evidence.versions === "object" ? evidence.versions : {};
+	const versions =
+		evidence.versions && typeof evidence.versions === "object" ? evidence.versions : {};
 	const mismatch = Boolean(detector.mismatch);
 	const empty = !evidence.reader && !detector.family && !provenance.bytes;
 	// Evidence written before the versioned extractor is marked by the

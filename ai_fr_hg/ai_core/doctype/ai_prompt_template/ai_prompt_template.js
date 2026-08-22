@@ -22,9 +22,7 @@ frappe.ui.form.on("AI Prompt Template", {
 
 			const result = rendered?.message || rendered || {};
 			const section = (label, value) =>
-				value
-					? `<b>${__(label)}:</b><br>${frappe.utils.escape_html(value)}<br><br>`
-					: "";
+				value ? `<b>${__(label)}:</b><br>${frappe.utils.escape_html(value)}<br><br>` : "";
 
 			const body = [
 				section("System Prompt", result.system_prompt),

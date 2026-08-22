@@ -227,7 +227,12 @@ describe("Part 1 evidence version provenance", () => {
         detector: { family: "pdf", extension: "pdf" },
         provenance: { bytes: 10 },
         extracted_on: "2026-08-21T10:00:00+00:00",
-        versions: { app: "0.0.1", reader: "1.1", library: "pypdf", library_version: "6.16.1" },
+        versions: {
+          app: "0.0.1",
+          reader: "1.1",
+          library: "pypdf",
+          library_version: "6.16.1",
+        },
       })
     );
     assert.equal(summary.extracted_on, "2026-08-21T10:00:00+00:00");

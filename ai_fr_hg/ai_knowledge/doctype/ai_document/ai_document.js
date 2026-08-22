@@ -527,7 +527,9 @@ frappe.ui.form.on("AI Document", {
 								entity.extraction_method === "semantic"
 									? `<span class="indicator-pill orange small" title="${__(
 											"Model-inferred, grounded in the source text"
-									  )}">${__("inferred")} ${Math.round(entity.confidence || 0)}%</span>`
+									  )}">${__("inferred")} ${Math.round(
+											entity.confidence || 0
+									  )}%</span>`
 									: `<span class="indicator-pill blue small" title="${__(
 											"Deterministic pattern match"
 									  )}">${__("exact")}</span>`
@@ -569,12 +571,12 @@ frappe.ui.form.on("AI Document", {
 							(rejected.low_confidence || 0) +
 							(rejected.invalid || 0);
 						frappe.show_alert({
-							message: __("Found {0} entities and {1} relationships ({2} discarded)", [
-								result.entities,
-								result.relationships,
-								dropped,
-							]),
-							indicator: result.entities || result.relationships ? "green" : "orange",
+							message: __(
+								"Found {0} entities and {1} relationships ({2} discarded)",
+								[result.entities, result.relationships, dropped]
+							),
+							indicator:
+								result.entities || result.relationships ? "green" : "orange",
 						});
 						frm.reload_doc();
 					} catch (error) {
