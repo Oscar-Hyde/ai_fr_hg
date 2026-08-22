@@ -454,9 +454,12 @@ MUTATIONS: list[Mutation] = [
 	Mutation(
 		name="folder-endpoint-impersonates-user",
 		path="ai_fr_hg/api/folders.py",
-		old="return service_tabs(user=frappe.session.user)",
-		new='return service_tabs(user="Administrator")',
-		breaks="A published endpoint must act as the caller, never a fixed identity.",
+		# Re-anchored after FILE-08 removed `get_tabs`. `delete_file` is a
+		# destructive endpoint, so acting as a fixed identity here is the
+		# worst form of the defect.
+		old="return service_delete_file(file_name=file_name, user=frappe.session.user)",
+		new='return service_delete_file(file_name=file_name, user="Administrator")',
+		breaks="A destructive endpoint acts as Administrator instead of the caller.",
 	),
 	# -- schema and wiring integrity (real-bench failure classes) ---------
 	Mutation(

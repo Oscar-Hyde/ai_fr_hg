@@ -71,20 +71,6 @@ def rename_file(file_name: str, new_name: str) -> dict:
 
 
 @frappe.whitelist()
-def move_file(file_name: str, target_folder: str) -> dict:
-	from ai_fr_hg.ai.folders import move_file as service_move
-
-	return service_move(file_name=file_name, target_folder=target_folder, user=frappe.session.user)
-
-
-@frappe.whitelist()
-def move_folder(folder_name: str, target_folder: str) -> dict:
-	from ai_fr_hg.ai.document_tree import move_folder as tree_move_folder
-
-	return tree_move_folder(folder=folder_name, target_folder=target_folder)
-
-
-@frappe.whitelist()
 def delete_folder(folder_name: str, recursive: int = 0) -> dict:
 	from ai_fr_hg.ai.folders import delete_folder as service_delete
 
@@ -147,49 +133,6 @@ def bulk_move(file_names: str | list, target_folder: str, enqueue: int | None = 
 
 
 @frappe.whitelist()
-def list_folder_contents(
-	folder: str | None = None,
-	include_files: int = 1,
-	include_folders: int = 1,
-	limit: int = 50,
-	offset: int = 0,
-	search_text: str | None = None,
-	order_by: str | None = None,
-) -> dict:
-	from ai_fr_hg.ai.folders import list_folder_contents as service_list
-	from ai_fr_hg.utils import api_validation
-
-	folder = api_validation.valid_identifier(folder, label=_("Folder")) if folder else None
-	limit, offset = api_validation.pagination(limit, offset, default_limit=50, hard_limit=200)
-	search_text = api_validation.bounded_text(search_text, label=_("Search"), max_length=200) or None
-	return service_list(
-		folder=folder,
-		include_files=bool(cint(include_files)),
-		include_folders=bool(cint(include_folders)),
-		limit=limit,
-		offset=offset,
-		search_text=search_text,
-		order_by=order_by or "file_name asc",
-	)
-
-
-@frappe.whitelist()
-def get_tree(root: str | None = None, max_depth: int = 4, include_files: int = 0) -> dict:
-	from ai_fr_hg.ai.folders import get_tree as service_tree
-	from ai_fr_hg.utils import api_validation
-
-	root = api_validation.valid_identifier(root, label=_("Folder")) if root else None
-	return service_tree(
-		root=root,
-		max_depth=api_validation.bounded_integer(
-			max_depth, label=_("Depth"), default=4, maximum=api_validation.MAX_FOLDER_TREE_DEPTH
-		),
-		include_files=bool(cint(include_files)),
-		user=frappe.session.user,
-	)
-
-
-@frappe.whitelist()
 def get_breadcrumbs(file_or_folder: str) -> list:
 	from ai_fr_hg.ai.folders import get_breadcrumbs as service_crumb
 
@@ -197,46 +140,10 @@ def get_breadcrumbs(file_or_folder: str) -> list:
 
 
 @frappe.whitelist()
-def get_folder_info(folder_name: str) -> dict:
-	from ai_fr_hg.ai.folders import get_folder_info as service_info
-
-	return service_info(folder_name=folder_name, user=frappe.session.user)
-
-
-@frappe.whitelist()
 def get_file_info(file_name: str) -> dict:
 	from ai_fr_hg.ai.folders import get_file_info as service_file_info
 
 	return service_file_info(file_name=file_name, user=frappe.session.user)
-
-
-@frappe.whitelist()
-def search(
-	query: str | None = None,
-	folder: str | None = None,
-	file_type: str | None = None,
-	limit: int = 50,
-) -> dict:
-	from ai_fr_hg.ai.folders import search as service_search
-	from ai_fr_hg.utils import api_validation
-
-	query = api_validation.bounded_text(query, label=_("Query"), max_length=200) or None
-	folder = api_validation.valid_identifier(folder, label=_("Folder")) if folder else None
-	return service_search(
-		query=query,
-		folder=folder,
-		file_type=api_validation.bounded_text(file_type, label=_("File type"), max_length=40) or None,
-		limit=api_validation.bounded_integer(
-			limit, label=_("limit"), default=50, maximum=api_validation.MAX_FOLDER_SEARCH_RESULTS
-		),
-	)
-
-
-@frappe.whitelist()
-def list_favorites() -> list:
-	from ai_fr_hg.ai.folders import list_favorites as service_fav
-
-	return service_fav(user=frappe.session.user)
 
 
 @frappe.whitelist()
@@ -251,24 +158,6 @@ def remove_favorite(folder: str) -> dict:
 	from ai_fr_hg.ai.folders import remove_favorite as service_remove
 
 	return service_remove(folder=folder, user=frappe.session.user)
-
-
-@frappe.whitelist()
-def get_recents(limit: int = 20) -> list:
-	from ai_fr_hg.ai.folders import get_recents as service_recent
-	from ai_fr_hg.utils import api_validation
-
-	return service_recent(
-		user=frappe.session.user,
-		limit=api_validation.bounded_integer(limit, label=_("limit"), default=20, maximum=200),
-	)
-
-
-@frappe.whitelist()
-def get_tabs() -> list:
-	from ai_fr_hg.ai.folders import get_tabs as service_tabs
-
-	return service_tabs(user=frappe.session.user)
 
 
 @frappe.whitelist()

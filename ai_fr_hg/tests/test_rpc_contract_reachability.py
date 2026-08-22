@@ -49,15 +49,6 @@ ROOT = APP.parent
 #: asserted by `TestUncalledEndpointsStillEnforcePermissions` below rather than
 #: by any UI exercising them. Tracked as FILE-08.
 DOCUMENTED_EXTERNAL_API: dict[str, str] = {
-	"ai_fr_hg.api.folders.get_tree": "FILE-08: folder-browser API, no UI caller since FILE-05",
-	"ai_fr_hg.api.folders.list_folder_contents": "FILE-08: folder-browser API, no UI caller",
-	"ai_fr_hg.api.folders.get_tabs": "FILE-08: folder-browser API, no UI caller",
-	"ai_fr_hg.api.folders.get_recents": "FILE-08: folder-browser API, no UI caller",
-	"ai_fr_hg.api.folders.list_favorites": "FILE-08: folder-browser API, no UI caller",
-	"ai_fr_hg.api.folders.get_folder_info": "FILE-08: folder-browser API, no UI caller",
-	"ai_fr_hg.api.folders.move_file": "FILE-08: folder-browser API, no UI caller",
-	"ai_fr_hg.api.folders.move_folder": "FILE-08: folder-browser API, no UI caller",
-	"ai_fr_hg.api.folders.search": "FILE-08: folder-browser API, no UI caller",
 	"ai_fr_hg.ai_conversation.doctype.ai_conversation.ai_conversation.generate_summary": (
 		"CHAT-10: Desk form action with no script caller; delegates to "
 		"ai_fr_hg.api.chat.summarize_conversation"
@@ -68,10 +59,11 @@ DOCUMENTED_EXTERNAL_API: dict[str, str] = {
 }
 
 #: Endpoints published without an in-repo caller must still prove they refuse
-#: an unauthorized session. Maps method -> the authorization it must perform.
-UNCALLED_ENDPOINTS_REQUIRING_AUTHZ = tuple(
-	name for name in DOCUMENTED_EXTERNAL_API if name.startswith("ai_fr_hg.api.folders.")
-)
+#: an unauthorized session. Empty since FILE-08 was dispositioned by Removal:
+#: the nine unreachable folder-browser endpoints were deleted rather than
+#: left as an unexercised surface. Kept so the invariant is re-armed the
+#: moment another endpoint is published without a caller.
+UNCALLED_ENDPOINTS_REQUIRING_AUTHZ: tuple[str, ...] = ()
 
 
 def _iter_js() -> list[Path]:
@@ -303,37 +295,46 @@ class TestRpcReachability(TestCase):
 			self.assertIn(dotted, self.whitelisted, f"{dotted} is allow-listed but no longer exists")
 
 	def test_uncalled_endpoints_still_scope_to_the_session_user(self):
-		"""An endpoint with no UI caller is still reachable by any logged-in session.
+		"""An endpoint with no UI caller is still reachable by any session.
 
-		These are the FILE-08 folder-browser methods. Nothing in the product
-		exercises them, so no UI test can demonstrate that they are safe; the
-		guarantee has to be asserted directly against the source. Each must
-		either pass the session user down to the service layer or perform an
-		explicit permission check — never call the service unscoped.
+		Currently empty: FILE-08 was dispositioned by Removal rather than
+		left as an unexercised surface. The check stays so the invariant
+		re-arms the moment another endpoint is published without a caller.
 		"""
-		unscoped = []
-		impersonating = []
 		for dotted in UNCALLED_ENDPOINTS_REQUIRING_AUTHZ:
 			name = dotted.rsplit(".", 1)[1]
 			node = _function_node(APP / "api" / "folders.py", name)
 			self.assertIsNotNone(node, f"{dotted} no longer exists")
-			if not _enforces_authorization(node, APP / "api" / "folders.py"):
-				unscoped.append(dotted)
-			# A service that defaults to `user or frappe.session.user` will
-			# look authorized even when the facade hands it a fixed identity,
-			# so reject a literal user argument outright.
-			body = ast.unparse(node)
-			if re.search(r"user\s*=\s*[\"'][^\"']+[\"']", body):
-				impersonating.append(dotted)
-		self.assertEqual(
-			unscoped,
-			[],
-			"published endpoints that never scope to the caller, directly or via their service",
-		)
+			self.assertTrue(
+				_enforces_authorization(node, APP / "api" / "folders.py"),
+				f"{dotted} never scopes to the caller",
+			)
+
+	def test_no_endpoint_acts_as_a_hardcoded_identity(self):
+		"""A facade must act as the caller, never as a fixed user.
+
+		A service that defaults to `user or frappe.session.user` looks
+		authorized even when the facade hands it a fixed identity, so the
+		literal argument is rejected outright. This covers every endpoint in
+		the API layer, not only the ones without callers — the FILE-08
+		removal left the previous, narrower version of this check with no
+		subjects at all.
+		"""
+		impersonating = []
+		for module in sorted((APP / "api").glob("*.py")):
+			tree = ast.parse(module.read_text())
+			for node in ast.walk(tree):
+				if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+					continue
+				if not any("whitelist" in ast.unparse(d) for d in node.decorator_list):
+					continue
+				body = ast.unparse(node)
+				if re.search(r"user\s*=\s*[\"\'][^\"\']+[\"\']", body):
+					impersonating.append(f"{module.name}:{node.lineno} {node.name}")
 		self.assertEqual(
 			impersonating,
 			[],
-			"published endpoints that pass a hardcoded user instead of the session",
+			"whitelisted endpoints passing a hardcoded user instead of the session",
 		)
 
 
