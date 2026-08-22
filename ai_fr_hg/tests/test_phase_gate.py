@@ -148,3 +148,60 @@ class TestOperationalRunbooks(TestCase):
 			documented,
 			"the runbook's baseline command no longer matches scripts/mutation_check.py",
 		)
+
+
+class TestEvidenceTierHonesty(TestCase):
+	"""A CLOSED row may not count a test that never runs in its claimed tier.
+
+	This rule exists because the same defect appeared four times — SEC-04,
+	SEC-07, GOV-01/02/03 and the §24 audit writer were each closed citing
+	tests that either did not exist or lived only in bench-only suites. Those
+	suites error without a live site, so offline and under the mutation gate
+	they contribute no evidence at all.
+
+	193 application functions are currently referenced *only* by bench-only
+	suites. That is not a defect in itself — those suites are real evidence at
+	the runtime tier — but it means a reference count says nothing about
+	whether a behaviour is verified offline. The check below is therefore
+	narrow and mechanical: rows claiming `tier: fakebench behaviour` must cite
+	symbols something in the offline batch actually exercises.
+	"""
+
+	@classmethod
+	def setUpClass(cls):
+		mutation_source = (ROOT / "scripts" / "mutation_check.py").read_text()
+		cls.bench_only_names = {
+			Path(path).name for path in re.findall(r"--ignore=(\S+?\.py)", mutation_source)
+		}
+		cls.offline_text = "\n".join(
+			path.read_text()
+			for path in (ROOT / "ai_fr_hg" / "tests").rglob("test_*.py")
+			if path.name not in cls.bench_only_names and "__pycache__" not in path.parts
+		)
+		cls.register = (ROOT / "docs" / "GAP_REGISTER.md").read_text()
+
+	def test_discovery_found_the_offline_batch(self):
+		self.assertGreater(len(self.offline_text), 200_000, "offline suite discovery collapsed")
+		self.assertGreaterEqual(len(self.bench_only_names), 7)
+
+	def test_fakebench_tier_rows_cite_symbols_the_offline_batch_exercises(self):
+		"""Claiming the fakebench tier requires evidence that runs in it."""
+		unproven: list[str] = []
+		for line in self.register.splitlines():
+			if not re.match(r"^\|\s*[A-Z]+-\d+", line):
+				continue
+			if "tier: fakebench behaviour" not in line:
+				continue
+			columns = [column.strip() for column in line.split("|")]
+			evidence = columns[-2]
+			cited = [
+				symbol
+				for symbol in re.findall(r"`([A-Za-z_][A-Za-z0-9_]*)`", evidence)
+				if "_" in symbol or symbol[0].isupper()
+			]
+			# At least one cited symbol must appear in a suite that actually runs.
+			if cited and not any(
+				re.search(rf"\b{re.escape(symbol)}\b", self.offline_text) for symbol in cited
+			):
+				unproven.append(f"{columns[1]}: cites {cited} — none exercised by the offline batch")
+		self.assertEqual(unproven, [])

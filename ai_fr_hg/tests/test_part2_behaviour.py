@@ -2524,3 +2524,307 @@ class TestAuditTrailIntegrity(TestCase):
 
 		self.assertEqual(bench.db.savepoints, [])
 		self.assertEqual(bench.db.rolled_back, 0)
+
+
+class TestAutomationEventIdempotency(TestCase):
+	"""One document change must produce one execution, however often it is delivered.
+
+	Frappe's queue is at-least-once, and `doc_events` can fire more than once
+	for a single logical change, so `_register_event` is the deduplication
+	boundary. `event_revision_key` had a test for its *string format*; the
+	decision that consumes it had none — neither `_register_event` nor
+	`_insert_event` was referenced anywhere in the repository.
+
+	The failure this prevents is not a duplicate row. It is a duplicate
+	*effect*: the target field written twice, the model billed twice, two
+	audit entries for one cause.
+	"""
+
+	def _bench(self, *, coalesce=1):
+		bench = install(FakeBench())
+		bench.register_doctype(
+			"AI Automation Event",
+			[
+				"rule",
+				"event",
+				"status",
+				"requested_by",
+				"source_doctype",
+				"source_name",
+				"document_modified",
+				"revision_key",
+				"snapshot",
+			],
+		)
+		bench.session.user = "alice@example.com"
+		automation = import_app("ai_fr_hg.ai.automation")
+		rule = types.SimpleNamespace(
+			name="RULE-1",
+			coalesce_events=coalesce,
+			get=lambda key, default=None: {"coalesce_events": coalesce}.get(key, default),
+		)
+		return bench, automation, rule
+
+	@staticmethod
+	def _doc(name="TODO-1", modified="2026-08-21 10:00:00"):
+		return types.SimpleNamespace(
+			doctype="ToDo",
+			name=name,
+			modified=modified,
+			as_dict=lambda: {"doctype": "ToDo", "name": name, "modified": modified},
+		)
+
+	def _events(self, bench):
+		return list(bench.db.tables["AI Automation Event"].values())
+
+	def test_the_same_revision_delivered_twice_runs_once(self):
+		"""At-least-once delivery must not become at-least-once execution."""
+		bench, automation, rule = self._bench()
+		doc = self._doc()
+
+		first = automation._register_event(rule, doc, "on_update")
+		second = automation._register_event(rule, doc, "on_update")
+
+		self.assertEqual(first["status"], "Queued")
+		self.assertTrue(second["skipped"])
+		self.assertEqual(second["reason"], "duplicate_revision")
+		self.assertEqual(second["event"], first["event"])
+		self.assertEqual(len([e for e in self._events(bench) if e["status"] == "Queued"]), 1)
+
+	def test_a_genuinely_new_revision_is_not_suppressed(self):
+		"""Dedupe must not swallow a real second change (the AUTO-04 defect)."""
+		bench, automation, rule = self._bench(coalesce=0)
+
+		automation._register_event(rule, self._doc(modified="2026-08-21 10:00:00"), "on_update")
+		second = automation._register_event(rule, self._doc(modified="2026-08-21 10:05:00"), "on_update")
+
+		self.assertNotIn("skipped", second)
+		self.assertEqual(second["status"], "Queued")
+		self.assertEqual(len([e for e in self._events(bench) if e["status"] == "Queued"]), 2)
+
+	def test_the_revision_key_is_deterministic_across_deliveries(self):
+		"""A key with any per-call entropy would defeat deduplication entirely."""
+		_, _automation, _rule = self._bench()
+		module = import_app("ai_fr_hg.ai.automation_utils")
+
+		first = module.event_revision_key("RULE-1", "ToDo", "TODO-1", "2026-08-21 10:00:00")
+		second = module.event_revision_key("RULE-1", "ToDo", "TODO-1", "2026-08-21 10:00:00")
+
+		self.assertEqual(first, second)
+		# Distinct on every component that identifies the work.
+		self.assertNotEqual(
+			first, module.event_revision_key("RULE-2", "ToDo", "TODO-1", "2026-08-21 10:00:00")
+		)
+		self.assertNotEqual(
+			first, module.event_revision_key("RULE-1", "Note", "TODO-1", "2026-08-21 10:00:00")
+		)
+		self.assertNotEqual(
+			first, module.event_revision_key("RULE-1", "ToDo", "TODO-2", "2026-08-21 10:00:00")
+		)
+		self.assertNotEqual(
+			first, module.event_revision_key("RULE-1", "ToDo", "TODO-1", "2026-08-21 11:00:00")
+		)
+
+	def test_the_identity_is_stored_before_the_work_is_queued(self):
+		"""A key written after execution cannot deduplicate anything."""
+		bench, automation, rule = self._bench()
+
+		result = automation._register_event(rule, self._doc(), "on_update")
+
+		queued = next(e for e in self._events(bench) if e["name"] == result["event"])
+		self.assertEqual(queued["revision_key"], "RULE-1::ToDo::TODO-1::2026-08-21 10:00:00")
+		self.assertEqual(queued["status"], "Queued")
+
+	def test_a_completed_revision_is_still_suppressed(self):
+		"""Re-delivery after success must not re-run the work."""
+		bench, automation, rule = self._bench()
+		first = automation._register_event(rule, self._doc(), "on_update")
+		bench.db.tables["AI Automation Event"][first["event"]]["status"] = "Success"
+
+		second = automation._register_event(rule, self._doc(), "on_update")
+
+		self.assertTrue(second["skipped"])
+		self.assertEqual(second["reason"], "duplicate_revision")
+
+	def test_a_failed_revision_may_be_retried(self):
+		"""Suppression must not turn a transient failure into a permanent one."""
+		bench, automation, rule = self._bench(coalesce=0)
+		first = automation._register_event(rule, self._doc(), "on_update")
+		bench.db.tables["AI Automation Event"][first["event"]]["status"] = "Failed"
+
+		second = automation._register_event(rule, self._doc(), "on_update")
+
+		self.assertEqual(second["status"], "Queued")
+
+	def test_coalescing_records_the_superseded_change_rather_than_dropping_it(self):
+		"""A coalesced event must remain visible for audit, not vanish."""
+		bench, automation, rule = self._bench(coalesce=1)
+		automation._register_event(rule, self._doc(modified="2026-08-21 10:00:00"), "on_update")
+
+		second = automation._register_event(rule, self._doc(modified="2026-08-21 10:05:00"), "on_update")
+
+		self.assertEqual(second["status"], "Coalesced")
+		self.assertTrue(second["skipped"])
+		statuses = sorted(e["status"] for e in self._events(bench))
+		self.assertEqual(statuses, ["Coalesced", "Queued"])
+
+	def test_a_coalesced_row_does_not_collide_with_the_live_revision_key(self):
+		"""Two rows sharing a unique key would fail the insert outright."""
+		bench, automation, rule = self._bench(coalesce=1)
+		automation._register_event(rule, self._doc(modified="2026-08-21 10:00:00"), "on_update")
+		automation._register_event(rule, self._doc(modified="2026-08-21 10:05:00"), "on_update")
+
+		keys = [e["revision_key"] for e in self._events(bench)]
+		self.assertEqual(len(keys), len(set(keys)), "revision keys collided")
+
+	def test_coalescing_is_scoped_to_one_document(self):
+		"""An unrelated document must not be suppressed by a busy neighbour."""
+		_, automation, rule = self._bench(coalesce=1)
+		automation._register_event(rule, self._doc(name="TODO-1"), "on_update")
+
+		other = automation._register_event(rule, self._doc(name="TODO-2"), "on_update")
+
+		self.assertEqual(other["status"], "Queued")
+
+	def test_the_immutable_snapshot_is_captured_at_registration(self):
+		"""AUTO-01: delete-event automation depends on this being stored up front."""
+		bench, automation, rule = self._bench()
+
+		result = automation._register_event(rule, self._doc(), "on_trash")
+
+		stored = json.loads(next(e for e in self._events(bench) if e["name"] == result["event"])["snapshot"])
+		self.assertEqual(stored["name"], "TODO-1")
+
+
+class TestRetryExhaustion(TestCase):
+	"""Retries must terminate, and cancellation must not consume an attempt.
+
+	`_max_retries` and the reconciliation filter that applies it were never
+	referenced by a test. The failure mode is a document that requeues
+	forever: each attempt burns extraction and model budget, and because the
+	row keeps changing it never looks stuck.
+	"""
+
+	def _bench(self, *, max_retries=2, rows=()):
+		bench = install(FakeBench())
+		bench.register_doctype("AI Platform Settings", ["max_retries"], is_single=True)
+		bench.db.singles["AI Platform Settings"] = {"max_retries": max_retries}
+		bench.register_doctype(
+			"AI Document",
+			[
+				"status",
+				"retry_count",
+				"processing_heartbeat",
+				"processing_requested_by",
+				"error_type",
+				"error_message",
+				"processing_message",
+			],
+		)
+		for row in rows:
+			bench.db.insert_row("AI Document", row)
+		return bench, import_app("ai_fr_hg.ai.ingestion")
+
+	@staticmethod
+	def _failed(name, retry_count, modified="2026-08-21 10:00:00"):
+		return {
+			"name": name,
+			"status": "Failed",
+			"retry_count": retry_count,
+			"modified": modified,
+			"owner": "alice@example.com",
+			"processing_requested_by": "alice@example.com",
+			"processing_heartbeat": modified,
+		}
+
+	def test_the_retry_ceiling_comes_from_settings(self):
+		_, ingestion = self._bench(max_retries=5)
+
+		self.assertEqual(ingestion._max_retries(), 5)
+
+	def test_an_unset_ceiling_falls_back_to_a_bounded_default(self):
+		"""An unconfigured site must not mean unlimited retries."""
+		bench, ingestion = self._bench()
+		bench.db.singles["AI Platform Settings"]["max_retries"] = None
+
+		self.assertEqual(ingestion._max_retries(), 2)
+
+	def test_a_negative_ceiling_is_clamped_rather_than_inverting_the_filter(self):
+		bench, ingestion = self._bench()
+		bench.db.singles["AI Platform Settings"]["max_retries"] = -5
+
+		self.assertEqual(ingestion._max_retries(), 0)
+
+	def test_documents_past_the_ceiling_are_not_requeued(self):
+		"""The exhaustion boundary: this is what stops an infinite retry loop."""
+		_, ingestion = self._bench(
+			max_retries=2,
+			rows=[self._failed("DOC-OK", 1), self._failed("DOC-EXHAUSTED", 9)],
+		)
+		enqueued = []
+		ingestion.enqueue_processing = lambda name, requested_by=None: enqueued.append(name)
+
+		ingestion.process_pending_documents()
+
+		self.assertIn("DOC-OK", enqueued)
+		self.assertNotIn("DOC-EXHAUSTED", enqueued)
+
+	def test_reconciliation_is_bounded_per_sweep(self):
+		"""A large failure backlog must not become one unbounded sweep."""
+		_, ingestion = self._bench(
+			max_retries=99,
+			rows=[self._failed(f"DOC-{i}", 0) for i in range(60)],
+		)
+		enqueued = []
+		ingestion.enqueue_processing = lambda name, requested_by=None: enqueued.append(name)
+
+		ingestion.process_pending_documents()
+
+		self.assertLessEqual(len(enqueued), 40, "reconciliation enqueued an unbounded batch")
+
+	def test_a_document_is_never_enqueued_twice_in_one_sweep(self):
+		"""A row can match both the stale-in-flight and failed queries."""
+		bench, ingestion = self._bench(
+			max_retries=9,
+			rows=[self._failed("DOC-DUP", 0)],
+		)
+		# Also make it look like a dead in-flight worker.
+		bench.db.tables["AI Document"]["DOC-DUP"]["status"] = "Extracting"
+		enqueued = []
+		ingestion.enqueue_processing = lambda name, requested_by=None: enqueued.append(name)
+
+		ingestion.process_pending_documents()
+
+		self.assertEqual(enqueued.count("DOC-DUP"), 1)
+
+	def test_the_retry_runs_under_the_durable_requester(self):
+		"""§22: a retry must not silently acquire the scheduler's authority."""
+		bench, ingestion = self._bench(
+			max_retries=9,
+			rows=[self._failed("DOC-1", 0)],
+		)
+		bench.db.tables["AI Document"]["DOC-1"]["processing_requested_by"] = "bob@example.com"
+		seen = {}
+		ingestion.enqueue_processing = lambda name, requested_by=None: seen.setdefault(name, requested_by)
+
+		ingestion.process_pending_documents()
+
+		self.assertEqual(seen["DOC-1"], "bob@example.com")
+
+	def test_one_failing_document_does_not_abort_the_sweep(self):
+		"""Reconciliation is a batch: one bad row must not strand the rest."""
+		_, ingestion = self._bench(
+			max_retries=9,
+			rows=[self._failed("DOC-BAD", 0), self._failed("DOC-GOOD", 0)],
+		)
+		enqueued = []
+
+		def flaky(name, requested_by=None):
+			if name == "DOC-BAD":
+				raise RuntimeError("enqueue exploded")
+			enqueued.append(name)
+
+		ingestion.enqueue_processing = flaky
+		ingestion.process_pending_documents()
+
+		self.assertIn("DOC-GOOD", enqueued)

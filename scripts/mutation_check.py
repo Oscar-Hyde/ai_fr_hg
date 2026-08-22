@@ -237,6 +237,78 @@ MUTATIONS: list[Mutation] = [
 		breaks="Evidence must record when extraction ran.",
 	),
 	# -- formula preservation (§6.2) --------------------------------------
+	# -- retry exhaustion and duplicate suppression -----------------------
+	Mutation(
+		name="retry-ceiling-removed",
+		path="ai_fr_hg/ai/ingestion.py",
+		old='\t\t\t["retry_count", "<=", max_retries],\n',
+		new="",
+		breaks="A permanently failing document requeues forever, burning model budget.",
+	),
+	Mutation(
+		name="retry-default-unbounded",
+		path="ai_fr_hg/ai/ingestion.py",
+		old='\treturn 2 if configured in (None, "") else max(0, cint(configured))',
+		new='\treturn 999999 if configured in (None, "") else cint(configured)',
+		breaks="An unconfigured site silently gets unlimited retries.",
+	),
+	Mutation(
+		name="reconciliation-enqueues-duplicates",
+		path="ai_fr_hg/ai/ingestion.py",
+		old="\t\tif row.name in seen:\n\t\t\tcontinue\n\t\tseen.add(row.name)",
+		new="\t\tpass",
+		breaks="A row matching two reconciliation queries is processed twice per sweep.",
+	),
+	Mutation(
+		name="retry-loses-durable-requester",
+		path="ai_fr_hg/ai/ingestion.py",
+		old="\t\tauthority = row.processing_requested_by or row.owner",
+		new='\t\tauthority = "Administrator"',
+		breaks="A retry escalates to scheduler authority instead of the original requester.",
+	),
+	Mutation(
+		name="reconciliation-aborts-on-first-failure",
+		path="ai_fr_hg/ai/ingestion.py",
+		old="\t\ttry:\n\t\t\tenqueue_processing(row.name, requested_by=authority)\n\t\texcept Exception:",
+		new="\t\tif True:\n\t\t\tenqueue_processing(row.name, requested_by=authority)\n\t\tif False:",
+		breaks="One bad row strands every remaining document in the sweep.",
+	),
+	# -- event idempotency: at-least-once delivery, once-only effect ------
+	Mutation(
+		name="idempotency-check-removed",
+		path="ai_fr_hg/ai/automation.py",
+		old='\tif existing and existing.status in {"Queued", "Running", "Success"}:',
+		new="\tif False:",
+		breaks="A redelivered event runs again: duplicate writes, duplicate model spend.",
+	),
+	Mutation(
+		name="revision-key-nondeterministic",
+		path="ai_fr_hg/ai/automation_utils.py",
+		old='\treturn f"{rule}::{doctype}::{docname}::{modified}"',
+		new='\timport uuid\n\n\treturn f"{rule}::{doctype}::{docname}::{modified}::{uuid.uuid4().hex}"',
+		breaks="Per-call entropy in the identity defeats deduplication entirely.",
+	),
+	Mutation(
+		name="revision-key-ignores-the-revision",
+		path="ai_fr_hg/ai/automation_utils.py",
+		old='\treturn f"{rule}::{doctype}::{docname}::{modified}"',
+		new='\treturn f"{rule}::{doctype}::{docname}"',
+		breaks="Every later change to a document is mistaken for a duplicate and dropped.",
+	),
+	Mutation(
+		name="terminal-failure-blocks-retry",
+		path="ai_fr_hg/ai/automation.py",
+		old='if existing and existing.status in {"Queued", "Running", "Success"}:',
+		new="if existing:",
+		breaks="A transient failure becomes permanent: the event can never be retried.",
+	),
+	Mutation(
+		name="coalesced-change-not-recorded",
+		path="ai_fr_hg/ai/automation.py",
+		old='\t\t\tcoalesced = _insert_event(rule, doc, event, revision, status="Coalesced")\n\t\t\treturn {"event": coalesced, "status": "Coalesced", "skipped": True, "reason": "coalesced"}',
+		new='\t\t\treturn {"event": None, "status": "Coalesced", "skipped": True, "reason": "coalesced"}',
+		breaks="A superseded change vanishes with no audit record that it occurred.",
+	),
 	# -- audit trail integrity (Part 2 §24) -------------------------------
 	Mutation(
 		name="audit-actor-not-the-session-user",
