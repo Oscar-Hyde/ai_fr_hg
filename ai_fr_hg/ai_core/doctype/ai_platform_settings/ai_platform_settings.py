@@ -68,6 +68,7 @@ class AIPlatformSettings(Document):
 		processing_queue: DF.Literal["default", "short", "long"]
 		redact_patterns: DF.SmallText | None
 		request_timeout: DF.Int
+		resource_allowed_hosts: DF.SmallText | None
 		retrieval_brute_force_ceiling: DF.Int
 		require_memory_approval: DF.Check
 		require_tool_approval: DF.Check

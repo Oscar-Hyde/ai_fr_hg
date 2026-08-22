@@ -1,0 +1,310 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "allow_rename": 0,
+ "autoname": "naming_series:",
+ "creation": "2026-08-22 09:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "resource",
+  "resource_code",
+  "resource_name",
+  "resource_type",
+  "version",
+  "publisher",
+  "repository",
+  "naming_series",
+  "resource_cb",
+  "status",
+  "is_active",
+  "activated",
+  "activated_on",
+  "installed_on",
+  "installed_by",
+  "install_sec",
+  "previous_version",
+  "requires_update",
+  "download",
+  "source_url",
+  "security_sec",
+  "sha256",
+  "signature",
+  "package_size_mb",
+  "monitor_sec",
+  "use_count",
+  "last_used",
+  "health_status",
+  "last_checked",
+  "removal_sec",
+  "removed_on",
+  "removed_by",
+  "target_sec",
+  "target_records"
+ ],
+ "fields": [
+  {
+   "fieldname": "resource",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Resource",
+   "options": "AI Resource",
+   "reqd": 1
+  },
+  {
+   "fieldname": "resource_code",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Resource Code"
+  },
+  {
+   "fieldname": "resource_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Resource Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "resource_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Resource Type",
+   "options": "Translation Package\nTranslation Memory Pack\nAI Model\nAI Prompt Template\nAI Workflow Template\nAgent Capability\nLanguage Pack\nKnowledge Resource\nAI Extension"
+  },
+  {
+   "fieldname": "version",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Version",
+   "reqd": 1
+  },
+  {
+   "fieldname": "publisher",
+   "fieldtype": "Data",
+   "label": "Publisher"
+  },
+  {
+   "fieldname": "repository",
+   "fieldtype": "Link",
+   "label": "Repository",
+   "options": "AI Resource Repository"
+  },
+  {
+   "default": "RESINS-.YYYY.-.#####",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Series",
+   "options": "RESINS-.YYYY.-.#####",
+   "read_only": 1
+  },
+  {
+   "fieldname": "resource_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Active",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Installing\nRegistering\nActive\nUpdate Available\nUpdate Failed\nRollback Pending\nSuperseded\nRemoved\nFailed"
+  },
+  {
+   "default": "1",
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Active"
+  },
+  {
+   "fieldname": "activated",
+   "fieldtype": "Check",
+   "label": "Activated"
+  },
+  {
+   "fieldname": "activated_on",
+   "fieldtype": "Datetime",
+   "label": "Activated On"
+  },
+  {
+   "fieldname": "installed_on",
+   "fieldtype": "Datetime",
+   "label": "Installed On"
+  },
+  {
+   "fieldname": "installed_by",
+   "fieldtype": "Link",
+   "label": "Installed By",
+   "options": "User"
+  },
+  {
+   "fieldname": "install_sec",
+   "fieldtype": "Section Break",
+   "label": "Installation"
+  },
+  {
+   "fieldname": "previous_version",
+   "fieldtype": "Data",
+   "label": "Previous Version"
+  },
+  {
+   "fieldname": "requires_update",
+   "fieldtype": "Check",
+   "label": "Update Available"
+  },
+  {
+   "fieldname": "download",
+   "fieldtype": "Link",
+   "label": "Download",
+   "options": "AI Resource Download"
+  },
+  {
+   "fieldname": "source_url",
+   "fieldtype": "Data",
+   "label": "Source URL"
+  },
+  {
+   "fieldname": "security_sec",
+   "fieldtype": "Section Break",
+   "label": "Integrity"
+  },
+  {
+   "fieldname": "sha256",
+   "fieldtype": "Data",
+   "label": "SHA-256 Checksum",
+   "read_only": 1
+  },
+  {
+   "fieldname": "signature",
+   "fieldtype": "Data",
+   "label": "Digital Signature",
+   "read_only": 1
+  },
+  {
+   "fieldname": "package_size_mb",
+   "fieldtype": "Float",
+   "label": "Package Size (MB)",
+   "precision": "2"
+  },
+  {
+   "fieldname": "monitor_sec",
+   "fieldtype": "Section Break",
+   "label": "Monitoring"
+  },
+  {
+   "fieldname": "use_count",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Times Used"
+  },
+  {
+   "fieldname": "last_used",
+   "fieldtype": "Datetime",
+   "label": "Last Used"
+  },
+  {
+   "default": "Unknown",
+   "fieldname": "health_status",
+   "fieldtype": "Select",
+   "label": "Health",
+   "options": "Unknown\nHealthy\nDegraded\nError"
+  },
+  {
+   "fieldname": "last_checked",
+   "fieldtype": "Datetime",
+   "label": "Last Checked"
+  },
+  {
+   "fieldname": "removal_sec",
+   "fieldtype": "Section Break",
+   "label": "Removal"
+  },
+  {
+   "fieldname": "removed_on",
+   "fieldtype": "Datetime",
+   "label": "Removed On"
+  },
+  {
+   "fieldname": "removed_by",
+   "fieldtype": "Link",
+   "label": "Removed By",
+   "options": "User"
+  },
+  {
+   "fieldname": "target_sec",
+   "fieldtype": "Section Break",
+   "label": "Target Records"
+  },
+  {
+   "fieldname": "target_records",
+   "fieldtype": "Code",
+   "label": "Target Records",
+   "options": "JSON",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [
+  {
+   "link_doctype": "AI Resource Event",
+   "link_fieldname": "install"
+  }
+ ],
+ "modified": "2026-08-22 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Resources",
+ "name": "AI Resource Install",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI User",
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1
+  },
+  {
+   "role": "AI Auditor",
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "show_title_field_in_link": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "resource_name",
+ "track_changes": 1
+}

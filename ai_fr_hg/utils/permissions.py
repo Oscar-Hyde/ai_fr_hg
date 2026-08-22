@@ -339,6 +339,17 @@ def folder_favorite_query(user: str) -> str:
 	return _owned_condition("AI Folder Favorite", "user", user)
 
 
+def resource_download_query(user: str) -> str:
+	"""Marketplace download rows are visible to managers/auditors and the owner.
+
+	Installed resources are deliberately shared: an AI User may read them. In
+	flight downloads carry the requester, so AI Users only see their own job.
+	"""
+	if _is_manager(user) or _is_auditor(user):
+		return ""
+	return _owned_condition("AI Resource Download", "user", user)
+
+
 # Wrap all list-query conditions so Desk return never throws 500
 conversation_query = _safe_condition(conversation_query)
 message_query = _safe_condition(message_query)
@@ -359,6 +370,7 @@ search_query = _safe_condition(search_query)
 tool_invocation_query = _safe_condition(tool_invocation_query)
 folder_settings_query = _safe_condition(folder_settings_query)
 folder_favorite_query = _safe_condition(folder_favorite_query)
+resource_download_query = _safe_condition(resource_download_query)
 
 # ---------------------------------------------------------------------------
 # Direct-document permission
@@ -505,6 +517,10 @@ def has_document_permission(
 	if doc.doctype in {"AI Execution Log", "AI Search Query", "AI Tool Invocation"}:
 		return _owned_document_access(doc, user, "user", permission_type, auditors=True)
 	if doc.doctype == "AI Folder Favorite":
+		if _is_auditor(user) and _is_read(permission_type):
+			return True
+		return doc.get("user") == user
+	if doc.doctype == "AI Resource Download":
 		if _is_auditor(user) and _is_read(permission_type):
 			return True
 		return doc.get("user") == user

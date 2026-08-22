@@ -180,6 +180,12 @@
    "type": "Page"
   },
   {
+   "color": "Cyan",
+   "label": "Resource Marketplace",
+   "link_to": "resource-marketplace",
+   "type": "Page"
+  },
+  {
    "color": "Grey",
    "label": "Platform Settings",
    "link_to": "AI Platform Settings",
@@ -214,6 +220,19 @@
    "keep_closed": 0,
    "label": "Model Manager",
    "link_to": "ai-model-manager",
+   "link_type": "Page",
+   "open_in_new_tab": 0,
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 0,
+   "collapsible": 1,
+   "icon": "box",
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Resource Marketplace",
+   "link_to": "resource-marketplace",
    "link_type": "Page",
    "open_in_new_tab": 0,
    "show_arrow": 0,

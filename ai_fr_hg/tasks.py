@@ -303,3 +303,15 @@ def backup_knowledge() -> None:
 			export_knowledge_base(kb, include_embeddings=False)
 		except Exception:
 			frappe.log_error(title=f"AI knowledge backup failed: {kb}", message=frappe.get_traceback())
+
+def recover_resource_downloads() -> None:
+	"""Recover stale marketplace download jobs after a worker restart."""
+	try:
+		from ai_fr_hg.ai.resources.recovery import recover_interrupted_downloads
+
+		recover_interrupted_downloads()
+	except Exception:
+		try:
+			frappe.log_error(title="AI resource download recovery failed", message=frappe.get_traceback())
+		except Exception:
+			pass

@@ -1,0 +1,105 @@
+{
+  "schema": "ai-resource-package-v1",
+  "resource_code": "ai-prompt-essentials",
+  "resource_name": "AI Prompt Essentials Pack",
+  "resource_type": "AI Prompt Template",
+  "category": "Prompt Templates",
+  "version": "1.2.0",
+  "publisher": "Ai Fr Hg",
+  "description": "A curated set of production-ready AI prompt templates for summarisation, grounded answers, classification, extraction and agentic workflows.",
+  "supported_languages": ["en", "ar", "he"],
+  "supported_providers": ["Ollama", "OpenAI Compatible"],
+  "requires": {
+    "frappe": ">=17.0.0",
+    "python": ">=3.14,<3.15",
+    "min_disk_gb": 0.1,
+    "min_ram_gb": 1
+  },
+  "dependencies": [],
+  "license": "MIT",
+  "license_url": "https://opensource.org/licenses/MIT",
+  "release_notes": [
+    "1.0.0 - Initial release with six validated prompt templates.",
+    "1.1.0 - Added structured JSON output schemas and an agent orchestration template.",
+    "1.2.0 - Added Arabic and Hebrew output guidance and a document comparison template."
+  ],
+  "payload": {
+    "templates": [
+      {
+        "template_name": "Executive Summary",
+        "category": "Summarization",
+        "enabled": 1,
+        "output_format": "Markdown",
+        "description": "Concise executive summary for leadership review.",
+        "system_prompt": "You are a precise enterprise analyst. You never invent facts. Ground every claim in the provided document.",
+        "user_prompt": "Summarise the document for an executive audience.\n\nUse this structure:\n1. Purpose\n2. Key facts\n3. Required actions\n4. Risks and open questions\n\nIf a section has no evidence, write \"Not stated in source\".\n\nDOCUMENT:\n{{ content }}",
+        "variables": [
+          {"variable": "content", "label": "Document Content", "required": 1}
+        ]
+      },
+      {
+        "template_name": "Grounded Answer",
+        "category": "RAG",
+        "enabled": 1,
+        "output_format": "Markdown",
+        "description": "Answer only from supplied retrieval context.",
+        "system_prompt": "Answer only from CONTEXT. If CONTEXT does not contain the answer, say that you do not have that information. Cite passages as [1], [2].",
+        "user_prompt": "CONTEXT:\n{{ context }}\n\nQUESTION: {{ question }}",
+        "variables": [
+          {"variable": "context", "label": "Retrieval Context", "required": 1},
+          {"variable": "question", "label": "Question", "required": 1}
+        ]
+      },
+      {
+        "template_name": "Triage Classifier",
+        "category": "Classification",
+        "enabled": 1,
+        "output_format": "JSON",
+        "description": "Classify an inquiry into a priority, category and owner.",
+        "system_prompt": "You are a support triage specialist. Return strict JSON only.",
+        "user_prompt": "Classify the inquiry below.\n\nINQUIRY:\n{{ text }}",
+        "variables": [
+          {"variable": "text", "label": "Inquiry", "required": 1}
+        ],
+        "json_schema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"priority\": {\"type\": \"string\", \"enum\": [\"Critical\", \"High\", \"Medium\", \"Low\"]},\n    \"category\": {\"type\": \"string\"},\n    \"suggested_owner\": {\"type\": \"string\"},\n    \"summary\": {\"type\": \"string\"}\n  },\n  \"required\": [\"priority\", \"category\", \"summary\"]\n}"
+      },
+      {
+        "template_name": "Arabic Output Guide",
+        "category": "Custom",
+        "enabled": 1,
+        "output_format": "Markdown",
+        "description": "Produces professional Modern Standard Arabic with preserved terminology.",
+        "system_prompt": "You are an expert Arabic localisation specialist. Produce professional Modern Standard Arabic. Preserve proper nouns, acronyms, numbers and technical terms exactly as supplied. Use the plural or dual form where standard Arabic requires it.",
+        "user_prompt": "Translate and localise the text below into Modern Standard Arabic for enterprise documentation.\n\nSOURCE:\n{{ content }}",
+        "variables": [
+          {"variable": "content", "label": "Source Content", "required": 1}
+        ]
+      },
+      {
+        "template_name": "Hebrew Output Guide",
+        "category": "Custom",
+        "enabled": 1,
+        "output_format": "Markdown",
+        "description": "Produces professional Hebrew with preserved identifiers.",
+        "system_prompt": "You are an expert Hebrew localisation specialist. Produce professional Hebrew. Preserve proper nouns, acronyms, numbers and technical terms exactly as supplied. Write RTL-safe text and keep code blocks intact.",
+        "user_prompt": "Translate and localise the text below into Hebrew for enterprise documentation.\n\nSOURCE:\n{{ content }}",
+        "variables": [
+          {"variable": "content", "label": "Source Content", "required": 1}
+        ]
+      },
+      {
+        "template_name": "Document Comparison",
+        "category": "Comparison",
+        "enabled": 1,
+        "output_format": "Markdown",
+        "description": "Compares two documents and reports differences.",
+        "system_prompt": "You are a contract and document analyst. Be precise about differences. Never invent a difference.",
+        "user_prompt": "Compare the two documents.\n\nDOCUMENT A:\n{{ document_a }}\n\nDOCUMENT B:\n{{ document_b }}\n\nReport:\n1. Shared content\n2. Material differences\n3. Ambiguities\n4. Recommended attention",
+        "variables": [
+          {"variable": "document_a", "label": "Document A", "required": 1},
+          {"variable": "document_b", "label": "Document B", "required": 1}
+        ]
+      }
+    ]
+  }
+}

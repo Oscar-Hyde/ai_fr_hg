@@ -1,0 +1,323 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "allow_rename": 0,
+ "autoname": "field:resource_code",
+ "creation": "2026-08-22 09:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "resource_code",
+  "resource_name",
+  "resource_type",
+  "category",
+  "version",
+  "publisher",
+  "repository",
+  "enabled",
+  "is_builtin",
+  "marketplace_cb",
+  "description",
+  "source_url",
+  "package_size_mb",
+  "license",
+  "license_url",
+  "last_updated",
+  "security_section",
+  "sha256",
+  "signature",
+  "signature_verified",
+  "security_restricted",
+  "deprecated",
+  "compat_section",
+  "min_disk_gb",
+  "min_ram_gb",
+  "min_frappe_version",
+  "min_python_version",
+  "languages_section",
+  "supported_languages",
+  "providers_section",
+  "supported_providers",
+  "dependency_section",
+  "dependencies",
+  "notes_section",
+  "release_notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "resource_code",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Resource Code",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "resource_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Resource Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "resource_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Resource Type",
+   "options": "Translation Package\nTranslation Memory Pack\nAI Model\nAI Prompt Template\nAI Workflow Template\nAgent Capability\nLanguage Pack\nKnowledge Resource\nAI Extension",
+   "reqd": 1
+  },
+  {
+   "fieldname": "category",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Category"
+  },
+  {
+   "fieldname": "version",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Version",
+   "reqd": 1
+  },
+  {
+   "fieldname": "publisher",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Publisher"
+  },
+  {
+   "fieldname": "repository",
+   "fieldtype": "Link",
+   "label": "Repository",
+   "options": "AI Resource Repository"
+  },
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Available"
+  },
+  {
+   "fieldname": "is_builtin",
+   "fieldtype": "Check",
+   "label": "Built-in"
+  },
+  {
+   "fieldname": "marketplace_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "fieldname": "source_url",
+   "fieldtype": "Data",
+   "label": "Source URL"
+  },
+  {
+   "fieldname": "package_size_mb",
+   "fieldtype": "Float",
+   "label": "Package Size (MB)",
+   "precision": "2"
+  },
+  {
+   "fieldname": "license",
+   "fieldtype": "Data",
+   "label": "License"
+  },
+  {
+   "fieldname": "license_url",
+   "fieldtype": "Data",
+   "label": "License URL"
+  },
+  {
+   "fieldname": "last_updated",
+   "fieldtype": "Datetime",
+   "label": "Last Updated"
+  },
+  {
+   "fieldname": "security_section",
+   "fieldtype": "Section Break",
+   "label": "Security & Integrity"
+  },
+  {
+   "fieldname": "sha256",
+   "fieldtype": "Data",
+   "label": "SHA-256 Checksum",
+   "read_only": 1
+  },
+  {
+   "fieldname": "signature",
+   "fieldtype": "Data",
+   "label": "Digital Signature",
+   "read_only": 1
+  },
+  {
+   "fieldname": "signature_verified",
+   "fieldtype": "Check",
+   "label": "Signature Verified",
+   "read_only": 1
+  },
+  {
+   "fieldname": "security_restricted",
+   "fieldtype": "Check",
+   "label": "Security Restricted"
+  },
+  {
+   "fieldname": "deprecated",
+   "fieldtype": "Check",
+   "label": "Deprecated"
+  },
+  {
+   "fieldname": "compat_section",
+   "fieldtype": "Section Break",
+   "label": "Compatibility"
+  },
+  {
+   "fieldname": "min_disk_gb",
+   "fieldtype": "Float",
+   "label": "Minimum Disk (GB)",
+   "precision": "2"
+  },
+  {
+   "fieldname": "min_ram_gb",
+   "fieldtype": "Float",
+   "label": "Minimum RAM (GB)",
+   "precision": "2"
+  },
+  {
+   "fieldname": "min_frappe_version",
+   "fieldtype": "Data",
+   "label": "Frappe Version"
+  },
+  {
+   "fieldname": "min_python_version",
+   "fieldtype": "Data",
+   "label": "Python Version"
+  },
+  {
+   "fieldname": "languages_section",
+   "fieldtype": "Section Break",
+   "label": "Supported Languages"
+  },
+  {
+   "fieldname": "supported_languages",
+   "fieldtype": "Table",
+   "label": "Supported Languages",
+   "options": "AI Resource Language"
+  },
+  {
+   "fieldname": "providers_section",
+   "fieldtype": "Section Break",
+   "label": "Supported Providers"
+  },
+  {
+   "fieldname": "supported_providers",
+   "fieldtype": "Table",
+   "label": "Supported Providers",
+   "options": "AI Resource Provider"
+  },
+  {
+   "fieldname": "dependency_section",
+   "fieldtype": "Section Break",
+   "label": "Dependencies"
+  },
+  {
+   "fieldname": "dependencies",
+   "fieldtype": "Table",
+   "label": "Dependencies",
+   "options": "AI Resource Dependency"
+  },
+  {
+   "fieldname": "notes_section",
+   "fieldtype": "Section Break",
+   "label": "Release Notes"
+  },
+  {
+   "fieldname": "release_notes",
+   "fieldtype": "Long Text",
+   "label": "Release Notes"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [
+  {
+   "link_doctype": "AI Resource Version",
+   "link_fieldname": "resource"
+  },
+  {
+   "link_doctype": "AI Resource Download",
+   "link_fieldname": "resource"
+  },
+  {
+   "link_doctype": "AI Resource Install",
+   "link_fieldname": "resource"
+  },
+  {
+   "link_doctype": "AI Resource Event",
+   "link_fieldname": "resource"
+  }
+ ],
+ "modified": "2026-08-22 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Resources",
+ "name": "AI Resource",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI User",
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1
+  },
+  {
+   "role": "AI Auditor",
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "show_title_field_in_link": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "resource_name",
+ "track_changes": 1
+}

@@ -185,6 +185,7 @@ permission_query_conditions = {
 	"AI Tool Invocation": "ai_fr_hg.utils.permissions.tool_invocation_query",
 	"AI Folder Settings": "ai_fr_hg.utils.permissions.folder_settings_query",
 	"AI Folder Favorite": "ai_fr_hg.utils.permissions.folder_favorite_query",
+	"AI Resource Download": "ai_fr_hg.utils.permissions.resource_download_query",
 }
 
 has_permission = {
@@ -234,6 +235,10 @@ scheduler_events = {
 		"*/10 * * * *": [
 			"ai_fr_hg.tasks.run_scheduled_pipelines",
 			"ai_fr_hg.tasks.run_due_tasks",
+		],
+		# Resource marketplace recovery (stale checkpoints).
+		"*/15 * * * *": [
+			"ai_fr_hg.tasks.recover_resource_downloads",
 		],
 	},
 	"hourly_long": [

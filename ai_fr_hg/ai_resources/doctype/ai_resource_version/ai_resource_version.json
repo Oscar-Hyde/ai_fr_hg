@@ -1,0 +1,164 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "allow_rename": 1,
+ "autoname": "hash",
+ "creation": "2026-08-22 09:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "resource",
+  "version",
+  "publisher",
+  "repository",
+  "source_url",
+  "security_sec",
+  "sha256",
+  "signature",
+  "size_mb",
+  "status_sec",
+  "is_current",
+  "is_installed",
+  "installed_on",
+  "release_notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "resource",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Resource",
+   "options": "AI Resource",
+   "reqd": 1
+  },
+  {
+   "fieldname": "version",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Version",
+   "reqd": 1
+  },
+  {
+   "fieldname": "publisher",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Publisher"
+  },
+  {
+   "fieldname": "repository",
+   "fieldtype": "Link",
+   "label": "Repository",
+   "options": "AI Resource Repository"
+  },
+  {
+   "fieldname": "source_url",
+   "fieldtype": "Data",
+   "label": "Source URL"
+  },
+  {
+   "fieldname": "security_sec",
+   "fieldtype": "Section Break",
+   "label": "Integrity"
+  },
+  {
+   "fieldname": "sha256",
+   "fieldtype": "Data",
+   "label": "SHA-256 Checksum",
+   "read_only": 1
+  },
+  {
+   "fieldname": "signature",
+   "fieldtype": "Data",
+   "label": "Digital Signature",
+   "read_only": 1
+  },
+  {
+   "fieldname": "size_mb",
+   "fieldtype": "Float",
+   "label": "Size (MB)",
+   "precision": "2"
+  },
+  {
+   "fieldname": "status_sec",
+   "fieldtype": "Section Break",
+   "label": "Status"
+  },
+  {
+   "fieldname": "is_current",
+   "fieldtype": "Check",
+   "label": "Current"
+  },
+  {
+   "fieldname": "is_installed",
+   "fieldtype": "Check",
+   "label": "Installed"
+  },
+  {
+   "fieldname": "installed_on",
+   "fieldtype": "Datetime",
+   "label": "Installed On"
+  },
+  {
+   "fieldname": "release_notes",
+   "fieldtype": "Small Text",
+   "label": "Release Notes"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-22 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Resources",
+ "name": "AI Resource Version",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI User",
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1
+  },
+  {
+   "role": "AI Auditor",
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "show_title_field_in_link": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "version",
+ "track_changes": 1
+}

@@ -1,0 +1,36 @@
+{
+  "schema": "ai-resource-package-v1",
+  "resource_code": "language-pack-routing",
+  "resource_name": "Multilingual Care Language Pack",
+  "resource_type": "Language Pack",
+  "category": "Language Packs",
+  "version": "1.0.0",
+  "publisher": "Ai Fr Hg",
+  "description": "Registers language routing metadata for enterprise customer-care locales. Extends the resource registry so translations can be discovered by language without modifying the core language matrix.",
+  "supported_languages": ["en", "ar", "he", "es", "fr", "de"],
+  "supported_providers": ["Ollama", "OpenAI Compatible"],
+  "requires": {
+    "frappe": ">=17.0.0",
+    "python": ">=3.14,<3.15",
+    "min_disk_gb": 0.05,
+    "min_ram_gb": 1
+  },
+  "dependencies": [],
+  "license": "MIT",
+  "license_url": "https://opensource.org/licenses/MIT",
+  "release_notes": [
+    "1.0.0 - Registers routing metadata for Spanish, French and German customer care."
+  ],
+  "payload": {
+    "language_pack": {
+      "pack_name": "Multilingual Care",
+      "enabled": 1,
+      "languages": [
+        {"code": "es", "name": "Spanish", "direction": "ltr", "script": "Latin"},
+        {"code": "fr", "name": "French", "direction": "ltr", "script": "Latin"},
+        {"code": "de", "name": "German", "direction": "ltr", "script": "Latin"}
+      ],
+      "notes": "Registration only. Core translation remains bounded to Arabic, English and Hebrew until a translation engine supports these locales."
+    }
+  }
+}

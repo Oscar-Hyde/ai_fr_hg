@@ -1,0 +1,45 @@
+{
+  "schema": "ai-resource-package-v1",
+  "resource_code": "translation-legal-essentials",
+  "resource_name": "Legal Translation Pack",
+  "resource_type": "Translation Package",
+  "category": "Translation",
+  "version": "1.1.0",
+  "publisher": "Ai Fr Hg",
+  "description": "Enterprise legal terminology pack for Arabic, English and Hebrew translation, with preservation rules and a reusable glossary.",
+  "supported_languages": ["en", "ar", "he"],
+  "supported_providers": ["Ollama", "OpenAI Compatible"],
+  "requires": {
+    "frappe": ">=17.0.0",
+    "python": ">=3.14,<3.15",
+    "min_disk_gb": 0.05,
+    "min_ram_gb": 1
+  },
+  "dependencies": [],
+  "license": "MIT",
+  "license_url": "https://opensource.org/licenses/MIT",
+  "release_notes": [
+    "1.0.0 - Legal glossary with contracts, courts, obligations and compliance terms.",
+    "1.1.0 - Added arbitration clauses and do-not-translate identifier guidance."
+  ],
+  "payload": {
+    "glossary": {
+      "glossary_name": "Legal Terminology EN-AR-HE",
+      "enabled": 1,
+      "description": "Enterprise legal terminology from the Legal Translation Pack.",
+      "terms": [
+        {"term_en": "agreement", "term_ar": "اتفاق", "term_he": "הסכם"},
+        {"term_en": "contract", "term_ar": "عقد", "term_he": "חוזה"},
+        {"term_en": "party", "term_ar": "طرف", "term_he": "צד"},
+        {"term_en": "arbitration", "term_ar": "تحكيم", "term_he": "בוררות"},
+        {"term_en": "obligation", "term_ar": "التزام", "term_he": "התחייבות"},
+        {"term_en": "liability", "term_ar": "مسؤولية", "term_he": "אחריות"},
+        {"term_en": "compliance", "term_ar": "امتثال", "term_he": "ציות"},
+        {"term_en": "confidentiality", "term_ar": "سرية", "term_he": "סודיות"},
+        {"term_en": "termination", "term_ar": "إنهاء", "term_he": "סיום"},
+        {"term_en": "IP", "term_ar": "IP", "term_he": "IP", "do_not_translate": 1},
+        {"term_en": "SLA", "term_ar": "SLA", "term_he": "SLA", "do_not_translate": 1}
+      ]
+    }
+  }
+}

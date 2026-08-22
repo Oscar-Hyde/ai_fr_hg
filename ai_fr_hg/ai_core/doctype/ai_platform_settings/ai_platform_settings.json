@@ -10,6 +10,7 @@
   "platform_enabled",
   "offline_mode",
   "allowed_hosts",
+  "resource_allowed_hosts",
   "general_cb",
   "request_timeout",
   "max_turn_seconds",
@@ -117,6 +118,12 @@
    "fieldname": "allowed_hosts",
    "fieldtype": "Small Text",
    "label": "Additional Allowed Hosts"
+  },
+  {
+   "description": "Newline separated hostnames permitted for the Resource Marketplace download engine when operating in strict local-only mode.",
+   "fieldname": "resource_allowed_hosts",
+   "fieldtype": "Small Text",
+   "label": "Resource Allowed Hosts"
   },
   {
    "fieldname": "general_cb",

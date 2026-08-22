@@ -474,3 +474,80 @@ print(answer["answer"])
 for index, citation in enumerate(answer["citations"], start=1):
     print(f"[{index}] {citation['document_title']} p{citation['page_number']}")
 ```
+
+---
+
+## Resource Marketplace
+
+The marketplace endpoints are described in full in
+[`docs/RESOURCE_MARKETPLACE.md`](RESOURCE_MARKETPLACE.md). All read endpoints are
+available to `AI User`, `AI Manager` and `System Manager`; mutating endpoints
+require `AI Manager` or `System Manager`.
+
+### `ai_fr_hg.api.resources.marketplace()`
+
+Load the dashboard payload in one call: summary, catalog, active downloads,
+installed resources, available updates and recommendations.
+
+### `ai_fr_hg.api.resources.catalog(resource_type, category, search)`
+
+Browse available resources with live compatibility and lifecycle status.
+
+### `ai_fr_hg.api.resources.resource_detail(name)`
+
+Full metadata, dependencies, versions, events, compatibility checks and the
+matching installed record.
+
+### `ai_fr_hg.api.resources.start_download(name, version)`
+
+Start a background download/verify/install/activate operation. Returns the
+`AI Resource Download` record.
+
+### `ai_fr_hg.api.resources.downloads()`
+
+Active, non-terminal downloads for the live progress panel.
+
+### `ai_fr_hg.api.resources.download_detail(name)`
+
+One download's full state plus its lifecycle events.
+
+### `ai_fr_hg.api.resources.download_history(limit)`
+
+Completed, failed, cancelled and removed downloads.
+
+### `ai_fr_hg.api.resources.pause_download(name)`, `resume_download_api(name)`, `retry_download_api(name)`, `cancel_download(name)`
+
+Control an in-flight download. Pause/resume is checkpoint-based; retry re-runs a
+failed or stale job from its last checkpoint.
+
+### `ai_fr_hg.api.resources.installed_resources()`
+
+Installed and active resources with usage and health metadata.
+
+### `ai_fr_hg.api.resources.available_updates()`
+
+Installed resources that have a newer catalog version.
+
+### `ai_fr_hg.api.resources.update_resource_api(name)`, `rollback_api(install_name)`, `remove_api(install_name)`
+
+Update, roll back or remove an installed resource.
+
+### `ai_fr_hg.api.resources.history(resource_code, limit)`
+
+Event, version and install history for one resource.
+
+### `ai_fr_hg.api.resources.usage()`
+
+Resource usage and health metrics with the marketplace summary.
+
+### `ai_fr_hg.api.resources.recommendations_api(limit)`
+
+Smart recommendations based on installed capability gaps and usage.
+
+### `ai_fr_hg.api.resources.repositories()`
+
+Enabled resource repositories.
+
+### `ai_fr_hg.api.resources.sync_catalog()`
+
+Rescan built-in bundles and refresh catalog metadata.

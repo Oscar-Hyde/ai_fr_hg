@@ -1,0 +1,60 @@
+{
+  "schema": "ai-resource-package-v1",
+  "resource_code": "model-profiles",
+  "resource_name": "Curated Model Profiles",
+  "resource_type": "AI Model",
+  "category": "Models",
+  "version": "1.0.0",
+  "publisher": "Ai Fr Hg",
+  "description": "Pre-validated model profiles for a local Ollama runtime. Installation registers the model metadata; the model binary still follows your provider's documented pull procedure.",
+  "supported_languages": ["en", "ar", "he"],
+  "supported_providers": ["Ollama"],
+  "requires": {
+    "frappe": ">=17.0.0",
+    "python": ">=3.14,<3.15",
+    "min_disk_gb": 1,
+    "min_ram_gb": 8,
+    "required_providers": ["Local Ollama"]
+  },
+  "dependencies": [],
+  "license": "MIT",
+  "license_url": "https://opensource.org/licenses/MIT",
+  "release_notes": [
+    "1.0.0 - Small local chat and embedding profiles suitable for air-gapped deployments."
+  ],
+  "payload": {
+    "models": [
+      {
+        "model_label": "Local Chat (Small)",
+        "provider_name": "Local Ollama",
+        "model_name": "qwen2.5:0.5b",
+        "model_type": "Chat",
+        "enabled": 1,
+        "family": "Qwen",
+        "parameter_size": "0.5B",
+        "context_window": 8192,
+        "supports_tools": 0,
+        "supports_streaming": 1,
+        "supports_json_mode": 1,
+        "max_tokens": 512,
+        "temperature": 0.2,
+        "top_p": 0.9
+      },
+      {
+        "model_label": "Local Embeddings",
+        "provider_name": "Local Ollama",
+        "model_name": "nomic-embed-text",
+        "model_type": "Embedding",
+        "enabled": 1,
+        "family": "Nomic",
+        "context_window": 8192,
+        "embedding_dimensions": 768,
+        "supports_streaming": 0,
+        "supports_json_mode": 0,
+        "max_tokens": 0,
+        "temperature": 0,
+        "top_p": 0.9
+      }
+    ]
+  }
+}

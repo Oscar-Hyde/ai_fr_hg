@@ -1,0 +1,56 @@
+{
+  "schema": "ai-resource-package-v1",
+  "resource_code": "agent-skills-starter",
+  "resource_name": "Agent Skills Starter",
+  "resource_type": "Agent Capability",
+  "category": "Agent Capabilities",
+  "version": "1.0.0",
+  "publisher": "Ai Fr Hg",
+  "description": "Reusable agent responsibilities: citation discipline, refusal hygiene, multilingual output and retrieval breadth.",
+  "supported_languages": ["en", "ar", "he"],
+  "supported_providers": ["Ollama", "OpenAI Compatible"],
+  "requires": {
+    "frappe": ">=17.0.0",
+    "python": ">=3.14,<3.15",
+    "min_disk_gb": 0.05,
+    "min_ram_gb": 1
+  },
+  "dependencies": [],
+  "license": "MIT",
+  "license_url": "https://opensource.org/licenses/MIT",
+  "release_notes": [
+    "1.0.0 - Initial release with four agent skills."
+  ],
+  "payload": {
+    "skills": [
+      {
+        "skill_name": "Cite Retrieval Honestly",
+        "enabled": 1,
+        "skill_type": "Procedural",
+        "description": "Always cite the retrieved passage that supports a claim.",
+        "instructions": "When you use retrieval context, append inline footnotes for every factual claim and never cite a passage that does not contain the claim."
+      },
+      {
+        "skill_name": "Decline Without Guessing",
+        "enabled": 1,
+        "skill_type": "Procedural",
+        "description": "State uncertainty explicitly instead of fabricating an answer.",
+        "instructions": "If the answer is not in the provided evidence, say you cannot determine it from the available information and ask for the missing evidence."
+      },
+      {
+        "skill_name": "Multilingual Enterprise Voice",
+        "enabled": 1,
+        "skill_type": "Formatting",
+        "description": "Maintain professional tone in English, Arabic and Hebrew.",
+        "instructions": "Adapt tone for the target audience. Preserve technical terms, identifiers and proper nouns. Use correct script direction for RTL languages."
+      },
+      {
+        "skill_name": "Retrieve Before Summarising",
+        "enabled": 1,
+        "skill_type": "Workflow",
+        "description": "Search the knowledge base before producing summaries or answers.",
+        "instructions": "For questions about organisational data or documents, search the knowledge base first, then answer from the retrieved evidence."
+      }
+    ]
+  }
+}
