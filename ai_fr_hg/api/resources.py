@@ -61,7 +61,7 @@ def marketplace() -> dict:
 	return {
 		"summary": resource_summary(),
 		"catalog": list_catalog({"enabled": 1}),
-		"downloads": active_downloads(),
+		"downloads": downloads(),
 		"installed": installed_resources(),
 		"updates": available_updates(),
 		"recommendations": recommendations(),
