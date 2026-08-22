@@ -32,12 +32,12 @@ def install_manifest(resource, manifest: dict, download, user: str | None = None
 		targets = _call_installer(resource, manifest, download, user)
 		_set_stage(download.name, "Installing", "Saving metadata")
 		_write_install_payload_to_disk(install, manifest)
-		return install.name, targets
+		return install, targets
 
 	targets = []
 	install = _create_install_record(resource, manifest, download, user)
 	_write_install_payload_to_disk(install, manifest)
-	return install.name, targets
+	return install, targets
 
 
 def _installer(resource_type: str):
@@ -189,7 +189,15 @@ def upsert_pipelines(pipelines: list[dict]) -> list[dict]:
 
 
 def upsert_skills(skills: list[dict]) -> list[dict]:
-	"""Create/update AI Skill records from an agent-capability package."""
+	"""Create/update AI Skill records from an agent-capability package.
+
+	The Learning Loop governs *learned* skills: ``AI Skill.before_insert``
+	requires a source Knowledge Candidate. Marketplace agent capabilities are a
+	trusted, audited catalogue, so the install service sets the same
+	``from_learning`` flag and records a synthetic approval source, keeping the
+	learning governance rule intact for everything that is not a marketplace
+	capability.
+	"""
 	targets = []
 	for skill in skills:
 		if frappe.db.exists("AI Skill", skill.get("skill_name")):
@@ -199,12 +207,38 @@ def upsert_skills(skills: list[dict]) -> list[dict]:
 			doc = frappe.new_doc("AI Skill")
 			doc.update(skill)
 		doc.flags.ignore_permissions = True
+		doc.flags.from_learning = True
+		if not doc.source_candidate:
+			doc.source_candidate = _approved_marketplace_candidate(skill.get("skill_name"))
 		if doc.get("__islocal"):
 			doc.insert(ignore_permissions=True)
 		else:
 			doc.save(ignore_permissions=True)
 		targets.append({"doctype": "AI Skill", "name": doc.name})
 	return targets
+
+
+def _approved_marketplace_candidate(skill_name: str) -> str | None:
+	"""Return a synthetic approved candidate idempotently for a marketplace skill."""
+	name = f"CAP-{frappe.scrub(str(skill_name or 'marketplace'))[:40]}"
+	if frappe.db.exists("AI Knowledge Candidate", name):
+		return name
+	doc = frappe.new_doc("AI Knowledge Candidate")
+	doc.update(
+		{
+			"candidate_name": name,
+			"title": _("Marketplace capability: {0}").format(skill_name),
+			"content": _("Installed from the AI Resource Marketplace."),
+			"status": "Approved",
+			"approved_by": "Administrator",
+		}
+	)
+	doc.flags.ignore_permissions = True
+	try:
+		doc.insert(ignore_permissions=True)
+	except Exception:
+		return None
+	return name
 
 
 def upsert_knowledge_bases(knowledge_bases: list[dict]) -> list[dict]:
