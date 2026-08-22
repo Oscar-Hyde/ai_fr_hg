@@ -375,8 +375,14 @@ def create_default_folders() -> None:
 def seed_resource_marketplace() -> None:
 	"""Register the built-in resource marketplace so downloads work out of the box."""
 	try:
-		from ai_fr_hg.ai.resources.catalog import refresh_builtin_catalog
+		from ai_fr_hg.ai.resources.catalog import catalog_tables_ready, refresh_builtin_catalog
 
+		if not catalog_tables_ready():
+			frappe.logger("ai_fr_hg").info(
+				"Resource marketplace seeding skipped: AI Resources module has not been synced yet. "
+				"Run `bench migrate` once more after the app's modules are synced."
+			)
+			return
 		refresh_builtin_catalog(user="Administrator")
 	except Exception:
 		frappe.log_error(title="Resource marketplace seeding failed", message=frappe.get_traceback())

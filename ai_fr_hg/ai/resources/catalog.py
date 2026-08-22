@@ -96,12 +96,52 @@ def builtin_bundle_digest(resource_code: str) -> dict:
 	return compute_package_digest(Path(path).read_bytes())
 
 
+def catalog_tables_ready() -> bool:
+	"""Whether the AI Resources storage tables were synced.
+
+	Frappe creates tables only for modules it recognizes (module directories
+	must contain a ``.frappe`` marker). During an upgrade that adds the module,
+	``after_migrate`` can run before a stale/partial sync in some bench states;
+	this lets callers skip cleanly instead of crashing on a missing table.
+	"""
+	for doctype in (
+		"AI Resource Repository",
+		"AI Resource",
+		"AI Resource Version",
+		"AI Resource Download",
+		"AI Resource Install",
+		"AI Resource Event",
+	):
+		try:
+			if not frappe.db.table_exists(doctype):
+				return False
+		except Exception:
+			return False
+	return True
+
+
 def refresh_builtin_catalog(user: str | None = None) -> dict:
 	"""Create or update the built-in repository and its resources.
 
 	Also computes checksums/signatures so even a first install has tamper
-	detection. Returns a short summary for audit messages.
+	detection. Returns a short summary for audit messages. If the storage tables
+	have not been synced yet, returns a skipped summary instead of raising.
 	"""
+	if not catalog_tables_ready():
+		frappe.logger("ai_fr_hg").info(
+			"Resource marketplace skipped: AI Resources tables are not synced yet. "
+			"Run `bench migrate` after the AI Resources module is recognised."
+		)
+		return {
+			"repository": "",
+			"created": 0,
+			"updated": 0,
+			"skipped": 0,
+			"skipped_schema": True,
+			"user": user or frappe.session.user,
+			"timestamp": now_datetime().isoformat(),
+		}
+
 	repository = _ensure_builtin_repository()
 	created = updated = skipped = 0
 
