@@ -320,6 +320,20 @@ MUTATIONS: list[Mutation] = [
 		breaks="An upgraded site silently loses the unique (conversation, sequence) backstop.",
 	),
 	Mutation(
+		name="ddl-without-committing-pending-writes",
+		path="ai_fr_hg/ai/conversation_indexes.py",
+		old='\t\t\tfrappe.db.commit()\n\t\t\tfrappe.db.sql(\n\t\t\t\t"ALTER TABLE `tabAI Message` "',
+		new='\t\t\tfrappe.db.sql(\n\t\t\t\t"ALTER TABLE `tabAI Message` "',
+		breaks="bench migrate aborts with ImplicitCommitError; the index is never created.",
+	),
+	Mutation(
+		name="migrate-commits-when-there-is-no-schema-work",
+		path="ai_fr_hg/ai/conversation_indexes.py",
+		old="\tif not _schema_ready():\n\t\treturn\n",
+		new="\tif not _schema_ready():\n\t\treturn\n\tfrappe.db.commit()\n",
+		breaks="A stray commit makes test fixtures durable and breaks rollback isolation.",
+	),
+	Mutation(
 		name="reconciliation-enqueues-duplicates",
 		path="ai_fr_hg/ai/ingestion.py",
 		old="\t\tif row.name in seen:\n\t\t\tcontinue\n\t\tseen.add(row.name)",

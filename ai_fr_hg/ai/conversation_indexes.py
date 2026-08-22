@@ -89,7 +89,17 @@ def renumber_duplicate_sequences() -> int:
 
 
 def ensure_sequence_constraints() -> None:
-	"""Repair sequence data if needed, then create the indexes."""
+	"""Repair sequence data if needed, then create the indexes.
+
+	**Every write and commit below is behind an ``index_exists`` check.**
+	That is a correctness requirement, not an optimisation. This runs from
+	``after_migrate``, and the DDL path has to commit (see the comment on the
+	ALTER). Frappe's IntegrationTestCase isolates tests by rolling back, so a
+	commit reached during a test run makes other suites' fixtures durable --
+	which is exactly how an operator's second `bench run-tests` turned eight
+	AI Pipeline tests into DuplicateEntryError. On a site whose indexes are
+	already present this function must touch nothing at all.
+	"""
 	if getattr(frappe.db, "db_type", None) == "postgres":
 		return  # ADR-001: MariaDB is the supported engine.
 	if not _schema_ready():
@@ -98,6 +108,15 @@ def ensure_sequence_constraints() -> None:
 	if not index_exists(UNIQUE_SEQUENCE_INDEX):
 		renumber_duplicate_sequences()
 		try:
+			# Frappe refuses DDL while a transaction holds pending writes
+			# (`check_implicit_commit` raises ImplicitCommitError once
+			# `transaction_writes` is non-zero), and the renumber pass above
+			# is exactly such a write. MariaDB commits implicitly on DDL
+			# anyway, so the framework's own `db.add_unique`/`db.add_index`
+			# call `commit()` immediately before their ALTER for this reason.
+			# Do the same rather than fight the guard: the renumbering must be
+			# durable before the constraint that depends on it is applied.
+			frappe.db.commit()
 			frappe.db.sql(
 				"ALTER TABLE `tabAI Message` "
 				"ADD UNIQUE INDEX `unique_conversation_sequence` (`conversation`, `sequence`)"
@@ -123,6 +142,11 @@ def ensure_sequence_constraints() -> None:
 
 	if not index_exists(TURN_ID_INDEX):
 		try:
+			# Same implicit-commit guard as above. Without this the ALTER
+			# raises whenever anything earlier in the request wrote a row, and
+			# the handler below would quietly log it -- leaving the index
+			# permanently absent on a busy site while migrate reported success.
+			frappe.db.commit()
 			frappe.db.sql("ALTER TABLE `tabAI Message` ADD INDEX `turn_id_index` (`turn_id`)")
 		except Exception:
 			# A missing secondary index costs lookup speed, not correctness.
