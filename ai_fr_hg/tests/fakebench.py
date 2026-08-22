@@ -798,6 +798,10 @@ class FakeBench:
 
 	def build_module(self) -> types.ModuleType:
 		module = types.ModuleType("frappe")
+		# Lets a suite tell this stub apart from the real framework, so it can
+		# refuse to install itself over a live bench. See the guard at the top
+		# of test_part2_behaviour.py.
+		module.__fakebench__ = True
 		for name in (
 			"new_doc",
 			"get_doc",

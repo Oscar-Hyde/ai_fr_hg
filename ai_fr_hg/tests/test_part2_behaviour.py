@@ -21,17 +21,48 @@ isolation levels, index usage, or migrations — that remains bench work.
 from __future__ import annotations
 
 import json
+import os
+import sys
 import types
 from pathlib import Path
 from unittest import TestCase
 
-from ai_fr_hg.tests.fakebench import (
-	FakeBench,
-	PermissionError_,
-	ValidationError,
-	import_app,
-	install,
+# These tests replace the process-wide `frappe` module with the in-memory
+# bench (see `fakebench.install`). That is safe under the offline pytest
+# batch, where nothing else needs the real framework, but it is destructive
+# under `bench --site ... run-tests`: Frappe imports every `test_*.py` into
+# one process, so swapping `sys.modules["frappe"]` here corrupts the real
+# framework for every test discovered afterwards. This is what broke
+# CI / Server from d5e9bf9 onwards.
+#
+# Define nothing rather than sabotage it. Raising `unittest.SkipTest` here
+# would not work: Frappe's `discover_all_tests` wraps `import_module` in a
+# bare `except Exception` and re-raises as a fatal TestRunnerError, and
+# SkipTest subclasses Exception. An empty module is discovered as zero tests,
+# which is the honest outcome — this suite's tier is the offline batch.
+#
+# Detect a *real* frappe specifically. Several sibling offline suites install
+# their own lightweight stubs, and those are fine to replace — they are
+# synthetic modules with no `__file__`. An installed framework is a package on
+# disk, so `__file__` is the discriminator. Testing merely for presence in
+# sys.modules skipped this suite during the offline batch, because
+# test_document_tree_units imports earlier alphabetically and leaves a stub.
+_frappe = sys.modules.get("frappe")
+_REAL_FRAPPE = (
+	_frappe is not None
+	and not getattr(_frappe, "__fakebench__", False)
+	and getattr(_frappe, "__file__", None) is not None
 )
+_SKIP_UNDER_BENCH = _REAL_FRAPPE and not os.environ.get("AI_FR_HG_ALLOW_FAKEBENCH")
+
+if not _SKIP_UNDER_BENCH:
+	from ai_fr_hg.tests.fakebench import (
+		FakeBench,
+		PermissionError_,
+		ValidationError,
+		import_app,
+		install,
+	)
 
 APP = Path(__file__).resolve().parents[1]
 
@@ -3056,3 +3087,17 @@ class TestLearningTrustBoundary(TestCase):
 			learning.teach(content="everyone should know this", target_scope="Global")
 
 		self.assertIn("AI Manager", str(caught.exception))
+
+
+if _SKIP_UNDER_BENCH:
+
+	def load_tests(loader, tests, pattern):
+		"""Present zero tests to a real bench runner.
+
+		`unittest.TestLoader.loadTestsFromModule` honours this hook, so the
+		classes above are never instantiated under `bench run-tests`, where
+		their fakebench dependency is deliberately not imported. Claiming a
+		pass here would be dishonest; contributing nothing is correct, because
+		this suite's verification tier is the offline batch.
+		"""
+		return loader.suiteClass()
