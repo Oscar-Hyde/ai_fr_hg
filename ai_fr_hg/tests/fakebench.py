@@ -598,11 +598,19 @@ class FakeBench:
 			rows = rows[:page]
 		if pluck:
 			return [r.get(pluck) for r in rows]
-		if fields:
+		if fields and "*" not in fields:
 			plain = [f for f in fields if isinstance(f, str)]
 			rows = [_Row({f: r.get(f) for f in plain}) for r in rows]
 		else:
-			rows = [_Row(r) for r in rows]
+			# `fields=["*"]` is valid Frappe and means "every column". Treating
+			# it as a literal column name produced rows of {"*": None}, so any
+			# caller using it was reading empty records rather than failing.
+			# A real SELECT * also returns declared-but-unset columns as NULL,
+			# so fill them in: code that reads `row.some_field` must get None,
+			# not AttributeError.
+			meta = self.doctypes.get(doctype)
+			declared = meta.fieldnames() if meta else set()
+			rows = [_Row({**{f: None for f in declared}, **r}) for r in rows]
 		return rows
 
 	def get_list(self, doctype, **kwargs):

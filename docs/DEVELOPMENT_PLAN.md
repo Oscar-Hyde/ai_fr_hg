@@ -231,6 +231,18 @@ Do not leave the current checkbox visible.
 
 ---
 
+### SEC-08 — Any user could teach the Global memory scope, and unknown scopes were recalled to everyone
+
+**Found 2026-08-22 while auditing the learning trust boundary.** Not part of the original audit; the LEARN-02..05 register rows describe feature gaps, not this.
+
+**Evidence:** `_validate_scope()` returned `True` for `scope == "Global"` before reaching its own manager check at the end of the function, making that check unreachable for the widest scope. `target_scope` is caller-supplied through the whitelisted `api.learning.teach`, so the least-privilege default in `_default_scope()` — which only applies when the caller omits a scope — did not constrain a caller who named `Global` explicitly. Separately, `_memory_applies()` ended in `return True`, so a memory row carrying an unrecognised scope was treated as applying to every user.
+
+**Impact:** Memory poisoning across the tenant boundary. A single ordinary user could write a memory that is recalled into every other user's context, including managers', and thereby steer answers platform-wide. The fail-open branch gave the same result for any row whose scope was written outside a document save — direct SQL, patches and imports all bypass Frappe's Select-option enforcement.
+
+**Disposition:** Full Debugging + Full Testing. The manager check now guards `Global` before it is granted, and an unrecognised scope fails closed (withheld) rather than open (broadcast).
+
+---
+
 ## 5.2 Retrieval correctness and scale
 
 ### RET-01 — Semantic search ranks only a small unordered subset

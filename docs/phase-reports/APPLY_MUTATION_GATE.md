@@ -14,21 +14,14 @@ from re-entering the suite and inflating apparent coverage.
 It needs no MariaDB, Redis, or Frappe: the offline suite runs against the
 in-memory bench in `ai_fr_hg/tests/fakebench.py`.
 
-**Current local result:** 30/30 caught, 0 survived, 0 stale (~2m40s).
+**Current local result:** 90/90 caught, 0 survived, 0 stale (~13m30s on the offline batch).
 
-**Optional but recommended.** Set `FRAPPE_SOURCE` to a `frappe/develop`
-checkout in the job. `test_doctype_schema_against_frappe.py` then compares its
-transcribed constants against Frappe's actual source, so the schema rules
-cannot silently drift from the framework:
-
-```yaml
-      - name: Clone Frappe for schema cross-check
-        run: git clone --depth 1 --branch develop https://github.com/frappe/frappe.git /tmp/frappe-src
-      - name: Prove the suite can fail
-        env:
-          FRAPPE_SOURCE: /tmp/frappe-src
-        run: python scripts/mutation_check.py
-```
+**`FRAPPE_SOURCE` is required, not optional.** It must point at a
+`frappe/develop` checkout so `test_doctype_schema_against_frappe.py` compares
+its transcribed constants against Frappe's actual source and the schema rules
+cannot silently drift from the framework. Without it those tests *skip*: the
+job still reports green while proving materially less. The full job below sets
+it; treat a green run with missing dependencies as an unverified run.
 
 Without it those two cross-check tests skip; the 865 schema subtests still run.
 
@@ -57,12 +50,26 @@ Append this job to `.github/workflows/ci.yml`:
           python -m pip install --upgrade pip
           # The offline suite runs against the in-memory bench in
           # ai_fr_hg/tests/fakebench.py, so Frappe itself is not required.
-          python -m pip install pytest requests
+          # `fakeredis[lua]` and the frappe checkout are NOT optional: without
+          # them the affected suites skip, and the run goes green while
+          # proving materially less. Keep ruff pinned - newer versions have
+          # reformatted `except (A, B):` in a way the mutation anchors notice.
+          python -m pip install pytest requests pyyaml "fakeredis[lua]" ruff==0.14.10
           python -m pip install --editable ".[documents]"
+
+      - name: Fetch Frappe source for schema/hook checks
+        # test_doctype_schema_against_frappe.py and test_hook_targets_resolve.py
+        # resolve against a real checkout; they skip silently without it.
+        run: git clone --depth 1 --branch develop https://github.com/frappe/frappe.git /tmp/frappe-src
+
+      - name: Enforce phase and dependency order
+        run: python scripts/phase_gate.py
 
       - name: Prove the suite can fail
         # Injects real defects and fails if the tests do not notice. Guards
         # against tautological tests that assert on source text.
+        env:
+          FRAPPE_SOURCE: /tmp/frappe-src
         run: python scripts/mutation_check.py
 ```
 

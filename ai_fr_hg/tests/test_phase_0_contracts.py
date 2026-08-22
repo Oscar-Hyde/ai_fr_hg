@@ -101,8 +101,10 @@ class TestControlledBaseline(TestCase):
 		# its server call, and eleven endpoints left published without a
 		# caller when FILE-05 removed the custom picker), plus OPS-07
 		# (workspace recreation destroying local verification state, recorded
-		# after the second occurrence).
-		self.assertEqual(len(audit_ids), 83)
+		# after the second occurrence), plus SEC-08 (amended in on 2026-08-22
+		# when auditing the learning trust boundary found the Global scope
+		# escalation and the fail-open memory scope).
+		self.assertEqual(len(audit_ids), 84)
 		self.assertEqual(len(audit_ids), len(set(audit_ids)))
 		self.assertEqual(len(registered_ids), len(set(registered_ids)))
 		self.assertEqual(set(audit_ids), set(registered_ids))

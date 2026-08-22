@@ -81,6 +81,15 @@ def _validate_scope(scope: str, value: str | None, teaching_user: str) -> tuple[
 	if scope not in VALID_SCOPES:
 		return False, _("Target scope is invalid.")
 	if scope == "Global":
+		# Global is the widest blast radius, so it needs the manager check
+		# *most*. This previously returned True here, above the check at the
+		# end of the function, which made that check unreachable for the one
+		# scope that shapes every user's answers. `target_scope` is
+		# caller-supplied all the way from `api.learning.teach`, so an
+		# ordinary user could request it explicitly; the least-privilege
+		# default in `_default_scope` only covers callers who omit it.
+		if not _is_learning_manager():
+			return False, _("Only AI Managers may teach Global, Role, Agent, or another user's scope.")
 		return True, _("Global scope is valid.")
 	if not value:
 		return False, _("Target Scope Value is required for a non-global scope.")
@@ -715,7 +724,11 @@ def _memory_applies(memory: dict, user: str, roles: set[str], agent: str | None)
 		return bool(value) and value in roles
 	if scope == "Agent":
 		return bool(value) and value == agent
-	return True
+	# An unrecognised scope is not a licence to show the memory to everyone.
+	# Frappe enforces Select options on document saves, not on direct SQL,
+	# patches or imports, so a bad value can reach this row. Fail closed:
+	# an unreadable scope is withheld rather than broadcast.
+	return False
 
 
 def recall(

@@ -2828,3 +2828,231 @@ class TestRetryExhaustion(TestCase):
 		ingestion.process_pending_documents()
 
 		self.assertIn("DOC-GOOD", enqueued)
+
+
+class TestLearningTrustBoundary(TestCase):
+	"""Can untrusted feedback become trusted knowledge, and whose?
+
+	The learning loop turns user input into content that shapes future
+	answers, so it is the platform's clearest poisoning surface. None of
+	`_default_scope`, `_validate_scope`, `_memory_applies` or `recall` was
+	referenced by any offline test.
+
+	Two failure directions matter, and they are opposite. Too permissive and
+	an ordinary user teaches the whole tenant, or reads another user's
+	memories. Too strict and legitimate teaching silently stops working.
+	"""
+
+	def _bench(self, *, user="alice@example.com", roles=(), memories=()):
+		bench = install(FakeBench())
+		bench.register_doctype("User", ["enabled"])
+		bench.register_doctype("Role", [])
+		bench.register_doctype("AI Agent", [])
+		# Load the real Settings schema rather than listing fields by hand, so
+		# the fixture cannot drift from the DocType and a field added upstream
+		# does not silently abort `teach()` before the scope check runs.
+		settings_meta = bench.load_doctype_json(
+			APP / "ai_core" / "doctype" / "ai_platform_settings" / "ai_platform_settings.json"
+		)
+		settings_meta.is_single = True
+		bench.db.singles["AI Platform Settings"] = dict.fromkeys(settings_meta.fieldnames(), 0)
+		bench.db.singles["AI Platform Settings"].update(
+			{"memory_top_k": 10, "learning_enabled": 1, "enable_learning": 1}
+		)
+		bench.register_doctype(
+			"AI Memory",
+			[
+				"content",
+				"memory_type",
+				"scope",
+				"scope_value",
+				"status",
+				"confidence",
+				"usage_count",
+				"last_used_on",
+			],
+		)
+		bench.register_doctype(
+			"AI Skill",
+			["skill_name", "description", "instructions", "skill_type", "enabled", "scope", "scope_value"],
+		)
+		for name in ("alice@example.com", "bob@example.com", "boss@example.com"):
+			bench.db.insert_row("User", {"name": name, "enabled": 1})
+		bench.db.insert_row("Role", {"name": "Legal"})
+		bench.db.insert_row("AI Agent", {"name": "AGENT-1"})
+		for row in memories:
+			bench.db.insert_row("AI Memory", row)
+		bench.session.user = user
+		bench.roles[user] = list(roles)
+		return bench, import_app("ai_fr_hg.ai.learning")
+
+	@staticmethod
+	def _memory(name, scope, value, content="secret"):
+		return {
+			"name": name,
+			"content": content,
+			"scope": scope,
+			"scope_value": value,
+			"status": "Active",
+		}
+
+	# -- tenant isolation --------------------------------------------------
+
+	def test_a_user_scoped_memory_is_invisible_to_another_user(self):
+		"""The core isolation claim: one user's memory must not leak."""
+		_, learning = self._bench(user="bob@example.com")
+
+		self.assertFalse(
+			learning._memory_applies(
+				self._memory("M1", "User", "alice@example.com"), "bob@example.com", set(), None
+			)
+		)
+
+	def test_a_user_scoped_memory_is_visible_to_its_owner(self):
+		_, learning = self._bench(user="alice@example.com")
+
+		self.assertTrue(
+			learning._memory_applies(
+				self._memory("M1", "User", "alice@example.com"), "alice@example.com", set(), None
+			)
+		)
+
+	def test_role_scope_requires_holding_the_role(self):
+		_, learning = self._bench()
+		memory = self._memory("M1", "Role", "Legal")
+
+		self.assertTrue(learning._memory_applies(memory, "alice@example.com", {"Legal"}, None))
+		self.assertFalse(learning._memory_applies(memory, "alice@example.com", {"Finance"}, None))
+
+	def test_agent_scope_requires_the_matching_agent(self):
+		_, learning = self._bench()
+		memory = self._memory("M1", "Agent", "AGENT-1")
+
+		self.assertTrue(learning._memory_applies(memory, "alice@example.com", set(), "AGENT-1"))
+		self.assertFalse(learning._memory_applies(memory, "alice@example.com", set(), "AGENT-2"))
+
+	def test_a_scoped_memory_with_no_value_is_not_treated_as_global(self):
+		"""A malformed row must fail closed, not become visible to everyone."""
+		_, learning = self._bench()
+
+		for scope in ("User", "Role", "Agent"):
+			self.assertFalse(
+				learning._memory_applies(
+					self._memory("M1", scope, None), "alice@example.com", {"Legal"}, "AGENT-1"
+				),
+				scope,
+			)
+
+	def test_recall_returns_only_memories_in_the_callers_scope(self):
+		"""End-to-end: the predicate must actually be applied by recall()."""
+		_bench_unused, learning = self._bench(
+			user="bob@example.com",
+			memories=[
+				self._memory("M-MINE", "User", "bob@example.com", "quarterly revenue figures"),
+				self._memory("M-THEIRS", "User", "alice@example.com", "quarterly revenue secret"),
+				self._memory("M-GLOBAL", "Global", None, "quarterly revenue policy"),
+			],
+		)
+
+		# All three are equally relevant to the query, so anything excluded
+		# was excluded by scope rather than by ranking.
+		memories, _skills = learning.recall("quarterly revenue", user="bob@example.com", track_usage=False)
+
+		contents = {m.get("content") for m in memories}
+		self.assertIn("quarterly revenue figures", contents)
+		self.assertIn("quarterly revenue policy", contents)
+		self.assertNotIn("quarterly revenue secret", contents)
+
+	# -- poisoning resistance ---------------------------------------------
+
+	def test_an_ordinary_user_teaching_is_confined_to_their_own_scope(self):
+		"""Untrusted feedback must not default to tenant-wide knowledge."""
+		_, learning = self._bench(user="alice@example.com", roles=[])
+
+		scope, value = learning._default_scope("Fact", "Chat Correction", "alice@example.com")
+
+		self.assertEqual((scope, value), ("User", "alice@example.com"))
+
+	def test_an_ordinary_user_cannot_request_global_scope(self):
+		_, learning = self._bench(user="alice@example.com", roles=[])
+
+		ok, message = learning._validate_scope("Global", None, "alice@example.com")
+
+		self.assertFalse(ok)
+		self.assertIn("AI Manager", message)
+
+	def test_an_ordinary_user_cannot_target_another_user(self):
+		"""Otherwise one user could poison a specific colleague's answers."""
+		_, learning = self._bench(user="alice@example.com", roles=[])
+
+		ok, _message = learning._validate_scope("User", "bob@example.com", "alice@example.com")
+
+		self.assertFalse(ok)
+
+	def test_an_ordinary_user_cannot_target_a_role_or_agent(self):
+		_, learning = self._bench(user="alice@example.com", roles=[])
+
+		self.assertFalse(learning._validate_scope("Role", "Legal", "alice@example.com")[0])
+		self.assertFalse(learning._validate_scope("Agent", "AGENT-1", "alice@example.com")[0])
+
+	def test_a_manager_may_teach_globally(self):
+		"""The restriction must not break legitimate curation."""
+		_, learning = self._bench(user="boss@example.com", roles=["AI Manager"])
+
+		self.assertTrue(learning._validate_scope("Global", None, "boss@example.com")[0])
+
+	def test_manager_feedback_still_defaults_to_user_scope(self):
+		"""Even a manager's correction is an opinion until deliberately promoted."""
+		_, learning = self._bench(user="boss@example.com", roles=["AI Manager"])
+
+		scope, value = learning._default_scope("Feedback", "Feedback", "boss@example.com")
+
+		self.assertEqual((scope, value), ("User", "boss@example.com"))
+
+	def test_a_scope_target_that_does_not_exist_is_refused(self):
+		"""Scope values are attacker-supplied and must be validated."""
+		_, learning = self._bench(user="boss@example.com", roles=["AI Manager"])
+
+		self.assertFalse(learning._validate_scope("User", "ghost@example.com", "boss@example.com")[0])
+		self.assertFalse(learning._validate_scope("Role", "Nonexistent", "boss@example.com")[0])
+		self.assertFalse(learning._validate_scope("Agent", "AGENT-404", "boss@example.com")[0])
+
+	def test_an_unknown_scope_name_is_rejected(self):
+		_, learning = self._bench(user="boss@example.com", roles=["AI Manager"])
+
+		self.assertFalse(learning._validate_scope("Everyone", None, "boss@example.com")[0])
+
+	def test_a_memory_with_an_unrecognised_scope_is_withheld(self):
+		"""An unreadable scope must fail closed, not broadcast to everyone.
+
+		Frappe enforces Select options when a document is saved, not on the
+		direct SQL, patches and imports that also write this table, so a row
+		carrying an unknown scope is reachable. The safe reading of a scope
+		the code does not understand is "show nobody", not "show everyone".
+		"""
+		_, learning = self._bench(user="bob@example.com")
+
+		applies = learning._memory_applies(
+			{"scope": "Everyone", "scope_value": None},
+			"bob@example.com",
+			set(),
+			None,
+		)
+
+		self.assertFalse(applies)
+
+	def test_an_ordinary_user_cannot_teach_globally_through_the_api(self):
+		"""The escalation must be closed at the service, not just the default.
+
+		`_default_scope` only picks a safe scope for callers who omit one.
+		`target_scope` is caller-supplied all the way from
+		`api.learning.teach`, so this asserts the explicit request is refused
+		rather than trusting the default to cover it.
+		"""
+		bench, learning = self._bench(user="bob@example.com")
+		bench.db.singles.setdefault("AI Platform Settings", {})["enable_learning"] = 1
+
+		with self.assertRaises(Exception) as caught:
+			learning.teach(content="everyone should know this", target_scope="Global")
+
+		self.assertIn("AI Manager", str(caught.exception))
