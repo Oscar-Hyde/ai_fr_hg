@@ -556,6 +556,7 @@ def compute_resource_status(row: dict, *, install: dict | None, download: dict |
 		"compatible": evaluate_compatibility_row(row, installed=installed),
 		"requires_update": bool(install and install.get("status") == "Update Available"),
 		"is_installed": bool(install and install.get("status") == "Active"),
+		"ready": bool(install and install.get("health_status") in ("Healthy", "Available")),
 	}
 
 
@@ -660,7 +661,7 @@ def installed_resources_map() -> dict[str, dict]:
 		rows = frappe.get_all(
 			"AI Resource Install",
 			filters={"is_active": 1, "status": ("in", ["Active", "Update Available"])},
-			fields=["name", "resource", "resource_code", "resource_type", "version", "status", "installed_on"],
+			fields=["name", "resource", "resource_code", "resource_type", "version", "status", "installed_on", "health_status"],
 		)
 	except Exception:
 		return result

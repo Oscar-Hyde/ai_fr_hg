@@ -149,6 +149,69 @@ def uninstall_resource(install_name: str, user: str | None = None) -> dict:
 	return {"status": "Removed", "install": install.name, "resource": install.resource_code}
 
 
+def verify_ready_install(install_name: str, user: str | None = None) -> dict:
+	"""Verify that an installed resource is actually usable.
+
+	This runs after activation (and on demand) so a downloaded template, model
+	profile, translation pack, workflow or capability is marked *Ready* only
+	when the target records it created can be read and enabled. It also updates
+	the install's health so the Installed page can show a real readiness badge.
+	"""
+	install = frappe.get_doc("AI Resource Install", install_name)
+	checks: list[dict] = []
+	targets = []
+	try:
+		targets = json.loads(install.target_records or "[]")
+	except Exception:
+		targets = []
+
+	for target in targets:
+		doctype = target.get("doctype")
+		name = target.get("name")
+		if not doctype or not name:
+			continue
+		record = frappe.db.exists(doctype, name)
+		ok = True
+		detail = _("Record exists.")
+		if not record:
+			ok = False
+			detail = _("Record is missing.")
+		else:
+			if doctype in ("AI Prompt Template", "AI Pipeline", "AI Skill", "AI Knowledge Base", "AI Translation Glossary", "AI Model"):
+				try:
+					enabled = frappe.db.get_value(doctype, name, "enabled")
+					if enabled is not None and not int(enabled):
+						ok = False
+						detail = _("Record is disabled.")
+				except Exception:
+					pass
+		checks.append({"doctype": doctype, "name": name, "ok": ok, "detail": detail})
+
+	# A resource with no created target is still valid when its package snapshot
+	# exists (for registration-only language packs and future extensions).
+	if not targets:
+		from ai_fr_hg.ai.resources.paths import install_path
+
+		snapshot = install_path(install.resource_code, install.version)
+		ok = snapshot.exists()
+		checks.append({"doctype": _("Package"), "name": install.resource_code, "ok": ok, "detail": _("Offline snapshot exists.") if ok else _("Offline snapshot is missing.")})
+
+	ready = all(check["ok"] for check in checks)
+	health = "Healthy" if ready else "Degraded"
+	install.health_status = health
+	install.last_checked = now_datetime()
+	install.flags.ignore_permissions = True
+	install.save(ignore_permissions=True)
+
+	write_event_for_install(
+		install_name,
+		"Ready" if ready else "Readiness Failed",
+		_("Resource verified and ready.") if ready else _("Resource could not be verified as ready."),
+		user=user or frappe.session.user,
+	)
+	return {"ready": ready, "health": health, "checks": checks}
+
+
 def record_resource_use(resource_code: str, delta: int = 1, health: str | None = None) -> None:
 	"""Increment usage and optionally record health for monitoring."""
 	install = _active_install(resource_code)

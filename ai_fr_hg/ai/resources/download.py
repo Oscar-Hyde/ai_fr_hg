@@ -362,6 +362,21 @@ def _download_and_install(download_name: str, user: str, *, depth: int = 0) -> N
 	activate_install(install, targets, resource)
 	write_event(download_name, "Activate", "Resource activated.")
 
+	_set_status(download_name, "Ready", "Verifying readiness")
+	from ai_fr_hg.ai.resources.lifecycle import verify_ready_install
+
+	readiness = verify_ready_install(install, user=user)
+	if not readiness["ready"]:
+		_update_download(
+			download_name,
+			{"install_message": _("Installed, but readiness verification failed."), "heartbeat": now_datetime()},
+		)
+		frappe.throw(_("Readiness verification failed for {0}.").format(resource.resource_name))
+	_update_download(
+		download_name,
+		{"install_message": _("Verified and ready."), "verify_message": _("Integrity and readiness passed."), "heartbeat": now_datetime()},
+	)
+
 	_set_status(download_name, "Completed", "Ready for use")
 	frappe.db.set_value(
 		"AI Resource Download",

@@ -124,6 +124,8 @@ def resource_detail(name: str) -> dict:
 			installed=installed_resources_map(),
 		)
 	)
+	if resource_dict.get("installed"):
+		resource_dict["install_name"] = resource_dict["installed"]["name"]
 	return resource_dict
 
 
@@ -309,6 +311,9 @@ def installed_resources() -> list[dict]:
 		],
 		order_by="creation desc",
 	)
+	for row in rows:
+		row["ready"] = row.get("health_status") in ("Healthy", "Available")
+	return rows
 
 
 @frappe.whitelist()
