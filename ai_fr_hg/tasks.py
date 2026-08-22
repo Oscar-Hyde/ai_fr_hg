@@ -315,3 +315,17 @@ def recover_resource_downloads() -> None:
 			frappe.log_error(title="AI resource download recovery failed", message=frappe.get_traceback())
 		except Exception:
 			pass
+
+def discover_local_runtime() -> None:
+	"""Recognize local Ollama models / Qdrant indexes and mark resources Ready."""
+	try:
+		from ai_fr_hg.ai.resources.local_runtime import register_local_models
+
+		if not frappe.db.get_single_value("AI Platform Settings", "platform_enabled"):
+			return
+		register_local_models(user="Administrator", quiet=True)
+	except Exception:
+		try:
+			frappe.log_error(title="AI local runtime discovery failed", message=frappe.get_traceback())
+		except Exception:
+			pass

@@ -231,6 +231,7 @@ class AIResourceMarketplace {
 		const data = this.data || {};
 		const catalog = data.catalog || [];
 		const recommendations = data.recommendations || [];
+		const localRuntime = data.local_runtime || {};
 
 		this.el.view.html(`
 			<div class="row mb-3">
@@ -241,16 +242,18 @@ class AIResourceMarketplace {
 							<option value="">${__("All Types")}</option>
 							${Object.keys(RESOURCE_TYPE_LABELS).map((key) => `<option value="${key}">${RESOURCE_TYPE_LABELS[key]}</option>`).join("")}
 						</select>
-						<select class="form-control rm-category" style="width: 190px;">
+						<select class="form-control mr-2 rm-category" style="width: 190px;">
 							<option value="">${__("All Categories")}</option>
 							${this.categories(catalog).map((c) => `<option value="${c}">${c}</option>`).join("")}
 						</select>
 					</div>
 				</div>
 				<div class="col-md-4 text-right">
+					${this.canManage ? `<button class="btn btn-sm btn-default mr-1 rm-detect">${__("Recognize Local Runtime")}</button>` : ""}
 					${this.canManage ? `<button class="btn btn-sm btn-default rm-sync">${__("Sync Catalog")}</button>` : ""}
 				</div>
 			</div>
+			${this.localRuntimeBanner(localRuntime)}
 			<div class="row">
 				<div class="col-12">
 					<div class="rm-resource-grid"></div>
@@ -278,12 +281,48 @@ class AIResourceMarketplace {
 			this.category = $(event.currentTarget).val();
 			this.renderResourceGrid(filterResources(catalog, this.search, this.type, this.category));
 		});
+		this.el.view.find(".rm-detect").on("click", () => this.discoverLocalRuntime());
 		this.el.view.find(".rm-sync").on("click", () => this.syncCatalog());
 		this.el.view.find(".rm-recommendations").html(
 			recommendations.map((r) => this.resourceCard(r, { compact: true })).join("")
 		);
 		this.bindResourceCards();
 		this.renderResourceGrid(filterResources(catalog, this.search, this.type, this.category));
+	}
+
+	localRuntimeBanner(localRuntime) {
+		const models = localRuntime.ollama_models || [];
+		const collections = localRuntime.qdrant_collections || [];
+		const registered = localRuntime.registered_local_models || [];
+		const detected = localRuntime.detected || models.length > 0 || collections.length > 0;
+		if (!detected) {
+			return `
+				<div class="card mb-3 rm-local-runtime">
+					<div class="card-body text-muted small">
+						${__("No local runtime artifacts detected yet. Click “Recognize Local Runtime” after placing Ollama models or Qdrant indexes under this bench’s services directory.")}
+					</div>
+				</div>`;
+		}
+		return `
+			<div class="card mb-3 rm-local-runtime">
+				<div class="card-body">
+					<div class="d-flex justify-content-between">
+						<div>
+							<strong>${__("Detected Locally")}</strong>
+							<div class="small text-muted mt-1">
+								${models.length ? `<span class="badge badge-success mr-1">${models.length} ${__("Ollama model(s)")}</span>` : ""}
+								${collections.length ? `<span class="badge badge-success mr-1">${collections.length} ${__("Qdrant index(es)")}</span>` : ""}
+								${registered.length ? `<span class="badge badge-light mr-1">${registered.length} ${__("already registered")}</span>` : ""}
+							</div>
+						</div>
+						${this.canManage ? `<button class="btn btn-sm btn-primary rm-detect">${__("Recognize Local Runtime")}</button>` : ""}
+					</div>
+					${models.length ? `
+						<div class="small text-muted mt-2">${models.map((m) => `<span class="badge badge-light mr-1">${m.model_name}</span>`).join("")}</div>` : ""}
+					${collections.length ? `
+						<div class="small text-muted mt-2">${collections.map((c) => `<span class="badge badge-light mr-1">${c.collection_name}</span>`).join("")}</div>` : ""}
+				</div>
+			</div>`;
 	}
 
 	categories(catalog) {
@@ -708,6 +747,23 @@ class AIResourceMarketplace {
 				this.showError(error);
 			}
 		});
+	}
+
+	async discoverLocalRuntime() {
+		try {
+			const response = await frappe.call({ method: "ai_fr_hg.api.resources.discover_local_runtime" });
+			const result = response.message || {};
+			const created = (result.created_models || []).length;
+			const updated = (result.updated_models || []).length;
+			const ready = (result.marketplace_ready || []).length;
+			frappe.show_alert({
+				message: `${__("Local runtime recognized")}: ${created} ${__("new model(s)")}, ${updated} ${__("updated")}, ${ready} ${__("marketplace resource(s) marked Ready")}`,
+				indicator: "blue",
+			}, 5);
+			this.refresh();
+		} catch (error) {
+			this.showError(error);
+		}
 	}
 
 	async syncCatalog() {

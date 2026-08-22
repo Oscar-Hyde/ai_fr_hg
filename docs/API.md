@@ -544,6 +544,17 @@ Resource usage and health metrics with the marketplace summary.
 
 Smart recommendations based on installed capability gaps and usage.
 
+### `ai_fr_hg.api.resources.discover_local_runtime()`
+
+Scan this bench's local runtime directories (`services/ollama/models`,
+`services/qdrant/storage`) and automatically register the Ollama models and
+Qdrant indexes that are already on disk, then mark matching marketplace model
+resources as **Ready**. Idempotent; manager-only.
+
+### `ai_fr_hg.api.resources.local_runtime()`
+
+Read-only summary of detected local runtime artifacts.
+
 ### `ai_fr_hg.api.resources.sources()`
 
 Every enabled download source across repositories — the full list of places

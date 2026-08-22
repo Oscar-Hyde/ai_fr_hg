@@ -254,6 +254,7 @@ scheduler_events = {
 		"ai_fr_hg.tasks.sync_models",
 		"ai_fr_hg.tasks.rollup_usage",
 		"ai_fr_hg.tasks.backup_knowledge",
+		"ai_fr_hg.tasks.discover_local_runtime",
 	],
 	"weekly_long": [
 		"ai_fr_hg.tasks.cleanup_logs",

@@ -31,6 +31,8 @@ from ai_fr_hg.ai.resources.lifecycle import rollback_install, uninstall_resource
 from ai_fr_hg.ai.resources.monitoring import recommendations, resource_summary, usage_metrics
 from ai_fr_hg.ai.resources.recovery import retry_download
 
+from ai_fr_hg.ai.resources.local_runtime import local_runtime_summary, register_local_models
+
 _MANAGER_ROLES = ("AI Manager", "System Manager")
 
 
@@ -68,6 +70,7 @@ def marketplace() -> dict:
 		"updates": available_updates(),
 		"recommendations": recommendations(),
 		"download_sources": sources_summary(),
+		"local_runtime": local_runtime_summary(),
 	}
 
 
@@ -449,6 +452,32 @@ def _feels_authorized(resource, source_row: dict) -> bool:
 	with a password/secret check.
 	"""
 	return True
+
+
+@frappe.whitelist()
+def discover_local_runtime() -> dict:
+	"""Scan the local bench runtime and mark already-present artifacts as Ready."""
+	_require_manage()
+	result = register_local_models(user=frappe.session.user)
+
+	from ai_fr_hg.ai.logging import write_audit_log
+
+	write_audit_log(
+		action="AI Resource Local Runtime Discovered",
+		category="Configuration",
+		message=_("Local AI runtime artifacts were scanned and recognised."),
+		details=result,
+		reference_doctype="AI Resource",
+		raise_on_error=True,
+	)
+	return result
+
+
+@frappe.whitelist()
+def local_runtime() -> dict:
+	"""Read-only local runtime detection summary."""
+	_require_view()
+	return local_runtime_summary()
 
 
 @frappe.whitelist()
