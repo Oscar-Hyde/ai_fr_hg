@@ -457,9 +457,31 @@ That last one is the shape of the boundary. A test can prove the lock was
 requested, and prove the code handles losing the race; it cannot prove two
 workers will not both win it.
 
+**Background execution: what the split looks like in practice.** The
+cancellation audit made the boundary unusually concrete, so it is worth
+recording as a worked example rather than a rule.
+
+Cancelling a pipeline run does two things: it commits `status = Cancelled`,
+and it asks RQ to stop the job. The first is fully testable here — the
+transition, the authority check, the audit record, the refusal of terminal
+states. The second needs a live Redis and a live worker, and is not claimed.
+
+That split is the application's own design, not a testing compromise: the code
+treats `send_stop_job_command` as best-effort *because* committed state
+prevents a queued job from starting and the cooperative checkpoints
+(`_assert_not_cancelled`, `_is_cancelled`) stop a running one. Those
+checkpoints are therefore load-bearing, which is why they now have tests and
+mutations of their own — if Redis signalling silently stopped working, they
+are the only thing left.
+
+Stale-worker recovery sits on the same line. `reap_stale_in_flight_documents`
+is fully testable in both failure directions (reaping a live worker, never
+reaping a dead one); whether a worker *actually* died, and whether its lease
+truly expired under contention, is runtime-tier.
+
 **Non-claims.** fakebench proves nothing about SQL correctness, transactions,
 InnoDB isolation levels, index behaviour, deadlocks, concurrency, `bench
-migrate`, or browser behaviour. CHAT-09 is the standing illustration: the
+migrate`, RQ job control, or browser behaviour. CHAT-09 is the standing illustration: the
 sequence-allocation defect is a REPEATABLE READ interaction that only a real
 database exhibits, and it is recorded as OPEN precisely because this tier
 cannot reach it.

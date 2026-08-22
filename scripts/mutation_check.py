@@ -237,6 +237,78 @@ MUTATIONS: list[Mutation] = [
 		breaks="Evidence must record when extraction ran.",
 	),
 	# -- formula preservation (§6.2) --------------------------------------
+	# -- stale worker recovery (Part 2 §20 heartbeat/lease) ---------------
+	Mutation(
+		name="stale-reaper-never-fires",
+		path="ai_fr_hg/ai/ingestion.py",
+		old="STALE_IN_FLIGHT_MINUTES = 30",
+		new="STALE_IN_FLIGHT_MINUTES = 100000",
+		breaks="A document held by a dead worker stays in-flight until a human notices.",
+	),
+	Mutation(
+		name="stale-reaper-kills-live-workers",
+		path="ai_fr_hg/ai/ingestion.py",
+		old='\t\t\t["processing_heartbeat", "<", cutoff],\n',
+		new="",
+		breaks="A live worker's document is failed underneath it, duplicating the work.",
+	),
+	Mutation(
+		name="stale-reaper-unbounded",
+		path="ai_fr_hg/ai/ingestion.py",
+		old="\t\tlimit=max(1, cint(limit)),\n\t)\n\treaped: list[dict] = []",
+		new="\t)\n\treaped: list[dict] = []",
+		breaks="A backlog becomes one unbounded reaping transaction.",
+	),
+	Mutation(
+		name="stale-reaper-does-not-refresh-heartbeat",
+		path="ai_fr_hg/ai/ingestion.py",
+		old='\t\t\t\t"processing_message": "Stale worker",\n\t\t\t\t"processing_heartbeat": now_datetime(),',
+		new='\t\t\t\t"processing_message": "Stale worker",',
+		breaks="The same row is reaped on every sweep, churning audit and retries.",
+	),
+	# -- cooperative cancellation and retry (background execution) --------
+	Mutation(
+		name="ingestion-cancel-checkpoint-dead",
+		path="ai_fr_hg/ai/ingestion.py",
+		old='\tif frappe.db.get_value("AI Document", document_name, "cancel_requested"):',
+		new="\tif False:",
+		breaks="A cancelled document job runs to completion; the stop flag is ignored.",
+	),
+	Mutation(
+		name="translation-cancel-checkpoint-dead",
+		path="ai_fr_hg/ai/translation.py",
+		old='\tif frappe.db.get_value("AI Translation", translation, "cancel_requested"):',
+		new="\tif False:",
+		breaks="A cancelled translation keeps consuming model quota to the end.",
+	),
+	Mutation(
+		name="pipeline-backoff-ignores-cancellation",
+		path="ai_fr_hg/ai/pipeline.py",
+		old="\tfor _retry_tick in range(max(seconds, 0) * 10):\n\t\tif _is_cancelled(run):\n\t\t\treturn True\n\t\ttime.sleep(0.1)",
+		new="\ttime.sleep(max(seconds, 0))",
+		breaks="A cancelled run holds a worker slot for the whole retry backoff.",
+	),
+	Mutation(
+		name="pipeline-cancel-authority-dropped",
+		path="ai_fr_hg/ai_automation/doctype/ai_pipeline_run/ai_pipeline_run.py",
+		old="\t\tif self.triggered_by != user:",
+		new="\t\tif False:",
+		breaks="Any signed-in user can cancel or retry another user's pipeline run.",
+	),
+	Mutation(
+		name="pipeline-cancel-allows-terminal",
+		path="ai_fr_hg/ai_automation/doctype/ai_pipeline_run/ai_pipeline_run.py",
+		old='\t\tif status not in {"Queued", "Running", "Waiting Approval"}:',
+		new="\t\tif False:",
+		breaks="A completed run is rewritten as Cancelled, destroying its outcome.",
+	),
+	Mutation(
+		name="pipeline-retry-accepts-corrupt-input",
+		path="ai_fr_hg/ai_automation/doctype/ai_pipeline_run/ai_pipeline_run.py",
+		old="\t\tif not isinstance(input_data, dict):",
+		new="\t\tif False:",
+		breaks="A retry starts from a non-object payload instead of refusing.",
+	),
 	# -- automation event claim and counters (AUTO-03 / AUTO-04) ----------
 	Mutation(
 		name="automation-event-claimed-twice",

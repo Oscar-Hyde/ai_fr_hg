@@ -2041,3 +2041,353 @@ class TestAutomationEventClaim(TestCase):
 		stored = [value for stmt in bench.db.sql_values for value in stmt if isinstance(value, str)]
 		longest = max((len(value) for value in stored), default=0)
 		self.assertLessEqual(longest, 1000)
+
+
+class TestCooperativeCancellation(TestCase):
+	"""Cancellation checkpoints: the mechanism a running job stops by.
+
+	`_assert_not_cancelled` (ingestion and translation) and `_is_cancelled`
+	(pipeline) are how long-running work notices it should stop. None was
+	named by any test. They are also the *reason* the design can treat RQ
+	signalling as best-effort: if Redis never delivers the stop command, the
+	job is supposed to halt at its next checkpoint anyway. That fallback is
+	load-bearing, so it needs evidence.
+	"""
+
+	def _ingestion(self, *, cancel_requested=0):
+		bench = install(FakeBench())
+		bench.register_doctype("AI Document", ["status", "cancel_requested"])
+		bench.db.insert_row(
+			"AI Document",
+			{"name": "DOC-1", "status": "Processing", "cancel_requested": cancel_requested},
+		)
+		return bench, import_app("ai_fr_hg.ai.ingestion")
+
+	def _translation(self, *, cancel_requested=0):
+		bench = install(FakeBench())
+		bench.register_doctype("AI Translation", ["status", "cancel_requested"])
+		bench.db.insert_row(
+			"AI Translation",
+			{"name": "TRN-1", "status": "Processing", "cancel_requested": cancel_requested},
+		)
+		return bench, import_app("ai_fr_hg.ai.translation")
+
+	def _pipeline(self, *, status="Running"):
+		bench = install(FakeBench())
+		bench.register_doctype("AI Pipeline Run", ["status", "finished_at"])
+		bench.db.insert_row("AI Pipeline Run", {"name": "RUN-1", "status": status})
+		return bench, import_app("ai_fr_hg.ai.pipeline")
+
+	def test_ingestion_checkpoint_halts_when_cancellation_was_requested(self):
+		_, ingestion = self._ingestion(cancel_requested=1)
+
+		with self.assertRaises(ingestion.DocumentProcessingCancelled):
+			ingestion._assert_not_cancelled("DOC-1")
+
+	def test_ingestion_checkpoint_is_transparent_when_not_cancelled(self):
+		"""A checkpoint that raised spuriously would abort healthy work."""
+		_, ingestion = self._ingestion(cancel_requested=0)
+
+		ingestion._assert_not_cancelled("DOC-1")
+
+	def test_ingestion_checkpoint_reads_live_state_not_a_snapshot(self):
+		"""Cancellation arrives *during* the job, so each check must re-read."""
+		bench, ingestion = self._ingestion(cancel_requested=0)
+		ingestion._assert_not_cancelled("DOC-1")
+
+		# Another session sets the flag while the job is mid-flight.
+		bench.db.tables["AI Document"]["DOC-1"]["cancel_requested"] = 1
+
+		with self.assertRaises(ingestion.DocumentProcessingCancelled):
+			ingestion._assert_not_cancelled("DOC-1")
+
+	def test_translation_checkpoint_halts_when_cancellation_was_requested(self):
+		_, translation = self._translation(cancel_requested=1)
+		import frappe
+
+		with self.assertRaises(frappe.ValidationError):
+			translation._assert_not_cancelled("TRN-1")
+
+	def test_translation_checkpoint_is_transparent_when_not_cancelled(self):
+		_, translation = self._translation(cancel_requested=0)
+
+		translation._assert_not_cancelled("TRN-1")
+
+	def test_pipeline_checkpoint_reports_only_the_cancelled_state(self):
+		for status, expected in (
+			("Cancelled", True),
+			("Running", False),
+			("Queued", False),
+			("Completed", False),
+			("Failed", False),
+		):
+			_, pipeline = self._pipeline(status=status)
+			self.assertIs(pipeline._is_cancelled("RUN-1"), expected, status)
+
+	def test_pipeline_backoff_aborts_immediately_on_cancellation(self):
+		"""`_wait_for_retry` must not hold a worker for the full delay.
+
+		The loop polls in 100ms ticks precisely so a cancellation lands
+		quickly. A regression to `time.sleep(seconds)` would keep a cancelled
+		run occupying a worker slot for the whole backoff.
+		"""
+		_, pipeline = self._pipeline(status="Cancelled")
+		slept = []
+		pipeline.time = types.SimpleNamespace(sleep=slept.append, monotonic=lambda: 0.0)
+
+		self.assertTrue(pipeline._wait_for_retry("RUN-1", 30))
+		self.assertEqual(slept, [], "a cancelled run must not sleep at all")
+
+	def test_pipeline_backoff_polls_in_short_ticks_while_running(self):
+		_, pipeline = self._pipeline(status="Running")
+		slept = []
+		pipeline.time = types.SimpleNamespace(sleep=slept.append, monotonic=lambda: 0.0)
+
+		self.assertFalse(pipeline._wait_for_retry("RUN-1", 2))
+		# 2 seconds at 100ms granularity, so cancellation is noticed quickly.
+		self.assertEqual(len(slept), 20)
+		self.assertTrue(all(tick <= 0.1 for tick in slept))
+
+
+class TestPipelineRunCancelAndRetry(TestCase):
+	"""`cancel_run` and `retry` on AI Pipeline Run: authority and state gates.
+
+	Neither was named by any test. Both are terminal-state operations on a
+	background job, so the risk is a caller cancelling someone else's run, a
+	completed run being reopened, or a retry silently starting from corrupt
+	stored input.
+
+	**Boundary.** These tests cover the committed-state half of cancellation:
+	the status transition, the authority check and the audit record. The RQ
+	half — `send_stop_job_command` reaching a live worker — needs real Redis
+	and is not claimed here. That split is the design's own: the code treats
+	Redis signalling as best-effort *because* the committed state stops a
+	queued job and the cooperative checkpoints stop a running one.
+	"""
+
+	def _bench(self, *, status="Running", owner="alice@example.com", roles=(), user=None):
+		bench = install(FakeBench())
+		module = import_app("ai_fr_hg.ai_automation.doctype.ai_pipeline_run.ai_pipeline_run")
+		bench.register_doctype(
+			"AI Pipeline Run",
+			["status", "finished_at", "triggered_by", "pipeline", "input_data"],
+			controller=module.AIPipelineRun,
+		)
+		bench.register_doctype("AI Audit Log", ["action", "category", "severity", "message"])
+		bench.db.insert_row(
+			"AI Pipeline Run",
+			{
+				"name": "RUN-1",
+				"status": status,
+				"triggered_by": owner,
+				"pipeline": "PIPE-1",
+				"input_data": '{"x": 1}',
+			},
+		)
+		acting = user or owner
+		bench.session.user = acting
+		bench.roles[acting] = list(roles)
+		return bench, module
+
+	def _status(self, bench):
+		return bench.db.tables["AI Pipeline Run"]["RUN-1"]["status"]
+
+	def _run_doc(self, bench):
+		import frappe
+
+		return frappe.get_doc("AI Pipeline Run", "RUN-1")
+
+	def test_a_running_run_is_cancelled_and_stamped(self):
+		bench, _ = self._bench(status="Running")
+
+		result = self._run_doc(bench).cancel_run()
+
+		self.assertEqual(result["status"], "Cancelled")
+		self.assertEqual(self._status(bench), "Cancelled")
+		self.assertTrue(bench.db.tables["AI Pipeline Run"]["RUN-1"]["finished_at"])
+
+	def test_a_terminal_run_cannot_be_cancelled(self):
+		"""Cancelling a finished run would rewrite a completed outcome."""
+		import frappe
+
+		for terminal in ("Completed", "Failed", "Cancelled"):
+			bench, _ = self._bench(status=terminal)
+			with self.assertRaises(frappe.ValidationError):
+				self._run_doc(bench).cancel_run()
+			self.assertEqual(self._status(bench), terminal)
+
+	def test_a_stranger_cannot_cancel_another_users_run(self):
+		import frappe
+
+		bench, _ = self._bench(owner="alice@example.com", user="mallory@example.com", roles=[])
+
+		with self.assertRaises(frappe.PermissionError):
+			self._run_doc(bench).cancel_run()
+		self.assertEqual(self._status(bench), "Running")
+
+	def test_a_manager_may_cancel_any_run(self):
+		bench, _ = self._bench(owner="alice@example.com", user="boss@example.com", roles=["AI Manager"])
+
+		self._run_doc(bench).cancel_run()
+
+		self.assertEqual(self._status(bench), "Cancelled")
+
+	def test_cancellation_writes_an_audit_record_before_signalling(self):
+		"""§24: the decision must be recorded even if RQ signalling fails."""
+		bench, _ = self._bench(status="Running")
+
+		self._run_doc(bench).cancel_run()
+
+		actions = [row.get("action") for row in bench.db.tables.get("AI Audit Log", {}).values()]
+		self.assertIn("Pipeline Run Cancelled", actions)
+
+	def test_only_terminal_runs_may_be_retried(self):
+		import frappe
+
+		for status in ("Queued", "Running", "Waiting Approval", "Completed"):
+			bench, _ = self._bench(status=status)
+			with self.assertRaises(frappe.ValidationError):
+				self._run_doc(bench).retry()
+
+	def test_retry_refuses_corrupt_stored_input_instead_of_guessing(self):
+		"""A retry must not silently start from an empty payload."""
+		import frappe
+
+		for payload in ("{not json", "[1, 2]", '"a string"'):
+			bench, _ = self._bench(status="Failed")
+			bench.db.tables["AI Pipeline Run"]["RUN-1"]["input_data"] = payload
+			with self.assertRaises(frappe.ValidationError):
+				self._run_doc(bench).retry()
+
+	def test_retry_authority_matches_cancellation_authority(self):
+		import frappe
+
+		bench, _ = self._bench(status="Failed", owner="alice@example.com", user="mallory@example.com")
+
+		with self.assertRaises(frappe.PermissionError):
+			self._run_doc(bench).retry()
+
+
+class TestStaleWorkerRecovery(TestCase):
+	"""`reap_stale_in_flight_documents`: recovery when a worker dies mid-job.
+
+	Nothing referenced it. This is the path that stops a document being
+	stranded in `Extracting` forever because the worker holding it was
+	killed — the enterprise requirement in Part 2 §20 for heartbeat, lease
+	and recovery.
+
+	The failure modes are opposite and both bad: reap too eagerly and a live
+	worker's document is failed underneath it, producing duplicate work; reap
+	never and the document is stuck until someone notices by hand.
+	"""
+
+	def _bench(self, rows):
+		bench = install(FakeBench())
+		bench.register_doctype(
+			"AI Document",
+			[
+				"status",
+				"processing_heartbeat",
+				"processing_requested_by",
+				"error_type",
+				"error_message",
+				"processing_message",
+				"retry_count",
+			],
+		)
+		for row in rows:
+			bench.db.insert_row("AI Document", row)
+		return bench, import_app("ai_fr_hg.ai.ingestion")
+
+	@staticmethod
+	def _doc(name, status, heartbeat, **extra):
+		row = {
+			"name": name,
+			"status": status,
+			"processing_heartbeat": heartbeat,
+			"owner": "alice@example.com",
+			"processing_requested_by": "alice@example.com",
+		}
+		row.update(extra)
+		return row
+
+	def test_a_dead_worker_releases_its_document_to_the_retry_path(self):
+		bench, ingestion = self._bench([self._doc("DOC-DEAD", "Extracting", "2026-08-21 10:00:00")])
+
+		reaped = ingestion.reap_stale_in_flight_documents()
+
+		self.assertEqual([row.name for row in reaped], ["DOC-DEAD"])
+		stored = bench.db.tables["AI Document"]["DOC-DEAD"]
+		self.assertEqual(stored["status"], "Failed")
+		self.assertEqual(stored["error_type"], "StaleWorker")
+
+	def test_a_live_worker_is_never_reaped(self):
+		"""Reaping a live job would run the same document twice."""
+		bench, ingestion = self._bench([self._doc("DOC-LIVE", "Extracting", "2026-08-21 11:59:00")])
+
+		self.assertEqual(ingestion.reap_stale_in_flight_documents(), [])
+		self.assertEqual(bench.db.tables["AI Document"]["DOC-LIVE"]["status"], "Extracting")
+
+	def test_every_in_flight_status_is_covered(self):
+		"""A worker can die during any stage, not only extraction."""
+		_, ingestion = self._bench(
+			[
+				self._doc("DOC-E", "Extracting", "2026-08-21 10:00:00"),
+				self._doc("DOC-C", "Chunking", "2026-08-21 10:00:00"),
+				self._doc("DOC-M", "Embedding", "2026-08-21 10:00:00"),
+			]
+		)
+
+		reaped = {row.name for row in ingestion.reap_stale_in_flight_documents()}
+
+		self.assertEqual(reaped, {"DOC-E", "DOC-C", "DOC-M"})
+
+	def test_settled_documents_are_left_alone(self):
+		"""An old heartbeat on a finished row is not a stale worker."""
+		bench, ingestion = self._bench(
+			[
+				self._doc("DOC-OK", "Indexed", "2026-08-21 09:00:00"),
+				self._doc("DOC-FAIL", "Failed", "2026-08-21 09:00:00"),
+				self._doc("DOC-Q", "Queued", "2026-08-21 09:00:00"),
+			]
+		)
+
+		self.assertEqual(ingestion.reap_stale_in_flight_documents(), [])
+		for name in ("DOC-OK", "DOC-FAIL", "DOC-Q"):
+			self.assertNotEqual(bench.db.tables["AI Document"][name].get("error_type"), "StaleWorker")
+
+	def test_the_reaper_is_bounded_per_run(self):
+		"""A backlog must not become one unbounded transaction."""
+		_, ingestion = self._bench(
+			[self._doc(f"DOC-{i}", "Extracting", "2026-08-21 10:00:00") for i in range(30)]
+		)
+
+		self.assertEqual(len(ingestion.reap_stale_in_flight_documents(limit=5)), 5)
+
+	def test_the_heartbeat_is_refreshed_so_a_row_is_not_reaped_repeatedly(self):
+		bench, ingestion = self._bench([self._doc("DOC-DEAD", "Extracting", "2026-08-21 10:00:00")])
+
+		ingestion.reap_stale_in_flight_documents()
+
+		# Refreshed to "now", so the next sweep does not re-reap the same row.
+		self.assertEqual(
+			str(bench.db.tables["AI Document"]["DOC-DEAD"]["processing_heartbeat"]),
+			"2026-08-21 12:00:00",
+		)
+
+	def test_recovery_preserves_the_original_requester_for_re_enqueue(self):
+		"""§22: the retry must run under the durable requester, not the worker."""
+		_, ingestion = self._bench(
+			[
+				self._doc(
+					"DOC-DEAD",
+					"Extracting",
+					"2026-08-21 10:00:00",
+					processing_requested_by="bob@example.com",
+				)
+			]
+		)
+
+		reaped = ingestion.reap_stale_in_flight_documents()
+
+		self.assertEqual(reaped[0].processing_requested_by, "bob@example.com")
