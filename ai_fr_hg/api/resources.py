@@ -139,13 +139,17 @@ def start_download(name: str, version: str | None = None, source: str | None = N
 	if not compat["compatible"]:
 		frappe.throw(_("Resource is not compatible: {0}").format(compat["reason"]))
 	source_row = next(
-		(row for row in resource_sources_map(resource.name).get(resource.name, []) if row.source_name == source or row.name == source),
+		(
+			row
+			for row in resource_sources_map(resource.name).get(resource.name, [])
+			if row.get("source_name") == source or row.get("name") == source
+		),
 		None,
 	)
 	if source and not source_row:
 		frappe.throw(_("Source {0} is not available for {1}.").format(source, resource.resource_name))
 	if source_row and source_row.get("requires_authorization") and not _feels_authorized(resource, source_row):
-		frappe.throw(_("Source {0} requires authorization.").format(source_row.source_name), frappe.PermissionError)
+		frappe.throw(_("Source {0} requires authorization.").format(source_row.get("source_name")), frappe.PermissionError)
 
 	from ai_fr_hg.ai.logging import write_audit_log
 

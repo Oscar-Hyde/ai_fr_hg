@@ -137,6 +137,14 @@ class TranslationOptions:
 			repair_pass=bool(cint(settings.get("translation_repair_pass", 1))),
 			use_translation_memory=bool(cint(settings.get("translation_memory_enabled", 1))),
 			back_translation_samples=cint(settings.get("translation_back_translation_samples")),
+			extra_instructions="\n".join(
+				part
+				for part in (
+					_template_extra_instructions(settings),
+					settings.get("translation_extra_instructions") or "",
+				)
+				if part
+			),
 		)
 		for key, value in overrides.items():
 			if value in (None, ""):
@@ -161,6 +169,8 @@ def _settings() -> dict:
 		"default_target_language",
 		"default_translation_model",
 		"default_glossary",
+		"translation_template",
+		"translation_extra_instructions",
 		"translation_segment_characters",
 		"translation_batch_segments",
 		"translation_quality_checks",
@@ -171,6 +181,25 @@ def _settings() -> dict:
 		"translation_enabled",
 	)
 	return {key: doc.get(key) for key in keys if doc.get(key) is not None}
+
+
+def _template_extra_instructions(settings: dict) -> str:
+	"""Resolve the marketplace prompt template chosen for translation.
+
+	Only the template's ``system_prompt`` is used as extra instructions: it is
+	the stable guidance block (persona, preservation rules, RTL/output quality),
+	while ``user_prompt`` carries the segment payload the engine already builds.
+	An installed marketplace template therefore becomes immediately usable as
+	translation output guidance without replacing the core translation engine.
+	"""
+	template_name = settings.get("translation_template") or ""
+	if not template_name:
+		return ""
+	try:
+		template = frappe.get_cached_doc("AI Prompt Template", template_name)
+	except Exception:
+		return ""
+	return (template.system_prompt or "").strip()
 
 
 def translation_enabled() -> bool:

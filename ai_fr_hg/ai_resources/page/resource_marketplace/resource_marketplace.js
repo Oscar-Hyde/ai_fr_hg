@@ -614,8 +614,9 @@ class AIResourceMarketplace {
 				${this.canManage && status === "Installed" ? `<button class="btn btn-sm btn-primary rm-install-update">${__("Update if available")}</button>` : ""}
 			</div>
 		`;
-		dialog.body.html(html);
-		dialog.body.find(".rm-install-update").on("click", async () => {
+		const dialogBody = dialog.$body || $(dialog.body);
+		dialogBody.html(html);
+		dialogBody.find(".rm-install-update").on("click", async () => {
 			await this.updateResource(resource.resource_code);
 			dialog.hide();
 		});
@@ -725,7 +726,8 @@ class AIResourceMarketplace {
 			callback: (response) => {
 				const rows = response.message || [];
 				const dialog = new frappe.ui.Dialog({ title: __("Download History"), size: "large", fields: [] });
-				dialog.body.html(`
+				const dialogBody = dialog.$body || $(dialog.body);
+				dialogBody.html(`
 					<table class="table table-sm">
 						<thead><tr><th>${__("Resource")}</th><th>${__("Version")}</th><th>${__("Status")}</th><th>${__("Progress")}</th><th>${__("Started")}</th><th>${__("Error")}</th></tr></thead>
 						<tbody>${rows.map((r) => `

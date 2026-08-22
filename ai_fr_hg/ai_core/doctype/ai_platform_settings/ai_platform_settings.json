@@ -55,6 +55,8 @@
   "default_target_language",
   "default_translation_model",
   "default_glossary",
+  "translation_template",
+  "translation_extra_instructions",
   "translation_cb",
   "translation_segment_characters",
   "translation_batch_segments",
@@ -393,6 +395,19 @@
    "fieldtype": "Link",
    "label": "Default Glossary",
    "options": "AI Translation Glossary"
+  },
+  {
+   "description": "An AI Prompt Template whose System Prompt is appended as extra translation instructions (e.g. Arabic Output Guide, Hebrew Output Guide). Blank uses the built-in translator persona.",
+   "fieldname": "translation_template",
+   "fieldtype": "Link",
+   "label": "Template",
+   "options": "AI Prompt Template"
+  },
+  {
+   "description": "Extra one-line translation instructions, appended after the selected template.",
+   "fieldname": "translation_extra_instructions",
+   "fieldtype": "Small Text",
+   "label": "Extra Instructions"
   },
   {
    "fieldname": "translation_cb",

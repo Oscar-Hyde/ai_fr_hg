@@ -189,7 +189,7 @@ def resolve_download_source(resource, source_name: str | None = None) -> dict:
 
 	if source_name:
 		for row in sources:
-			if row.source_name == source_name or row.name == source_name:
+			if row.get("source_name") == source_name or row.get("name") == source_name:
 				return dict(row)
 		frappe.throw(_("Source {0} is not enabled for resource {1}.").format(source_name, resource.resource_name))
 
@@ -242,7 +242,7 @@ def _download_source(download: object) -> dict:
 	resource = frappe.get_doc("AI Resource", download.resource)
 	if download.get("source"):
 		sources = resource_sources_map(resource.name).get(resource.name, [])
-		match = next((row for row in sources if row.source_name == download.source), None)
+		match = next((row for row in sources if row.get("source_name") == download.source), None)
 		if match:
 			return dict(match)
 	return resolve_download_source(resource, source_name=download.get("source"))

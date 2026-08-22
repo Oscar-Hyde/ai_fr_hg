@@ -83,6 +83,8 @@ class AIPlatformSettings(Document):
 		translation_quality_checks: DF.Check
 		translation_repair_pass: DF.Check
 		translation_segment_characters: DF.Int
+		translation_template: DF.Link | None
+		translation_extra_instructions: DF.SmallText | None
 	# end: auto-generated types
 
 	def validate(self):
