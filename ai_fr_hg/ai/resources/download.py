@@ -339,7 +339,16 @@ def _download_and_install(download_name: str, user: str, *, depth: int = 0) -> N
 	expected_checksum = download.expected_checksum or source.get("checksum") or resource.sha256
 	expected_signature = download.expected_signature or source.get("signature") or resource.signature
 	verification = verify_package(payload_bytes, expected_checksum, expected_signature)
-	_update_download(download_name, verify=verification)
+	_update_download(
+		download_name,
+		{
+			"verify_progress": 100,
+			"verify_message": verification.get("message") or "",
+			"verify_checksum": "Verified" if verification.get("checksum_ok") else "Failed",
+			"signature_status": "Verified" if verification.get("signature_ok") else "Failed",
+			"corruption_detected": 0 if verification.get("checksum_ok") else 1,
+		},
+	)
 	if not verification["ok"]:
 		frappe.throw(_("Package verification failed: {0}").format(verification["message"]))
 
