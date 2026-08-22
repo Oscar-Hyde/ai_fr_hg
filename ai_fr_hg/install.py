@@ -601,6 +601,26 @@ def after_migrate() -> None:
 	except Exception:
 		pass
 
+	# CHAT-02: re-assert the message-sequence indexes on every migrate.
+	#
+	# Neither of the two previous owners fires on an already-installed site:
+	# `AI Message.on_doctype_update` runs from `DocType.on_update`, and
+	# `frappe.modules.import_file` skips the import entirely (and so the save)
+	# when the JSON's migration_hash is unchanged; the v0_0_17 patch is marked
+	# already-applied on any site installed after it was written. A real site
+	# therefore ran with no database-level uniqueness backstop while the test
+	# suite that checks for it only ever ran on fresh CI installs.
+	#
+	# This hook has no such condition -- Frappe calls it on every migrate --
+	# and `ensure_sequence_constraints` is idempotent, so it is the correct
+	# owner. Deliberately NOT wrapped in `except: pass` like the cosmetic
+	# repairs above: a missing uniqueness constraint is a correctness defect,
+	# and it must fail the migration loudly rather than leave the operator
+	# with a green run and no guarantee.
+	from ai_fr_hg.ai.conversation_indexes import ensure_sequence_constraints
+
+	ensure_sequence_constraints()
+
 
 def before_tests() -> None:
 	"""Clear cached metadata before the standalone app fixtures are created.

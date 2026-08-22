@@ -181,6 +181,60 @@ class TestConversationTurnIdentityPatch(TestCase):
 		module.ensure_sequence_constraints()
 		return module
 
+	def test_after_migrate_reasserts_the_constraint_on_an_existing_site(self):
+		"""Reported from a real bench: `bench migrate` left the index absent.
+
+		Neither previous owner fires on an already-installed site.
+		`AI Message.on_doctype_update` runs from `DocType.on_update`, and
+		`frappe.modules.import_file` skips the import (and therefore the
+		save) when the JSON's migration_hash is unchanged -- so a migrate
+		that changes no DocType JSON never calls it. The v0_0_17 patch is
+		marked already-applied on any site installed after it was written.
+		Both paths miss, and the site runs with no uniqueness backstop.
+
+		`after_migrate` has no such condition, so this asserts the hook
+		really reaches the constraint owner and creates the index, rather
+		than asserting that the source text mentions it.
+		"""
+		state = _make_state(indexes={})
+		module = _load_module(AI_DIR / self.MODULE, state)
+
+		# Precondition: the index genuinely does not exist yet.
+		self.assertNotIn("unique_conversation_sequence", state.indexes.get(MESSAGE_TABLE, set()))
+
+		module.ensure_sequence_constraints()
+
+		self.assertIn(
+			"unique_conversation_sequence",
+			state.indexes.get(MESSAGE_TABLE, set()),
+			"after_migrate did not create the uniqueness backstop",
+		)
+		self.assertTrue(
+			any("ADD UNIQUE INDEX" in alter for alter in state.alters),
+			f"no unique index DDL was issued; alters were {state.alters}",
+		)
+
+	def test_after_migrate_calls_the_constraint_owner(self):
+		"""The hook must be wired, not merely available.
+
+		A source-text assertion would pass if the call sat in a function
+		nothing invokes, so this parses install.py and checks the call is
+		inside `after_migrate` itself.
+		"""
+		import ast
+
+		source = (Path(__file__).resolve().parents[1] / "install.py").read_text()
+		tree = ast.parse(source)
+		hook = next(
+			node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "after_migrate"
+		)
+		called = {
+			node.func.id
+			for node in ast.walk(hook)
+			if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+		}
+		self.assertIn("ensure_sequence_constraints", called)
+
 	def test_patch_compiles_and_runs_without_type_error(self):
 		"""Reproduces the bench crash: execute() must complete end to end."""
 		state = _make_state(

@@ -313,6 +313,13 @@ MUTATIONS: list[Mutation] = [
 		breaks="A user with no resolvable roles matches every Role-scoped memory.",
 	),
 	Mutation(
+		name="migrate-stops-reasserting-the-sequence-index",
+		path="ai_fr_hg/install.py",
+		old="\tfrom ai_fr_hg.ai.conversation_indexes import ensure_sequence_constraints\n\n\tensure_sequence_constraints()",
+		new="\tfrom ai_fr_hg.ai.conversation_indexes import ensure_sequence_constraints  # noqa: F401",
+		breaks="An upgraded site silently loses the unique (conversation, sequence) backstop.",
+	),
+	Mutation(
 		name="reconciliation-enqueues-duplicates",
 		path="ai_fr_hg/ai/ingestion.py",
 		old="\t\tif row.name in seen:\n\t\t\tcontinue\n\t\tseen.add(row.name)",
