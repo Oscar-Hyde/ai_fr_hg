@@ -255,8 +255,12 @@ MUTATIONS: list[Mutation] = [
 	Mutation(
 		name="global-scope-skips-the-manager-check",
 		path="ai_fr_hg/ai/learning.py",
-		old='\t\tif not _is_learning_manager():\n\t\t\treturn False, _("Only AI Managers may teach Global, Role, Agent, or another user\'s scope.")\n\t\treturn True, _("Global scope is valid.")',
-		new='\t\treturn True, _("Global scope is valid.")',
+		# Anchored on the guard line alone: deleting it drops through to the
+		# success return below, granting Global to everyone. Kept free of a
+		# literal translation call so semgrep does not read this string as
+		# real translated source.
+		old="\t\tif not _is_learning_manager():\n",
+		new="\t\tif False:\n",
 		breaks="Any user can teach the Global scope, poisoning every user's answers.",
 	),
 	Mutation(
