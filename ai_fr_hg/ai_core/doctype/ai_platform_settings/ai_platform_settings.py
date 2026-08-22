@@ -61,6 +61,8 @@ class AIPlatformSettings(Document):
 		max_tokens_per_user_per_day: DF.Int
 		memory_top_k: DF.Int
 		ocr_enabled: DF.Check
+		semantic_confidence_floor: DF.Percent
+		semantic_entities_enabled: DF.Check
 		offline_mode: DF.Check
 		platform_enabled: DF.Check
 		processing_queue: DF.Literal["default", "short", "long"]

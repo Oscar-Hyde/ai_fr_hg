@@ -321,6 +321,17 @@
 
 /* ---------------------------------------------------------- citations */
 
+// §15.3 disclosure: an answer the corpus does not support is marked, so it
+// cannot be mistaken for a sourced result.
+.ai-grounding-note {
+	margin-top: var(--margin-xs);
+	padding: 2px 8px;
+	border-radius: var(--border-radius);
+	background: var(--bg-yellow);
+	color: var(--text-on-yellow, var(--text-muted));
+	display: inline-block;
+}
+
 .ai-citations {
 	display: flex;
 	flex-wrap: wrap;

@@ -628,6 +628,19 @@ def _extract_source(document, authority: str):
 	result = outcome.result
 	reader = outcome.reader
 	if not result.text or not result.text.strip():
+		# An archive that yielded nothing is not corrupt -- it is empty or holds
+		# only formats this platform cannot read. Saying "no readable text"
+		# would send the operator looking for a damaged file.
+		metadata = result.metadata or {}
+		if metadata.get("format") == "archive":
+			member_count = metadata.get("member_count") or 0
+			if not member_count:
+				raise CorruptDocumentError(_("The archive {0} contains no files.").format(filename))
+			raise UnsupportedDocumentError(
+				_(
+					"None of the {0} files in {1} are in a supported format, so no text could be extracted."
+				).format(member_count, filename)
+			)
 		raise CorruptDocumentError(
 			_("The {0} reader found no readable text in {1}.").format(reader.label, filename)
 		)

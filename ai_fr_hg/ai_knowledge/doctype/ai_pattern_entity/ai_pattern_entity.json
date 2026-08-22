@@ -14,6 +14,9 @@
   "pattern_cb",
   "entity_type",
   "occurrences",
+  "extraction_method",
+  "confidence",
+  "model_used",
   "value_sec",
   "value",
   "normalized_value",
@@ -21,7 +24,8 @@
   "first_offset",
   "context_quote",
   "scan_sec",
-  "source_checksum"
+  "source_checksum",
+  "last_scanned_on"
  ],
  "fields": [
   {
@@ -62,7 +66,7 @@
    "in_preview": 1,
    "in_standard_filter": 1,
    "label": "Entity Type",
-   "options": "email\nurl\nphone\nip\nhash\ndate\nidentifier\nmoney\ncustom"
+   "options": "email\nurl\nphone\nip\nhash\ndate\nidentifier\nmoney\nperson\norganization\nlocation\nconcept\ncustom"
   },
   {
    "default": "1",
@@ -71,6 +75,32 @@
    "in_list_view": 1,
    "label": "Occurrences",
    "non_negative": 1,
+   "read_only": 1
+  },
+  {
+   "description": "How this entity was produced. Deterministic patterns are exact; semantic entities are model-inferred and carry a confidence.",
+   "fieldname": "extraction_method",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Extraction Method",
+   "options": "pattern\nsemantic",
+   "default": "pattern",
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "description": "Model-reported confidence for semantic entities (0-100). Empty for deterministic pattern matches, which are exact by construction.",
+   "fieldname": "confidence",
+   "fieldtype": "Percent",
+   "in_list_view": 1,
+   "label": "Confidence",
+   "read_only": 1
+  },
+  {
+   "description": "The AI Model that inferred this entity, when extraction_method is semantic.",
+   "fieldname": "model_used",
+   "fieldtype": "Data",
+   "label": "Model Used",
    "read_only": 1
   },
   {
@@ -128,11 +158,18 @@
    "label": "Source Checksum",
    "read_only": 1,
    "search_index": 1
+  },
+  {
+   "description": "When this row was last confirmed by a scan. Required by the pattern-result contract: a result must state when it was produced.",
+   "fieldname": "last_scanned_on",
+   "fieldtype": "Datetime",
+   "label": "Last Scanned On",
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-08-19 09:00:00.000000",
+ "modified": "2026-08-21 13:00:00.000000",
  "modified_by": "Administrator",
  "module": "AI Knowledge",
  "name": "AI Pattern Entity",

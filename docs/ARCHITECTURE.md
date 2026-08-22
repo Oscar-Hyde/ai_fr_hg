@@ -33,10 +33,13 @@ ai_fr_hg/
 │   │   ├── openai_compatible.py   vLLM, LM Studio, llama.cpp, …
 │   │   └── __init__.py      Registry, merges the `ai_providers` hook
 │   ├── extraction.py        Format detection, reader resolution, extraction evidence
+│   ├── semantic.py          Semantic entities/relationships, grounded (ADR-011)
 │   ├── readers/             Document text extraction
 │   │   ├── base.py          BaseReader contract, ReadResult, MissingDependency
-│   │   ├── archive.py       Single ZIP-container guard (bomb/traversal/encryption)
-│   │   ├── plain.py         Text, Markdown, JSON, XML, HTML, code, email, images
+│   │   ├── archive.py       Container policy: ZIP guard + safe member walking
+│   │   ├── container.py     ArchiveReader: recursive zip/tar member extraction
+│   │   ├── code.py          CodeReader: 40+ languages, Python parsed via `ast`
+│   │   ├── plain.py         Text, Markdown, JSON, XML, HTML, email, images
 │   │   ├── office.py        PDF, Word, Excel, PowerPoint, OpenDocument (incl. ODP)
 │   │   └── __init__.py      Registry, merges the `ai_document_readers` hook
 │   ├── tools/               Tool calling

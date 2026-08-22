@@ -24,16 +24,42 @@ frappe.pages["ai-operations"].on_page_load = function (wrapper) {
 };
 
 frappe.pages["ai-operations"].on_page_show = function (wrapper) {
-	wrapper.dashboard && wrapper.dashboard.refresh();
+	if (!wrapper.dashboard) return;
+	wrapper.dashboard.refresh();
+	// Navigating back to a cached page must restart polling that was stopped
+	// on hide, otherwise the dashboard silently goes stale.
+	wrapper.dashboard.start_polling();
+};
+
+frappe.pages["ai-operations"].on_page_hide = function (wrapper) {
+	// Frappe keeps Desk pages in the DOM after navigation. Without this the
+	// 30s timer keeps polling the server forever, and a second visit stacks
+	// another timer on top of the first.
+	wrapper.dashboard && wrapper.dashboard.stop_polling();
 };
 
 class AIOperations {
+	//: Refresh cadence for the live operations view.
+	static POLL_INTERVAL_MS = 30000;
+
 	constructor(page) {
 		this.page = page;
+		this.timer = null;
 		this.make();
 		this.refresh();
-		// Keep the operations view live without hammering the server.
-		this.timer = setInterval(() => this.refresh(true), 30000);
+		this.start_polling();
+	}
+
+	start_polling() {
+		// Idempotent: never stack a second interval on the same dashboard.
+		if (this.timer) return;
+		this.timer = setInterval(() => this.refresh(true), AIOperations.POLL_INTERVAL_MS);
+	}
+
+	stop_polling() {
+		if (!this.timer) return;
+		clearInterval(this.timer);
+		this.timer = null;
 	}
 
 	make() {

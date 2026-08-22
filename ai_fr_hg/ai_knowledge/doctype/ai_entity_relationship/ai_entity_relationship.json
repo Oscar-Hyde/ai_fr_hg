@@ -1,0 +1,224 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "allow_rename": 0,
+ "autoname": "hash",
+ "creation": "2026-08-21 12:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "document_sec",
+  "document",
+  "knowledge_base",
+  "relationship_cb",
+  "relationship_type",
+  "confidence",
+  "subject_sec",
+  "subject",
+  "subject_entity",
+  "object_cb",
+  "object",
+  "object_entity",
+  "provenance_sec",
+  "evidence_quote",
+  "first_offset",
+  "model_used",
+  "scan_sec",
+  "source_checksum",
+  "last_scanned_on"
+ ],
+ "fields": [
+  {
+   "fieldname": "document_sec",
+   "fieldtype": "Section Break",
+   "label": "Document"
+  },
+  {
+   "fieldname": "document",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Document",
+   "options": "AI Document",
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "description": "Denormalized from the document so knowledge-base row permissions apply without a join.",
+   "fieldname": "knowledge_base",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Knowledge Base",
+   "options": "AI Knowledge Base",
+   "read_only": 1,
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "relationship_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Normalized predicate describing how the subject relates to the object.",
+   "fieldname": "relationship_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Relationship Type",
+   "options": "works_for\nlocated_in\npart_of\nreports_to\nowns\npartner_of\nmentions\nrelated_to",
+   "default": "related_to",
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "description": "Model-reported confidence (0-100). Relationships are always inferred, never deterministic.",
+   "fieldname": "confidence",
+   "fieldtype": "Percent",
+   "in_list_view": 1,
+   "label": "Confidence",
+   "read_only": 1
+  },
+  {
+   "fieldname": "subject_sec",
+   "fieldtype": "Section Break",
+   "label": "Subject"
+  },
+  {
+   "fieldname": "subject",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Subject",
+   "length": 500,
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "description": "Resolved AI Pattern Entity for the subject, when one exists.",
+   "fieldname": "subject_entity",
+   "fieldtype": "Link",
+   "label": "Subject Entity",
+   "options": "AI Pattern Entity",
+   "read_only": 1
+  },
+  {
+   "fieldname": "object_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "object",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Object",
+   "length": 500,
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "description": "Resolved AI Pattern Entity for the object, when one exists.",
+   "fieldname": "object_entity",
+   "fieldtype": "Link",
+   "label": "Object Entity",
+   "options": "AI Pattern Entity",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "provenance_sec",
+   "fieldtype": "Section Break",
+   "label": "Provenance"
+  },
+  {
+   "description": "Verbatim span from the document that supports this relationship. A relationship without supporting text is not persisted.",
+   "fieldname": "evidence_quote",
+   "fieldtype": "Small Text",
+   "label": "Evidence Quote",
+   "read_only": 1
+  },
+  {
+   "description": "Character offset of the evidence quote within the document content.",
+   "fieldname": "first_offset",
+   "fieldtype": "Int",
+   "label": "First Offset",
+   "read_only": 1
+  },
+  {
+   "fieldname": "model_used",
+   "fieldtype": "Data",
+   "label": "Model Used",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "scan_sec",
+   "fieldtype": "Section Break",
+   "label": "Scan"
+  },
+  {
+   "description": "Checksum of the document source when this row was written. Rescans refresh it.",
+   "fieldname": "source_checksum",
+   "fieldtype": "Data",
+   "label": "Source Checksum",
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "description": "When this relationship was last confirmed by a scan.",
+   "fieldname": "last_scanned_on",
+   "fieldtype": "Datetime",
+   "label": "Last Scanned On",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-21 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Knowledge",
+ "name": "AI Entity Relationship",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI User",
+   "read": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "search_fields": "document,relationship_type,subject,object",
+ "show_title_field_in_link": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "subject",
+ "track_changes": 0
+}

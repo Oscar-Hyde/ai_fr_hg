@@ -231,6 +231,18 @@ Do not leave the current checkbox visible.
 
 ---
 
+### SEC-08 — Any user could teach the Global memory scope, and unknown scopes were recalled to everyone
+
+**Found 2026-08-22 while auditing the learning trust boundary.** Not part of the original audit; the LEARN-02..05 register rows describe feature gaps, not this.
+
+**Evidence:** `_validate_scope()` returned `True` for `scope == "Global"` before reaching its own manager check at the end of the function, making that check unreachable for the widest scope. `target_scope` is caller-supplied through the whitelisted `api.learning.teach`, so the least-privilege default in `_default_scope()` — which only applies when the caller omits a scope — did not constrain a caller who named `Global` explicitly. Separately, `_memory_applies()` ended in `return True`, so a memory row carrying an unrecognised scope was treated as applying to every user.
+
+**Impact:** Memory poisoning across the tenant boundary. A single ordinary user could write a memory that is recalled into every other user's context, including managers', and thereby steer answers platform-wide. The fail-open branch gave the same result for any row whose scope was written outside a document save — direct SQL, patches and imports all bypass Frappe's Select-option enforcement.
+
+**Disposition:** Full Debugging + Full Testing. The manager check now guards `Global` before it is granted, and an unrecognised scope fails closed (withheld) rather than open (broadcast).
+
+---
+
 ## 5.2 Retrieval correctness and scale
 
 ### RET-01 — Semantic search ranks only a small unordered subset
@@ -365,6 +377,20 @@ The Assistant upload call omits `file_record`, while other upload surfaces pass 
 **Impact:** correctness is preserved — the caller receives a retryable error and never a duplicate sequence — but a concurrent send can fail a request that a retry would have completed.
 
 **Required revision:** Make the allocation transparent to the caller, by either (a) moving the counter onto a dedicated allocator record that no request path ever reads, so the consistent-read conflict cannot arise, or (b) adding a bounded transaction-level retry around the turn. Measure the real contention rate first; this belongs with Phase 7 concurrency and chaos testing, where the retry budget can be set from observed behaviour rather than guessed.
+
+---
+
+### CHAT-10 — Prompt preview was simulated in the browser, not rendered by the server
+
+*Added 2026-08-21 by the CLOSED-claim re-audit (VER-08 reachability sweep).*
+
+`AI Prompt Template` exposes a whitelisted `preview()` that calls `render_prompt_template`, applying Frappe's sandboxed Jinja environment, substituting variable defaults and raising when a required variable is unset. Nothing called it. The "Preview Prompt" Desk button instead concatenated `frm.doc.system_prompt` and `frm.doc.user_prompt` client-side and listed variable names as literal `{{ name }}` placeholders.
+
+**Impact:** the operator previewed the *unrendered* template. Variables were never substituted, so the preview did not show what the model would receive; a required-variable error could not surface at preview time; and any future server-side rendering rule would be invisible. The feature appeared complete — button, dialog, server method, tests — while the two halves were never connected.
+
+**Disposition:** Full Integration. The button now calls `frm.call("preview")` and renders the returned `system_prompt`, `user_prompt`, `model` and `output_format`.
+
+**Residual:** the rendered output is asserted only against the server's return contract (`ai/intelligence.py:902`). Browser verification of the dialog belongs to Phase 7.
 
 ---
 
@@ -684,6 +710,23 @@ The app replaces `frappe.ui.FileUploader`, `frappe.file_manager.paste`, `FileVie
 
 ---
 
+### FILE-08 — Eleven folder-browser endpoints remain published with no caller
+
+*Added 2026-08-21 by the CLOSED-claim re-audit (VER-08 reachability sweep).*
+
+FILE-05 replaced the eager, bounded, depth-6 custom folder picker with Frappe's native lazy Link control. That was the correct fix — it uses a framework capability instead of a custom mechanism — but it removed the only callers of the API that backed the old picker. `get_tree`, `list_folder_contents`, `get_tabs`, `get_recents`, `list_favorites`, `get_folder_info`, `move_file`, `move_folder`, `search`, `add_favorite` and `remove_favorite` remain `@frappe.whitelist()` and are therefore callable by any authenticated session.
+
+**Impact:** this is not dead code — it is a live, unexercised surface. No UI drives it, so no UI test can demonstrate its behaviour, and a regression in its permission handling would be invisible. Each endpoint was confirmed to scope to the session user (directly or through its service), but authorization being present in source is weaker evidence than authorization observed under a real session.
+
+**Disposition required — one of:**
+
+* **Full Integration.** Build the folder-browser UI these endpoints were written for, giving them callers and behavioural tests.
+* **Removal.** Delete the endpoints and their services, keeping only what the native Link picker needs.
+
+Deferring is not a disposition. Until it is resolved this row stays OPEN, with the static authorization assertion recorded as partial evidence.
+
+---
+
 ## 5.10 Operations, backup, and audit
 
 ### OPS-01 — GitHub Actions is not currently a gate
@@ -727,6 +770,20 @@ The page starts a 30-second interval and has no page-hide cleanup. Usage-report 
 ### OPS-06 — Backup and cleanup jobs need bounded batches
 
 Several jobs use broad deletes or whole-corpus exports. They need batching, continuation state, per-item savepoints, metrics, and failure summaries to remain safe on large sites.
+
+---
+
+### OPS-07 — Workspace recreation destroys local verification state
+
+*Added 2026-08-21 after the second occurrence during the CLOSED-claim re-audit.*
+
+The development workspace has been recreated twice mid-audit. Each time the local git history reset to the base commit, every newly-added file was lost, modifications to tracked files survived as uncommitted edits, and both `/home/user/.venv` and the Frappe source checkout were destroyed. The pushed branch on `origin` was unaffected on both occasions.
+
+**Impact.** The danger is not the loss itself — the remote is authoritative — but that a half-restored tree is indistinguishable from ordinary uncommitted work. Committing from that state would silently drop every file added since the last push, and the resulting commit would look entirely normal. A second, quieter risk: a partial toolchain rebuild leaves `fakeredis[lua]` or the Frappe checkout missing, at which point the admission-control and schema suites **skip** rather than fail, and the run reports green while proving materially less.
+
+**Disposition:** Full Integration of a recovery procedure. The cause is outside the repository, so what belongs to the project is a deterministic recovery path plus the verification step that stops a partial restore being committed. `docs/phase-reports/WORKSPACE_RECOVERY.md` records: verify the remote holds the work → fetch the branch ref explicitly → stash → hard reset → check artifacts individually → rebuild the toolchain → re-establish the baseline and compare the test count against the last commit's stated figure.
+
+**Residual:** the procedure is documented and its accuracy is enforced by `TestOperationalRunbooks`, which fails if the runbook's dependency list or its pytest ignore-list drifts from `scripts/mutation_check.py`. Preventing the recreation itself is not in scope for this repository.
 
 ---
 

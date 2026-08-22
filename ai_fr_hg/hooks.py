@@ -170,6 +170,7 @@ permission_query_conditions = {
 	"AI Document": "ai_fr_hg.utils.permissions.document_query",
 	"AI Document Chunk": "ai_fr_hg.utils.permissions.chunk_query",
 	"AI Pattern Entity": "ai_fr_hg.utils.permissions.pattern_entity_query",
+	"AI Entity Relationship": "ai_fr_hg.utils.permissions.entity_relationship_query",
 	"AI Translation": "ai_fr_hg.utils.permissions.translation_query",
 	"AI Translation Glossary": "ai_fr_hg.utils.permissions.glossary_query",
 	"AI Agent": "ai_fr_hg.utils.permissions.agent_query",
@@ -213,7 +214,10 @@ doc_events = {
 	# ingestion pipeline. Frappe runs on_trash hooks before link validation, so
 	# this cascade can never block document deletion.
 	"AI Document": {
-		"on_trash": "ai_fr_hg.ai.patterns.handle_document_trashed",
+		"on_trash": [
+			"ai_fr_hg.ai.patterns.handle_document_trashed",
+			"ai_fr_hg.ai.semantic.handle_document_trashed",
+		],
 	},
 }
 
@@ -236,6 +240,10 @@ scheduler_events = {
 		"ai_fr_hg.tasks.process_pending_documents",
 		# Opt-in high-precision pattern extraction for indexed documents.
 		"ai_fr_hg.tasks.scan_pending_pattern_entities",
+		# Opt-in semantic entity/relationship extraction. Costs model calls, so
+		# it is disabled by default and skips documents already scanned at
+		# their current checksum.
+		"ai_fr_hg.tasks.scan_pending_semantic_entities",
 	],
 	"daily_long": [
 		"ai_fr_hg.tasks.sync_models",

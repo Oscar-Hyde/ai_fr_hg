@@ -44,6 +44,10 @@ ADD_INDEX_RE = re.compile(r"add (?:unique )?(?:fulltext )?index `(?P<name>[^`]+)
 ADD_COLUMN_RE = re.compile(r"add column `(?P<name>[^`]+)`", re.IGNORECASE)
 
 
+class _ImplicitCommitError(Exception):
+	"""Stands in for frappe.exceptions.ImplicitCommitError."""
+
+
 class _FakeDB:
 	"""Minimal in-memory stand-in implementing the Frappe db semantics used by patches.
 
@@ -74,6 +78,13 @@ class _FakeDB:
 			return [(m["name"], m["sequence"]) for m in rows]
 
 		if normalized.startswith("alter table"):
+			# Frappe's check_implicit_commit refuses DDL while the current
+			# transaction holds uncommitted writes. Modelling it here is what
+			# makes the missing `db.commit()` reproducible offline: without
+			# this the harness accepted an ALTER that a real bench rejected
+			# with ImplicitCommitError.
+			if state.pending_writes:
+				raise _ImplicitCommitError("This statement can cause implicit commit", str(query))
 			table = re.search(r"alter table `([^`]+)`", str(query), re.IGNORECASE).group(1)
 			index_match = ADD_INDEX_RE.search(str(query))
 			if index_match:
@@ -93,6 +104,7 @@ class _FakeDB:
 					document["processing_progress"] = 100
 					document["processing_message"] = "Indexed"
 			state.updates.append(query)
+			state.pending_writes += 1
 			return []
 
 		raise AssertionError(f"unexpected SQL statement: {query}")
@@ -102,6 +114,7 @@ class _FakeDB:
 			if message["name"] == name:
 				message[fieldname] = value
 		self._state.set_values.append((doctype, name, fieldname, value))
+		self._state.pending_writes += 1
 
 	def table_exists(self, doctype, *, cached=True):
 		return f"tab{doctype}" in self._state.tables
@@ -110,6 +123,8 @@ class _FakeDB:
 		return columnname in self._state.columns.get(f"tab{doctype}", set())
 
 	def commit(self):
+		self._state.pending_writes = 0
+		self._state.commits += 1
 		return None
 
 
@@ -127,6 +142,8 @@ def _make_state(**overrides):
 		updates=[],
 		set_values=[],
 		logged_errors=[],
+		pending_writes=0,
+		commits=0,
 	)
 	for key, value in overrides.items():
 		setattr(state, key, value)
@@ -180,6 +197,114 @@ class TestConversationTurnIdentityPatch(TestCase):
 		module = _load_module(AI_DIR / self.MODULE, state)
 		module.ensure_sequence_constraints()
 		return module
+
+	def test_after_migrate_reasserts_the_constraint_on_an_existing_site(self):
+		"""Reported from a real bench: `bench migrate` left the index absent.
+
+		Neither previous owner fires on an already-installed site.
+		`AI Message.on_doctype_update` runs from `DocType.on_update`, and
+		`frappe.modules.import_file` skips the import (and therefore the
+		save) when the JSON's migration_hash is unchanged -- so a migrate
+		that changes no DocType JSON never calls it. The v0_0_17 patch is
+		marked already-applied on any site installed after it was written.
+		Both paths miss, and the site runs with no uniqueness backstop.
+
+		`after_migrate` has no such condition, so this asserts the hook
+		really reaches the constraint owner and creates the index, rather
+		than asserting that the source text mentions it.
+		"""
+		state = _make_state(indexes={})
+		module = _load_module(AI_DIR / self.MODULE, state)
+
+		# Precondition: the index genuinely does not exist yet.
+		self.assertNotIn("unique_conversation_sequence", state.indexes.get(MESSAGE_TABLE, set()))
+
+		module.ensure_sequence_constraints()
+
+		self.assertIn(
+			"unique_conversation_sequence",
+			state.indexes.get(MESSAGE_TABLE, set()),
+			"after_migrate did not create the uniqueness backstop",
+		)
+		self.assertTrue(
+			any("ADD UNIQUE INDEX" in alter for alter in state.alters),
+			f"no unique index DDL was issued; alters were {state.alters}",
+		)
+
+	def test_ddl_commits_the_renumber_before_altering(self):
+		"""Reported from a real bench: migrate died with ImplicitCommitError.
+
+		Frappe refuses DDL while the transaction holds uncommitted writes,
+		and the renumber pass immediately above the ALTER is such a write.
+		The framework's own `db.add_unique` and `db.add_index` call
+		`commit()` right before their ALTER for exactly this reason.
+
+		This drives a conversation that genuinely needs renumbering, so the
+		write happens, and then asserts the index was still created -- the
+		harness raises the same ImplicitCommitError a real MariaDB
+		connection does if the commit is missing.
+		"""
+		state = _make_state(
+			conversations=["CONV-1"],
+			messages=[
+				_message("MSG-1", "CONV-1", 0, "2026-01-01 00:00:01"),
+				_message("MSG-2", "CONV-1", 0, "2026-01-01 00:00:02"),
+			],
+		)
+		module = _load_module(AI_DIR / self.MODULE, state)
+
+		module.ensure_sequence_constraints()
+
+		# The renumber really did write, so the guard was really armed.
+		self.assertTrue(state.set_values, "no renumbering happened; guard untested")
+		self.assertGreaterEqual(state.commits, 1, "DDL ran without committing pending writes")
+		self.assertIn("unique_conversation_sequence", state.indexes.get(MESSAGE_TABLE, set()))
+
+	def test_no_schema_work_means_no_commit(self):
+		"""The steady-state path must not commit, or it breaks test isolation.
+
+		This runs from `after_migrate`, and the DDL path has to commit. But
+		Frappe's IntegrationTestCase isolates tests by rolling back, so a
+		stray commit makes other suites' fixtures durable -- which is what
+		turned eight AI Pipeline tests into DuplicateEntryError on the second
+		run of an operator's bench. When both indexes already exist there is
+		no schema work, so there must be no commit.
+		"""
+		state = _make_state(
+			indexes={MESSAGE_TABLE: {"unique_conversation_sequence", "turn_id_index"}},
+			conversations=["CONV-1"],
+			messages=[_message("MSG-1", "CONV-1", 0, "2026-01-01 00:00:01")],
+		)
+		module = _load_module(AI_DIR / self.MODULE, state)
+
+		module.ensure_sequence_constraints()
+
+		self.assertEqual(state.commits, 0, "committed with no schema work to do")
+		self.assertEqual(state.alters, [])
+		# A sequence of 0 would normally be renumbered; the early return must
+		# skip that write too, since it is what would need committing.
+		self.assertEqual(state.set_values, [])
+
+	def test_after_migrate_calls_the_constraint_owner(self):
+		"""The hook must be wired, not merely available.
+
+		A source-text assertion would pass if the call sat in a function
+		nothing invokes, so this parses install.py and checks the call is
+		inside `after_migrate` itself.
+		"""
+		import ast
+
+		source = (Path(__file__).resolve().parents[1] / "install.py").read_text()
+		tree = ast.parse(source)
+		hook = next(
+			node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "after_migrate"
+		)
+		called = {
+			node.func.id
+			for node in ast.walk(hook)
+			if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+		}
+		self.assertIn("ensure_sequence_constraints", called)
 
 	def test_patch_compiles_and_runs_without_type_error(self):
 		"""Reproduces the bench crash: execute() must complete end to end."""

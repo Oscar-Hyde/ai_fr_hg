@@ -437,6 +437,11 @@ def get_pattern_entities(document: str, entity_type: str | None = None, limit: i
 			"occurrences",
 			"first_offset",
 			"context_quote",
+			# Provenance: an inferred entity must never look like an exact match.
+			"extraction_method",
+			"confidence",
+			"model_used",
+			"last_scanned_on",
 		],
 		order_by="occurrences desc, entity_type asc",
 		limit_page_length=max(1, cint(limit) or 200),
@@ -457,6 +462,67 @@ def get_pattern_entities(document: str, entity_type: str | None = None, limit: i
 		"entities": entities,
 		"entity_counts": {row.entity_type: cint(row.total) for row in counts},
 	}
+
+
+@frappe.whitelist()
+def scan_semantic_entities(document: str, model: str | None = None) -> dict:
+	"""Extract semantic entities and relationships from a document (§11).
+
+	Like the deterministic pattern scan, this only reads already-extracted
+	content and writes its own rows; it never rewrites the document. Requires
+	write access because it consumes model quota on the caller's behalf.
+	"""
+	from ai_fr_hg.ai.semantic import scan_document_semantic, semantic_enabled
+	from ai_fr_hg.utils import api_validation
+
+	document = api_validation.valid_identifier(document, label=_("Document"), required=True)
+	model = api_validation.valid_identifier(model, label=_("Model")) if model else None
+
+	if not semantic_enabled():
+		frappe.throw(
+			_("Semantic entity extraction is disabled. Enable it in AI Platform Settings."),
+			frappe.ValidationError,
+		)
+
+	doc = frappe.get_doc("AI Document", document)
+	doc.check_permission("read")
+	doc.check_permission("write")
+
+	if not (doc.content or "").strip():
+		frappe.throw(_("Document {0} has no extracted content to scan.").format(document))
+
+	return scan_document_semantic(document, model=model)
+
+
+@frappe.whitelist()
+def get_entity_relationships(document: str, limit: int = 200) -> dict:
+	"""List the relationships discovered in a document, with their evidence."""
+	from ai_fr_hg.utils import api_validation
+
+	document = api_validation.valid_identifier(document, label=_("Document"), required=True)
+	limit = api_validation.bounded_integer(
+		limit, label=_("limit"), default=200, maximum=api_validation.MAX_CHUNK_ENTITY_PAGE
+	)
+	frappe.has_permission("AI Document", "read", doc=document, throw=True)
+
+	relationships = frappe.get_all(
+		"AI Entity Relationship",
+		filters={"document": document},
+		fields=[
+			"name",
+			"subject",
+			"relationship_type",
+			"object",
+			"confidence",
+			"evidence_quote",
+			"first_offset",
+			"model_used",
+			"last_scanned_on",
+		],
+		order_by="confidence desc, subject asc",
+		limit_page_length=max(1, cint(limit) or 200),
+	)
+	return {"document": document, "relationships": relationships, "total": len(relationships)}
 
 
 @frappe.whitelist()

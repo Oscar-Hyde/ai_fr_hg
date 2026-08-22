@@ -95,9 +95,16 @@ class TestControlledBaseline(TestCase):
 		audit_ids = AUDIT_ID_PATTERN.findall(audit)
 		registered_ids = REGISTER_ID_PATTERN.findall(register)
 
-		# 79 original findings plus CHAT-09, amended into the baseline on
-		# 2026-08-21 when the CHAT-02 reopening exposed it.
-		self.assertEqual(len(audit_ids), 80)
+		# 79 original findings, plus CHAT-09 (amended in on 2026-08-21 when the
+		# CHAT-02 reopening exposed it), plus CHAT-10 and FILE-08 (amended in
+		# on 2026-08-21 by the CLOSED-claim re-audit: a Desk button that faked
+		# its server call, and eleven endpoints left published without a
+		# caller when FILE-05 removed the custom picker), plus OPS-07
+		# (workspace recreation destroying local verification state, recorded
+		# after the second occurrence), plus SEC-08 (amended in on 2026-08-22
+		# when auditing the learning trust boundary found the Global scope
+		# escalation and the fail-open memory scope).
+		self.assertEqual(len(audit_ids), 84)
 		self.assertEqual(len(audit_ids), len(set(audit_ids)))
 		self.assertEqual(len(registered_ids), len(set(registered_ids)))
 		self.assertEqual(set(audit_ids), set(registered_ids))
@@ -109,6 +116,27 @@ class TestControlledBaseline(TestCase):
 			self.assertIn(f"ADR-{decision:03d}", decisions)
 		self.assertIn("MariaDB 11.8 only", decisions)
 		self.assertIn(FRAPPE_V17_SHA, decisions)
+
+	def test_verification_model_is_documented_with_its_limits(self):
+		"""ADR-015..019 record the verification model and what it cannot prove.
+
+		The point of these ADRs is the non-claims. If the limitations were
+		dropped, the documents would read as a guarantee of production
+		readiness that no tier in this repository supports.
+		"""
+		decisions = (ROOT / "docs/ARCHITECTURE_DECISIONS.md").read_text()
+
+		for decision in range(15, 20):
+			self.assertIn(f"ADR-{decision:03d}", decisions)
+
+		# The runtime tier is unavailable, and nothing may imply otherwise.
+		for limitation in (
+			"InnoDB isolation",
+			"bench migrate",
+			"browser",
+			"CHAT-09",
+		):
+			self.assertIn(limitation, decisions)
 
 	def test_ci_targets_an_immutable_frappe_v17_development_revision(self):
 		workflow = (ROOT / ".github/workflows/ci.yml").read_text()
@@ -157,7 +185,11 @@ class TestControlledBaseline(TestCase):
 		translation = (ROOT / "docs/TRANSLATION.md").read_text()
 		project = (ROOT / "pyproject.toml").read_text()
 
-		self.assertIn("37 registered extensions", readme)
+		# The advertised extension count must match the real registry, so the
+		# README cannot drift from what a parser actually backs.
+		from ai_fr_hg.ai.readers import BUILTIN_READERS
+
+		self.assertIn(f"{len(BUILTIN_READERS)} registered extensions", readme)
 		self.assertIn("PostgreSQL is not currently supported", readme)
 		self.assertIn("scanned-pdf ocr", readme.lower())
 		self.assertIn("not supported", readme.lower())
@@ -166,6 +198,9 @@ class TestControlledBaseline(TestCase):
 		self.assertRegex(translation, r"does not\s+reconstruct")
 		self.assertNotIn("A complete, fully local", project)
 		self.assertNotIn("36 registered", readme)
+		self.assertNotIn("37 registered", readme)
+		# ADR-012: legacy OLE formats stay declared-unsupported.
+		self.assertIn("`.doc`/`.xls`/`.ppt`", readme)
 		self.assertNotIn("37 ingestible", translation)
 		self.assertNotIn("Translation-memory isolation hardening remains open", readme)
 		self.assertNotIn("Connection-level network hardening is still tracked", readme)

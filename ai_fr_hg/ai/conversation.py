@@ -257,6 +257,18 @@ def _decorate_messages(rows) -> list[dict]:
 		item = dict(row)
 		item["citations"] = _parse_json_field(item.get("citations"), [])
 		item["learned_context"] = _parse_json_field(item.get("learned_context"), {})
+		if (item.get("role") or "") == "Assistant":
+			# §15.3: the live turn returns a `grounding` block. Reloading a
+			# conversation must not quietly drop the disclosure, or a refresh
+			# would make an unsupported answer look sourced. Derived from the
+			# persisted citations, which are the stored evidence of grounding.
+			citation_count = len(item["citations"])
+			item["grounding"] = {
+				"has_context": bool(citation_count),
+				"citation_count": citation_count,
+				"basis": "sources" if citation_count else "unsupported",
+				"derived": True,
+			}
 		messages.append(item)
 	return messages
 

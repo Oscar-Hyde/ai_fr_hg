@@ -34,16 +34,34 @@ def _zip_bytes(members: dict[str, bytes]) -> bytes:
 
 
 class TestReaderInventory(TestCase):
-	def test_builtin_registry_is_thirty_seven_and_includes_odp(self):
+	def test_builtin_registry_covers_the_supported_families(self):
+		"""The registry advertises exactly what a real parser backs.
+
+		Part 1 added source code (`ai.readers.code`) and user archives
+		(`ai.readers.container`). The legacy binary Office family stays absent
+		under ADR-012: no OLE2 parser exists, and listing an extension without a
+		parser is the "declared only" pattern the audit removed.
+		"""
 		from ai_fr_hg.ai.readers import BUILTIN_READERS
 
-		self.assertEqual(len(BUILTIN_READERS), 37)
 		self.assertIn("odp", BUILTIN_READERS)
+		# Source code is recognized rather than falling through to plain text.
+		for extension in ("py", "js", "ts", "java", "go", "rs"):
+			self.assertIn(extension, BUILTIN_READERS)
+		# User archives are supported containers.
+		for extension in ("zip", "tar", "gz"):
+			self.assertIn(extension, BUILTIN_READERS)
+		# Still deliberately unsupported: no real parser exists for these.
 		self.assertNotIn("doc", BUILTIN_READERS)
 		self.assertNotIn("xls", BUILTIN_READERS)
 		self.assertNotIn("ppt", BUILTIN_READERS)
 		self.assertNotIn("msg", BUILTIN_READERS)
-		self.assertNotIn("zip", BUILTIN_READERS)
+
+	def test_source_code_is_not_read_as_anonymous_plain_text(self):
+		from ai_fr_hg.ai.readers import BUILTIN_READERS
+		from ai_fr_hg.ai.readers.code import CodeReader
+
+		self.assertIs(BUILTIN_READERS["py"], CodeReader)
 
 
 class TestDetectFormat(TestCase):

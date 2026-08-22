@@ -423,6 +423,7 @@ class TestEquivalentModelFailover(AIPlatformTestCase):
 		return doc
 
 	def test_failover_targets_are_real_models_on_other_providers(self):
+		from ai_fr_hg.ai import capability
 		from ai_fr_hg.ai.engine import resolve_failover_attempts
 
 		model_doc = frappe.get_cached_doc("AI Model", self.chat_model.name)
@@ -432,7 +433,17 @@ class TestEquivalentModelFailover(AIPlatformTestCase):
 		self.assertIn((self.backup_provider.name, self.backup_model.name), targets)
 		for row in attempts:
 			self.assertNotEqual(row["provider"], model_doc.provider)
-			self.assertEqual(row["model"].model_type, "Chat")
+			# Not `== "Chat"`. A Vision model may serve Chat -- that is the
+			# declared policy in COMPATIBLE_MODEL_TYPES, asserted directly by
+			# test_vision_model_may_serve_chat. Pinning the literal string
+			# here contradicted that policy and only stayed green on sites
+			# with no Vision model installed; a real bench carrying llava:7b
+			# failed. Assert the compatibility rule the ranker actually
+			# applies, so this test tracks the policy instead of the fixture.
+			self.assertIsNone(
+				capability.model_type_error(model_doc.model_type or "Chat", row["model"]),
+				f"{row['model'].name} ({row['model'].model_type}) cannot serve {model_doc.model_type}",
+			)
 
 	def test_embedding_failover_never_crosses_dimensions(self):
 		from ai_fr_hg.ai.engine import resolve_failover_attempts

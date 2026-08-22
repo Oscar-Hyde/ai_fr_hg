@@ -218,3 +218,46 @@ describe("realtime session", () => {
     assert.equal(calls.filter((row) => row[0] === "off").length, 2);
   });
 });
+
+describe("Part 1 evidence version provenance", () => {
+  it("surfaces the extractor timestamp and version triple", () => {
+    const summary = summarizeExtractionEvidence(
+      JSON.stringify({
+        reader: "PDF",
+        detector: { family: "pdf", extension: "pdf" },
+        provenance: { bytes: 10 },
+        extracted_on: "2026-08-21T10:00:00+00:00",
+        versions: {
+          app: "0.0.1",
+          reader: "1.1",
+          library: "pypdf",
+          library_version: "6.16.1",
+        },
+      })
+    );
+    assert.equal(summary.extracted_on, "2026-08-21T10:00:00+00:00");
+    assert.equal(summary.app_version, "0.0.1");
+    assert.equal(summary.reader_version, "1.1");
+    assert.equal(summary.library_version, "6.16.1");
+    assert.equal(summary.legacy, false);
+  });
+
+  it("flags evidence produced before the versioned extractor", () => {
+    const summary = summarizeExtractionEvidence(
+      JSON.stringify({
+        reader: "PDF",
+        detector: { family: "pdf" },
+        provenance: { bytes: 10 },
+        versions: { app: "pre-0.0.2", reader: "unknown" },
+      })
+    );
+    assert.equal(summary.legacy, true);
+  });
+
+  it("stays empty-safe when evidence has no version block", () => {
+    const summary = summarizeExtractionEvidence("{}");
+    assert.equal(summary.empty, true);
+    assert.equal(summary.app_version, "");
+    assert.equal(summary.legacy, false);
+  });
+});

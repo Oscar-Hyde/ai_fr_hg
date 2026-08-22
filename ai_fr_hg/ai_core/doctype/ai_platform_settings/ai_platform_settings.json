@@ -47,6 +47,8 @@
   "allow_user_url_ingestion",
   "auto_scan_patterns",
   "max_pattern_entities",
+  "semantic_entities_enabled",
+  "semantic_confidence_floor",
   "translation_sec",
   "translation_enabled",
   "default_target_language",
@@ -76,11 +78,13 @@
   "alert_recipients",
   "governance_tab",
   "require_tool_approval",
+  "tool_sensitive_fields",
   "max_tokens_per_user_per_day",
   "max_requests_per_user_per_hour",
   "governance_cb",
   "log_prompts",
   "log_responses",
+  "log_search_queries",
   "redact_patterns",
   "learning_tab",
   "learning_enabled",
@@ -336,6 +340,21 @@
    "fieldname": "max_pattern_entities",
    "fieldtype": "Int",
    "label": "Max Pattern Entities per Document"
+  },
+  {
+   "default": "0",
+   "description": "Extract people, organizations, locations, concepts and their relationships using the configured model. Off by default: each scan costs a model call. Every result is grounded against the source text and dropped if it cannot be located.",
+   "fieldname": "semantic_entities_enabled",
+   "fieldtype": "Check",
+   "label": "Enable Semantic Entity Extraction"
+  },
+  {
+   "default": "50",
+   "depends_on": "eval:doc.semantic_entities_enabled",
+   "description": "Semantic entities and relationships below this confidence (0-100) are discarded.",
+   "fieldname": "semantic_confidence_floor",
+   "fieldtype": "Percent",
+   "label": "Semantic Confidence Floor"
   },
   {
    "fieldname": "translation_sec",
@@ -599,7 +618,7 @@
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-08-16 09:00:00.000000",
+ "modified": "2026-08-21 14:00:00.000000",
  "modified_by": "Administrator",
  "module": "AI Core",
  "name": "AI Platform Settings",
