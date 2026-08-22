@@ -600,17 +600,19 @@ def evaluate_compatibility(
 			else:
 				checks.append({"check": f"Dependency {dep_code}", "ok": True, "detail": installed[dep_code].get("version")})
 
-	# A compatible resource still requires a registered runtime for model bundles.
+	# A model profile can only be registered against an existing AI provider.
+	# The curated profiles are metadata plus registration hints; the runtime
+	# itself is managed separately, so a compatible *any* enabled provider is
+	# enough rather than a hard-coded provider name.
 	if resource.get("resource_type") == "AI Model":
-		provider_found = False
-		for provider in resource.get("supported_providers", []):
-			name = provider if isinstance(provider, str) else provider.get("provider_name")
-			if name and frappe.db.exists("AI Provider", name) and frappe.db.get_value("AI Provider", name, "enabled"):
-				provider_found = True
+		provider_found = any(
+			bool(frappe.db.exists("AI Provider", row.get("name"))) and bool(frappe.db.get_value("AI Provider", row.get("name"), "enabled"))
+			for row in frappe.get_all("AI Provider", filters={"enabled": 1}, fields=["name"], limit=20)
+		)
 		if not provider_found:
 			compatible = False
-			reason = _("No compatible AI provider is registered or enabled.")
-			checks.append({"check": "AI Provider", "ok": False, "detail": _("Missing.")})
+			reason = _("No AI provider is registered or enabled.")
+			checks.append({"check": "AI Provider", "ok": False, "detail": _("Register and enable a provider first.")})
 
 	return {"compatible": compatible, "reason": reason, "checks": checks}
 

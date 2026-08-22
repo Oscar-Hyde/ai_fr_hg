@@ -628,9 +628,9 @@ class AIResourceMarketplace {
 			frappe.show_alert({ message: __("AI Manager or System Manager role required."), indicator: "red" });
 			return;
 		}
-		frappe.show_alert({ message: __("Download started"), indicator: "blue" });
 		try {
 			await frappe.call({ method: "ai_fr_hg.api.resources.start_download", args: { name: resourceCode } });
+			frappe.show_alert({ message: __("Download started"), indicator: "blue" });
 			this.activeTab = "downloads";
 			this.page.main.find(".rm-tabs .nav-link").removeClass("active");
 			this.page.main.find(`.rm-tabs [data-tab="downloads"]`).addClass("active");

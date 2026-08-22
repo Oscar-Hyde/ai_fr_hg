@@ -146,15 +146,15 @@ def resume_download(download_name: str, user: str | None = None) -> dict:
 
 
 def _existing_active_download(resource_name: str):
-	return frappe.get_doc(
+	existing = frappe.get_all(
 		"AI Resource Download",
-		frappe.get_all(
-			"AI Resource Download",
-			filters={"resource": resource_name, "status": ("in", ACTIVE_DOWNLOAD_STATUSES), "is_cancelled": 0},
-			order_by="creation desc",
-			limit=1,
-		)[0].name,
+		filters={"resource": resource_name, "status": ("in", ACTIVE_DOWNLOAD_STATUSES), "is_cancelled": 0},
+		order_by="creation desc",
+		limit=1,
 	)
+	if not existing:
+		return None
+	return frappe.get_doc("AI Resource Download", existing[0].name)
 
 
 def resolve_download_source(resource, source_name: str | None = None) -> dict:
