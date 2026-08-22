@@ -85,6 +85,27 @@ python scripts/mutation_check.py          # full campaign
 python scripts/mutation_check.py --list   # show mutations without running
 ```
 
+### Before pushing: run the register checks the way CI does
+
+pytest is **not** sufficient for the documentation-consistency suites. Several
+of them (`test_rpc_contract_reachability.py`, `test_phase_0_contracts.py`,
+`test_phase_gate.py`) parse `GAP_REGISTER.md`, and CI runs them through
+`unittest`, not pytest. A register edit that satisfies pytest can still fail
+the Server job — that happened at 455f022, where a new row cited a symbol in
+prose and the "every cited symbol must be referenced by a test" rule rejected
+it.
+
+```bash
+python -m unittest ai_fr_hg.tests.test_rpc_contract_reachability \
+                   ai_fr_hg.tests.test_phase_0_contracts \
+                   ai_fr_hg.tests.test_phase_gate
+```
+
+Run this after **any** edit to `GAP_REGISTER.md` or `DEVELOPMENT_PLAN.md`.
+Note that backticked identifiers in a CLOSED row's evidence column are treated
+as claims: if a symbol is mentioned only as prose, name it in plain text
+instead of backticks, or the row is rejected.
+
 A mutation reported as `SKIP ... (anchor not found)` means the source moved and
 the mutation no longer tests anything — fix the anchor rather than deleting it,
 or the gate silently weakens over time.
