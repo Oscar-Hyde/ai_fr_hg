@@ -761,6 +761,20 @@ Several jobs use broad deletes or whole-corpus exports. They need batching, cont
 
 ---
 
+### OPS-07 — Workspace recreation destroys local verification state
+
+*Added 2026-08-21 after the second occurrence during the CLOSED-claim re-audit.*
+
+The development workspace has been recreated twice mid-audit. Each time the local git history reset to the base commit, every newly-added file was lost, modifications to tracked files survived as uncommitted edits, and both `/home/user/.venv` and the Frappe source checkout were destroyed. The pushed branch on `origin` was unaffected on both occasions.
+
+**Impact.** The danger is not the loss itself — the remote is authoritative — but that a half-restored tree is indistinguishable from ordinary uncommitted work. Committing from that state would silently drop every file added since the last push, and the resulting commit would look entirely normal. A second, quieter risk: a partial toolchain rebuild leaves `fakeredis[lua]` or the Frappe checkout missing, at which point the admission-control and schema suites **skip** rather than fail, and the run reports green while proving materially less.
+
+**Disposition:** Full Integration of a recovery procedure. The cause is outside the repository, so what belongs to the project is a deterministic recovery path plus the verification step that stops a partial restore being committed. `docs/phase-reports/WORKSPACE_RECOVERY.md` records: verify the remote holds the work → fetch the branch ref explicitly → stash → hard reset → check artifacts individually → rebuild the toolchain → re-establish the baseline and compare the test count against the last commit's stated figure.
+
+**Residual:** the procedure is documented and its accuracy is enforced by `TestOperationalRunbooks`, which fails if the runbook's dependency list or its pytest ignore-list drifts from `scripts/mutation_check.py`. Preventing the recreation itself is not in scope for this repository.
+
+---
+
 ## 5.11 Learning facade and reports
 
 ### LEARN-01 — Learning report filters are effectively disconnected

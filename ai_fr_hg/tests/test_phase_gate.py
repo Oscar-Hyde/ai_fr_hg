@@ -12,6 +12,7 @@ in CI and pins the properties that make it a control rather than a formality.
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -108,3 +109,42 @@ class TestPhaseGate(TestCase):
 					r"(?i)(runtime|browser|chaos|Phase 7)",
 					"a RUNTIME-TIER row must say which runtime evidence is missing",
 				)
+
+
+class TestOperationalRunbooks(TestCase):
+	"""A recovery procedure that names stale commands is worse than none.
+
+	OPS-07 records how to restore the workspace after it is recreated. The
+	risk is that it rots: the ignore-list, the dependency set or the branch
+	convention change, and the runbook silently starts describing a recovery
+	that no longer works — at exactly the moment someone is relying on it.
+	"""
+
+	RUNBOOK = ROOT / "docs" / "phase-reports" / "WORKSPACE_RECOVERY.md"
+
+	@classmethod
+	def setUpClass(cls):
+		cls.text = cls.RUNBOOK.read_text()
+
+	def test_the_runbook_exists_and_names_the_verification_step(self):
+		self.assertIn("git ls-remote --heads origin", self.text)
+		self.assertIn("stash", self.text)
+		# The step that stops a partial restore being committed.
+		self.assertIn("scripts/mutation_check.py", self.text)
+
+	def test_the_runbook_lists_every_dependency_the_suites_need(self):
+		"""A partial rebuild yields a green run that proves less than it looks."""
+		for dependency in ("fakeredis[lua]", "ruff==0.14.10", "pytest"):
+			self.assertIn(dependency, self.text, f"{dependency} missing from the runbook")
+		self.assertIn("frappe.git", self.text, "the Frappe checkout is not in the runbook")
+
+	def test_the_runbook_baseline_matches_the_real_offline_batch(self):
+		"""The documented pytest invocation must skip exactly the bench-only suites."""
+		mutation_source = (ROOT / "scripts" / "mutation_check.py").read_text()
+		ignored = set(re.findall(r"--ignore=(\S+?\.py)", mutation_source))
+		documented = set(re.findall(r"--ignore=(\S+?\.py)", self.text))
+		self.assertEqual(
+			ignored,
+			documented,
+			"the runbook's baseline command no longer matches scripts/mutation_check.py",
+		)

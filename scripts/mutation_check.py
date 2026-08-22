@@ -237,6 +237,42 @@ MUTATIONS: list[Mutation] = [
 		breaks="Evidence must record when extraction ran.",
 	),
 	# -- formula preservation (§6.2) --------------------------------------
+	# -- audit trail integrity (Part 2 §24) -------------------------------
+	Mutation(
+		name="audit-actor-not-the-session-user",
+		path="ai_fr_hg/ai/logging.py",
+		old='\t\t\t\t"user": frappe.session.user,',
+		new='\t\t\t\t"user": "Administrator",',
+		breaks="Audit entries are attributed to the wrong actor, so the trail cannot answer who.",
+	),
+	Mutation(
+		name="audit-message-unbounded",
+		path="ai_fr_hg/ai/logging.py",
+		old='\t\t\t\t"message": (message or "")[:1000],',
+		new='\t\t\t\t"message": (message or ""),',
+		breaks="Attacker-influenced text is written unbounded into a limited column.",
+	),
+	Mutation(
+		name="audit-fail-closed-ignored",
+		path="ai_fr_hg/ai/logging.py",
+		old="\t\tif raise_on_error:\n\t\t\traise",
+		new="\t\tif False:\n\t\t\traise",
+		breaks="A security-sensitive state change proceeds unaudited instead of failing closed.",
+	),
+	Mutation(
+		name="audit-savepoint-leaked",
+		path="ai_fr_hg/ai/logging.py",
+		old='\t\trelease = getattr(frappe.db, "release_savepoint", None)\n\t\tif release:\n\t\t\trelease(savepoint)',
+		new="\t\tpass",
+		breaks="Savepoints accumulate across a long-running job until the transaction fails.",
+	),
+	Mutation(
+		name="audit-failure-discards-caller-transaction",
+		path="ai_fr_hg/ai/logging.py",
+		old="\t\tfrappe.db.rollback(save_point=savepoint)",
+		new="\t\tpass",
+		breaks="A failed audit leaves the caller's transaction poisoned on PostgreSQL.",
+	),
 	# -- stale worker recovery (Part 2 §20 heartbeat/lease) ---------------
 	Mutation(
 		name="stale-reaper-never-fires",

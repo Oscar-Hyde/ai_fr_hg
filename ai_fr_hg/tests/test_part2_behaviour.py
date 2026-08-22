@@ -2391,3 +2391,136 @@ class TestStaleWorkerRecovery(TestCase):
 		reaped = ingestion.reap_stale_in_flight_documents()
 
 		self.assertEqual(reaped[0].processing_requested_by, "bob@example.com")
+
+
+class TestAuditTrailIntegrity(TestCase):
+	"""§24: `write_audit_log` is how the platform answers "what happened?".
+
+	Its only existing coverage lives in bench-only suites that never execute
+	offline or under the mutation gate, so in practice the audit writer was
+	unverified. It is not a passive logger: it isolates itself in a savepoint
+	so a failed audit cannot poison the caller's transaction, truncates
+	attacker-influenced text, captures the acting user, and supports a
+	fail-closed mode for security-sensitive callers.
+
+	**Boundary.** fakebench records savepoint and rollback calls but does not
+	undo writes, so "the caller's transaction survived a failed audit" is
+	asserted through the savepoint/rollback protocol rather than by observing
+	a real rollback. Actual transactional isolation is runtime-tier.
+	"""
+
+	def _bench(self, *, user="alice@example.com"):
+		bench = install(FakeBench())
+		bench.register_doctype(
+			"AI Audit Log",
+			[
+				"action",
+				"category",
+				"severity",
+				"user",
+				"message",
+				"details",
+				"reference_doctype",
+				"reference_name",
+				"ip_address",
+				"site_user_agent",
+			],
+		)
+		bench.session.user = user
+		return bench, import_app("ai_fr_hg.ai.logging")
+
+	def _entries(self, bench):
+		return list(bench.db.tables["AI Audit Log"].values())
+
+	def test_an_entry_records_actor_action_and_reference(self):
+		bench, logging_module = self._bench(user="alice@example.com")
+
+		logging_module.write_audit_log(
+			action="Pipeline Run Cancelled",
+			category="Execution",
+			severity="Warning",
+			message="cancelled by request",
+			reference_doctype="AI Pipeline Run",
+			reference_name="RUN-1",
+		)
+
+		entry = self._entries(bench)[0]
+		self.assertEqual(entry["action"], "Pipeline Run Cancelled")
+		self.assertEqual(entry["user"], "alice@example.com")
+		self.assertEqual(entry["severity"], "Warning")
+		self.assertEqual(entry["reference_doctype"], "AI Pipeline Run")
+		self.assertEqual(entry["reference_name"], "RUN-1")
+
+	def test_the_actor_is_taken_from_the_session_not_the_caller(self):
+		"""An audit entry a caller could attribute to someone else is worthless."""
+		bench, logging_module = self._bench(user="bob@example.com")
+
+		logging_module.write_audit_log(action="Thing Happened")
+
+		self.assertEqual(self._entries(bench)[0]["user"], "bob@example.com")
+
+	def test_message_text_is_bounded_before_storage(self):
+		bench, logging_module = self._bench()
+
+		logging_module.write_audit_log(action="Long", message="x" * 5000)
+
+		self.assertEqual(len(self._entries(bench)[0]["message"]), 1000)
+
+	def test_details_are_serialised_rather_than_dropped(self):
+		bench, logging_module = self._bench()
+
+		logging_module.write_audit_log(action="Detailed", details={"model": "m1", "rejected": 3})
+
+		stored = json.loads(self._entries(bench)[0]["details"])
+		self.assertEqual(stored["model"], "m1")
+		self.assertEqual(stored["rejected"], 3)
+
+	def test_unserialisable_details_do_not_lose_the_entry(self):
+		"""A bad payload must not cost the audit record itself."""
+		bench, logging_module = self._bench()
+
+		logging_module.write_audit_log(action="Odd", details={"obj": object()})
+
+		self.assertEqual(len(self._entries(bench)), 1)
+
+	def test_a_failed_audit_is_swallowed_by_default(self):
+		"""Observational call sites must not break the operation they describe."""
+		bench, logging_module = self._bench()
+		bench.db.fail_next_write = True
+
+		logging_module.write_audit_log(action="Best Effort")
+
+		self.assertEqual(self._entries(bench), [])
+
+	def test_a_failed_audit_fails_closed_when_the_caller_demands_it(self):
+		"""§24: a security-sensitive state change must not proceed unaudited."""
+		bench, logging_module = self._bench()
+		bench.db.fail_next_write = True
+
+		with self.assertRaises(Exception):
+			logging_module.write_audit_log(action="Must Be Audited", raise_on_error=True)
+
+	def test_a_failed_audit_rolls_back_only_its_own_savepoint(self):
+		"""The caller's work must survive an audit failure.
+
+		fakebench does not undo writes on rollback, so this asserts the
+		protocol -- a savepoint is taken, and rollback names that savepoint
+		rather than discarding the whole transaction. Real isolation is
+		runtime-tier.
+		"""
+		bench, logging_module = self._bench()
+		bench.db.fail_next_write = True
+
+		logging_module.write_audit_log(action="Doomed")
+
+		self.assertEqual(bench.db.rolled_back, 1)
+		self.assertTrue(bench.db.savepoints, "no savepoint was taken to roll back to")
+
+	def test_a_successful_audit_releases_its_savepoint(self):
+		"""Leaked savepoints accumulate across a long-running job."""
+		bench, logging_module = self._bench()
+
+		logging_module.write_audit_log(action="Fine")
+
+		self.assertEqual(bench.db.savepoints, [])
+		self.assertEqual(bench.db.rolled_back, 0)

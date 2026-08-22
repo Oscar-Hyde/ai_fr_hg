@@ -99,8 +99,10 @@ class TestControlledBaseline(TestCase):
 		# CHAT-02 reopening exposed it), plus CHAT-10 and FILE-08 (amended in
 		# on 2026-08-21 by the CLOSED-claim re-audit: a Desk button that faked
 		# its server call, and eleven endpoints left published without a
-		# caller when FILE-05 removed the custom picker).
-		self.assertEqual(len(audit_ids), 82)
+		# caller when FILE-05 removed the custom picker), plus OPS-07
+		# (workspace recreation destroying local verification state, recorded
+		# after the second occurrence).
+		self.assertEqual(len(audit_ids), 83)
 		self.assertEqual(len(audit_ids), len(set(audit_ids)))
 		self.assertEqual(len(registered_ids), len(set(registered_ids)))
 		self.assertEqual(set(audit_ids), set(registered_ids))
