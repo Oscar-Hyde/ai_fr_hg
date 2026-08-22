@@ -1,0 +1,38 @@
+{
+  "schema": "ai-resource-package-v1",
+  "resource_code": "knowledge-operations-base",
+  "resource_name": "Operations Knowledge Base",
+  "resource_type": "Knowledge Resource",
+  "category": "Knowledge",
+  "version": "1.0.0",
+  "publisher": "Ai Fr Hg",
+  "description": "A public knowledge base for operations, incident response and runbook retrieval.",
+  "supported_languages": ["en"],
+  "supported_providers": ["Ollama", "OpenAI Compatible"],
+  "requires": {
+    "frappe": ">=17.0.0",
+    "python": ">=3.14,<3.15",
+    "min_disk_gb": 0.05,
+    "min_ram_gb": 1
+  },
+  "dependencies": [],
+  "license": "MIT",
+  "license_url": "https://opensource.org/licenses/MIT",
+  "release_notes": [
+    "1.0.0 - Initial operations knowledge base with tuned retrieval defaults."
+  ],
+  "payload": {
+    "knowledge_bases": [
+      {
+        "knowledge_base_name": "Operations Runbooks",
+        "enabled": 1,
+        "is_public": 1,
+        "description": "Operations runbooks and incident response guidance for retrieval grounding.",
+        "chunk_size": 1200,
+        "chunk_overlap": 150,
+        "top_k": 6,
+        "similarity_threshold": 0.3
+      }
+    ]
+  }
+}

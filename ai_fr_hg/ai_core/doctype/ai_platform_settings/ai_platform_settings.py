@@ -68,6 +68,7 @@ class AIPlatformSettings(Document):
 		processing_queue: DF.Literal["default", "short", "long"]
 		redact_patterns: DF.SmallText | None
 		request_timeout: DF.Int
+		resource_allowed_hosts: DF.SmallText | None
 		retrieval_brute_force_ceiling: DF.Int
 		require_memory_approval: DF.Check
 		require_tool_approval: DF.Check
@@ -82,6 +83,8 @@ class AIPlatformSettings(Document):
 		translation_quality_checks: DF.Check
 		translation_repair_pass: DF.Check
 		translation_segment_characters: DF.Int
+		translation_template: DF.Link | None
+		translation_extra_instructions: DF.SmallText | None
 	# end: auto-generated types
 
 	def validate(self):

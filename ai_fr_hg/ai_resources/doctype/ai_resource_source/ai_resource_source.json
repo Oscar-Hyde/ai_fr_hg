@@ -1,0 +1,150 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-08-22 15:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "source_name",
+  "source_type",
+  "repository",
+  "source_url",
+  "enabled",
+  "is_default",
+  "priority",
+  "integrity_sec",
+  "checksum",
+  "signature",
+  "package_size_mb",
+  "capability_sec",
+  "offline_supported",
+  "requires_authorization",
+  "last_checked",
+  "notes"
+ ],
+ "fields": [
+  {
+   "columns": 2,
+   "fieldname": "source_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Source",
+   "reqd": 1
+  },
+  {
+   "columns": 1,
+   "default": "Built-in",
+   "fieldname": "source_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Type",
+   "options": "Built-in\nHTTP\nFile\nEnterprise"
+  },
+  {
+   "columns": 2,
+   "fieldname": "repository",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Repository",
+   "options": "AI Resource Repository"
+  },
+  {
+   "columns": 3,
+   "fieldname": "source_url",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Source URL"
+  },
+  {
+   "columns": 1,
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Enabled"
+  },
+  {
+   "columns": 1,
+   "fieldname": "is_default",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Default"
+  },
+  {
+   "columns": 1,
+   "default": "9",
+   "fieldname": "priority",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Priority"
+  },
+  {
+   "fieldname": "integrity_sec",
+   "fieldtype": "Section Break",
+   "label": "Integrity"
+  },
+  {
+   "fieldname": "checksum",
+   "fieldtype": "Data",
+   "label": "SHA-256 Checksum",
+   "read_only": 1
+  },
+  {
+   "fieldname": "signature",
+   "fieldtype": "Data",
+   "label": "Digital Signature",
+   "read_only": 1
+  },
+  {
+   "fieldname": "package_size_mb",
+   "fieldtype": "Float",
+   "label": "Package Size (MB)",
+   "precision": "2"
+  },
+  {
+   "fieldname": "capability_sec",
+   "fieldtype": "Section Break",
+   "label": "Capability"
+  },
+  {
+   "default": "0",
+   "fieldname": "offline_supported",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Offline Supported"
+  },
+  {
+   "default": "0",
+   "fieldname": "requires_authorization",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Requires Authorization"
+  },
+  {
+   "fieldname": "last_checked",
+   "fieldtype": "Datetime",
+   "label": "Last Checked",
+   "read_only": 1
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-08-22 15:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Resources",
+ "name": "AI Resource Source",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "ASC",
+ "states": []
+}

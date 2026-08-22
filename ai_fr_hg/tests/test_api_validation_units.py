@@ -80,3 +80,19 @@ class TestBoundedCollections(UnitTestCase):
 		self.assertEqual(v.bounded_payload('{"a": 1}', label="Payload", max_bytes=64), '{"a": 1}')
 		with self.assertRaises(frappe.ValidationError):
 			v.bounded_payload("x" * 65, label="Payload", max_bytes=64)
+
+
+class TestModelNameValidation(UnitTestCase):
+	def test_accepts_model_labels_and_runtime_names(self):
+		self.assertEqual(v.valid_model_name("qwen2.5:0.5b"), "qwen2.5:0.5b")
+		self.assertEqual(v.valid_model_name("Local Chat (Small)"), "Local Chat (Small)")
+		self.assertEqual(v.valid_model_name("nomic-embed-text"), "nomic-embed-text")
+		self.assertEqual(v.valid_model_name("acme.local/models/phi3:mini"), "acme.local/models/phi3:mini")
+
+	def test_rejects_empty_oversized_and_control_characters(self):
+		with self.assertRaises(frappe.ValidationError):
+			v.valid_model_name("")
+		with self.assertRaises(frappe.ValidationError):
+			v.valid_model_name("x" * 256)
+		with self.assertRaises(frappe.ValidationError):
+			v.valid_model_name("bad\u0000model")

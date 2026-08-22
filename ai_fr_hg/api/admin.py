@@ -251,7 +251,7 @@ def test_model(model: str, prompt: str = "Reply with the single word: OK") -> di
 
 	from ai_fr_hg.utils import api_validation
 
-	model = api_validation.valid_identifier(model, label=_("Model"), required=True)
+	model = api_validation.valid_model_name(model, label=_("Model"))
 	prompt = api_validation.bounded_text(
 		prompt, label=_("Prompt"), max_length=api_validation.MAX_MODEL_TEST_PROMPT_CHARS
 	)

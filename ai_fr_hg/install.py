@@ -310,6 +310,7 @@ def after_install() -> None:
 	create_default_agent()
 	create_default_policies()
 	create_default_folders()
+	seed_resource_marketplace()
 
 	frappe.db.commit()  # nosemgrep: frappe-manual-commit
 
@@ -369,6 +370,22 @@ def create_default_folders() -> None:
 			settings.save(ignore_permissions=True)
 	except Exception:
 		frappe.log_error(title="Storage folder default assignment failed", message=frappe.get_traceback())
+
+
+def seed_resource_marketplace() -> None:
+	"""Register the built-in resource marketplace so downloads work out of the box."""
+	try:
+		from ai_fr_hg.ai.resources.catalog import catalog_tables_ready, refresh_builtin_catalog
+
+		if not catalog_tables_ready():
+			frappe.logger("ai_fr_hg").info(
+				"Resource marketplace seeding skipped: AI Resources module has not been synced yet. "
+				"Run `bench migrate` once more after the app's modules are synced."
+			)
+			return
+		refresh_builtin_catalog(user="Administrator")
+	except Exception:
+		frappe.log_error(title="Resource marketplace seeding failed", message=frappe.get_traceback())
 
 
 def create_roles() -> None:
@@ -620,6 +637,13 @@ def after_migrate() -> None:
 	from ai_fr_hg.ai.conversation_indexes import ensure_sequence_constraints
 
 	ensure_sequence_constraints()
+
+	# Idempotent: an existing site gets the built-in resource marketplace as
+	# soon as the app is upgraded.
+	try:
+		seed_resource_marketplace()
+	except Exception:
+		frappe.log_error(title="Resource marketplace migrate seeding failed", message=frappe.get_traceback())
 
 
 def before_tests() -> None:

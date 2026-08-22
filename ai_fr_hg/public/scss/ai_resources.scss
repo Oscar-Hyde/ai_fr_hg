@@ -1,0 +1,43 @@
+// Copyright (c) 2026, Ai Fr Hg and contributors
+// For license information, please see license.txt
+
+// AI Resource Marketplace page.
+
+.ai-resource-marketplace {
+	padding-bottom: var(--padding-xl);
+
+	.rm-card {
+		cursor: pointer;
+		transition: box-shadow 150ms ease, transform 150ms ease;
+
+		&:hover {
+			box-shadow: var(--shadow-md);
+			transform: translateY(-1px);
+		}
+	}
+
+	.rm-filters .form-control {
+		max-width: 220px;
+	}
+
+	.rm-download-card .progress-bar {
+		transition: width 250ms ease;
+	}
+
+	.rm-app .nav-tabs .nav-link {
+		color: var(--text-muted);
+
+		&.active {
+			color: var(--text-color);
+			border-color: var(--border-color) var(--border-color) transparent;
+		}
+	}
+
+	.rm-detail pre {
+		white-space: pre-wrap;
+		word-break: break-word;
+		background: var(--bg-light-gray);
+		padding: var(--padding-sm);
+		border-radius: var(--border-radius-sm);
+	}
+}

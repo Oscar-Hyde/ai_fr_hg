@@ -1,0 +1,421 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "allow_rename": 0,
+ "autoname": "naming_series:",
+ "creation": "2026-08-22 09:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "resource",
+  "resource_code",
+  "resource_name",
+  "resource_type",
+  "version",
+  "naming_series",
+  "resource_cb",
+  "status",
+  "stage",
+  "stage_message",
+  "progress",
+  "started_at",
+  "completed_at",
+  "download_sec",
+  "downloaded_bytes",
+  "total_bytes",
+  "transfer_speed_kbps",
+  "eta_seconds",
+  "network_status",
+  "connection_quality",
+  "queue_position",
+  "last_checkpoint",
+  "source",
+  "source_url",
+  "repository",
+  "expected_checksum",
+  "expected_signature",
+  "verify_sec",
+  "verify_progress",
+  "verify_message",
+  "verify_checksum",
+  "signature_status",
+  "corruption_detected",
+  "install_sec",
+  "install_progress",
+  "install_stage",
+  "install_message",
+  "target_records",
+  "execution_sec",
+  "job_id",
+  "pause_requested",
+  "is_cancelled",
+  "is_completed",
+  "is_error",
+  "error_message",
+  "dependency_sec",
+  "is_dependency",
+  "parent_download",
+  "user",
+  "heartbeat"
+ ],
+ "fields": [
+  {
+   "fieldname": "resource",
+   "fieldtype": "Link",
+   "label": "Resource",
+   "options": "AI Resource",
+   "reqd": 1
+  },
+  {
+   "fieldname": "resource_code",
+   "fieldtype": "Data",
+   "label": "Resource Code",
+   "reqd": 1
+  },
+  {
+   "fieldname": "resource_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Resource Name"
+  },
+  {
+   "fieldname": "resource_type",
+   "fieldtype": "Select",
+   "label": "Resource Type",
+   "options": "Translation Package\nTranslation Memory Pack\nAI Model\nAI Prompt Template\nAI Workflow Template\nAgent Capability\nLanguage Pack\nKnowledge Resource\nAI Extension"
+  },
+  {
+   "fieldname": "version",
+   "fieldtype": "Data",
+   "label": "Version"
+  },
+  {
+   "default": "RESDL-.YYYY.-.#####",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Series",
+   "options": "RESDL-.YYYY.-.#####",
+   "read_only": 1
+  },
+  {
+   "fieldname": "resource_cb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Queued",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Queued\nPreparing\nDownloading\nWaiting Dependencies\nVerifying\nInstalling\nRegistering\nActivating\nReady\nCompleted\nPaused\nFailed\nCancelled\nRemoved\nRetrying",
+   "reqd": 1
+  },
+  {
+   "fieldname": "stage",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Stage"
+  },
+  {
+   "fieldname": "stage_message",
+   "fieldtype": "Small Text",
+   "label": "Stage Message"
+  },
+  {
+   "fieldname": "progress",
+   "fieldtype": "Percent",
+   "in_list_view": 1,
+   "label": "Overall Progress",
+   "read_only": 1
+  },
+  {
+   "fieldname": "started_at",
+   "fieldtype": "Datetime",
+   "label": "Started At"
+  },
+  {
+   "fieldname": "completed_at",
+   "fieldtype": "Datetime",
+   "label": "Completed At"
+  },
+  {
+   "fieldname": "download_sec",
+   "fieldtype": "Section Break",
+   "label": "Download"
+  },
+  {
+   "fieldname": "downloaded_bytes",
+   "fieldtype": "Int",
+   "label": "Downloaded Bytes",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_bytes",
+   "fieldtype": "Int",
+   "label": "Total Bytes",
+   "read_only": 1
+  },
+  {
+   "fieldname": "transfer_speed_kbps",
+   "fieldtype": "Int",
+   "label": "Speed (KB/s)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "eta_seconds",
+   "fieldtype": "Int",
+   "label": "ETA (s)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "network_status",
+   "fieldtype": "Data",
+   "label": "Network Status",
+   "read_only": 1
+  },
+  {
+   "default": "Unknown",
+   "fieldname": "connection_quality",
+   "fieldtype": "Select",
+   "label": "Connection Quality",
+   "options": "Unknown\nPoor\nFair\nGood\nExcellent",
+   "read_only": 1
+  },
+  {
+   "fieldname": "queue_position",
+   "fieldtype": "Int",
+   "label": "Queue Position",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_checkpoint",
+   "fieldtype": "Datetime",
+   "label": "Last Checkpoint",
+   "read_only": 1
+  },
+  {
+   "fieldname": "source",
+   "fieldtype": "Data",
+   "label": "Source",
+   "read_only": 1
+  },
+  {
+   "fieldname": "source_url",
+   "fieldtype": "Data",
+   "label": "Source URL",
+   "read_only": 1
+  },
+  {
+   "fieldname": "repository",
+   "fieldtype": "Link",
+   "label": "Repository",
+   "options": "AI Resource Repository",
+   "read_only": 1
+  },
+  {
+   "fieldname": "expected_checksum",
+   "fieldtype": "Data",
+   "label": "Expected SHA-256",
+   "read_only": 1
+  },
+  {
+   "fieldname": "expected_signature",
+   "fieldtype": "Data",
+   "label": "Expected Signature",
+   "read_only": 1
+  },
+  {
+   "fieldname": "verify_sec",
+   "fieldtype": "Section Break",
+   "label": "Verification"
+  },
+  {
+   "fieldname": "verify_progress",
+   "fieldtype": "Percent",
+   "label": "Verification Progress",
+   "read_only": 1
+  },
+  {
+   "fieldname": "verify_message",
+   "fieldtype": "Data",
+   "label": "Verification Message",
+   "read_only": 1
+  },
+  {
+   "fieldname": "verify_checksum",
+   "fieldtype": "Data",
+   "label": "Checksum Status",
+   "read_only": 1
+  },
+  {
+   "fieldname": "signature_status",
+   "fieldtype": "Data",
+   "label": "Signature Status",
+   "read_only": 1
+  },
+  {
+   "fieldname": "corruption_detected",
+   "fieldtype": "Check",
+   "label": "Corruption Detected",
+   "read_only": 1
+  },
+  {
+   "fieldname": "install_sec",
+   "fieldtype": "Section Break",
+   "label": "Installation"
+  },
+  {
+   "fieldname": "install_progress",
+   "fieldtype": "Percent",
+   "label": "Installation Progress",
+   "read_only": 1
+  },
+  {
+   "fieldname": "install_stage",
+   "fieldtype": "Data",
+   "label": "Install Stage"
+  },
+  {
+   "fieldname": "install_message",
+   "fieldtype": "Data",
+   "label": "Install Message"
+  },
+  {
+   "fieldname": "target_records",
+   "fieldtype": "Code",
+   "label": "Target Records",
+   "options": "JSON",
+   "read_only": 1
+  },
+  {
+   "fieldname": "execution_sec",
+   "fieldtype": "Section Break",
+   "label": "Execution"
+  },
+  {
+   "fieldname": "job_id",
+   "fieldtype": "Data",
+   "label": "Background Job"
+  },
+  {
+   "fieldname": "pause_requested",
+   "fieldtype": "Check",
+   "label": "Pause Requested"
+  },
+  {
+   "fieldname": "is_cancelled",
+   "fieldtype": "Check",
+   "label": "Cancelled"
+  },
+  {
+   "fieldname": "is_completed",
+   "fieldtype": "Check",
+   "label": "Completed"
+  },
+  {
+   "fieldname": "is_error",
+   "fieldtype": "Check",
+   "label": "Error"
+  },
+  {
+   "fieldname": "error_message",
+   "fieldtype": "Small Text",
+   "label": "Error Message"
+  },
+  {
+   "fieldname": "dependency_sec",
+   "fieldtype": "Section Break",
+   "label": "Dependency"
+  },
+  {
+   "fieldname": "is_dependency",
+   "fieldtype": "Check",
+   "label": "Is Dependency"
+  },
+  {
+   "fieldname": "parent_download",
+   "fieldtype": "Link",
+   "label": "Parent Download",
+   "options": "AI Resource Download"
+  },
+  {
+   "fieldname": "user",
+   "fieldtype": "Link",
+   "label": "User",
+   "options": "User"
+  },
+  {
+   "fieldname": "heartbeat",
+   "fieldtype": "Datetime",
+   "label": "Heartbeat",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [
+  {
+   "link_doctype": "AI Resource Install",
+   "link_fieldname": "download"
+  },
+  {
+   "link_doctype": "AI Resource Event",
+   "link_fieldname": "download"
+  }
+ ],
+ "modified": "2026-08-22 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "AI Resources",
+ "name": "AI Resource Download",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI Manager",
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "role": "AI User",
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1
+  },
+  {
+   "role": "AI Auditor",
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "show_title_field_in_link": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "resource_name",
+ "track_changes": 1
+}

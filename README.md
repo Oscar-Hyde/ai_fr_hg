@@ -140,6 +140,12 @@ charts, job drill-down, stale reconciliation, and timer cleanup remain open.
 Install, test, enable and set defaults per provider, with curated suggestions
 for a fresh install.
 
+**Resource marketplace** — `/app/resource-marketplace`
+Discover, download, verify, install, update and remove translation packages,
+AI prompt templates, workflow templates, agent skills, knowledge resources and
+future AI extensions. Downloads run on background workers with live progress,
+checkpoint resume and automatic activation.
+
 ---
 
 ### Documentation
@@ -150,6 +156,7 @@ for a fresh install.
 | [`docs/ARCHITECTURE_DECISIONS.md`](docs/ARCHITECTURE_DECISIONS.md) | Supported database/runtime and implement-or-remove decisions |
 | [`docs/FILE_TO_ANSWER.md`](docs/FILE_TO_ANSWER.md) | Current attach → ingest → index → retrieve → cite main path and limitations |
 | [`docs/TRANSLATION.md`](docs/TRANSLATION.md) | Arabic / English / Hebrew translation: pipeline, quality gate, glossaries, memory, review |
+| [`docs/RESOURCE_MARKETPLACE.md`](docs/RESOURCE_MARKETPLACE.md) | Download/verify/install/activate/update translation & AI templates, lifecycle, security, recovery |
 | [`docs/LEARNING.md`](docs/LEARNING.md) | The Learning Loop: teach → validate → approve → memory/skill → recall → observe |
 | [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) | Every setting, quotas, redaction, retention, deployment topologies |
 | [`docs/EXTENDING.md`](docs/EXTENDING.md) | Writing custom providers, readers, tools and pipeline steps |

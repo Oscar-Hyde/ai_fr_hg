@@ -1,7 +1,7 @@
 {
  "app": "ai_fr_hg",
  "charts": [],
- "content": "[{\"id\": \"h96108603\", \"type\": \"header\", \"data\": {\"text\": \"AI Control Center\", \"col\": 12, \"level\": 4}}, {\"id\": \"p27133583\", \"type\": \"paragraph\", \"data\": {\"text\": \"Real-time health, usage and configuration of the local AI platform.\", \"col\": 12}}, {\"id\": \"s81828925\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Operations Dashboard\", \"col\": 3}}, {\"id\": \"s48215366\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Model Manager\", \"col\": 3}}, {\"id\": \"s90898964\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Platform Settings\", \"col\": 3}}, {\"id\": \"s85056245\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Providers\", \"col\": 3}}, {\"id\": \"sp84c2f4\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"c55819567\", \"type\": \"card\", \"data\": {\"card_name\": \"Engine\", \"col\": 4}}, {\"id\": \"c4615100\", \"type\": \"card\", \"data\": {\"card_name\": \"Monitoring\", \"col\": 4}}, {\"id\": \"c88846151\", \"type\": \"card\", \"data\": {\"card_name\": \"Governance\", \"col\": 4}}]",
+ "content": "[{\"id\":\"h96108603\",\"type\":\"header\",\"data\":{\"text\":\"AI Control Center\",\"col\":12,\"level\":4}},{\"id\":\"p27133583\",\"type\":\"paragraph\",\"data\":{\"text\":\"Real-time health, usage and configuration of the local AI platform.\",\"col\":12}},{\"id\":\"s81828925\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Operations Dashboard\",\"col\":3}},{\"id\":\"s48215366\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Model Manager\",\"col\":3}},{\"id\":\"s90898964\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Platform Settings\",\"col\":3}},{\"id\":\"s85056245\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Providers\",\"col\":3}},{\"id\":\"s_resource_marketplace\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Resource Marketplace\",\"col\":3}},{\"id\":\"sp84c2f4\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"c55819567\",\"type\":\"card\",\"data\":{\"card_name\":\"Engine\",\"col\":4}},{\"id\":\"c4615100\",\"type\":\"card\",\"data\":{\"card_name\":\"Monitoring\",\"col\":4}},{\"id\":\"c88846151\",\"type\":\"card\",\"data\":{\"card_name\":\"Governance\",\"col\":4}},{\"id\":\"c_resources\",\"type\":\"card\",\"data\":{\"card_name\":\"Resources\",\"col\":4}}]",
  "creation": "2026-08-16 09:00:00.000000",
  "custom_blocks": [],
  "docstatus": 0,
@@ -147,6 +147,80 @@
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Resources",
+   "link_count": 6,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Resource Catalog",
+   "link_count": 0,
+   "link_to": "AI Resource",
+   "link_type": "DocType",
+   "onboard": 1,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Downloads",
+   "link_count": 0,
+   "link_to": "AI Resource Download",
+   "link_type": "DocType",
+   "onboard": 1,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Installed",
+   "link_count": 0,
+   "link_to": "AI Resource Install",
+   "link_type": "DocType",
+   "onboard": 1,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Versions",
+   "link_count": 0,
+   "link_to": "AI Resource Version",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Events",
+   "link_count": 0,
+   "link_to": "AI Resource Event",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "dependencies": "",
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Repositories",
+   "link_count": 0,
+   "link_to": "AI Resource Repository",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
   }
  ],
  "modified": "2026-08-16 09:00:00.000000",
@@ -177,6 +251,12 @@
    "color": "Blue",
    "label": "Model Manager",
    "link_to": "ai-model-manager",
+   "type": "Page"
+  },
+  {
+   "color": "Cyan",
+   "label": "Resource Marketplace",
+   "link_to": "resource-marketplace",
    "type": "Page"
   },
   {
@@ -214,6 +294,19 @@
    "keep_closed": 0,
    "label": "Model Manager",
    "link_to": "ai-model-manager",
+   "link_type": "Page",
+   "open_in_new_tab": 0,
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 0,
+   "collapsible": 1,
+   "icon": "box",
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Resource Marketplace",
+   "link_to": "resource-marketplace",
    "link_type": "Page",
    "open_in_new_tab": 0,
    "show_arrow": 0,

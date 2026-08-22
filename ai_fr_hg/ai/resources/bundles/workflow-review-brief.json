@@ -1,0 +1,59 @@
+{
+  "schema": "ai-resource-package-v1",
+  "resource_code": "workflow-review-brief",
+  "resource_name": "Review Brief Workflow",
+  "resource_type": "AI Workflow Template",
+  "category": "Workflows",
+  "version": "1.0.0",
+  "publisher": "Ai Fr Hg",
+  "description": "A manual AI pipeline that summarises a document and produces a review brief using the AI Prompt Essentials Pack.",
+  "supported_languages": ["en", "ar", "he"],
+  "supported_providers": ["Ollama", "OpenAI Compatible"],
+  "requires": {
+    "frappe": ">=17.0.0",
+    "python": ">=3.14,<3.15",
+    "min_disk_gb": 0.05,
+    "min_ram_gb": 1
+  },
+  "dependencies": [
+    {"resource_code": "ai-prompt-essentials", "version_constraint": ">=1.0.0", "required": 1}
+  ],
+  "license": "MIT",
+  "license_url": "https://opensource.org/licenses/MIT",
+  "release_notes": [
+    "1.0.0 - Review Brief pipeline with Summarize and Extract Data steps."
+  ],
+  "payload": {
+    "pipelines": [
+      {
+        "pipeline_name": "Document Review Brief",
+        "enabled": 1,
+        "description": "Summarise a document and extract decision points for review.",
+        "trigger_type": "Manual",
+        "queue": "long",
+        "steps": [
+          {
+            "step_name": "Summarise",
+            "step_type": "Summarize",
+            "enabled": 1,
+            "prompt_template": "Executive Summary",
+            "input_field": "content",
+            "output_field": "summary",
+            "on_error": "Stop",
+            "retry_count": 1
+          },
+          {
+            "step_name": "Decision Points",
+            "step_type": "Extract Data",
+            "enabled": 1,
+            "prompt_template": "Triage Classifier",
+            "input_field": "summary",
+            "output_field": "review_brief",
+            "on_error": "Continue",
+            "retry_count": 1
+          }
+        ]
+      }
+    ]
+  }
+}
