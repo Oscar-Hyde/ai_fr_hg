@@ -18,6 +18,7 @@ class AIResource(Document):
 		from ai_fr_hg.ai_resources.doctype.ai_resource_dependency.ai_resource_dependency import AIResourceDependency
 		from ai_fr_hg.ai_resources.doctype.ai_resource_language.ai_resource_language import AIResourceLanguage
 		from ai_fr_hg.ai_resources.doctype.ai_resource_provider.ai_resource_provider import AIResourceProvider
+		from ai_fr_hg.ai_resources.doctype.ai_resource_source.ai_resource_source import AIResourceSource
 
 		category: DF.Data
 		deprecated: DF.Check
@@ -54,6 +55,7 @@ class AIResource(Document):
 		signature: DF.Data | None
 		signature_verified: DF.Check
 		source_url: DF.Data | None
+		sources: DF.Table[AIResourceSource]
 		supported_languages: DF.Table[AIResourceLanguage]
 		supported_providers: DF.Table[AIResourceProvider]
 		version: DF.Data

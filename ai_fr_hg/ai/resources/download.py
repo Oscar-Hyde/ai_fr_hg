@@ -44,12 +44,24 @@ from ai_fr_hg.ai.resources.verification import validate_manifest
 STALLED_AFTER_SECONDS = 60 * 15
 
 
-def enqueue_download(resource_name: str, version: str | None = None, user: str | None = None) -> dict:
-	"""Create a download record and enqueue the orchestrated background job."""
+def enqueue_download(
+	resource_name: str,
+	version: str | None = None,
+	user: str | None = None,
+	source_name: str | None = None,
+) -> dict:
+	"""Create a download record and enqueue the orchestrated background job.
+
+	``source_name`` selects an ``AI Resource Source`` row; when omitted the
+	resource's default enabled source (usually the offline-built-in bundle) is
+	used. The selected source is persisted on the download so resume/retry and
+	audit traces know exactly where the package came from.
+	"""
 	from ai_fr_hg.ai.resources.catalog import evaluate_compatibility
 
 	user = user or frappe.session.user
 	resource = frappe.get_doc("AI Resource", resource_name)
+	source = resolve_download_source(resource, source_name=source_name)
 
 	compat = evaluate_compatibility(resource.as_dict(), ignore_dependencies=True)
 	if not compat["compatible"]:
@@ -68,11 +80,17 @@ def enqueue_download(resource_name: str, version: str | None = None, user: str |
 			"resource_name": resource.resource_name,
 			"resource_type": resource.resource_type,
 			"version": version or resource.version,
+			"source": source.get("source_name") or "",
+			"source_url": source.get("source_url") or "",
+			"repository": source.get("repository") or "",
+			"expected_checksum": source.get("checksum") or resource.sha256,
+			"expected_signature": source.get("signature") or resource.signature,
 			"status": "Preparing",
 			"stage": "Preparing Download",
 			"progress": 0,
 			"downloaded_bytes": 0,
-			"total_bytes": _package_size(manifest, resource),
+			"total_bytes": source.get("package_size_mb") and int(float(source["package_size_mb"]) * 1024 * 1024)
+			or _package_size(manifest, resource),
 			"network_status": "Idle",
 			"connection_quality": "Unknown",
 			"user": user,
@@ -139,6 +157,64 @@ def _existing_active_download(resource_name: str):
 	)
 
 
+def resolve_download_source(resource, source_name: str | None = None) -> dict:
+	"""Resolve the source to download from.
+
+	Defaults to the first enabled source, ordered by :code:`is_default` then
+	priority. Returns a dict shaped for ``AI Resource Download`` fields.
+	"""
+	try:
+		sources = frappe.get_all(
+			"AI Resource Source",
+			filters={"parent": resource.name, "parenttype": "AI Resource", "enabled": 1},
+			fields=[
+				"name",
+				"source_name",
+				"source_type",
+				"repository",
+				"source_url",
+				"is_default",
+				"priority",
+				"checksum",
+				"signature",
+				"package_size_mb",
+				"offline_supported",
+				"requires_authorization",
+			],
+			order_by="is_default desc, priority asc, creation asc",
+			limit=10,
+		)
+	except Exception:
+		sources = []
+
+	if source_name:
+		for row in sources:
+			if row.source_name == source_name or row.name == source_name:
+				return dict(row)
+		frappe.throw(_("Source {0} is not enabled for resource {1}.").format(source_name, resource.resource_name))
+
+	if sources:
+		return dict(sources[0])
+
+	# Fallback: a manually-curated resource with no source rows still uses its
+	# catalog source_url/checksum metadata as a single Enterprise/HTTP source.
+	fallback = {
+		"name": "catalog-source",
+		"source_name": _("Catalog Source"),
+		"source_type": "Enterprise" if resource.source_url and not resource.is_builtin else "Built-in",
+		"repository": resource.repository or "",
+		"source_url": resource.source_url or f"builtin://{resource.resource_code}",
+		"is_default": 1,
+		"priority": 9,
+		"checksum": resource.sha256 or "",
+		"signature": resource.signature or "",
+		"package_size_mb": resource.package_size_mb or 0,
+		"offline_supported": int(bool(resource.is_builtin)),
+		"requires_authorization": 0,
+	}
+	return fallback
+
+
 def _manifest_for(resource, version: str | None) -> dict:
 	if resource.is_builtin:
 		return package_manifest(resource.resource_code)
@@ -157,6 +233,19 @@ def _package_size(manifest: dict, resource) -> int:
 		except Exception:
 			return 0
 	return cint(manifest.get("package_size_bytes")) or flt(resource.package_size_mb or 0) * 1024 * 1024
+
+
+def _download_source(download: object) -> dict:
+	"""Load the source metadata persisted on a download row."""
+	from ai_fr_hg.ai.resources.catalog import resource_sources_map
+
+	resource = frappe.get_doc("AI Resource", download.resource)
+	if download.get("source"):
+		sources = resource_sources_map(resource.name).get(resource.name, [])
+		match = next((row for row in sources if row.source_name == download.source), None)
+		if match:
+			return dict(match)
+	return resolve_download_source(resource, source_name=download.get("source"))
 
 
 def _download_resource_job(download_name: str, user: str) -> None:
@@ -236,17 +325,20 @@ def _download_and_install(download_name: str, user: str, *, depth: int = 0) -> N
 	"""Download, verify, install, register and activate one resource."""
 	download = frappe.get_doc("AI Resource Download", download_name)
 	resource = frappe.get_doc("AI Resource", download.resource)
+	source = _download_source(download)
 
 	if _check_interrupt(download_name):
 		return
 
-	payload_bytes = _perform_download(download_name, resource)
+	payload_bytes = _perform_download(download_name, resource, source)
 	if _check_interrupt(download_name):
 		return
 
 	from ai_fr_hg.ai.resources.verification import verify_package
 
-	verification = verify_package(payload_bytes, resource.sha256, resource.signature)
+	expected_checksum = download.expected_checksum or source.get("checksum") or resource.sha256
+	expected_signature = download.expected_signature or source.get("signature") or resource.signature
+	verification = verify_package(payload_bytes, expected_checksum, expected_signature)
 	_update_download(download_name, verify=verification)
 	if not verification["ok"]:
 		frappe.throw(_("Package verification failed: {0}").format(verification["message"]))
@@ -282,23 +374,68 @@ def _download_and_install(download_name: str, user: str, *, depth: int = 0) -> N
 	frappe.db.commit()  # nosemgrep: frappe-manual-commit
 
 
-def _perform_download(download_name: str, resource) -> bytes:
+def _perform_download(download_name: str, resource, source: dict | None = None) -> bytes:
 	"""Write the package to disk (or read the built-in bundle) with live progress."""
 	_set_status(download_name, "Downloading", "Downloading package")
 
 	resolved_path = download_path(resource.resource_code)
-	if resource.is_builtin:
+	source = source or resolve_download_source(resource)
+	source_url = (source.get("source_url") or resource.source_url or "").strip()
+	source_type = source.get("source_type") or ""
+
+	if source_type == "Built-in" or source_url.startswith("builtin://") or (resource.is_builtin and not source_url.startswith(("http://", "https://"))):
 		return _download_builtin(download_name, resource, resolved_path)
 
-	source_url = (resource.source_url or "").strip()
+	if source_type == "File" or source_url.startswith("file://"):
+		return _download_file(download_name, resource, source_url, resolved_path)
+
 	if not source_url:
 		frappe.throw(_("Resource {0} has no source URL.").format(resource.resource_name))
 	if source_url.startswith(("http://", "https://")):
 		return _download_http(download_name, resource, source_url, resolved_path)
-	if source_url.startswith("builtin://"):
-		return _download_builtin(download_name, resource, resolved_path)
 
 	frappe.throw(_("Unsupported resource URL scheme: {0}").format(source_url))
+
+
+def _download_file(download_name: str, resource, source_url: str, target: Path) -> bytes:
+	"""Copy a local package file (used by offline / enterprise local sources)."""
+	from urllib.parse import unquote, urlparse
+
+	path_value = unquote(urlparse(source_url).path) if source_url.startswith("file://") else source_url
+	if not path_value:
+		frappe.throw(_("File source for {0} has no path.").format(resource.resource_name))
+	if not Path(path_value).is_absolute():
+		path_value = str(frappe.get_site_path(path_value))
+	path = Path(path_value).resolve()
+	site_root = Path(frappe.get_site_path()).resolve()
+	app_root = bundle_path(resource.resource_code).resolve().parent.parent.parent.parent  # bundles dir ancestor
+	try:
+		path.relative_to(site_root)
+	except ValueError:
+		try:
+			path.relative_to(app_root)
+		except ValueError:
+			frappe.throw(_("File source for {0} is outside permitted site/app paths.").format(resource.resource_name))
+	if not path.exists() or not path.is_file():
+		frappe.throw(_("Local source file does not exist: {0}").format(path))
+
+	target.parent.mkdir(parents=True, exist_ok=True)
+	total = path.stat().st_size
+	written = 0
+	start = time.monotonic()
+	with open(path, "rb") as handle, open(target, "wb") as out:
+		while True:
+			if _check_interrupt(download_name):
+				break
+			chunk = handle.read(64 * 1024)
+			if not chunk:
+				break
+			out.write(chunk)
+			written += len(chunk)
+			_update_progress(download_name, written, total, start)
+	if written == 0:
+		frappe.throw(_("Downloaded package is empty."))
+	return target.read_bytes()
 
 
 def _download_builtin(download_name: str, resource, target: Path) -> bytes:

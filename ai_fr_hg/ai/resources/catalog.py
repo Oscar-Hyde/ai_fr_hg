@@ -252,12 +252,68 @@ def _upsert_resource(resource_code: str, manifest: dict, repository: str, digest
 
 	_sync_dependencies(doc, manifest.get("dependencies") or [])
 
+	_sync_sources(doc, resource_code, manifest, repository, digest)
+
 	doc.flags.ignore_permissions = True
 	if doc.get("__islocal"):
 		doc.insert(ignore_permissions=True)
 	else:
 		doc.save(ignore_permissions=True)
 	return doc.name
+
+
+def _sync_sources(doc, resource_code: str, manifest: dict, repository: str, digest: dict) -> None:
+	"""Ensure the resource has an installed, default, offline-capable source row.
+
+	External catalog files can supply a ``sources`` list to register additional
+	repository-backed sources (private HTTP, local File, Enterprise). The
+	built-in bundle is always registered as the default local source first.
+	"""
+	existing_sources = {row.source_name for row in (doc.sources or [])}
+	default_source = "Built-in Bundle"
+
+	# Built-in bundle source.
+	if default_source not in existing_sources:
+		doc.append(
+			"sources",
+			{
+				"source_name": default_source,
+				"source_type": "Built-in",
+				"repository": repository,
+				"source_url": f"builtin://{resource_code}",
+				"enabled": 1,
+				"is_default": 1,
+				"priority": 1,
+				"checksum": digest.get("sha256") or "",
+				"signature": digest.get("signature") or "",
+				"package_size_mb": flt(digest.get("size_mb")),
+				"offline_supported": 1,
+				"requires_authorization": 0,
+				"notes": _("Vetted package bundled with this app. Works fully offline."),
+			},
+		)
+
+	for row in (manifest.get("sources") or []):
+		name = row.get("source_name") or row.get("source_type") or "External Source"
+		existing = next((source for source in doc.sources if source.source_name == name), None)
+		values = {
+			"source_type": row.get("source_type") or "Enterprise",
+			"repository": row.get("repository") or repository,
+			"source_url": row.get("source_url") or "",
+			"enabled": cint(row.get("enabled", 1)),
+			"is_default": 0,
+			"priority": cint(row.get("priority", 9)),
+			"checksum": row.get("checksum") or "",
+			"signature": row.get("signature") or "",
+			"package_size_mb": flt(row.get("package_size_mb")),
+			"offline_supported": cint(row.get("offline_supported", 0)),
+			"requires_authorization": cint(row.get("requires_authorization", 0)),
+			"notes": row.get("notes") or "",
+		}
+		if existing:
+			existing.update(values)
+		else:
+			doc.append("sources", {"source_name": name, **values})
 
 
 def _sync_dependencies(doc, dependencies: list) -> None:
@@ -372,12 +428,15 @@ def list_catalog(
 
 	installed = installed_resources_map()
 	active_downloads = active_downloads_map()
+	sources_by_resource = resource_sources_map({row["name"] for row in rows})
 
 	result = []
 	for row in rows:
 		data = dict(row)
 		install = installed.get(data["resource_code"])
 		download = active_downloads.get(data["resource_code"])
+		data["sources"] = sources_by_resource.get(row["name"], [])
+		data["source_count"] = len(data["sources"])
 		data.update(
 			compute_resource_status(
 				data,
@@ -387,6 +446,47 @@ def list_catalog(
 			)
 		)
 		result.append(data)
+	return result
+
+
+def resource_sources_map(resource_names: set[str] | str | None = None) -> dict[str, list[dict]]:
+	"""Return resource name -> list of registered download sources."""
+	filters = {"parenttype": "AI Resource", "enabled": 1}
+	if resource_names is not None:
+		if isinstance(resource_names, str):
+			filters["parent"] = resource_names
+		elif resource_names:
+			filters["parent"] = ("in", list(resource_names))
+		else:
+			return {}
+	try:
+		rows = frappe.get_all(
+			"AI Resource Source",
+			filters=filters,
+			fields=[
+				"name",
+				"source_name",
+				"source_type",
+				"repository",
+				"source_url",
+				"enabled",
+				"is_default",
+				"priority",
+				"checksum",
+				"signature",
+				"package_size_mb",
+				"offline_supported",
+				"requires_authorization",
+				"last_checked",
+				"notes",
+			],
+			order_by="is_default desc, priority asc, creation asc",
+		)
+	except Exception:
+		return {}
+	result: dict[str, list[dict]] = {}
+	for row in rows:
+		result.setdefault(row["parent"], []).append(dict(row))
 	return result
 
 
@@ -594,3 +694,77 @@ def _resource_dependency_map(resource_name: str) -> list[dict]:
 		)
 	except Exception:
 		return []
+
+
+def available_sources() -> list[dict]:
+	"""Return every enabled repository plus a count of sources it publishes.
+
+	Used by the UI's Download Sources panel so users understand *where* local
+	translation and AI templates can come from (bundled, private HTTP, local
+	file, enterprise repository) at a glance.
+	"""
+	repos = frappe.get_all(
+		"AI Resource Repository",
+		filters={"enabled": 1},
+		fields=[
+			"name",
+			"repository_name",
+			"repository_type",
+			"source_url",
+			"is_builtin",
+			"is_default",
+			"priority",
+			"offline_supported",
+			"requires_authorization",
+			"description",
+			"last_synced",
+		],
+		order_by="is_default desc, priority asc, creation asc",
+	)
+	repo_names = {repo["name"] for repo in repos}
+	by_repo: dict[str, dict] = {}
+
+	# Fallback: resources can carry sources before a repository is registered.
+	sources = frappe.get_all(
+		"AI Resource Source",
+		filters={"enabled": 1},
+		fields=["source_name", "source_type", "repository", "source_url", "offline_supported", "requires_authorization", "parent"],
+		order_by="priority asc, creation asc",
+		limit=1000,
+	)
+	for source in sources:
+		repo = source.get("repository")
+		if repo and repo not in repo_names and not by_repo.get(repo):
+			by_repo[repo] = {
+				"name": repo,
+				"repository_name": repo,
+				"repository_type": "Enterprise",
+				"source_url": source.get("source_url") or "",
+				"is_builtin": 0,
+				"is_default": 0,
+				"priority": 9,
+				"offline_supported": int(bool(source.get("offline_supported"))),
+				"requires_authorization": int(bool(source.get("requires_authorization"))),
+				"description": "Repository discovered from an installed resource source.",
+				"last_synced": None,
+			}
+
+	for repo in repos:
+		by_repo.setdefault(repo["name"], dict(repo))
+
+	for repo in by_repo.values():
+		repo["source_count"] = sum(1 for source in sources if source.get("repository") == repo["name"])
+		if repo["is_builtin"] and repo["source_count"] == 0:
+			# Built-in bundles are materialised in the app, not rows.
+			repo["source_count"] = _builtin_source_count()
+
+	result = list(by_repo.values())
+	result.sort(key=lambda row: (not row["is_default"], row.get("priority", 9)))
+	return result
+
+
+def _builtin_source_count() -> int:
+	try:
+		return frappe.db.count("AI Resource", {"is_builtin": 1, "enabled": 1})
+	except Exception:
+		return 0

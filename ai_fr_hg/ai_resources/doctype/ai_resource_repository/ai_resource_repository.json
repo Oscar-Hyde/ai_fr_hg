@@ -13,6 +13,11 @@
   "enabled",
   "is_builtin",
   "description",
+  "source_url",
+  "is_default",
+  "priority",
+  "offline_supported",
+  "requires_authorization",
   "sync_sec",
   "last_synced"
  ],
@@ -50,6 +55,33 @@
    "fieldname": "description",
    "fieldtype": "Small Text",
    "label": "Description"
+  },
+  {
+   "fieldname": "source_url",
+   "fieldtype": "Data",
+   "label": "Source URL",
+   "description": "Repository home URL. Resources from this repository should be served from this host or index."
+  },
+  {
+   "fieldname": "is_default",
+   "fieldtype": "Check",
+   "label": "Default Repository"
+  },
+  {
+   "fieldname": "priority",
+   "fieldtype": "Int",
+   "default": "9",
+   "label": "Priority"
+  },
+  {
+   "fieldname": "offline_supported",
+   "fieldtype": "Check",
+   "label": "Offline Supported"
+  },
+  {
+   "fieldname": "requires_authorization",
+   "fieldtype": "Check",
+   "label": "Requires Authorization"
   },
   {
    "fieldname": "sync_sec",

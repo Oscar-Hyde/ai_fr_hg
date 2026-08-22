@@ -20,6 +20,8 @@ class AIResourceDownload(Document):
 		corruption_detected: DF.Check
 		downloaded_bytes: DF.Int
 		error_message: DF.SmallText | None
+		expected_checksum: DF.Data | None
+		expected_signature: DF.Data | None
 		eta_seconds: DF.Int
 		heartbeat: DF.Datetime | None
 		install_message: DF.Data | None
@@ -37,6 +39,7 @@ class AIResourceDownload(Document):
 		pause_requested: DF.Check
 		progress: DF.Percent
 		queue_position: DF.Int
+		repository: DF.Link | None
 		resource: DF.Link
 		resource_code: DF.Data
 		resource_name: DF.Data
@@ -52,6 +55,8 @@ class AIResourceDownload(Document):
 			"AI Extension",
 		]
 		signature_status: DF.Data | None
+		source: DF.Data | None
+		source_url: DF.Data | None
 		stage: DF.Data | None
 		stage_message: DF.SmallText | None
 		started_at: DF.Datetime | None

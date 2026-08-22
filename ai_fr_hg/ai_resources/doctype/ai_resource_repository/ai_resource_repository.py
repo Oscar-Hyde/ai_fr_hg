@@ -18,9 +18,14 @@ class AIResourceRepository(Document):
 		description: DF.SmallText | None
 		enabled: DF.Check
 		is_builtin: DF.Check
+		is_default: DF.Check
 		last_synced: DF.Datetime | None
+		offline_supported: DF.Check
+		priority: DF.Int
 		repository_name: DF.Data
 		repository_type: DF.Literal["Built-in", "HTTP", "File", "Enterprise"]
+		requires_authorization: DF.Check
+		source_url: DF.Data | None
 	# end: auto-generated types
 
 	def validate(self):

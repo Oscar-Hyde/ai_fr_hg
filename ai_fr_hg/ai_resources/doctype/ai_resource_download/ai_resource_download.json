@@ -30,6 +30,11 @@
   "connection_quality",
   "queue_position",
   "last_checkpoint",
+  "source",
+  "source_url",
+  "repository",
+  "expected_checksum",
+  "expected_signature",
   "verify_sec",
   "verify_progress",
   "verify_message",
@@ -189,6 +194,37 @@
    "fieldname": "last_checkpoint",
    "fieldtype": "Datetime",
    "label": "Last Checkpoint",
+   "read_only": 1
+  },
+  {
+   "fieldname": "source",
+   "fieldtype": "Data",
+   "label": "Source",
+   "read_only": 1
+  },
+  {
+   "fieldname": "source_url",
+   "fieldtype": "Data",
+   "label": "Source URL",
+   "read_only": 1
+  },
+  {
+   "fieldname": "repository",
+   "fieldtype": "Link",
+   "label": "Repository",
+   "options": "AI Resource Repository",
+   "read_only": 1
+  },
+  {
+   "fieldname": "expected_checksum",
+   "fieldtype": "Data",
+   "label": "Expected SHA-256",
+   "read_only": 1
+  },
+  {
+   "fieldname": "expected_signature",
+   "fieldtype": "Data",
+   "label": "Expected Signature",
    "read_only": 1
   },
   {

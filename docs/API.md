@@ -544,6 +544,17 @@ Resource usage and health metrics with the marketplace summary.
 
 Smart recommendations based on installed capability gaps and usage.
 
+### `ai_fr_hg.api.resources.sources()`
+
+Every enabled download source across repositories — the full list of places
+local translation packages and AI templates can be fetched from (Bundled
+Marketplace, private HTTP repository, local File source, Enterprise repository),
+with offline support, authorization and source-count metadata.
+
+### `ai_fr_hg.api.resources.resource_sources(name)`
+
+The download sources available for one specific resource.
+
 ### `ai_fr_hg.api.resources.repositories()`
 
 Enabled resource repositories.

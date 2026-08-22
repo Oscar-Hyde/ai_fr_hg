@@ -239,6 +239,8 @@ class AIResourceMarketplace {
 		const data = this.data || {};
 		const catalog = data.catalog || [];
 		const recommendations = data.recommendations || [];
+		const downloadSources = data.download_sources || [];
+		const hasSources = downloadSources.length > 0;
 
 		this.el.view.html(`
 			<div class="row mb-3">
@@ -249,16 +251,22 @@ class AIResourceMarketplace {
 							<option value="">${__("All Types")}</option>
 							${Object.keys(RESOURCE_TYPE_LABELS).map((key) => `<option value="${key}">${RESOURCE_TYPE_LABELS[key]}</option>`).join("")}
 						</select>
-						<select class="form-control rm-category" style="width: 190px;">
+						<select class="form-control mr-2 rm-category" style="width: 190px;">
 							<option value="">${__("All Categories")}</option>
 							${this.categories(catalog).map((c) => `<option value="${c}">${c}</option>`).join("")}
 						</select>
+						${hasSources ? `
+							<select class="form-control rm-source-filter" style="width: 220px;">
+								<option value="">${__("All Download Sources")}</option>
+								${downloadSources.map((s) => `<option value="${s.repository_name}">${s.repository_name} (${s.source_count || 0})</option>`).join("")}
+							</select>` : ""}
 					</div>
 				</div>
 				<div class="col-md-4 text-right">
 					${this.canManage ? `<button class="btn btn-sm btn-default rm-sync">${__("Sync Catalog")}</button>` : ""}
 				</div>
 			</div>
+			${hasSources ? this.sourcesPanel(downloadSources) : ""}
 			<div class="row">
 				<div class="col-12">
 					<div class="rm-resource-grid"></div>
@@ -286,6 +294,14 @@ class AIResourceMarketplace {
 			this.category = $(event.currentTarget).val();
 			this.renderResourceGrid(filterResources(catalog, this.search, this.type, this.category));
 		});
+		this.el.view.find(".rm-source-filter").on("change", (event) => {
+			const sourceRepository = $(event.currentTarget).val();
+			this.renderResourceGrid(
+				filterResources(catalog, this.search, this.type, this.category).filter(
+					(row) => !sourceRepository || String(row.repository || "").includes(sourceRepository) || String(row.source_url || "").includes(sourceRepository)
+				)
+			);
+		});
 		this.el.view.find(".rm-sync").on("click", () => this.syncCatalog());
 		this.el.view.find(".rm-recommendations").html(
 			recommendations.map((r) => this.resourceCard(r, { compact: true })).join("")
@@ -302,6 +318,36 @@ class AIResourceMarketplace {
 		return seen.sort();
 	}
 
+	sourcesPanel(sources) {
+		return `
+			<div class="card mb-3 rm-sources-panel">
+				<div class="card-body">
+					<h6>${__("Download Sources")}</h6>
+					<p class="small text-muted mb-2">${__("All sources from which translation packages and AI templates can be fetched.")}</p>
+					<div class="row">
+						${sources.map((source) => `
+							<div class="col-md-4 mb-2">
+								<div class="border rounded p-2 h-100 rm-source-card" data-repository="${source.repository_name}">
+									<div class="d-flex justify-content-between">
+										<strong>${source.repository_name}</strong>
+										<span class="badge badge-${source.is_builtin ? "info" : "light"}">${source.repository_type}</span>
+									</div>
+									<div class="small text-muted mt-1">
+										${source.offline_supported ? `<span class="badge badge-light">${__("Offline")}</span>` : ""}
+										${source.requires_authorization ? `<span class="badge badge-light">${__("Authorized")}</span>` : ""}
+										${__("Sources")}: ${source.source_count || 0}
+									</div>
+									<div class="small text-muted mt-1">${source.description || source.source_url || "—"}</div>
+									${source.source_url ? `<div class="small text-truncate text-muted">${source.source_url}</div>` : ""}
+								</div>
+							</div>
+						`).join("")}
+					</div>
+				</div>
+			</div>
+		`;
+	}
+
 	renderResourceGrid(rows) {
 		const grid = this.el.view.find(".rm-resource-grid");
 		if (!rows.length) {
@@ -316,10 +362,13 @@ class AIResourceMarketplace {
 		const compact = options.compact;
 		const status = resource.status || "Available";
 		const actions = this.resourceAction(resource);
+		const sources = resource.sources || [];
+		const defaultSource = sources.find((s) => s.is_default) || sources[0];
 		const meta = [
 			resource.version ? __("v{0}").format(resource.version) : "",
 			resource.package_size_mb ? `${resource.package_size_mb} MB` : "",
 			resource.publisher || "",
+			(sources.length || resource.source_count) ? __("{0} source(s)").format(sources.length || resource.source_count) : "",
 		].filter(Boolean).join(" · ");
 
 		return `
@@ -335,6 +384,7 @@ class AIResourceMarketplace {
 						</div>
 						<p class="text-muted small mb-1">${resource.description || ""}</p>
 						<div class="small text-muted">${meta}</div>
+						${defaultSource ? `<div class="small text-muted mt-1">${__("Primary source")}: ${defaultSource.source_name} <span class="badge badge-light">${defaultSource.source_type}</span>${defaultSource.offline_supported ? ` <span class="badge badge-light">${__("Offline")}</span>` : ""}</div>` : ""}
 						${actions ? `<div class="mt-2">${actions}</div>` : ""}
 						${resource.reason ? `<div class="small text-muted mt-2"><i>${resource.reason}</i></div>` : ""}
 					</div>
@@ -550,14 +600,29 @@ class AIResourceMarketplace {
 		const versions = resource.versions || [];
 		const dependencies = resource.dependencies || [];
 		const compatibility = resource.compatibility || { checks: [] };
+		const sources = resource.sources || [];
+		const defaultSource = sources.find((s) => s.is_default) || sources[0];
+		const selectedSource = this.lastSelectedSource || (defaultSource && defaultSource.source_name) || "";
 
 		const dialog = new frappe.ui.Dialog({
 			title: resource.resource_name,
 			size: "large",
-			fields: [],
+			fields: [
+				{
+					fieldtype: "Select",
+					fieldname: "source",
+					label: __("Download Source"),
+					options: sources.map((s) => ({
+						value: s.source_name,
+						label: `${s.source_name} — ${s.source_type}${s.offline_supported ? " (Offline)" : ""}${s.requires_authorization ? " (Authorization)" : ""}`,
+					})),
+					default: selectedSource,
+					hidden: !sources.length,
+				},
+			],
 			primary_action_label: this.canManage && status === "Available" ? __("Download") : null,
-			primary_action: async () => {
-				await this.startDownload(resource.name || resource.resource_code);
+			primary_action: async (values) => {
+				await this.startDownload(resource.name || resource.resource_code, values && values.source);
 				dialog.hide();
 			},
 		});
@@ -599,6 +664,25 @@ class AIResourceMarketplace {
 						<div>${dependencies.map((d) => `<div class="small">${d.resource_code} ${d.version_constraint ? `(${d.version_constraint})` : ""}</div>`).join("") || "None"}</div>
 					</div>
 				</div>
+				${sources.length ? `
+					<h6 class="mt-3">${__("Download Sources")}</h6>
+					<div class="table-responsive">
+						<table class="table table-sm small rm-source-table">
+							<thead><tr><th>${__("Source")}</th><th>${__("Type")}</th><th>${__("Repository")}</th><th>${__("URL / Location")}</th><th>${__("Offline")}</th><th>${__("Integrity")}</th></tr></thead>
+							<tbody>
+								${sources.map((s) => `
+									<tr>
+										<td>${s.source_name} ${s.is_default ? `<span class="badge badge-success">${__("Default")}</span>` : ""}</td>
+										<td>${s.source_type}</td>
+										<td>${s.repository || "—"}</td>
+										<td class="text-truncate" style="max-width: 220px;">${s.source_url || "—"}</td>
+										<td>${s.offline_supported ? __("Yes") : __("No")}</td>
+										<td>${s.checksum ? `<span class="badge badge-success">${__("Signed")}</span>` : `<span class="badge badge-light">${__("Verify on download")}</span>`}</td>
+									</tr>
+								`).join("")}
+							</tbody>
+						</table>
+					</div>` : ""}
 				${resource.release_notes ? `<h6 class="mt-2">${__("Release Notes")}</h6><pre class="small">${escapeHtml(resource.release_notes)}</pre>` : ""}
 				${versions.length ? `<h6 class="mt-3">${__("Versions")}</h6><ul class="small">${versions.map((v) => `<li>v${v.version} ${v.is_installed ? `<span class="badge badge-success">${__("Installed")}</span>` : ""} ${v.installed_on ? ` · ${v.installed_on}` : ""}</li>`).join("")}</ul>` : ""}
 				${this.canManage && status === "Installed" ? `<button class="btn btn-sm btn-primary rm-install-update">${__("Update if available")}</button>` : ""}
@@ -612,14 +696,17 @@ class AIResourceMarketplace {
 		dialog.show();
 	}
 
-	async startDownload(resourceCode) {
+	async startDownload(resourceCode, source) {
 		if (!this.canManage) {
 			frappe.show_alert({ message: __("AI Manager or System Manager role required."), indicator: "red" });
 			return;
 		}
+		this.lastSelectedSource = source || "";
 		busy(this);
 		try {
-			const response = await frappe.call({ method: "ai_fr_hg.api.resources.start_download", args: { name: resourceCode } });
+			const args = { name: resourceCode };
+			if (source) args.source = source;
+			const response = await frappe.call({ method: "ai_fr_hg.api.resources.start_download", args });
 			done(this);
 			frappe.show_alert({ message: __("Download started for {0}").format(resourceCode), indicator: "blue" });
 			this.activeTab = "downloads";

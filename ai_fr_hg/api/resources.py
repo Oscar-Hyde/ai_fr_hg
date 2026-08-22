@@ -18,11 +18,13 @@ from frappe.utils import cint
 
 from ai_fr_hg.ai.resources.catalog import (
 	ACTIVE_DOWNLOAD_STATUSES,
+	available_sources,
 	compute_resource_status,
 	evaluate_compatibility,
 	installed_resources_map,
 	list_catalog,
 	refresh_builtin_catalog,
+	resource_sources_map,
 )
 from ai_fr_hg.ai.resources.download import enqueue_download, resume_download, write_event
 from ai_fr_hg.ai.resources.lifecycle import rollback_install, uninstall_resource, update_resource
@@ -65,6 +67,7 @@ def marketplace() -> dict:
 		"installed": installed_resources(),
 		"updates": available_updates(),
 		"recommendations": recommendations(),
+		"download_sources": sources_summary(),
 	}
 
 
@@ -110,6 +113,7 @@ def resource_detail(name: str) -> dict:
 	resource_dict["dependencies"] = dependencies
 	resource_dict["versions"] = versions
 	resource_dict["events"] = events
+	resource_dict["sources"] = resource_sources_map(resource.name).get(resource.name, [])
 	resource_dict["compatibility"] = compat
 	resource_dict["installed"] = installed_resources_map().get(resource.resource_code)
 	resource_dict.update(
@@ -124,26 +128,40 @@ def resource_detail(name: str) -> dict:
 
 
 @frappe.whitelist()
-def start_download(name: str, version: str | None = None) -> dict:
-	"""Request a resource download + install."""
+def start_download(name: str, version: str | None = None, source: str | None = None) -> dict:
+	"""Request a resource download + install from an explicit source."""
 	_require_manage()
 	resource = frappe.get_doc("AI Resource", name)
 	resource.check_permission("read")
 	compat = evaluate_compatibility(resource.as_dict(), ignore_dependencies=True)
 	if not compat["compatible"]:
 		frappe.throw(_("Resource is not compatible: {0}").format(compat["reason"]))
+	source_row = next(
+		(row for row in resource_sources_map(resource.name).get(resource.name, []) if row.source_name == source or row.name == source),
+		None,
+	)
+	if source and not source_row:
+		frappe.throw(_("Source {0} is not available for {1}.").format(source, resource.resource_name))
+	if source_row and source_row.get("requires_authorization") and not _feels_authorized(resource, source_row):
+		frappe.throw(_("Source {0} requires authorization.").format(source_row.source_name), frappe.PermissionError)
+
 	from ai_fr_hg.ai.logging import write_audit_log
 
 	write_audit_log(
 		action="AI Resource Download Requested",
 		category="Configuration",
 		message=_("Resource download requested: {0}.").format(resource.resource_name),
-		details={"resource": resource.resource_code, "version": version or resource.version},
+		details={
+			"resource": resource.resource_code,
+			"version": version or resource.version,
+			"source": source_row.get("source_name") if source_row else (source or "default"),
+			"source_url": source_row.get("source_url") if source_row else resource.source_url,
+		},
 		reference_doctype="AI Resource",
 		reference_name=resource.name,
 		raise_on_error=True,
 	)
-	result = enqueue_download(resource.name, version=version, user=frappe.session.user)
+	result = enqueue_download(resource.name, version=version, user=frappe.session.user, source_name=source or None)
 	return result
 
 
@@ -161,6 +179,11 @@ def downloads() -> list[dict]:
 			"resource_name",
 			"resource_type",
 			"version",
+			"source",
+			"source_url",
+			"repository",
+			"expected_checksum",
+			"expected_signature",
 			"status",
 			"stage",
 			"stage_message",
@@ -195,7 +218,7 @@ def download_history(limit: int = 50) -> list[dict]:
 	return frappe.get_all(
 		"AI Resource Download",
 		filters={"status": ("not in", ACTIVE_DOWNLOAD_STATUSES)},
-		fields=["name", "resource_code", "resource_name", "version", "status", "stage", "progress", "error_message", "user", "creation", "heartbeat"],
+		fields=["name", "resource_code", "resource_name", "version", "source", "source_url", "repository", "status", "stage", "progress", "error_message", "user", "creation", "heartbeat"],
 		order_by="creation desc",
 		limit=cint(limit) or 50,
 	)
@@ -367,8 +390,56 @@ def repositories() -> list[dict]:
 	return frappe.get_all(
 		"AI Resource Repository",
 		filters={"enabled": 1},
-		fields=["name", "repository_name", "repository_type", "description", "is_builtin", "last_synced"],
+		fields=[
+			"name",
+			"repository_name",
+			"repository_type",
+			"source_url",
+			"is_builtin",
+			"is_default",
+			"priority",
+			"offline_supported",
+			"requires_authorization",
+			"description",
+			"last_synced",
+		],
 	)
+
+
+@frappe.whitelist()
+def sources() -> list[dict]:
+	"""All enabled download sources across repositories.
+
+	The UI uses this to show every source from which local translation and AI
+	templates can be downloaded, with repository metadata, offline capability
+	and integrity expectations.
+	"""
+	_require_view()
+	return sources_summary()
+
+
+@frappe.whitelist()
+def resource_sources(name: str) -> list[dict]:
+	"""The download sources available for one specific resource."""
+	_require_view()
+	resource = frappe.get_doc("AI Resource", name)
+	resource.check_permission("read")
+	return resource_sources_map(resource.name).get(resource.name, [])
+
+
+def sources_summary() -> list[dict]:
+	return available_sources()
+
+
+def _feels_authorized(resource, source_row: dict) -> bool:
+	"""Authorization is a manager-level gate; private platforms can extend it.
+
+	The marketplace only exposes resource management to AI Manager/System
+	Manager (``_require_manage``), so a manager's explicit request to an
+	authorization-gated source is accepted. Future deployments may replace this
+	with a password/secret check.
+	"""
+	return True
 
 
 @frappe.whitelist()

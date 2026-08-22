@@ -39,6 +39,8 @@
   "supported_languages",
   "providers_section",
   "supported_providers",
+  "sources_section",
+  "sources",
   "dependency_section",
   "dependencies",
   "notes_section",
@@ -225,6 +227,17 @@
    "fieldtype": "Table",
    "label": "Supported Providers",
    "options": "AI Resource Provider"
+  },
+  {
+   "fieldname": "sources_section",
+   "fieldtype": "Section Break",
+   "label": "Download Sources"
+  },
+  {
+   "fieldname": "sources",
+   "fieldtype": "Table",
+   "label": "Download Sources",
+   "options": "AI Resource Source"
   },
   {
    "fieldname": "dependency_section",

@@ -96,6 +96,27 @@ last checkpoint.
 - `AI Auditor` gets read-only visibility into all resource events and history.
 - Every manager operation writes an `AI Audit Log` row and a `AI Resource Event`.
 
+## Download sources
+
+Every resource records one or more **download sources** in `AI Resource Source`.
+The Marketplace shows a **Download Sources** panel on the Discover page and a
+source table in each resource detail dialog. A source carries:
+
+| Metadata | Meaning |
+| --- | --- |
+| `source_name` | Human-readable source name in the UI. |
+| `source_type` | `Built-in`, `HTTP`, `File` or `Enterprise`. |
+| `repository` | The `AI Resource Repository` it belongs to. |
+| `source_url` | `builtin://...`, `https://...` or `file://...` location. |
+| `enabled` / `is_default` / `priority` | Selection order for auto-download. |
+| `checksum` / `signature` / `package_size_mb` | Integrity expectations. |
+| `offline_supported` / `requires_authorization` | Deployment/access metadata. |
+
+The **Bundled Marketplace** is always registered as the default offline source.
+An operator can add a private `AI Resource Repository` and attach HTTP/File
+sources to resources; the Download dialog then lets the user choose a specific
+source and shows its repository, URL, offline support and signed status.
+
 ## Bundled catalog
 
 The app ships a signed **Built-in Marketplace** in
