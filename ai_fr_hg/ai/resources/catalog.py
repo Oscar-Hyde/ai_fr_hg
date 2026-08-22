@@ -465,6 +465,7 @@ def resource_sources_map(resource_names: set[str] | str | None = None) -> dict[s
 			filters=filters,
 			fields=[
 				"name",
+				"parent",
 				"source_name",
 				"source_type",
 				"repository",

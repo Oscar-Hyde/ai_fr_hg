@@ -44,6 +44,7 @@ MAX_NAME_LENGTH = 140
 MAX_IDEMPOTENCY_KEY_LENGTH = 64
 MAX_TITLE_CHARS = 280
 MAX_IDENTIFIER_CHARS = 200
+MAX_MODEL_NAME_LENGTH = 255
 
 #: Document names and File paths are restricted to the same conservative
 #: character class Frappe itself uses for doc names.
@@ -137,6 +138,22 @@ def valid_identifier(value, *, label, required: bool = False) -> str:
 	if identifier and not _NAME_PATTERN.match(identifier):
 		frappe.throw(_("{0} contains unsupported characters.").format(_label(label)), frappe.ValidationError)
 	return identifier
+
+
+def valid_model_name(value, *, label: str | None = None, required: bool = True) -> str:
+	"""Validate an AI Model label or runtime model name.
+
+	Unlike document identifiers, model labels routinely contain spaces,
+	parentheses and a registry-style colon separator (for example
+	``qwen2.5:0.5b`` or ``Local Chat (Small)``). Do not run them through
+	:func:`valid_identifier`, which would reject legitimate model names. Store
+	existence still happens via the doc lookup in the caller, so this helper
+	only guards bounds and control characters.
+	"""
+	model = bounded_text(value, label=label or _("Model"), max_length=MAX_MODEL_NAME_LENGTH, required=required)
+	if any(ord(character) < 32 or ord(character) == 127 for character in model):
+		frappe.throw(_("{0} contains unsupported control characters.").format(_label(label or _("Model"))), frappe.ValidationError)
+	return model
 
 
 def idempotency_key(value) -> str | None:
